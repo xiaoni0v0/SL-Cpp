@@ -21,3 +21,4 @@ AllowShortLoopsOnASingleLine: true
 InsertNewlineAtEOF: true
 SpaceAfterCStyleCast: true
 ColumnLimit: 120
+AllowShortCaseLabelsOnASingleLine: true

@@ -1,0 +1,66 @@
+#pragma once
+
+#include "token.h"
+
+#include <vector>
+
+
+class Lexer {
+    const std::u32string source_;
+    const std::string file_path_;
+    size_t pos_{0};
+    int row_{1};
+    int col_{1};
+
+    // 往后看字符
+    [[nodiscard]] char32_t peek(size_t offset = 0) const;
+    // 消耗字符
+    char32_t advance();
+    // 是否读完了
+    [[nodiscard]] bool is_eof() const;
+    // 创建一个 token
+    [[nodiscard]] static Token make_token(TokenType type, const std::u32string &value, int row, int col);
+    // 抛出 SyntaxError 异常
+    [[noreturn]] void error(const std::string &msg) const;
+    // 抛出 SyntaxError 异常，提供行列
+    [[noreturn]] void error(const std::string &msg, int row, int col) const;
+
+    // 跳过空白（不含换行）
+    void skip_spaces();
+
+    // 读 \n
+    Token read_newline();
+    // 读单行注释
+    void read_comment_line();
+    // 读多行注释
+    void read_comment_block();
+    // 读字符串字面量。quote 为 ' 或者 "
+    Token read_string(char32_t quote);
+    // 读数字字面量
+    Token read_number();
+    // 读标识符或关键字
+    Token read_identifier_keyword_reservedword();
+    // 读符号
+    Token read_symbol();
+
+public:
+    /**
+     * 构造 Lexer 对象
+     * @param source    源代码
+     * @param file_path 文件路径，默认为 "<unknown>"
+     */
+    explicit Lexer(std::u32string source, std::string file_path = "<unknown>");
+
+    /**
+     * 对源代码词法分析，只能调用一次（右值限定）
+     * @return token 序列
+     */
+    std::vector<Token> tokenize() &&;
+
+    /**
+     * 获取 token 类型的字符串表示
+     * @param type token 类型
+     * @return     token 类型的字符串表示
+     */
+    static std::string get_typename_by_tokentype(TokenType type);
+};

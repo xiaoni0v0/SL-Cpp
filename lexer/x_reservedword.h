@@ -1,0 +1,12 @@
+// 保留字
+X(define, RW_DEFINE)
+X(as, RW_AS)
+X(yield, RW_YIELD)
+X(async, RW_ASYNC)
+X(await, RW_AWAIT)
+X(in, RW_IN)
+X(const, RW_CONST)
+X(static, RW_STATIC)
+X(with, RW_WITH)
+X(match, RW_MATCH)
+X(case, RW_CASE)
