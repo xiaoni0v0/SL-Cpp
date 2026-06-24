@@ -18,7 +18,7 @@ public:
     explicit Analyzer(AstNodeProgram *root, std::string file_path);
 
     /**
-     * 分析 AST，包括字面量折叠和语法合法性检查
+     * 分析 AST，包括语法合法性检查和字面量折叠
      */
     void analyze() const &&;
 };

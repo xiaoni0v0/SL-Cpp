@@ -3,7 +3,6 @@
 #include "../../parser/ast_nodes/ast_nodes.h"
 
 #include <string>
-#include <vector>
 
 
 class SyntaxChecker {
@@ -13,24 +12,41 @@ class SyntaxChecker {
     struct Context {
         int func_depth{0};
         int for_depth{0};
-        bool star_ok{false};
-        bool double_star_ok{false};
+        bool can_star{false};
+        bool can_double_star{false};
     } ctx_{};
 
+    // 报错
     [[noreturn]] void error(const std::string &msg, int row, int col) const;
+    void require_not_null(const AstNodePtr &node) const;
+    void require_not_null(const std::u32string &name) const;
 
+    template <typename T>
+    void require_not_null(const std::vector<T> &name) const {
+        if (name.empty()) error("unexpected null vector", 0, 0);
+    }
+
+    // 检查节点，dispatch
     void check(const AstNode *node);
 
+    // 每种节点的
 #define X(nt) void check(const nt *node);
 #include "../../parser/ast_nodes/x_ast_nodes.h"
 #undef X
 
-    void check_lvalue(const AstNode *node, bool allow_star = false) const;
-    void check_simple_lvalue(const AstNode *node) const;
-    void check_unpack_items(const std::vector<AstNodePtr> &items) const;
+    // 检查一个节点是否可以作为左值。要求 node 非空
+    void check_lvalue(const AstNode *node) const;
 
 public:
+    /**
+     * 构造 SyntaxChecker 对象
+     * @param root      AST 的根节点
+     * @param file_path 文件路径，用于错误信息
+     */
     explicit SyntaxChecker(AstNodeProgram *root, std::string file_path);
 
+    /**
+     * 语法合法性检查
+     */
     void check() &&;
 };
