@@ -1266,9 +1266,9 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.2.15 property
 
-`property(fget, fset=None, fdel=None)`，`Descriptor` 的子类。
-`fset`、`fdel` 为 `None` 时对应操作按 `Descriptor` 默认行为抛 `AttributeError`。
-`get(self, obj)`：若 `isinstance(obj, type)` 返回 `self`（供内省），否则返回 `fget(obj)`。
+`property(func_get, func_set=None, func_del=None)`，`Descriptor` 的子类。
+`func_set`、`func_del` 为 `None` 时对应操作按 `Descriptor` 默认行为抛 `AttributeError`。
+`get(self, obj)`：若 `isinstance(obj, type)` 返回 `self`（供内省），否则返回 `func_get(obj)`。
 
 #### 4.2.16 staticmethod
 
