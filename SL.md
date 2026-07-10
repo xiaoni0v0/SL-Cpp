@@ -990,13 +990,12 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 
 写 `o.attr = v`：
 
-1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则调用 `该属性.set(o, v)`（未重写 `set` 则由默认实现抛出 `AttributeError`）；
+1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则调用 `该属性.set(o, v)`；
 2. 否则写入 `o` 自身属性表（无则新建）。
 
 删 `del o.attr`：
 
-1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则调用 `该属性.delete(o)`（未重写 `delete` 则由默认实现抛出
-   `AttributeError`）；
+1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则调用 `该属性.delete(o)`；
 2. 否则从 `o` 自身属性表删除（无则 `AttributeError`）。
 
 自身属性表不通过任何属性名暴露，是被隐藏的内部状态；它是对对象属性的刻画，但本身不是对象的属性之一。
