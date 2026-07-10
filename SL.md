@@ -970,29 +970,33 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 **描述器**是内置类 `Descriptor` 的子类的实例。
 自定义属性行为需继承 `Descriptor` 并重载以下方法：
 
-| 方法                      | 何时调用 | 是否必选 | 参数                                       |
-|-------------------------|------|------|------------------------------------------|
-| `get(self, obj, owner)` | 读属性  | √    | `obj`：经其访问的实例（经类访问时为 `None`）；`owner`：属主类 |
-| `set(self, obj, value)` | 写属性  | ×    | `value`：要写入的值                            |
-| `delete(self, obj)`     | 删属性  | ×    | `obj`：经其访问的实例（经类访问时为 `None`）             |
+| 方法                      | 何时调用 | 参数            |
+|-------------------------|------|---------------|
+| `get(self, obj)`        | 读属性  | `obj`：经其访问的实例 |
+| `set(self, obj, value)` | 写属性  | `value`：要写入的值 |
+| `delete(self, obj)`     | 删属性  | `obj`：经其访问的实例 |
+
+`Descriptor` 把 `get` 声明为抽象方法，子类必须重写；
+`set`、`delete` 则有默认实现，调用即无条件抛出 `AttributeError`，需要可写、可删就重写它们。
 
 ##### 3.9.1.2 对属性的操作
 
 读 `o.attr`：
 
-1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则返回 `该属性.get(o, type(o))`；
+1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则返回 `该属性.get(o)`；
 2. 否则若 `o` 自身属性表中有 `attr`，则返回它；
 3. 否则若 `type(o)` 的 MRO 上有 `attr`（非描述器），则返回它；
 4. 否则 `AttributeError`。
 
 写 `o.attr = v`：
 
-1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器：若重载了 `set` 则调用 `set(o, v)`，否则 `AttributeError`；
+1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则调用 `该属性.set(o, v)`（未重写 `set` 则由默认实现抛出 `AttributeError`）；
 2. 否则写入 `o` 自身属性表（无则新建）。
 
 删 `del o.attr`：
 
-1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器：重载了 `delete` 则调用 `delete(o)`，否则 `AttributeError`；
+1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则调用 `该属性.delete(o)`（未重写 `delete` 则由默认实现抛出
+   `AttributeError`）；
 2. 否则从 `o` 自身属性表删除（无则 `AttributeError`）。
 
 自身属性表不通过任何属性名暴露，是被隐藏的内部状态；它是对对象属性的刻画，但本身不是对象的属性之一。
@@ -1003,7 +1007,7 @@ v = class {
     func __init__(self, x) { self.x = x }
     func read(self) { return self.x }
 }(5)
-v.read      # 方法描述器，get(v, 类) 得到绑定方法（self = v）
+v.read      # 方法描述器，get(v) 得到绑定方法（self = v）
 v.read()    # 5
 v.x = 9     # x 无描述器，写入 v 的属性字典
 del v.x     # x 无描述器，从属性字典删除
