@@ -1000,22 +1000,34 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 
 **属性表**不通过任何属性名暴露，唯一的取得方式是内置函数 `attrs(obj)`（见 4.1.7）。
 
-```
-v = class {
-    func __init__(self, x) { self.x = x }
-    func read(self) { return self.x }
-}(5)
-v.read      # 方法描述器，get(v) 得到绑定方法（self = v）
-v.read()    # 5
-v.x = 9     # x 无描述器，写入 v 的属性字典
-del v.x     # x 无描述器，从属性字典删除
-```
-
 #### 3.9.2 迭代器协议
 
-规定对象如何参与 `for (x : iterable)` 以及 `*iterable` 迭代。
+迭代器协议规定对象如何参与 `for (x : obj)` 及 `*obj` 展开迭代。
 
-还没写完……
+`for [$] (i : obj) expr` 等价于
+
+```
+{
+    iteration = obj.__iter__()
+    while [$] (True) {
+        try { i = iteration.__next__(); expr}
+        except (StopIteration) break
+    }
+}
+```
+
+`*obj` 同理。
+
+##### 3.9.2.1 迭代器
+
+实现了 `__iter__` 和 `__next__` 方法的对象称为迭代器。
+`__iter__` 的语义为获取对象对应的迭代器，通常迭代器的 `__iter__` 的返回值为它本身。
+`__next__` 的语义为从迭代器获取下一个元素，若迭代终止则抛出 `StopIteration`。
+
+##### 3.9.2.2 可迭代对象
+
+实现了 `__iter__` 方法的对象称为可迭代对象。
+迭代器一定可迭代。
 
 ### 3.10 作用域
 
@@ -1060,7 +1072,7 @@ SL 只有 2 种**作用域**：
 
 #### 3.10.4 要点与惯用法
 
-- 复合赋值 `x op= e` 及 `++x`、`--x` 展开后变为 `x = ... x ...`，读可能取自外层，写必落当前帧。
+**注意**：复合赋值 `x op= e` 及 `++x`、`--x` 展开后变为 `x = ... x ...`，读可能取自外层，写必落当前帧。
 
 例如：
 
@@ -1101,10 +1113,6 @@ stack = class {
 
 SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛出。
 
-可使用 `raise` 表达式抛出异常。
-
-还没写完……
-
 ## 4 内置对象
 
 ### 4.1 内置函数
@@ -1130,7 +1138,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 具体行为：
 
 1. 若 `type` 有 `__instance_check__` 方法，则返回 `type.__instance_check__(obj)`；
-2. 否则检查 `obj` 的类型是否为 `type` 及其子类。
+2. 否则返回 `issubclass(type(obj), type)`。
 
 #### 4.1.4 `issubclass(cls, type)`
 
@@ -1214,8 +1222,9 @@ del attrs(v)       # SyntaxError：不是合法 del 目标
 
 #### 4.2.8 Mapping
 
-`Iterable`（见 4.2.12）的子类，抽象基类，不可直接实例化。在此之上定义键值对容器的公共契约：支持
-`__op_index__`（按键读取）、`len`，遍历产出键值对。`dict`、`unordered_dict` 均为其子类。
+`Iterable`（见 4.2.12）的子类，抽象基类。
+
+在此之上定义键值对容器的公共契约：支持 `__op_index__`（按键读取）、`len`，遍历产出键值对。
 
 #### 4.2.9 dict
 
@@ -1236,12 +1245,11 @@ del attrs(v)       # SyntaxError：不是合法 del 目标
 
 #### 4.2.12 Iterable
 
-抽象基类，不可直接实例化。规定对象如何参与 `for (x : iterable)` 及 `*iterable` 展开迭代，详见 3.9.2。
-`str`、`tuple`、`list`、`Mapping`（及其子类）、`set`、`range` 均为其子类。
+抽象基类。规定对象如何参与 `for (x : obj)` 及 `*obj` 展开迭代，详见 3.9.2。
 
 #### 4.2.13 Iterator
 
-`Iterable` 的子类，抽象，不可直接实例化。迭代过程中产生的迭代器对象本身的类，详见 3.9.2。
+`Iterable` 的子类，抽象基类。迭代过程中产生的迭代器对象本身的类，详见 3.9.2。
 
 #### 4.2.14 SingletonType
 
@@ -1326,11 +1334,11 @@ BaseException
 
 ##### 4.3.1.1 Number
 
-抽象基类，不可直接实例化。定义数值的公共契约：四则运算与相等比较。`int`、`float`、`complex` 均为其子类。
+抽象基类。定义数值的公共契约：四则运算与相等比较。`int`、`float`、`complex` 均为其子类。
 
 ##### 4.3.1.2 Real
 
-`Number` 的子类，抽象，不可直接实例化。在四则运算之上增加大小比较。`int`、`float` 为其子类；
+`Number` 的子类，抽象基类。在四则运算之上增加大小比较。`int`、`float` 为其子类；
 `complex` 不是（复数没有跟四则运算相容的大小顺序）。
 
 `int`、`float` 对 `Number`/`Real` 的继承是真实的类继承，体现在各自的 MRO 上，不是仅为了让 `isinstance` 成立而做的登记。
@@ -1342,17 +1350,17 @@ BaseException
 
 ##### 4.3.2.1 Callable
 
-抽象基类，不可直接实例化。重写了 `__instance_check__`：`isinstance(obj, Callable)` 当且仅当 `type(obj)` 的 MRO 上有
+抽象基类。重写了 `__instance_check__`：`isinstance(obj, Callable)` 当且仅当 `type(obj)` 的 MRO 上有
 `__op_call__`；`__subclass_check__` 同理，检查候选类的 MRO 上有没有 `__op_call__`。不依赖任何真实继承关系，
 任何实现了 `__op_call__` 的类都会通过检查，不用显式继承 `Callable`。
 
 ##### 4.3.2.2 Indexable
 
-抽象基类，不可直接实例化。`__instance_check__`/`__subclass_check__` 检查 `__op_index__` 是否存在，用法同 `Callable`。
+抽象基类。`__instance_check__`/`__subclass_check__` 检查 `__op_index__` 是否存在，用法同 `Callable`。
 
 ##### 4.3.2.3 Hashable
 
-抽象基类，不可直接实例化。`__instance_check__`/`__subclass_check__` 检查 `__hash__` 是否存在，用法同 `Callable`。
+抽象基类。`__instance_check__`/`__subclass_check__` 检查 `__hash__` 是否存在，用法同 `Callable`。
 
 `list`、`dict`、`set`、`unordered_dict` 均不通过 `Hashable` 的 `isinstance`/`issubclass` 检查，
 因为它们的 `__hash__` 不可用（见 4.2.9），这不是继承关系的排除，是 `__instance_check__` 求值为 `False`。
