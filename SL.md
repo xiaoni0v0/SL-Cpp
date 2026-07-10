@@ -1195,25 +1195,25 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 只有两个实例，即 `True` 和 `False`。
 
-是 int 的子类。
+继承 int。
 
 #### 4.2.3 int
 
-表示整数，自带高精度。继承 `numbers.Real`（见 4.3.1）。
+表示整数，自带高精度。继承 `numbers.Real`。
 
 #### 4.2.4 float
 
-表示浮点数，底层用 C++ 的 double 实现。继承 `numbers.Real`（见 4.3.1）。
+表示浮点数，底层用 C++ 的 double 实现。继承 `numbers.Real`。
 
 #### 4.2.5 str
 
-表示字符串。严格按 Unicode 码点分割。继承 `Iterable`（见 4.2.12），逐字符迭代。
+表示字符串。严格按 Unicode 码点分割。继承 `Iterable`，逐字符迭代。
 
 **注意**：str 对象不可变。
 
 #### 4.2.6 tuple
 
-容器类。不可变。继承 `Iterable`（见 4.2.12）。
+容器类。不可变。继承 `Iterable`。
 
 包含任意多个对象的引用。
 
@@ -1221,13 +1221,13 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.2.7 list
 
-容器类，可变。继承 `Iterable`（见 4.2.12）。
+容器类，可变。继承 `Iterable`。
 
 包含任意多个对象的引用。
 
 #### 4.2.8 Mapping
 
-`Iterable`（见 4.2.12）的子类，抽象基类。
+`Iterable` 的子类，抽象基类。
 
 在此之上定义键值对容器的公共契约：支持 `__op_index__`（按键读取）、`len`，遍历产出键值对。
 
@@ -1246,7 +1246,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.2.11 set
 
-继承 `Iterable`（见 4.2.12）。
+继承 `Iterable`。
 
 #### 4.2.12 Iterable
 
@@ -1266,17 +1266,19 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.2.15 property
 
-`property(fget, fset=None, fdel=None)`，`Descriptor` 的子类。`fset`、`fdel` 缺省时对应操作按 `Descriptor` 默认行为抛
-`AttributeError`。`get(self, obj)`：若 `isinstance(obj, type)` 返回 `self`（供内省），否则返回 `fget(obj)`。
+`property(fget, fset=None, fdel=None)`，`Descriptor` 的子类。
+`fset`、`fdel` 为 `None` 时对应操作按 `Descriptor` 默认行为抛 `AttributeError`。
+`get(self, obj)`：若 `isinstance(obj, type)` 返回 `self`（供内省），否则返回 `fget(obj)`。
 
 #### 4.2.16 staticmethod
 
-`staticmethod(func)`，`self.func = func`。纯标签，不是描述器，仅在类体收集属性时（见 3.4.8）取出 `v.func` 使用，
+`staticmethod(func)`，`self.func = func`。纯标签，不是描述器，仅在类体收集属性时取出 `v.func` 使用，
 本身不会成为类属性。
 
 #### 4.2.17 classmethod
 
-`classmethod(func)`，`Descriptor` 的子类。`get(self, obj)`：令 `cls = obj if isinstance(obj, type) else type(obj)`，
+`classmethod(func)`，`Descriptor` 的子类。
+`get(self, obj)`：令 `cls = obj if isinstance(obj, type) else type(obj)`，
 返回把 `cls` 绑定为第一参数的可调用对象。
 
 #### 4.2.18 FuncGroup
@@ -1360,28 +1362,22 @@ BaseException
 ##### 4.3.1.2 Real
 
 `Number` 的子类，抽象基类。在四则运算之上增加大小比较。`int`、`float` 为其子类；
-`complex` 不是（复数没有跟四则运算相容的大小顺序）。
-
-`int`、`float` 对 `Number`、`Real` 的继承是真实的类继承，体现在各自的 MRO 上，不是仅为了让 `isinstance` 成立而做的登记。
-`import('numbers')` 只是让 SL 代码里能取得 `Number`、`Real` 这两个名字本身，这条继承关系本身不依赖是否执行过这次 `import`。
-
-`complex`（复数）尚未设计，将继承 `Number`，不继承 `Real`。
 
 #### 4.3.2 `protocols`
 
 ##### 4.3.2.1 Callable
 
-抽象基类。重写了 `__instance_check__`：`isinstance(obj, Callable)` 当且仅当 `type(obj)` 的 MRO 上有
-`__op_call__`；`__subclass_check__` 同理，检查候选类的 MRO 上有没有 `__op_call__`。不依赖任何真实继承关系，
-任何实现了 `__op_call__` 的类都会通过检查，不用显式继承 `Callable`。
+抽象基类。
+
+`isinstance(obj, Callable)` 当且仅当 `type(obj)` 的 MRO 上有 `__op_call__`；
+`issubclass(cls, Callable)` 当且仅当 `cls` 的 MRO 上有 `__op_call__`。
 
 ##### 4.3.2.2 Indexable
 
-抽象基类。`__instance_check__`、`__subclass_check__` 检查 `__op_index__` 是否存在，用法同 `Callable`。
+抽象基类。检查 `__op_index__` 是否存在，用法同 `Callable`。
 
 ##### 4.3.2.3 Hashable
 
-抽象基类。`__instance_check__`、`__subclass_check__` 检查 `__hash__` 是否存在，用法同 `Callable`。
+抽象基类。检查 `__hash__` 是否存在，用法同 `Callable`。
 
-`list`、`dict`、`set`、`unordered_dict` 均不通过 `Hashable` 的 `isinstance`、`issubclass` 检查，
-因为它们的 `__hash__` 不可用（见 4.2.9），这不是继承关系的排除，是 `__instance_check__` 求值为 `False`。
+`list`、`dict`、`set`、`unordered_dict` 均不是 `Hashable`。
