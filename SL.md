@@ -959,11 +959,12 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 
 #### 3.9.1 属性协议
 
-`obj.attr` 等价于 `getattr(obj, 'attr')`。求属性运算符不可重载。
+`obj.attr` 等价于 `getattr(obj, 'attr')`。求属性运算符不可重载，具体行为如下。
 
 ##### 3.9.1.1 描述器
 
-**描述器**是内置类 `Descriptor` 的子类的实例。要自定义某属性的行为，就创建继承 `Descriptor` 的类并重载以下方法：
+**描述器**是内置类 `Descriptor` 的子类的实例。
+自定义属性行为需继承 `Descriptor` 并重载以下方法：
 
 | 方法                      | 何时调用 | 是否必选 | 参数                                       |
 |-------------------------|------|------|------------------------------------------|
@@ -971,41 +972,38 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 | `set(self, obj, value)` | 写属性  | ×    | `value`：要写入的值                            |
 | `delete(self, obj)`     | 删属性  | ×    | —                                        |
 
-是否描述器用 `isinstance(d, Descriptor)` 判定。两条铁律：
-
 ##### 3.9.1.2 读取
 
-`getattr(o, attr)` 的行为：
+`getattr(o, attr)`：
 
-1. `type(o)` 的 MRO 上有 `attr`，且 `isinstance(类属性, Descriptor)` → 返回 `类属性.get(o, type(o))`
-2. `o` 自身的属性里有 `attr` → 见下面实例 / 类的分叉
-3. type(o) 的 MRO 上有 attr（非描述器）→ 返回它
-4. AttributeError
+1. `type(o)` 的 MRO 上有 `attr` 且是描述器 → 返回 `该属性.get(o, type(o))`；
+2. `o` 自身属性表中有 `attr` → 返回它；
+3. `type(o)` 的 MRO 上有 `attr`（非描述器）→ 返回它；
+4. 否则 `AttributeError`。
 
 ##### 3.9.1.3 写入与删除
 
-仍是描述器优先，否则落到"自身的属性表"（实例 → 实例字典；类 → 类属性表）。
+描述器优先，否则读写"自身属性表"（实例 → 实例字典；类 → 类属性表）。
 
-**写 `o.attr = v`**：
+写 `o.attr = v`：
 
-1. `type(o)` 的 MRO 上有 `attr` 且是描述器：重载了 `set` → 调 `它.set(o, v)`；否则 `AttributeError`；
-2. 否则 → 写入 `o` 自身属性表（无则新建）。
+1. `type(o)` 的 MRO 上有 `attr` 且是描述器：重载了 `set` → 调用 `set(o, v)`；否则 `AttributeError`；
+2. 否则写入 `o` 自身属性表（无则新建）。
 
-**删 `del o.attr`**（`del` 目标根须为标识符或属性访问，见 2.2.3）：
+删 `del o.attr`（`del` 目标须为标识符或属性访问，见 2.2.3）：
 
-1. `type(o)` 的 MRO 上有 `attr` 且是描述器：重载了 `delete` → 调 `它.delete(o)`；否则 `AttributeError`；
-2. 否则 → 从 `o` 自身属性表删除（无则 `AttributeError`）。
+1. `type(o)` 的 MRO 上有 `attr` 且是描述器：重载了 `delete` → 调用 `delete(o)`；否则 `AttributeError`；
+2. 否则从 `o` 自身属性表删除（无则 `AttributeError`）。
 
 ##### 3.9.1.4 `__dict__`
 
-每个对象的属性存在其**自身属性表**里，通过描述器 `__dict__`（只重载了 `get`，故只读）暴露。它与作用域里的 `_G`/`_L`（见
-3.10.1）同理——是一个**实时视图**：可读、可改其内容，但不能重绑或删除视图本身。
+对象的自身属性表通过描述器 `__dict__`（只重载 `get`）暴露，是实时视图（同 `_G`/`_L`，见 3.10.1）：可读可改内容，不能重绑或删除。
 
-- 读 `o.__dict__` → 返回那本**活的**字典；
-- `o.__dict__ = ...`、`del o.__dict__` → `__dict__` 无 `set`/`delete` → `AttributeError`；
-- 对返回的字典本身可增改键（`o.__dict__['k'] = v`）、用方法删键（`o.__dict__.pop('k')`；`del` 不接受下标）——这是直接增删自身属性的入口。
+- `o.__dict__` → 返回该字典；
+- `o.__dict__ = ...`、`del o.__dict__` → 无 `set`/`delete` → `AttributeError`；
+- 增改键：`o.__dict__['k'] = v`；删键：`o.__dict__.pop('k')`（`del` 不接受下标）。
 
-即便用 `__dict__` 后门塞入与某描述器同名的项，因描述器恒优先，`o.attr` 仍走描述器、该项被忽略。
+描述器恒优先于 `__dict__`，即使其中存在同名项，`o.attr` 也不会读到它。
 
 ```
 v = class {
@@ -1015,9 +1013,9 @@ v = class {
 v.read           # 方法描述器 → get(v, 类) → 绑定方法（self = v）
 v.read()         # 5
 v.x = 9          # x 无描述器 → 写入 v 的属性字典
-v.__dict__       # 活字典 {'x': 9}
+v.__dict__       # {'x': 9}
 del v.x          # x 无描述器 → 从属性字典删除
-v.__dict__ = {}  # 重绑 __dict__ → 无 set → AttributeError
+v.__dict__ = {}  # 无 set → AttributeError
 ```
 
 #### 3.9.2 迭代器协议
