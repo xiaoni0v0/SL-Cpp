@@ -1006,7 +1006,7 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 
 #### 3.9.2 迭代器协议
 
-迭代器协议规定对象如何参与 `for (x : obj)` 及 `*obj` 展开迭代。
+迭代器协议规定对象如何参与 `for (i : obj)` 及 `*obj` 展开迭代。
 
 `for [$] (i : obj) expr` 等价于
 
@@ -1014,24 +1014,25 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 {
     iteration = obj.__iter__()
     while [$] (True) {
-        try { i = iteration.__next__(); expr}
-        except (StopIteration) break
+        i = iteration.__next__()
+        if (i is StopIteration) break
+        expr
     }
 }
 ```
 
 `*obj` 同理。
 
-##### 3.9.2.2 可迭代对象
+##### 3.9.2.1 可迭代对象
 
 实现了 `__iter__` 方法的对象称为可迭代对象。
 `__iter__` 的语义为获取对象对应的迭代器。
 
-##### 3.9.2.1 迭代器
+##### 3.9.2.2 迭代器
 
 实现了 `__iter__` 和 `__next__` 方法的对象称为迭代器。
 通常迭代器的 `__iter__` 的返回值为它本身。迭代器一定可迭代。
-`__next__` 的语义为从迭代器获取下一个元素，若迭代终止则抛出 `StopIteration`。
+`__next__` 的语义为从迭代器获取下一个元素；若迭代终止，返回单例 `StopIteration`。
 
 ### 3.10 作用域
 
@@ -1249,7 +1250,7 @@ del attrs(v)       # SyntaxError：不是合法 del 目标
 
 #### 4.2.12 Iterable
 
-抽象基类。规定对象如何参与 `for (x : obj)` 及 `*obj` 展开迭代，详见 3.9.2。
+抽象基类。规定对象如何参与 `for (i : obj)` 及 `*obj` 展开迭代，详见 3.9.2。
 
 #### 4.2.13 Iterator
 
@@ -1261,6 +1262,7 @@ del attrs(v)       # SyntaxError：不是合法 del 目标
 
 - Ellipsis
 - NotImplemented
+- StopIteration
 
 #### 4.2.15 FuncGroup
 
