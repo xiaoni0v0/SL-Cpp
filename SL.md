@@ -857,6 +857,16 @@ deco(func() {})
 
 属性的读、写、删规则见 3.9.1 所述；`property`、`staticmethod`、`classmethod` 见 4.2。
 
+MRO 的计算：
+使用 C3 线性化算法。保证结果是一条确定的线性顺序， 且与各基类自身的 MRO、基类声明顺序均不矛盾；
+若继承关系本身矛盾无法线性化，则抛出 `TypeError`。
+
+`C(x)` 调用时（构造实例）：
+
+1. `obj = C.__new__(C, *args, **kwargs)`；
+2. 若 `isinstance(obj, C)`，再调用 `obj.__init__(*args, **kwargs)`；
+3. 最终返回 `obj`。
+
 ### 3.5 函数调用
 
 调用 `x(arg, kwarg=v, ...)` 时，在 `type(x)` 的 MRO 上查找 `__op_call__`，找到则以 `x` 为 `self` 调用；否则抛出
@@ -1303,14 +1313,21 @@ f(1.0)  # 抛出 DispatchError
 
 #### 4.2.19 异常类
 
+只列全局的一批常用异常，其余更细分的见 4.3.3 `exceptions` 模块。
+
 ```
 BaseException
 └── Exception
-    ├── SyntaxError   - 语法错误。编译期
-    ├── EncodingError - 编码错误。主要在打开文件时
-    ├── TypeError     - 类型错误
-    ├── NameError     - 变量名未找到
-    └── DispatchError - 函数调用时参数类型不匹配
+    ├── SyntaxError      - 语法错误。编译期
+    ├── TypeError        - 类型错误
+    ├── ValueError       - 值不合法
+    ├── NameError        - 变量名未找到
+    ├── AttributeError   - 属性不存在或不支持该操作
+    ├── IndexError       - `[]` 下标/键不存在或越界（不再区分序列下标与映射键）
+    ├── ZeroDivisionError - 除数为零
+    ├── DispatchError    - 函数调用时参数不匹配
+    ├── RecursionError   - 递归/调用嵌套过深
+    └── IOError          - 输入输出失败
 ```
 
 #### 4.2.20 CompoundType
@@ -1345,11 +1362,40 @@ BaseException
 
 #### 4.2.21 range
 
-继承 `Iterable`（见 4.2.12）。
+继承 `Iterable`。
 
 1. `range(stop)`
 2. `range(start, stop)`
 3. `range(start, stop, step)`
+
+#### 4.2.22 object
+
+所有类的根。可直接实例化（`object()` 得到一个空对象）。
+提供各协议的默认实现：`__op_eq__`、`__hash__`（同 `is`）；
+`__new__(cls)` 分配一个 `cls` 的空实例；
+`__init__(self)` 什么都不做。
+
+#### 4.2.23 type
+
+默认元类；一切类都是 `type` 的实例。
+
+1. `type(x)`：单参数，返回 `x` 的类；
+2. `type(name, bases, namespace)`：三参数，动态创建一个类，等价于 `class` 表达式的效果。
+
+#### 4.2.24 Function
+
+`func` 表达式建立的对象的类。实现 `__op_call__`。
+
+#### 4.2.25 super
+
+`super(cls, obj)`。
+
+`super_obj.__getattr__(self, attr)`：
+
+在 `type(obj)` 的 MRO 中找到 `cls` 的位置，从下一个类开始查找 `attr`。
+找到且是描述器则 `get(obj)`；
+否则原样返回；
+全部找不到则 `AttributeError`。
 
 ### 4.3 内置模块
 
@@ -1381,3 +1427,43 @@ BaseException
 抽象基类。检查 `__hash__` 是否存在，用法同 `Callable`。
 
 `list`、`dict`、`set`、`unordered_dict` 均不是 `Hashable`。
+
+#### 4.3.3 `exceptions`
+
+更细分的异常类，用不到就不用 `import`。目前只有：
+
+```
+IOError（见 4.2.19）
+└── EncodingError - 编码错误，主要在打开文件时
+```
+
+以后需要更细分的 IO 异常（如文件不存在、权限不足），继承 `IOError` 加入本模块，不动全局列表。
+
+### 4.4 内置类继承关系图
+
+$$
+\text{object}\left\{\begin{array}{l}
+\text{NoneType} \\
+\text{type} \\
+\text{Function} \\
+\text{staticmethod} \\
+\text{super} \\
+\text{SingletonType} \\
+\text{FuncGroup} \\
+\text{CompoundType} \\
+\text{Descriptor}\left\{\begin{array}{l}\text{property} \\ \text{classmethod} \end{array}\right. \\
+\text{Iterable}\left\{\begin{array}{l}
+\text{str} \\ \text{tuple} \\ \text{list} \\ \text{set} \\ \text{range} \\ \text{Iterator} \\
+\text{Mapping}\left\{\begin{array}{l}\text{dict} \\ \text{unordered_dict}\end{array}\right.
+\end{array}\right. \\
+\text{numbers.Number}\left\{\begin{array}{l}
+\text{complex（尚未设计）} \\
+\text{numbers.Real}\left\{\begin{array}{l}\text{float} \\ \text{int}\left\{\text{bool}\right.\end{array}\right.
+\end{array}\right. \\
+\text{BaseException} \to \text{Exception}\left\{\begin{array}{l}
+\text{SyntaxError} \\ \text{TypeError} \\ \text{ValueError} \\ \text{NameError} \\ \text{AttributeError} \\
+\text{IndexError} \\ \text{ZeroDivisionError} \\ \text{DispatchError} \\ \text{RecursionError} \\
+\text{IOError} \to \text{exceptions.EncodingError}
+\end{array}\right.
+\end{array}\right.
+$$
