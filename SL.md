@@ -901,7 +901,7 @@ f(*args, x=1, **extra) # 调用时展开
 
 SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Function Group）对象实现运行时 dispatch，而非通过同名函数定义。
 
-详见 4.2.13 所述。
+详见 4.2.15 所述。
 
 ### 3.8 运算符重载
 
@@ -998,8 +998,7 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则调用 `该属性.delete(o)`；
 2. 否则从 `o` 自身属性表删除（无则 `AttributeError`）。
 
-自身属性表不通过任何属性名暴露，是被隐藏的内部状态；它是对对象属性的刻画，但本身不是对象的属性之一。
-唯一的取得方式是内置函数 `attrs(obj)`（见 4.1.6）。
+**属性表**不通过任何属性名暴露，唯一的取得方式是内置函数 `attrs(obj)`（见 4.1.7）。
 
 ```
 v = class {
@@ -1130,25 +1129,36 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 具体行为：
 
-1. 若 `obj` 有 `__instancecheck__` 方法，则返回 `type.__instancecheck__(obj)`；
-2. 若 `obj` 无 `__instancecheck__` 方法，则检查 `obj` 的类型是否为 `type` 及其子类。
+1. 若 `type` 有 `__instance_check__` 方法，则返回 `type.__instance_check__(obj)`；
+2. 否则检查 `obj` 的类型是否为 `type` 及其子类。
 
-#### 4.1.4 `import(module_name, lazy=False)`
+#### 4.1.4 `issubclass(cls, type)`
+
+检查 `cls` 是否为 `type` 的子类（`cls` 本身也算）。其中 `type` 可以是具体类也可以是复合类。
+
+返回 `bool` 类型的值。
+
+具体行为：
+
+1. 若 `type` 有 `__subclass_check__` 方法，则返回 `type.__subclass_check__(cls)`；
+2. 否则检查 `cls` 是否为 `type` 或其子类。
+
+#### 4.1.5 `import(module_name, lazy=False)`
 
 导入名称为 `module_name` 的模块。
 
 `lazy` 参数表示是否延迟加载模块，若为 `True`，则在首次获取其属性时才会加载模块。
 **注意**：这可能导致异常的延迟发生。
 
-当前仅支持内置模块：`math`, `time`, `numbers`。
+当前仅支持内置模块：`math`, `time`, `numbers`, `protocols`。
 
 返回模块对象。
 
-#### 4.1.5 `len(obj)`
+#### 4.1.6 `len(obj)`
 
 返回容器对象的长度。
 
-#### 4.1.6 `attrs(obj)`
+#### 4.1.7 `attrs(obj)`
 
 返回 `obj` 的自身属性表（见 3.9.1.3），为实时视图：可读可改内容，写入的项若与某描述器同名，会被该描述器遮蔽（描述器恒优先，见
 3.9.1.2）。`obj` 为必选参数，不支持无参调用。
@@ -1184,13 +1194,13 @@ del attrs(v)       # SyntaxError：不是合法 del 目标
 
 #### 4.2.5 str
 
-表示字符串。严格按 Unicode 码点分割。
+表示字符串。严格按 Unicode 码点分割。继承 `Iterable`（见 4.2.12），逐字符迭代。
 
 **注意**：str 对象不可变。
 
 #### 4.2.6 tuple
 
-容器类。不可变。
+容器类。不可变。继承 `Iterable`（见 4.2.12）。
 
 包含任意多个对象的引用。
 
@@ -1198,14 +1208,14 @@ del attrs(v)       # SyntaxError：不是合法 del 目标
 
 #### 4.2.7 list
 
-容器类，可变。
+容器类，可变。继承 `Iterable`（见 4.2.12）。
 
 包含任意多个对象的引用。
 
 #### 4.2.8 Mapping
 
-抽象基类，不可直接实例化。定义键值对容器的公共契约：支持 `__op_index__`（按键读取）、`len`、按键值对迭代，
-不涉及顺序。`dict`、`unordered_dict` 均为其子类。
+`Iterable`（见 4.2.12）的子类，抽象基类，不可直接实例化。在此之上定义键值对容器的公共契约：支持
+`__op_index__`（按键读取）、`len`，遍历产出键值对。`dict`、`unordered_dict` 均为其子类。
 
 #### 4.2.9 dict
 
@@ -1222,14 +1232,25 @@ del attrs(v)       # SyntaxError：不是合法 del 目标
 
 #### 4.2.11 set
 
-#### 4.2.12 SingletonType
+继承 `Iterable`（见 4.2.12）。
+
+#### 4.2.12 Iterable
+
+抽象基类，不可直接实例化。规定对象如何参与 `for (x : iterable)` 及 `*iterable` 展开迭代，详见 3.9.2。
+`str`、`tuple`、`list`、`Mapping`（及其子类）、`set`、`range` 均为其子类。
+
+#### 4.2.13 Iterator
+
+`Iterable` 的子类，抽象，不可直接实例化。迭代过程中产生的迭代器对象本身的类，详见 3.9.2。
+
+#### 4.2.14 SingletonType
 
 包含了 SL 中的部分“单例”：
 
 - Ellipsis
 - NotImplemented
 
-#### 4.2.13 FuncGroup
+#### 4.2.15 FuncGroup
 
 `FuncGroup(*functions, name=None)`
 
@@ -1249,7 +1270,7 @@ f(1, 2) # 输出 4
 f(1.0)  # 抛出 DispatchError
 ```
 
-#### 4.2.14 异常类
+#### 4.2.16 异常类
 
 ```
 BaseException
@@ -1261,7 +1282,7 @@ BaseException
     └── DispatchError - 函数调用时参数类型不匹配
 ```
 
-#### 4.2.15 CompoundType
+#### 4.2.17 CompoundType
 
 用 `|`, `!`, `?`, `[]` 可以创建**复合类**。
 
@@ -1291,7 +1312,9 @@ BaseException
 以上检查均有短路性，但请不要依赖于此，因为检查的顺序不确定，
 例如 `int | str?` 的实际实现*可能*为 `None | int | str` 而非 `int | str | None`。
 
-#### 4.2.16 range
+#### 4.2.18 range
+
+继承 `Iterable`（见 4.2.12）。
 
 1. `range(stop)`
 2. `range(start, stop)`
@@ -1314,3 +1337,22 @@ BaseException
 `import('numbers')` 只是让 SL 代码里能取得 `Number`/`Real` 这两个名字本身，这条继承关系本身不依赖是否执行过这次 `import`。
 
 `complex`（复数）尚未设计，将继承 `Number`，不继承 `Real`。
+
+#### 4.3.2 `protocols`
+
+##### 4.3.2.1 Callable
+
+抽象基类，不可直接实例化。重写了 `__instance_check__`：`isinstance(obj, Callable)` 当且仅当 `type(obj)` 的 MRO 上有
+`__op_call__`；`__subclass_check__` 同理，检查候选类的 MRO 上有没有 `__op_call__`。不依赖任何真实继承关系，
+任何实现了 `__op_call__` 的类都会通过检查，不用显式继承 `Callable`。
+
+##### 4.3.2.2 Indexable
+
+抽象基类，不可直接实例化。`__instance_check__`/`__subclass_check__` 检查 `__op_index__` 是否存在，用法同 `Callable`。
+
+##### 4.3.2.3 Hashable
+
+抽象基类，不可直接实例化。`__instance_check__`/`__subclass_check__` 检查 `__hash__` 是否存在，用法同 `Callable`。
+
+`list`、`dict`、`set`、`unordered_dict` 均不通过 `Hashable` 的 `isinstance`/`issubclass` 检查，
+因为它们的 `__hash__` 不可用（见 4.2.9），这不是继承关系的排除，是 `__instance_check__` 求值为 `False`。
