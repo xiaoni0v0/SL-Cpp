@@ -846,9 +846,16 @@ deco(func() {})
 1. 从前到后对各基类 `BaseClass` 求值（若有）；
 2. 新建一个局部帧（即一个局部作用域），压入帧栈；
 3. 在该帧中从前到后对类体的各表达式求值；
-4. 类体执行完毕后弹出该帧，将其局部字典中收集到的全部变量作为类的**属性**；值为函数对象的属性即**方法**。
+4. 类体执行完毕后弹出该帧，其局部字典中收集到的每个变量 `v`，按下列规则存为类的**属性**：
+    1. 若 `isinstance(v, property)`，直接存入（属性行为由 `property` 自己的 `get`、`set`、`delete` 负责）；
+    2. 否则若 `isinstance(v, staticmethod)`，将 `v.func` 存入（纯标签，不是描述器，不参与绑定）；
+    3. 否则若 `isinstance(v, classmethod)`，直接存入（绑定 `cls` 由 `classmethod` 自己的 `get` 负责）；
+    4. 否则若 `isinstance(v, protocols.Callable)`，将 `MethodDescriptor(v)` 存入；
+       `MethodDescriptor` 是 `Descriptor` 的子类；
+       get 时返回一个把 `obj` 绑定为第一参数Z的可调用对象；
+    5. 否则原样存入。
 
-属性的读、写、删规则见 3.9.1 所述。
+属性的读、写、删规则见 3.9.1 所述；`property`、`staticmethod`、`classmethod` 见 4.2。
 
 ### 3.5 函数调用
 
@@ -901,7 +908,7 @@ f(*args, x=1, **extra) # 调用时展开
 
 SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Function Group）对象实现运行时 dispatch，而非通过同名函数定义。
 
-详见 4.2.15 所述。
+详见 4.2.18 所述。
 
 ### 3.8 运算符重载
 
@@ -983,11 +990,14 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 
 读 `o.attr`：
 
-1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则返回 `该属性.get(o)`；
-2. 否则若 `o` 自身属性表中有 `attr`，则返回它；
-3. 否则若 `type(o)` 的 MRO 上有 `attr`（非描述器），则返回它；
-4. 否则若 `type(o)` 的 MRO 上有 `__getattr__`，则返回 `__getattr__(o, attr)`；
-5. 否则 `AttributeError`。
+1. 若 `o` 本身是一个类，且它自己的 MRO 上有 `attr` 且是描述器，则返回 `该属性.get(o)`；
+2. 否则若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则返回 `该属性.get(o)`；
+3. 否则若 `o` 自身属性表中有 `attr`，则返回它；
+4. 否则若 `type(o)` 的 MRO 上有 `attr`（非描述器），则返回它；
+5. 否则若 `type(o)` 的 MRO 上有 `__getattr__`，则返回 `__getattr__(o, attr)`；
+6. 否则 `AttributeError`。
+
+`get` 只接受 `obj` 一个参数，不区分是否经类访问；描述器如需区分，自行判断 `isinstance(obj, type)`。
 
 写 `o.attr = v`：
 
@@ -1173,17 +1183,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.1.7 `attrs(obj)`
 
-返回 `obj` 的自身属性表（见 3.9.1.3），为实时视图：可读可改内容，写入的项若与某描述器同名，会被该描述器遮蔽（描述器恒优先，见
-3.9.1.2）。`obj` 为必选参数，不支持无参调用。
-
-因是函数调用而非合法的赋值/`del` 目标（见 2.2.3、3.3），无法重新赋值或 `del`，抛 `SyntaxError`。
-
-```
-attrs(v)['y'] = 1  # 增改键
-attrs(v).pop('y')  # 删键
-attrs(v) = {}      # SyntaxError：不是合法赋值目标
-del attrs(v)       # SyntaxError：不是合法 del 目标
-```
+返回 `obj` 的自身属性表（见 3.9.1.3），为实时视图，可读可改内容。
 
 ### 4.2 内置类
 
@@ -1264,7 +1264,22 @@ del attrs(v)       # SyntaxError：不是合法 del 目标
 - NotImplemented
 - StopIteration
 
-#### 4.2.15 FuncGroup
+#### 4.2.15 property
+
+`property(fget, fset=None, fdel=None)`，`Descriptor` 的子类。`fset`、`fdel` 缺省时对应操作按 `Descriptor` 默认行为抛
+`AttributeError`。`get(self, obj)`：若 `isinstance(obj, type)` 返回 `self`（供内省），否则返回 `fget(obj)`。
+
+#### 4.2.16 staticmethod
+
+`staticmethod(func)`，`self.func = func`。纯标签，不是描述器，仅在类体收集属性时（见 3.4.8）取出 `v.func` 使用，
+本身不会成为类属性。
+
+#### 4.2.17 classmethod
+
+`classmethod(func)`，`Descriptor` 的子类。`get(self, obj)`：令 `cls = obj if isinstance(obj, type) else type(obj)`，
+返回把 `cls` 绑定为第一参数的可调用对象。
+
+#### 4.2.18 FuncGroup
 
 `FuncGroup(*functions, name=None)`
 
@@ -1284,7 +1299,7 @@ f(1, 2) # 输出 4
 f(1.0)  # 抛出 DispatchError
 ```
 
-#### 4.2.16 异常类
+#### 4.2.19 异常类
 
 ```
 BaseException
@@ -1296,7 +1311,7 @@ BaseException
     └── DispatchError - 函数调用时参数类型不匹配
 ```
 
-#### 4.2.17 CompoundType
+#### 4.2.20 CompoundType
 
 用 `|`, `!`, `?`, `[]` 可以创建**复合类**。
 
@@ -1326,7 +1341,7 @@ BaseException
 以上检查均有短路性，但请不要依赖于此，因为检查的顺序不确定，
 例如 `int | str?` 的实际实现*可能*为 `None | int | str` 而非 `int | str | None`。
 
-#### 4.2.18 range
+#### 4.2.21 range
 
 继承 `Iterable`（见 4.2.12）。
 
@@ -1347,8 +1362,8 @@ BaseException
 `Number` 的子类，抽象基类。在四则运算之上增加大小比较。`int`、`float` 为其子类；
 `complex` 不是（复数没有跟四则运算相容的大小顺序）。
 
-`int`、`float` 对 `Number`/`Real` 的继承是真实的类继承，体现在各自的 MRO 上，不是仅为了让 `isinstance` 成立而做的登记。
-`import('numbers')` 只是让 SL 代码里能取得 `Number`/`Real` 这两个名字本身，这条继承关系本身不依赖是否执行过这次 `import`。
+`int`、`float` 对 `Number`、`Real` 的继承是真实的类继承，体现在各自的 MRO 上，不是仅为了让 `isinstance` 成立而做的登记。
+`import('numbers')` 只是让 SL 代码里能取得 `Number`、`Real` 这两个名字本身，这条继承关系本身不依赖是否执行过这次 `import`。
 
 `complex`（复数）尚未设计，将继承 `Number`，不继承 `Real`。
 
@@ -1362,11 +1377,11 @@ BaseException
 
 ##### 4.3.2.2 Indexable
 
-抽象基类。`__instance_check__`/`__subclass_check__` 检查 `__op_index__` 是否存在，用法同 `Callable`。
+抽象基类。`__instance_check__`、`__subclass_check__` 检查 `__op_index__` 是否存在，用法同 `Callable`。
 
 ##### 4.3.2.3 Hashable
 
-抽象基类。`__instance_check__`/`__subclass_check__` 检查 `__hash__` 是否存在，用法同 `Callable`。
+抽象基类。`__instance_check__`、`__subclass_check__` 检查 `__hash__` 是否存在，用法同 `Callable`。
 
-`list`、`dict`、`set`、`unordered_dict` 均不通过 `Hashable` 的 `isinstance`/`issubclass` 检查，
+`list`、`dict`、`set`、`unordered_dict` 均不通过 `Hashable` 的 `isinstance`、`issubclass` 检查，
 因为它们的 `__hash__` 不可用（见 4.2.9），这不是继承关系的排除，是 `__instance_check__` 求值为 `False`。
