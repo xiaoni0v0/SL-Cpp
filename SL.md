@@ -52,7 +52,7 @@ SL 是一种面向对象的编程语言。特点是：
 - `static`
 - `with`
 - `match`, `case`
-- `local`, `global`
+- `local`
 
 #### 2.1.3 标识符
 
@@ -553,7 +553,10 @@ else x = 200
     - 对于 set，返回它们的交集、并集；
 - `x < y`, `x <= y`, `x > y`, `x >= y`, `x != y`, `x == y`，分别返回 `x` 小于/小于或等于/大于/大于或等于/不等于/等于 `y`；
 - `x is y`，返回 `x` 和 `y` 是否是同一个对象；
-- `not x`, `x and y`, `x or y`，分别返回逻辑非、逻辑与、逻辑或；
+- `not x`, `x and y`, `x or y`，分别返回逻辑非、逻辑与、逻辑或：
+    - 逻辑非的语义：若 `x` 的真值为 `True`，则返回 `False`，否则返回 `True`（一定是 bool 类型）；
+    - 逻辑与的语义：若 `x` 的真值为 `True`，则返回 `y`，否则返回 `x`（一定是 `x` 和 `y` 之一，不一定是 bool 类型）；
+    - 逻辑或的语义：若 `x` 的真值为 `True`，则返回 `x`，否则返回 `y`（一定是 `x` 和 `y` 之一，不一定是 bool 类型）；
 - `x = expr`，表示令 `x` 引用 `expr` 这个对象，返回 `expr` 的值。
 - `x op= expr`（其中 `op` 为支持的复合赋值运算的运算符），在语义上完全等价于 `(x = x op expr)`
 
@@ -971,29 +974,27 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 |-------------------------|------|------|------------------------------------------|
 | `get(self, obj, owner)` | 读属性  | √    | `obj`：经其访问的实例（经类访问时为 `None`）；`owner`：属主类 |
 | `set(self, obj, value)` | 写属性  | ×    | `value`：要写入的值                            |
-| `delete(self, obj)`     | 删属性  | ×    | —                                        |
+| `delete(self, obj)`     | 删属性  | ×    | `obj`：经其访问的实例（经类访问时为 `None`）             |
 
 ##### 3.9.1.2 读取
 
-`getattr(o, attr)`：
+读 `o.attr`：
 
-1. `type(o)` 的 MRO 上有 `attr` 且是描述器 → 返回 `该属性.get(o, type(o))`；
-2. `o` 自身属性表中有 `attr` → 返回它；
-3. `type(o)` 的 MRO 上有 `attr`（非描述器）→ 返回它；
+1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则返回 `该属性.get(o, type(o))`；
+2. 否则若 `o` 自身属性表中有 `attr`，则返回它；
+3. 否则若 `type(o)` 的 MRO 上有 `attr`（非描述器），则返回它；
 4. 否则 `AttributeError`。
 
 ##### 3.9.1.3 写入与删除
 
-描述器优先，否则读写"自身属性表"（实例 → 实例字典；类 → 类属性表）。
-
 写 `o.attr = v`：
 
-1. `type(o)` 的 MRO 上有 `attr` 且是描述器：重载了 `set` → 调用 `set(o, v)`；否则 `AttributeError`；
+1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器：若重载了 `set` 则调用 `set(o, v)`，否则 `AttributeError`；
 2. 否则写入 `o` 自身属性表（无则新建）。
 
 删 `del o.attr`（`del` 目标须为标识符或属性访问，见 2.2.3）：
 
-1. `type(o)` 的 MRO 上有 `attr` 且是描述器：重载了 `delete` → 调用 `delete(o)`；否则 `AttributeError`；
+1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器：重载了 `delete` 则调用 `delete(o)`，否则 `AttributeError`；
 2. 否则从 `o` 自身属性表删除（无则 `AttributeError`）。
 
 自身属性表不通过任何属性名暴露，是被隐藏的内部状态；它是对对象属性的刻画，但本身不是对象的属性之一。
@@ -1004,10 +1005,10 @@ v = class {
     func __init__(self, x) { self.x = x }
     func read(self) { return self.x }
 }(5)
-v.read      # 方法描述器 → get(v, 类) → 绑定方法（self = v）
+v.read      # 方法描述器，get(v, 类) 得到绑定方法（self = v）
 v.read()    # 5
-v.x = 9     # x 无描述器 → 写入 v 的属性字典
-del v.x     # x 无描述器 → 从属性字典删除
+v.x = 9     # x 无描述器，写入 v 的属性字典
+del v.x     # x 无描述器，从属性字典删除
 ```
 
 #### 3.9.2 迭代器协议
@@ -1138,7 +1139,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 `lazy` 参数表示是否延迟加载模块，若为 `True`，则在首次获取其属性时才会加载模块。
 **注意**：这可能导致异常的延迟发生。
 
-当前仅支持内置模块：`math`, `time`。
+当前仅支持内置模块：`math`, `time`, `numbers`。
 
 返回模块对象。
 
@@ -1174,11 +1175,11 @@ del attrs(v)       # SyntaxError：不是合法 del 目标
 
 #### 4.2.3 int
 
-表示整数，自带高精度。
+表示整数，自带高精度。继承 `numbers.Real`（见 4.3.1）。
 
 #### 4.2.4 float
 
-表示浮点数，底层用 C++ 的 double 实现。
+表示浮点数，底层用 C++ 的 double 实现。继承 `numbers.Real`（见 4.3.1）。
 
 #### 4.2.5 str
 
@@ -1229,7 +1230,7 @@ del attrs(v)       # SyntaxError：不是合法 del 目标
 
 #### 4.2.13 FuncGroup
 
-`FuncGroup(*args, name=None)`
+`FuncGroup(*functions, name=None)`
 
 一个例子足以说明 FuncGroup 的用法：
 
@@ -1249,12 +1250,15 @@ f(1.0)  # 抛出 DispatchError
 
 #### 4.2.14 异常类
 
-Exception
-├── SyntaxError - 语法错误。编译期
-├── EncodingError - 编码错误。主要在打开文件时
-├── TypeError - 类型错误
-├── DispatchError - 函数调用时参数类型不匹配
-└── NameError - 变量名未找到
+```
+BaseException
+└── Exception
+    ├── SyntaxError   - 语法错误。编译期
+    ├── EncodingError - 编码错误。主要在打开文件时
+    ├── TypeError     - 类型错误
+    ├── NameError     - 变量名未找到
+    └── DispatchError - 函数调用时参数类型不匹配
+```
 
 #### 4.2.15 CompoundType
 
@@ -1291,3 +1295,21 @@ Exception
 1. `range(stop)`
 2. `range(start, stop)`
 3. `range(start, stop, step)`
+
+### 4.3 内置模块
+
+#### 4.3.1 `numbers`
+
+##### 4.3.1.1 Number
+
+抽象基类，不可直接实例化。定义数值的公共契约：四则运算与相等比较。`int`、`float`、`complex` 均为其子类。
+
+##### 4.3.1.2 Real
+
+`Number` 的子类，抽象，不可直接实例化。在四则运算之上增加大小比较。`int`、`float` 为其子类；
+`complex` 不是（复数没有跟四则运算相容的大小顺序）。
+
+`int`、`float` 对 `Number`/`Real` 的继承是真实的类继承，体现在各自的 MRO 上，不是仅为了让 `isinstance` 成立而做的登记。
+`import('numbers')` 只是让 SL 代码里能取得 `Number`/`Real` 这两个名字本身，这条继承关系本身不依赖是否执行过这次 `import`。
+
+`complex`（复数）尚未设计，将继承 `Number`，不继承 `Real`。
