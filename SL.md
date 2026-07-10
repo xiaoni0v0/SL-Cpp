@@ -986,17 +986,21 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则返回 `该属性.get(o)`；
 2. 否则若 `o` 自身属性表中有 `attr`，则返回它；
 3. 否则若 `type(o)` 的 MRO 上有 `attr`（非描述器），则返回它；
-4. 否则 `AttributeError`。
+4. 否则若 `type(o)` 的 MRO 上有 `__getattr__`，则返回 `__getattr__(o, attr)`；
+5. 否则 `AttributeError`。
 
 写 `o.attr = v`：
 
 1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则调用 `该属性.set(o, v)`；
-2. 否则写入 `o` 自身属性表（无则新建）。
+2. 否则若 `type(o)` 的 MRO 上有 `__setattr__`，则调用 `__setattr__(o, attr, v)`；
+3. 否则写入 `o` 自身属性表（无则新建）。
 
 删 `del o.attr`：
 
 1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则调用 `该属性.delete(o)`；
-2. 否则从 `o` 自身属性表删除（无则 `AttributeError`）。
+2. 否则若 `o` 自身属性表中有 `attr`，则从中删除；
+3. 否则若 `type(o)` 的 MRO 上有 `__delattr__`，则调用 `__delattr__(o, attr)`；
+4. 否则 `AttributeError`。
 
 **属性表**不通过任何属性名暴露，唯一的取得方式是内置函数 `attrs(obj)`（见 4.1.7）。
 
