@@ -976,7 +976,7 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 | `set(self, obj, value)` | 写属性  | ×    | `value`：要写入的值                            |
 | `delete(self, obj)`     | 删属性  | ×    | `obj`：经其访问的实例（经类访问时为 `None`）             |
 
-##### 3.9.1.2 读取
+##### 3.9.1.2 对属性的操作
 
 读 `o.attr`：
 
@@ -985,14 +985,12 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 3. 否则若 `type(o)` 的 MRO 上有 `attr`（非描述器），则返回它；
 4. 否则 `AttributeError`。
 
-##### 3.9.1.3 写入与删除
-
 写 `o.attr = v`：
 
 1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器：若重载了 `set` 则调用 `set(o, v)`，否则 `AttributeError`；
 2. 否则写入 `o` 自身属性表（无则新建）。
 
-删 `del o.attr`（`del` 目标须为标识符或属性访问，见 2.2.3）：
+删 `del o.attr`：
 
 1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器：重载了 `delete` 则调用 `delete(o)`，否则 `AttributeError`；
 2. 否则从 `o` 自身属性表删除（无则 `AttributeError`）。
