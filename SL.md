@@ -849,7 +849,8 @@ deco(func() {})
 
 ### 3.5 函数调用
 
-调用 `x(arg, kwarg=v, ...)` 时，要求 `x` 的类是否是内置类 `callable` 的子类，否则直接抛 `TypeError`。
+调用 `x(arg, kwarg=v, ...)` 时，在 `type(x)` 的 MRO 上查找 `__op_call__`，找到则以 `x` 为 `self` 调用；否则抛出
+`TypeError`。
 
 对于函数对象的调用，应当给所有形参赋值，或是用传参，或是用默认值。
 
@@ -897,7 +898,7 @@ f(*args, x=1, **extra) # 调用时展开
 
 SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Function Group）对象实现运行时 dispatch，而非通过同名函数定义。
 
-详见 4.2.11 所述。
+详见 4.2.13 所述。
 
 ### 3.8 运算符重载
 
@@ -995,27 +996,18 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 1. `type(o)` 的 MRO 上有 `attr` 且是描述器：重载了 `delete` → 调用 `delete(o)`；否则 `AttributeError`；
 2. 否则从 `o` 自身属性表删除（无则 `AttributeError`）。
 
-##### 3.9.1.4 `__dict__`
-
-对象的自身属性表通过描述器 `__dict__`（只重载 `get`）暴露，是实时视图（同 `_G`/`_L`，见 3.10.1）：可读可改内容，不能重绑或删除。
-
-- `o.__dict__` → 返回该字典；
-- `o.__dict__ = ...`、`del o.__dict__` → 无 `set`/`delete` → `AttributeError`；
-- 增改键：`o.__dict__['k'] = v`；删键：`o.__dict__.pop('k')`（`del` 不接受下标）。
-
-描述器恒优先于 `__dict__`，即使其中存在同名项，`o.attr` 也不会读到它。
+自身属性表不通过任何属性名暴露，是被隐藏的内部状态；它是对对象属性的刻画，但本身不是对象的属性之一。
+唯一的取得方式是内置函数 `attrs(obj)`（见 4.1.6）。
 
 ```
 v = class {
     func __init__(self, x) { self.x = x }
     func read(self) { return self.x }
 }(5)
-v.read           # 方法描述器 → get(v, 类) → 绑定方法（self = v）
-v.read()         # 5
-v.x = 9          # x 无描述器 → 写入 v 的属性字典
-v.__dict__       # {'x': 9}
-del v.x          # x 无描述器 → 从属性字典删除
-v.__dict__ = {}  # 无 set → AttributeError
+v.read      # 方法描述器 → get(v, 类) → 绑定方法（self = v）
+v.read()    # 5
+v.x = 9     # x 无描述器 → 写入 v 的属性字典
+del v.x     # x 无描述器 → 从属性字典删除
 ```
 
 #### 3.9.2 迭代器协议
@@ -1154,6 +1146,20 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 返回容器对象的长度。
 
+#### 4.1.6 `attrs(obj)`
+
+返回 `obj` 的自身属性表（见 3.9.1.3），为实时视图：可读可改内容，写入的项若与某描述器同名，会被该描述器遮蔽（描述器恒优先，见
+3.9.1.2）。`obj` 为必选参数，不支持无参调用。
+
+因是函数调用而非合法的赋值/`del` 目标（见 2.2.3、3.3），无法重新赋值或 `del`，抛 `SyntaxError`。
+
+```
+attrs(v)['y'] = 1  # 增改键
+attrs(v).pop('y')  # 删键
+attrs(v) = {}      # SyntaxError：不是合法赋值目标
+del attrs(v)       # SyntaxError：不是合法 del 目标
+```
+
 ### 4.2 内置类
 
 #### 4.2.1 NoneType
@@ -1194,18 +1200,34 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 包含任意多个对象的引用。
 
-#### 4.2.8 dict
+#### 4.2.8 Mapping
 
-#### 4.2.9 set
+抽象基类，不可直接实例化。定义键值对容器的公共契约：支持 `__op_index__`（按键读取）、`len`、按键值对迭代，
+不涉及顺序。`dict`、`unordered_dict` 均为其子类。
 
-#### 4.2.10 SingletonType
+#### 4.2.9 dict
+
+`Mapping` 的子类，可变，键需可哈希。遍历（键、值、键值对）按插入序。
+
+哈希与相等：自定义类型默认按对象身份（同 `is`）计算，可重载 `__hash__(self)` 与 `__op_eq__` 改为按值比较，
+两者需保持一致（相等的对象哈希值必须相等）。
+
+内置类型中，`list`、`dict`、`set` 不可哈希；`tuple` 在其元素均可哈希时可哈希。
+
+#### 4.2.10 unordered_dict
+
+`Mapping` 的子类，除不保证遍历顺序外，与 `dict` 接口一致。
+
+#### 4.2.11 set
+
+#### 4.2.12 SingletonType
 
 包含了 SL 中的部分“单例”：
 
 - Ellipsis
 - NotImplemented
 
-#### 4.2.11 FuncGroup
+#### 4.2.13 FuncGroup
 
 `FuncGroup(*args, name=None)`
 
@@ -1225,7 +1247,7 @@ f(1, 2) # 输出 4
 f(1.0)  # 抛出 DispatchError
 ```
 
-#### 4.2.12 异常类
+#### 4.2.14 异常类
 
 Exception
 ├── SyntaxError - 语法错误。编译期
@@ -1234,7 +1256,7 @@ Exception
 ├── DispatchError - 函数调用时参数类型不匹配
 └── NameError - 变量名未找到
 
-#### 4.2.13 CompoundType
+#### 4.2.15 CompoundType
 
 用 `|`, `!`, `?`, `[]` 可以创建**复合类**。
 
@@ -1264,7 +1286,7 @@ Exception
 以上检查均有短路性，但请不要依赖于此，因为检查的顺序不确定，
 例如 `int | str?` 的实际实现*可能*为 `None | int | str` 而非 `int | str | None`。
 
-#### 4.2.14 range
+#### 4.2.16 range
 
 1. `range(stop)`
 2. `range(start, stop)`
