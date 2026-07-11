@@ -843,7 +843,7 @@ deco(func() {})
 
 与函数不同，类对象的建立会**立即执行类体**，过程如下：
 
-1. 从前到后对各基类 `BaseClass` 求值（若有）；若某个 `BaseClass` 的 `__final__` 为 `True`，抛出 `TypeError`；
+1. 从前到后对各基类 `BaseClass` 求值（若有）；若某个 `BaseClass` 的 `__is_final_class__` 为 `True`，抛出 `TypeError`；
 2. 新建一个局部帧（即一个局部作用域），压入帧栈；
 3. 在该帧中从前到后对类体的各表达式求值；
 4. 类体执行完毕后弹出该帧，其局部字典中收集到的每个变量 `v`，按下列规则存为类的**属性**：
@@ -858,19 +858,25 @@ deco(func() {})
 属性的读、写、删规则见 3.9.1 所述；`property`、`staticmethod`、`classmethod` 见 4.2。
 
 MRO 的计算：
-使用 C3 线性化算法。保证结果是一条确定的线性顺序， 且与各基类自身的 MRO、基类声明顺序均不矛盾；
+使用 C3 线性化算法。保证结果是一条确定的线性顺序， 且与各基类自身的 MRO、基类声明顺序均不矛盾。
 若继承关系本身矛盾无法线性化，则抛出 `TypeError`。
+
+`__abstractmethods__` 的计算：
+候选集合为各基类 `__abstractmethods__` 的并集，加上本次新收集的属性中 `__is_abstract_method__` 为 `True` 的名字；
+对候选集合中每个名字，按新类自己的 MRO 重新查一次，
+查到的结果仍是 `__is_abstract_method__` 则保留，否则（被具体实现覆盖）从集合中去掉；
+剩下的即为该类的 `__abstractmethods__`。
 
 `C(x)` 调用时（构造实例）：
 
-1. `obj = C.__new__(C, *args, **kwargs)`；
-2. 若 `isinstance(obj, C)`，再调用 `obj.__init__(*args, **kwargs)`；
-3. 最终返回 `obj`。
+1. 若 `C.__abstractmethods__` 非空，抛出 `TypeError`（不能实例化含未实现抽象方法的类）；
+2. `obj = C.__new__(C, *args, **kwargs)`；
+3. 若 `isinstance(obj, C)`，再调用 `obj.__init__(*args, **kwargs)`；
+4. 最终返回 `obj`。
 
 ### 3.5 函数调用
 
-调用 `x(arg, kwarg=v, ...)` 时，在 `type(x)` 的 MRO 上查找 `__op_call__`，找到则以 `x` 为 `self` 调用；否则抛出
-`TypeError`。
+调用 `x(arg, kwarg=v, ...)` 时，在 `type(x)` 的 MRO 上查找 `__op_call__` 并调用；否则抛出 `TypeError`。
 
 对于函数对象的调用，应当给所有形参赋值，或是用传参，或是用默认值。
 
@@ -993,7 +999,7 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 | `set(self, obj, value)` | 写属性  | `value`：要写入的值 |
 | `delete(self, obj)`     | 删属性  | `obj`：经其访问的实例 |
 
-`Descriptor` 把 `get` 声明为抽象方法，子类必须重写；
+`Descriptor` 把 `get` 标记为 `@abstractmethod`；
 `set`、`delete` 则有默认实现，调用即无条件抛出 `AttributeError`，需要可写、可删就重写它们。
 
 ##### 3.9.1.2 对属性的操作
@@ -1195,11 +1201,18 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 返回 `obj` 的自身属性表（见 3.9.1.3），为实时视图，可读可改内容。
 
-#### 4.1.8 `final(cls)`
+#### 4.1.8 `finalclass(cls)`
 
-要求 `cls` 为类，否则抛出 `TypeError`。
-将 `cls.__final__` 设为 `True`，返回 `cls` 本身。
-被标记的类不能再被继承，见 3.4.8。
+要求 `cls` 为类，否则抛出 `TypeError`；
+若 `cls.__abstractmethods__` 非空，也抛出 `TypeError`。
+
+将 `cls.__is_final_class__` 设为 `True`，返回 `cls` 本身。
+
+#### 4.1.9 `abstractmethod(v)`
+
+将 `v.__is_abstract_method__` 设为 `True`，返回 `v` 本身。
+
+可标在普通方法、`property`、`classmethod` 上；
 
 ### 4.2 内置类
 
@@ -1377,13 +1390,14 @@ BaseException
 #### 4.2.22 object
 
 所有类的根。可直接实例化（`object()` 得到一个空对象）。
-提供各协议的默认实现：`__op_eq__`、`__hash__`（同 `is`）；`__final__ = False`；
+提供各协议的默认实现：
+`__op_eq__`、`__hash__`、`__is_final_class__ = False`、`__is_abstract_method__ = False`；`__abstractmethods__ = ()`；
 `__new__(cls)` 分配一个 `cls` 的空实例；
 `__init__(self)` 什么都不做。
 
 #### 4.2.23 type
 
-默认元类，唯一，`__final__ = True`；一切类都是 `type` 的实例。
+唯一元类，`__is_final_class__ = True`；一切类都是 `type` 的实例。
 
 1. `type(x)`：单参数，返回 `x` 的类；
 2. `type(name, bases, namespace)`：三参数，动态创建一个类，等价于 `class` 表达式的效果。
