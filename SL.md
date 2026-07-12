@@ -512,10 +512,9 @@ else x = 200
 5. 对复合表达式 `{ expr1; expr2; ... }`
    从前到后逐个求每条表达式的值；
 6. 对控制流，见 3.4.5 所述。
-7. 对函数定义 `func f[ALL_CAPTURE](x: type_1 = default_value_1, type_2 = default_value_2, ...)`
+7. 对函数定义 `func f[ALL_CAPTURE](x: type_1 = default_value_1, y: type_2 = default_value_2, ...)`
    先从前到后处理 `ALL_CAPTURE` 中各项（值捕获按当前作用域读取标识符的值；引用捕获只记录定义帧与标识符，不读取值）；
    再从前到后对形参的类型注解和默认值逐个求值，即 `type_1` -> `default_value_1` -> `type_2` -> `default_value_2` -> ...
-   的顺序；
 8. 对类定义 `class identifier(BaseClass1, ...)`
    各基类从前到后逐个求值；
 9. 对 `except`，各异常类从前到后逐个求值。
