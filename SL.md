@@ -236,7 +236,7 @@ else x = 200
 语法：
 
 ```
-if (cond1) expr1 ⟦elif (cond2) expr2⟧ ... ⟦else expr3⟧
+if (cond1) expr1 ⟦elif (cond2) expr2 ...⟧ ⟦else expr3⟧
 ```
 
 `elif` 分支可以有 0 个或多个；`else` 可选；`cond`、`expr` 均为表达式。
@@ -319,14 +319,17 @@ try expr1 ⟦except (Exception1, ...) expr2⟧ ⟦finally expr3⟧
 语法：
 
 ```
-func ⟦identifier⟧ ⟦ [ALL_CAPTURE] ⟧ (ALL_PARAM) ⟦-> type⟧ { expr1; ... }
+⟦@decorator ...⟧ func ⟦identifier⟧ ⟦ [ALL_CAPTURE] ⟧ (ALL_PARAM) ⟦-> type⟧ { expr1; ... }
 ```
 
-省略 `identifier` 为**匿名函数**（**lambda 表达式**），否则为**命名函数**（`identifier` 须为标识符）；
-`-> type` 为可选的**返回值类型注解**，`type` 为表达式；
-`{ expr1; ... }` 称为**函数体**，可由 0 个或多个表达式组成。
+其中：
 
-`[ALL_CAPTURE]` 为**捕获列表**，由 1 个或多个 `ONE_CAPTURE` 组成，语法：
+1. `decorator` 为表达式；
+2. `identifier` 为标识符；
+3. `type` 为表达式；
+4. `{ expr1; ... }` 由 0 个或多个表达式组成。
+
+`[ALL_CAPTURE]` 为**捕获列表**，由 0 个或多个 `ONE_CAPTURE` 组成，语法：
 
 1. `identifier`（**值捕获**，捕获当前作用域内同名标识符的值）
 2. `identifier = expr`（**值捕获**，捕获 `expr` 的值，绑定为 `identifier`）
@@ -357,6 +360,8 @@ func ⟦identifier⟧ ⟦ [ALL_CAPTURE] ⟧ (ALL_PARAM) ⟦-> type⟧ { expr1; .
 
 语法：`@decorator expr`，其中 `decorator` 和 `expr` 均为表达式。
 
+**注意**：若 `expr` 紧邻着就是一个函数表达式或类表达式则不适用本节，那属于函数/类表达式的一部分。
+
 #### 2.2.8 类表达式
 
 类的定义 `class` 是表达式。
@@ -364,13 +369,15 @@ func ⟦identifier⟧ ⟦ [ALL_CAPTURE] ⟧ (ALL_PARAM) ⟦-> type⟧ { expr1; .
 语法：
 
 ```
-class ⟦identifier⟧ ⟦(BaseClass1, ...)⟧ { expr1; ... }
+⟦@decorator ...⟧ class ⟦identifier⟧ ⟦(BaseClass1, ...)⟧ { expr1; ... }
 ```
 
-省略 `identifier` 为**匿名类**，否则为**命名类**（`identifier` 须为标识符）。
+其中：
 
-`BaseClass` 为表达式，可以有 0 个或多个（省略括号即 0 个基类）；
-`{ expr1; ... }` 称为**类体**，可由 0 个或多个表达式组成。
+1. `decorator` 为表达式；
+2. `identifier` 为标识符；
+3. `BaseClass` 为表达式；
+4. `{ expr1; ... }` 由 0 个或多个表达式组成。
 
 ## 3 语义
 
@@ -622,6 +629,28 @@ class ⟦identifier⟧ ⟦(BaseClass1, ...)⟧ { expr1; ... }
 1. 命名函数的 `__name__` 属性为函数名（字符串），匿名函数不存在 `__name__` 属性。
 2. 命名函数建立时，会令当前作用域中名称为 `identifier` 的变量引用该函数对象。
 
+若函数带有前缀装饰器，建立函数对象之后，按从近到远（离 `func` 最近的先来）依次调用装饰器，
+整个表达式的值就是最终的值。
+
+若函数是命名的，还会额外把 `identifier` 重新绑定为这个最终值，覆盖掉函数建立时绑定的原始函数对象。
+
+要求每个 `decorator` 都是 `Callable`，否则抛出 `TypeError`。
+
+例如：
+
+```
+@deco1
+@deco2
+func f() {}
+# 等价于
+func f() {};
+f = deco1(deco2(f));
+
+@deco func () {}
+# 等价于
+deco( func () {} )
+```
+
 函数建立时会处理 `ALL_CAPTURE`（若有），规则见 3.10.4。
 
 函数定义并不会执行函数体，只有当函数被调用时才会执行此操作。
@@ -655,26 +684,17 @@ class ⟦identifier⟧ ⟦(BaseClass1, ...)⟧ { expr1; ... }
 
 #### 3.4.7 装饰器表达式的值
 
-要求 `decorator` 是一个可调用对象，否则抛出 `TypeError`。
+要求 `decorator` 是 `Callable`，否则抛出 `TypeError`。
 
 `@decorator expr` 的值为 `decorator(expr)`。
-
-对具有 `__name__` 属性的对象，`@decorator expr` 的副作用是令当前作用域内名为 `__name__` 的变量引用 `decorator(expr)`。
 
 例如：
 
 ```
-@deco
-func f() {}
-# 等价于
-func f() {};
-f = deco(f);
-# 注意以上的语义中有两次令 f 引用对象，第一次为命名函数，第二次为装饰器返回值
-
-@deco
-func () {}
-# 等价于
-deco(func() {})
+func outer() {}
+class MyClass {
+    not_method = @staticmethod outer # 等价于 not_method = staticmethod(outer)
+}
 ```
 
 #### 3.4.8 类表达式的值
@@ -686,6 +706,13 @@ deco(func() {})
 
 1. 命名类的 `__name__` 属性为类名（字符串），匿名类不存在 `__name__` 属性。
 2. 命名类建立时，会令当前作用域中名称为 `identifier` 的变量引用该类对象。
+
+若类带有前缀装饰器，建立类对象之后，按从近到远（离 `func` 最近的先来）依次调用装饰器，
+整个表达式的值就是最终的值。
+
+若类是命名的，还会额外把 `identifier` 重新绑定为这个最终值，覆盖掉类建立时绑定的原始类对象。
+
+要求每个 `decorator` 都是 `Callable`，否则抛出 `TypeError`。
 
 与函数不同，类对象的建立会立即执行类体，过程如下：
 
