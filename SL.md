@@ -336,12 +336,9 @@ func ⟦identifier⟧ ⟦ [ALL_CAPTURE] ⟧ (ALL_PARAM) ⟦-> type⟧ { expr1; .
 
 `ALL_PARAM` 为**形参**部分，由 0 个或多个 `ONE_PARAM` 组成，语法：
 
-1. `identifier`
-2. `identifier = expr`
-3. `identifier : type`
-4. `identifier : type = expr`
-5. `*identifier`（可变长位置形参）
-6. `**identifier`（可变长关键字形参）
+1. `identifier ⟦: type⟧ ⟦= expr⟧`
+2. `*identifier`（可变长位置形参）
+3. `**identifier`（可变长关键字形参）
 
 其中 `identifier` 为标识符，`expr` 和 `type` 均为表达式。
 
@@ -596,7 +593,7 @@ class ⟦identifier⟧ ⟦(BaseClass1, ...)⟧ { expr1; ... }
 
 ##### 3.4.5.3 `while` 表达式的值
 
-`while (cond) expr` 等价于 `for (; cond ;) expr`；`while $ (cond) expr` 等价于 `for $ (; cond ;) expr`。不再单独定义。
+`while ⟦$⟧ (cond) expr` 等价于 `for ⟦$⟧ (; cond ;) expr`。不再单独定义。
 
 ##### 3.4.5.4 `break` 表达式的值
 
