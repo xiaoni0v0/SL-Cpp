@@ -133,6 +133,9 @@ SL 中有以下**字面量**类型：
 
 量词：条，一条**表达式**（A Piece of Expression）。
 
+记号约定：下文语法描述中，`⟦X⟧` 表示 `X` 可选（出现 0 次或 1 次）；这只是本文描述语法用的记号，不是 SL 的语法。
+重复（0 个或多个、1 个或多个）仍用 `...` 加文字说明，不单独引入记号。
+
 #### 2.2.1 表达式分隔符
 
 对于一个块的内部，用如下方式分隔表达式：
@@ -232,27 +235,11 @@ else x = 200
 
 语法：
 
-1. 纯 if
+```
+if (cond1) expr1 ⟦elif (cond2) expr2⟧ ... ⟦else expr3⟧
+```
 
-   ```
-   if (cond) expr1
-   ```
-
-2. if-else
-
-   ```
-   if (cond) expr1 else expr2
-   ```
-
-3. if-elif-else
-
-   ```
-   if (cond1) expr1 elif (cond2) expr2 else expr3
-   ```
-
-   可以有 0 个或多个 `elif`
-
-其中 `cond` 和 `expr` 均为表达式。
+`elif` 分支可以有 0 个或多个；`else` 可选；`cond`、`expr` 均为表达式。
 
 ##### 2.2.5.2 `for` 表达式
 
@@ -260,55 +247,25 @@ else x = 200
 
 语法：
 
-1. 计数-步进模式
-
-   ```
-   for (init cond inc) expr
-   ```
-
-2. 计数-迭代模式
-
-   ```
-   for (identifier : iterable) expr
-   ```
-
-3. 收集-步进模式
-
-   ```
-   for $ (init cond inc) expr
-   ```
-
-4. 收集-迭代模式
-
-   ```
-   for $ (identifier : iterable) expr
-   ```
+1. 步进模式：`for ⟦$⟧ (init cond inc) expr`
+2. 迭代模式：`for ⟦$⟧ (identifier : iterable) expr`
 
 其中：
 
 1. `init`, `cond`, `inc` 为表达式或空，三者用 `;` 或至少一个换行无歧义地分割（若某个槽为空，则必须使用 `;`）；
 2. `identifier` 为标识符，`iterable` 为表达式；
-3. `expr` 为表达式。
+3. `expr` 为表达式；
+4. 带 `$` 为收集模式，不带为计数模式。
 
 ##### 2.2.5.3 `while` 表达式
 
 控制流 `while` 是表达式。
 
-语法：
-
-1. 计数模式
-
-   ```
-   while (cond) expr
-   ```
-
-2. 收集模式
-
-   ```
-   while $ (cond) expr
-   ```
+语法：`while ⟦$⟧ (cond) expr`
 
 其中 `cond` 和 `expr` 为表达式。
+
+带 `$` 为收集模式，不带为计数模式。
 
 ##### 2.2.5.4 `break` 表达式
 
@@ -330,10 +287,7 @@ else x = 200
 
 `return` 是表达式。
 
-语法：
-
-1. `return`，无参数。
-2. `return expr`，其中 `expr` 为表达式。
+语法：`return ⟦expr⟧`，其中 `expr` 为表达式。
 
 可在全局或函数体内使用。
 
@@ -343,29 +297,14 @@ else x = 200
 
 语法：
 
-1. try-except
+```
+try expr1 ⟦except (Exception1, ...) expr2⟧ ⟦finally expr3⟧
+```
 
-   ```
-   try expr1 except (Exception1, ...) expr2
-   ```
+`except` 子句可以有 1 个或多个（上面只写了一个），每个 `except` 内 `Exception` 有 1 个或多个；`finally` 可选；
+但 `except` 和 `finally` 不能同时省略。
 
-   可以有 1 个或多个 `except`，每个 `except` 内有 1 个或多个 `Exception`。
-
-2. try-finally
-
-   ```
-   try expr1 finally expr3
-   ```
-
-3. try-except-finally
-
-   ```
-   try expr1 except (Exception1, ...) expr2 finally expr3
-   ```
-
-   可以有 1 个或多个 `except`，每个 `except` 内有 1 个或多个 `Exception`。
-
-其中 `expr1`, `expr2`, `expr3`, `Exception` 均为表达式。
+其中 `expr1`、`expr2`、`expr3`、`Exception` 均为表达式。
 
 ##### 2.2.5.8 `raise` 表达式
 
@@ -379,43 +318,21 @@ else x = 200
 
 语法：
 
-1. 匿名函数
+```
+func ⟦identifier⟧ ⟦ [ALL_CAPTURE] ⟧ (ALL_PARAM) ⟦-> type⟧ { expr1; ... }
+```
 
-   ```
-   func [ALL_CAPTURE] (ALL_PARAM) [-> type] { expr1; ... }
-   ```
+省略 `identifier` 为**匿名函数**（**lambda 表达式**），否则为**命名函数**（`identifier` 须为标识符）；
+`-> type` 为可选的**返回值类型注解**，`type` 为表达式；
+`{ expr1; ... }` 称为**函数体**，可由 0 个或多个表达式组成。
 
-   或
-
-   ```
-   func (ALL_PARAM) [-> type] { expr1; ... }
-   ```
-
-2. 命名函数
-
-   ```
-   func identifier (ALL_PARAM) [-> type] { expr1; ... }
-   ```
-
-   或
-
-   ```
-   func identifier [ALL_CAPTURE] (ALL_PARAM) [-> type] { expr1; ... }
-   ```
-
-   其中 `identifier` 是标识符。
-
-其中 `{ expr1; ... }` 称为**函数体**，可由 0 个或多个表达式组成。`[-> type]` 为可选的**返回值类型注解**，
-`type` 为表达式；语义见 3.4.5.6。
-
-`[ALL_CAPTURE]` 为**捕获列表**部分；若出现，由 1 个或多个 `ONE_CAPTURE` 组成，语法：
+`[ALL_CAPTURE]` 为**捕获列表**，由 1 个或多个 `ONE_CAPTURE` 组成，语法：
 
 1. `identifier`（**值捕获**，捕获当前作用域内同名标识符的值）
 2. `identifier = expr`（**值捕获**，捕获 `expr` 的值，绑定为 `identifier`）
 3. `&identifier`（**引用捕获**）
 
 其中 `identifier` 为标识符，`expr` 为表达式。
-捕获列表内标识符（即捕获后绑定的名字）不可重复，否则抛出 `SyntaxError`。
 
 `ALL_PARAM` 为**形参**部分，由 0 个或多个 `ONE_PARAM` 组成，语法：
 
@@ -428,9 +345,7 @@ else x = 200
 
 其中 `identifier` 为标识符，`expr` 和 `type` 均为表达式。
 
-形参列表内标识符不可重复，否则抛出 `SyntaxError`。
-
-捕获列表和形参列表内标识符不可重复，否则抛出 `SyntaxError`。
+捕获列表、形参列表内部及两者之间的标识符均不可重复，否则抛出 `SyntaxError`。
 
 以上形参若出现，必须遵循以下顺序，否则会抛出 `SyntaxError`：
 
@@ -451,32 +366,14 @@ else x = 200
 
 语法：
 
-1. 匿名类
+```
+class ⟦identifier⟧ ⟦(BaseClass1, ...)⟧ { expr1; ... }
+```
 
-   ```
-   class { expr1; ... }
-   ```
+省略 `identifier` 为**匿名类**，否则为**命名类**（`identifier` 须为标识符）。
 
-   ```
-   class (BaseClass1, ...) { expr1; ... }
-   ```
-
-2. 命名类
-
-   ```
-   class identifier { expr1; ... }
-   ```
-
-   ```
-   class identifier(BaseClass1, ...) { expr1; ... }
-   ```
-
-   其中 `identifier` 是标识符。
-
-其中：
-
-1. `BaseClass` 为表达式，可以有 0 个或多个；
-2. `{ expr1; ... }` 称为**类体**，可由 0 个或多个表达式组成。
+`BaseClass` 为表达式，可以有 0 个或多个（省略括号即 0 个基类）；
+`{ expr1; ... }` 称为**类体**，可由 0 个或多个表达式组成。
 
 ## 3 语义
 
