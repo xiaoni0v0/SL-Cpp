@@ -513,79 +513,23 @@ class ⟦identifier⟧ ⟦(BaseClass1, ...)⟧ { expr1; ... }
 
 ##### 3.4.5.1 `if` 表达式的值
 
-1. 纯 if
-
-   ```
-   if (cond) expr1
-   ```
-
-   先对 `cond` 求值，若 `cond` 的真值成立则求 `expr1` 的值并返回，否则返回 `None`。
-
-2. if-else
-
-   ```
-   if (cond) expr1 else expr2
-   ```
-
-   先对 `cond` 求值，若 `cond` 的真值成立则求 `expr1` 的值并返回，否则求 `expr2` 的值并返回。
-
-3. if-elif-else
-
-   ```
-   if (cond1) expr1 elif (cond2) expr2 else expr3
-   ```
-
-   先对 `cond` 求值，若 `cond` 的真值成立则求 `expr1` 的值并返回，
-   否则求 `cond2` 的值，若 `cond2` 的真值成立则求 `expr2` 的值并返回，否则求 `expr3` 的值并返回。
+从前到后依次对每个 `cond`（`if` 的 `cond1`、各 `elif` 的 `cond2` ...）求值，
+一旦某个真值成立，就求对应 `expr` 的值并返回，后面的 `cond`/`expr` 都不再求值；
+若全部为假，有 `else` 则求 `expr3` 的值并返回，否则返回 `None`。
 
 ##### 3.4.5.2 `for` 表达式的值
 
-下述中：
+以下两种模式，`$` 都独立起作用：
 
-- 若 `init`, `inc` 为空，对其求值实为跳过；
-- 若 `cond` 为空，对其求值实为返回 `True`；
+- 不带 `$` 时，每轮对 `expr` 求值后丢弃，整体的值是 int（实际循环次数）；
+- 带 `$` 时，每轮对 `expr` 求值后放入结果列表末尾，整体的值是这个结果列表。
 
-1. 计数-步进模式
-
-   ```
-   for (init cond inc) expr
-   ```
-
-   首先对 `init` 求值并丢弃，然后不断重复这个过程：
-   对 `cond` 求值，若 `cond` 的真值成立则对 `expr` 求值并丢弃，然后对 `inc` 求值并丢弃；否则跳出循环。
-   其值类型为 int，表示实际进行的循环的次数。
-
-2. 计数-迭代模式
-
-   ```
-   for (identifier : iterable) expr
-   ```
-
-   要求 `iterable` 具有迭代器协议，若不满足，抛出 `TypeError`。
-   不断从 `iterable` 中取出一个元素，将其赋值给 `identifier`，然后对 `expr` 求值并丢弃。
-   其值类型为 int，表示实际进行的循环的次数。
-
-3. 收集-步进模式
-
-   ```
-   for $ (init cond inc) expr
-   ```
-
-   最开始初始化一个空列表（暂且称为结果列表）。
-   首先对 `init` 求值并丢弃，然后不断重复这个过程：
-   对 `cond` 求值，若 `cond` 的真值成立则对 `expr` 求值并放入结果列表末尾，然后对 `inc` 求值并丢弃；否则跳出循环。
-   其值为结果列表。
-
-4. 收集-迭代模式
-
-   ```
-   for $ (identifier : iterable) expr
-   ```
-
-   要求 `iterable` 具有迭代器协议，若不满足，抛出 `TypeError`。
-   最开始初始化一个空列表（暂且称为结果列表）。
-   不断从 `iterable` 中取出一个元素，将其赋值给 `identifier`，然后对 `expr` 求值并放入结果列表末尾。
-   其值为结果列表。
+1. 步进模式 `for ⟦$⟧ (init cond inc) expr`：
+   若 `init`、`inc` 为空，对其求值实为跳过；若 `cond` 为空，对其求值实为返回 `True`。
+   先对 `init` 求值并丢弃，然后不断重复：对 `cond` 求值，真值成立则按上述方式处理 `expr`，再对 `inc` 求值并丢弃；否则跳出循环。
+2. 迭代模式 `for ⟦$⟧ (identifier : iterable) expr`：
+   要求 `iterable` 具有迭代器协议，否则抛出 `TypeError`。
+   不断从 `iterable` 取出一个元素赋给 `identifier`，然后按上述方式处理 `expr`，直到迭代结束。
 
 `expr` 中可含有 `break` 和 `continue`，其行为以及对 `for` 的值的影响详见下文。
 
@@ -632,47 +576,15 @@ class ⟦identifier⟧ ⟦(BaseClass1, ...)⟧ { expr1; ... }
 
 ##### 3.4.5.7 `try` 表达式的值
 
-1. try-except
+先对 `expr1` 求值：
 
-   ```
-   try expr1 except (Exception1, ...) expr2
-   ```
+- 若未发生异常，`expr1` 的值即整个表达式的值；
+- 若发生异常，从上到下检查每个 `except` 的 `Exception`（可能不止一个，每个 `except` 内也可能有多个 `Exception`），
+  对其求值并检查异常类型是否匹配；一旦匹配，对 `expr2` 求值，其值即整个表达式的值，不再检查后面的 `except`；
+  若一个都不匹配（或没有 `except` 子句），异常继续向上传播。
 
-   先对 `expr1` 求值；
-    - 若未发生异常，则返回 `expr1` 的值；
-    - 若发生异常，则对于多个 `except`，从上到下依次进行如下操作：
-        - 对 `Exception` 求值并检查异常类型是否匹配；
-          若匹配，则对 `expr2` 求值并返回；
-          若均不匹配，则异常向上传播。
-
-2. try-finally
-
-   ```
-   try expr1 finally expr3
-   ```
-
-   要求 `expr3` 中不可含有任何有跳转功能的表达式（包括 `break`, `continue`, `return`），否则抛出 `TypeError`。
-
-   先对 `expr1` 求值；
-    - 若未发生异常，则返回 `expr1` 的值；
-    - 若发生异常，则异常向上传播；
-      无论如何，退出 `try` 表达式前都会对 `expr3` 求值。
-
-3. try-except-finally
-
-   ```
-   try expr1 except (Exception1, ...) expr2 finally expr3
-   ```
-
-   要求 `expr3` 中不可含有任何有跳转功能的表达式，否则抛出 `TypeError`。
-
-   先对 `expr1` 求值；
-    - 若未发生异常，则返回 `expr1` 的值；
-    - 若发生异常，则对于多个 `except`，从上到下依次进行如下操作：
-        - 对 `Exception` 求值并检查异常类型是否匹配；
-          若匹配，则对 `expr2` 求值并返回；
-          若均不匹配，则异常向上传播。
-          无论如何，退出 `try` 表达式前都会对 `expr3` 求值。
+无论上面走到哪一种情况，只要有 `finally` 子句，退出前都会对 `expr3` 求值（丢弃其值）；`expr3` 中不可含有任何有
+跳转功能的表达式（`break`、`continue`、`return`），否则抛出 `TypeError`。
 
 异常对象的绑定（`__except__`）：
 
@@ -1194,7 +1106,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 导入名称为 `module_name` 的模块。
 
 `lazy` 参数表示是否延迟加载模块，若为 `True`，则在首次获取其属性时才会加载模块。
-**注意**：这可能导致异常的延迟发生。
+**注意**：延迟加载可能导致异常的延迟发生。
 
 当前仅支持内置模块：`math`, `time`, `numbers`, `protocols`。
 
