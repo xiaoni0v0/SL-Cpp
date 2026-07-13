@@ -697,29 +697,8 @@ class ⟦identifier⟧ ⟦(BaseClass1, ...)⟧ { expr1; ... }
 
 #### 3.4.6 函数表达式的值
 
-1. ```
-   func [ALL_CAPTURE] (ALL_PARAM) { expr1; ... }
-   ```
-
-   或
-
-   ```
-   func (ALL_PARAM) { expr1; ... }
-   ```
-
-   定义一个**匿名函数**（**lambda 表达式**），该表达式的值是一个函数对象；
-
-2. ```
-   func identifier [ALL_CAPTURE] (ALL_PARAM) { expr1; ... }
-   ```
-
-   或
-
-   ```
-   func identifier (ALL_PARAM) { expr1; ... }
-   ```
-
-   定义一个**命名函数**，该表达式的值是一个函数对象。
+语法见 2.2.6。省略 `identifier` 定义一个**匿名函数**（**lambda 表达式**），带 `identifier` 定义一个**命名函数**；
+该表达式的值都是一个函数对象。
 
 以上两者的区别是：
 
@@ -732,33 +711,26 @@ class ⟦identifier⟧ ⟦(BaseClass1, ...)⟧ { expr1; ... }
 
 每一个形参可以有以下几种形式：
 
-1. `identifier`
-   普通形参，需要在调用时传入参数。
-2. `identifier = expr`
-   有默认值的形参，若调用时未传入参数，则使用默认值。
-   **注意**：默认值的求值在函数建立时。所以此处也可能有副作用。另外，若默认值为可变对象，可能会使该对象在不同调用之间共享。
-   例如：
+1. `identifier ⟦: type⟧ ⟦= expr⟧`
+    - 都不带：普通形参，调用时必须传入实参；
+    - 带 `= expr`：有默认值的形参，调用时未传入参数则使用默认值。默认值的求值在函数建立时，所以也可能有副作用；
+      若默认值为可变对象，可能会使该对象在不同调用之间共享。例如：
 
-   ```
-   func f(x, ls = []) { ls.append(x); print(ls); }
-   f(1) # 输出 [1]
-   f(2) # 输出 [1, 2]
-   ```
+      ```
+      func f(x, ls = []) { ls.append(x); print(ls); }
+      f(1) # 输出 [1]
+      f(2) # 输出 [1, 2]
+      ```
 
-3. `identifier : type`
-   有类型注解的形参，调用时自动进行类型检查，若类型不匹配则抛出 `DispatchError`。
-   **注意**：类型的求值在函数建立时。所以此处也可能有副作用。
-4. `identifier : type = expr`
-   有类型注解和默认值的形参，兼具以上两者的性质。
-   **注意**：此类型的形参会在函数建立时额外检查默认值是否符合类型，若类型不匹配则抛出 `TypeError`。
-5. `*identifier`
-   可变长位置形参，至多一个，会容纳所有多余的位置参数。`identifier` 类型为元组。
-   可变长位置形参不支持类型注解。
-6. `**identifier`
-   可变长关键字形参，至多一个，会容纳所有多余的关键字参数。`identifier` 类型为字典。
-   可变长关键字形参不支持类型注解。
+    - 带 `: type`：调用时自动进行类型检查，若类型不匹配则抛出 `DispatchError`。
+      类型注解本身的求值也在函数建立时，所以也可能有副作用；
+    - `: type` 和 `= expr` 都带：除了各自的行为，还会在函数建立时额外检查默认值是否符合类型注解，不符合则抛出 `TypeError`；
+2. `*identifier`
+   可变长位置形参，至多一个，会容纳所有多余的位置参数。`identifier` 类型为元组。不支持 `: type`/`= expr`。
+3. `**identifier`
+   可变长关键字形参，至多一个，会容纳所有多余的关键字参数。`identifier` 类型为字典。不支持 `: type`/`= expr`。
 
-实际执行时，没有类型注解的形参会自动添加类型注解 `object`。
+实际执行时，没有类型注解的形参/返回值等价于类型注解 `object`。
 
 函数内需要显式使用 `return` 语句返回值，否则函数运行完毕后自动 `return None`。
 
@@ -809,7 +781,7 @@ deco(func() {})
     3. 否则若 `isinstance(v, classmethod)`，直接存入（绑定 `cls` 由 `classmethod` 自己的 `get` 负责）；
     4. 否则若 `isinstance(v, protocols.Callable)`，将 `MethodDescriptor(v)` 存入；
        `MethodDescriptor` 是 `Descriptor` 的子类；
-       get 时返回一个把 `obj` 绑定为第一参数Z的可调用对象；
+       get 时返回一个把 `obj` 绑定为第一参数的可调用对象；
     5. 否则原样存入。
 
 属性的读、写、删规则见 3.9.1 所述；`property`、`staticmethod`、`classmethod` 见 4.2。
