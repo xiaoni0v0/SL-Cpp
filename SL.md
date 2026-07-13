@@ -51,7 +51,7 @@ SL 是一种面向对象的编程语言。特点是：
 - `const`
 - `static`
 - `with`
-- `match`, `case`
+- `when`, `case`
 - `local`
 - `assert`
 
@@ -382,30 +382,31 @@ else x = 200
 1. 匿名函数
 
    ```
-   func [ALL_CAPTURE] (ALL_PARAM) { expr1; ... }
+   func [ALL_CAPTURE] (ALL_PARAM) [-> type] { expr1; ... }
    ```
 
    或
 
    ```
-   func (ALL_PARAM) { expr1; ... }
+   func (ALL_PARAM) [-> type] { expr1; ... }
    ```
 
 2. 命名函数
 
    ```
-   func identifier (ALL_PARAM) { expr1; ... }
+   func identifier (ALL_PARAM) [-> type] { expr1; ... }
    ```
 
    或
 
    ```
-   func identifier [ALL_CAPTURE] (ALL_PARAM) { expr1; ... }
+   func identifier [ALL_CAPTURE] (ALL_PARAM) [-> type] { expr1; ... }
    ```
 
    其中 `identifier` 是标识符。
 
-其中 `{ expr1; ... }` 称为**函数体**，可由 0 个或多个表达式组成。
+其中 `{ expr1; ... }` 称为**函数体**，可由 0 个或多个表达式组成。`[-> type]` 为可选的**返回值类型注解**，
+`type` 为表达式；语义见 3.4.5.6。
 
 `[ALL_CAPTURE]` 为**捕获列表**部分；若出现，由 1 个或多个 `ONE_CAPTURE` 组成，语法：
 
@@ -527,10 +528,11 @@ else x = 200
 5. 对复合表达式 `{ expr1; expr2; ... }`
    从前到后逐个求每条表达式的值；
 6. 对控制流，见 3.4.5 所述。
-7. 对函数定义 `func f[ALL_CAPTURE](x: type_1 = default_value_1, y: type_2 = default_value_2, ...)`
+7. 对函数定义 `func f[ALL_CAPTURE](x: type_1 = default_value_1, y: type_2 = default_value_2, ...) -> ret_type`
    先从前到后处理 `ALL_CAPTURE` 中各项（具体规则见 3.10.4），
    再从前到后对形参的类型注解和默认值逐个求值，
-   即 `type_1` -> `default_value_1` -> `type_2` -> `default_value_2` -> ... 的顺序；
+   即 `type_1` -> `default_value_1` -> `type_2` -> `default_value_2` -> ... 的顺序，
+   最后（若有 `-> ret_type`）对 `ret_type` 求值；
 8. 对类定义 `class identifier(BaseClass1, ...)`
    各基类从前到后逐个求值；
 9. 对 `except`，各异常类从前到后逐个求值。
@@ -960,6 +962,8 @@ MRO 的计算：
 
 - 若存在匹配的，则运行且只运行第一个匹配的函数；
 - 若都不匹配，则抛出 `DispatchError`。
+
+函数返回（无论是 `return` 还是函数运行到最后），都要对返回值进行类型检查。若类型不匹配，则抛出 `TypeError`。
 
 ### 3.6 `*` 与 `**` 展开语法
 
