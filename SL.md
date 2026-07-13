@@ -585,8 +585,11 @@ class ⟦identifier⟧ ⟦(BaseClass1, ...)⟧ { expr1; ... }
 
 无论上面走到哪一种情况，只要有 `finally` 子句，退出前都会对 `expr3` 求值（丢弃其值）。
 
-编译期检查：`expr3` 内不能直接出现 `return`/`break`/`continue`，否则抛出 `SyntaxError`。
-这一检查通过 4.1.10 `eval` 中说明的方式，同样适用于 `eval` 现场编译出的代码。
+跳转限制：
+对 `expr3` 求值期间，任何试图跳出这段求值范围的 `return`/`break`/`continue` 都会被拦截并转成 `SyntaxError`；
+完整落在 `expr3` 内部的循环、`expr3` 内定义的函数不受影响。
+字面写在 `expr3` 里、能在编译期直接查出违规的会提前报错；
+查不出来的（例如来自 `eval` 现场编译出的代码，见 4.1.10）由这层运行时拦截兜底，同样抛出 `SyntaxError`。
 
 异常对象的绑定（`__except__`）：
 
@@ -1143,8 +1146,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 - 读写的 `_L`/`_G`（含 global 标记集）就是调用处当前帧的，`global x` 效果等同写在调用处；
 - `code` 中若定义带捕获列表的函数，其定义帧、值捕获取值的作用域，都以调用处当前帧为准；
-- `code` 中若有 `return`/`break`/`continue`，其合法性与目标和直接把 `code` 写在调用处完全一致。
-  编译 `code` 时，编译器会把调用处当时的上下文一并带入，不合法则抛出 `SyntaxError`。
+- `code` 中若有 `return`/`break`/`continue`，其合法性与目标和直接把 `code` 写在调用处完全一致：
 
 `eval` 的值：`code` 的值；若 `code` 中的 `return` 使外层函数返回，则以那次 `return` 的
 语义为准（外层函数直接返回，`eval` 这次调用不再产生值）。
