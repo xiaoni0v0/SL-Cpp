@@ -1218,6 +1218,31 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 用于覆盖继承来的默认协议实现、同时让 `protocols` 模块的鸭子类型检查判定为不满足该协议，见 4.3.2。
 
+#### 4.1.12 `hash(obj)`
+
+等价于 `obj.__hash__()`。若返回值不是 `int`，抛出 `TypeError`。
+
+#### 4.1.13 `getattr(obj, name, ⟦default⟧)`
+
+`name` 为 `str`，等价于 `obj.name`，但属性名在运行时给出。
+
+不带 `default` 时属性不存在则 `AttributeError`；
+带 `default` 时属性不存在则返回 `default`。
+
+#### 4.1.14 `setattr(obj, name, value)`
+
+`name` 为 `str`，等价于 `obj.name = value`。
+
+#### 4.1.15 `hasattr(obj, name)`
+
+等价于 `getattr(obj, name)` 不抛 `AttributeError` 则 `True`，否则 `False`。
+
+#### 4.1.16 `exit(code=0)`
+
+抛出 `SystemExit(code)`（见 4.2.16）。一路传播到解释器顶层无人捕获时，解释器终止，退出码为 `code`。
+
+要求 `code` 为 int 或 `None`，其中 `None` 被视为 0。
+
 ### 4.2 内置类
 
 #### 4.2.1 NoneType
@@ -1326,17 +1351,19 @@ f(1.0)  # 抛出 DispatchError
 
 ```
 BaseException
+├── SystemExit         - exit() 触发，见 4.1.16
+├── KeyboardInterrupt  - 用户按下 Ctrl + C
 └── Exception
-    ├── SyntaxError      - 语法错误。编译期
-    ├── TypeError        - 类型错误
-    ├── ValueError       - 值不合法
-    ├── NameError        - 变量名未找到
-    ├── AttributeError   - 属性不存在或不支持该操作
-    ├── IndexError       - `[]` 下标/键不存在或越界（不再区分序列下标与映射键）
-    ├── MathError        - 数学运算错误（除以零、负数开偶次方根、对非正数取对数、对[-1, 1]以外的数取反三角等）
-    ├── DispatchError    - 函数调用时参数不匹配
-    ├── RecursionError   - 递归/调用嵌套过深
-    └── IOError          - 输入输出失败
+    ├── SyntaxError    - 语法错误。编译期
+    ├── TypeError      - 类型错误
+    ├── ValueError     - 值不合法
+    ├── NameError      - 变量名未找到
+    ├── AttributeError - 属性不存在或不支持该操作
+    ├── IndexError     - `[]` 下标/键不存在或越界（不再区分序列下标与映射键）
+    ├── MathError      - 数学运算错误（除以零、负数开偶次方根、对非正数取对数、对[-1, 1]以外的数取反三角等）
+    ├── DispatchError  - 函数调用时参数不匹配
+    ├── RecursionError - 递归/调用嵌套过深
+    └── IOError        - 输入输出失败
 ```
 
 #### 4.2.17 CompoundType
@@ -1492,10 +1519,13 @@ $$
 \text{complex（尚未设计）} \\
 \text{numbers.Real}\left\{\begin{array}{l}\text{float} \\ \text{int}\left\{\text{bool}\right.\end{array}\right.
 \end{array}\right. \\
-\text{BaseException} \to \text{Exception}\left\{\begin{array}{l}
+\text{BaseException}\left\{\begin{array}{l}
+\text{SystemExit} \\ \text{KeyboardInterrupt} \\
+\text{Exception}\left\{\begin{array}{l}
 \text{SyntaxError} \\ \text{TypeError} \\ \text{ValueError} \\ \text{NameError} \\ \text{AttributeError} \\
 \text{IndexError} \\ \text{MathError} \\ \text{DispatchError} \\ \text{RecursionError} \\
 \text{IOError} \to \text{exceptions.EncodingError}
+\end{array}\right.
 \end{array}\right.
 \end{array}\right.
 $$
