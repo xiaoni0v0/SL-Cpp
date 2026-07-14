@@ -788,8 +788,8 @@ MRO 的计算：
 
 运行时检查：
 
-1. `*expr` 要求 `expr` 为可迭代对象；
-2. `**expr` 要求 `expr` 为 Mapping 对象（字典的父类）。
+1. `*expr` 要求 `expr` 满足可迭代协议（`protocols.Iterable`）；
+2. `**expr` 要求 `expr` 满足映射协议（`protocols.Mapping`）。
 
 例如：
 
@@ -804,7 +804,7 @@ f(*args, x=1, **extra) # 调用时展开
 
 SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Function Group）对象实现运行时 dispatch，而非通过同名函数定义。
 
-详见 4.2.18 所述。
+详见 4.2.15 所述。
 
 ### 3.8 运算符重载
 
@@ -1186,6 +1186,12 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 `eval` 的值：`code` 的值；若 `code` 中的 `return` 使外层函数返回，则以那次 `return` 的
 语义为准（外层函数直接返回，`eval` 这次调用不再产生值）。
 
+#### 4.1.11 `unsupported(v)`
+
+将 `v.__is_unsupported__` 设为 `True`，返回 `v` 本身。
+
+用于覆盖继承来的默认协议实现、同时让 `protocols` 模块的鸭子类型检查判定为不满足该协议，见 4.3.2。
+
 ### 4.2 内置类
 
 #### 4.2.1 NoneType
@@ -1211,56 +1217,39 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.2.5 str
 
-表示字符串。严格按 Unicode 码点分割。继承 `Iterable`，逐字符迭代。
+表示字符串。严格按 Unicode 码点分割，可迭代且逐码点迭代。
 
 **注意**：str 对象不可变。
 
 #### 4.2.6 tuple
 
-容器类。不可变。继承 `Iterable`。
+容器类。不可变，可迭代。
 
 包含任意多个对象的引用。
 
-**注意**：“不可变”指的是这些引用关系不可变，不蕴含引用的对象不可变。
+**注意**：“不可变”指的是这些引用关系不可变，不蕴含引用的对象自己不可变。
 
 #### 4.2.7 list
 
-容器类，可变。继承 `Iterable`。
+容器类，可变，可迭代。
 
 包含任意多个对象的引用。
 
-#### 4.2.8 Mapping
+#### 4.2.8 dict
 
-`Iterable` 的子类，抽象基类。
-
-在此之上定义键值对容器的公共契约：支持 `__op_index__`（按键读取）、`len`，遍历产出键值对。
-
-#### 4.2.9 dict
-
-`Mapping` 的子类，可变，键需可哈希。遍历（键、值、键值对）按插入序。
-
-哈希与相等：自定义类型默认按对象身份（同 `is`）计算，可重载 `__hash__(self)` 与 `__op_eq__` 改为按值比较，
-两者需保持一致（相等的对象哈希值必须相等）。
+可变，键需可哈希。遍历（键、值、键值对）按插入序。满足映射协议（`protocols.Mapping`，见 4.3.2）。
 
 内置类型中，`list`、`dict`、`set` 不可哈希；`tuple` 在其元素均可哈希时可哈希。
 
-#### 4.2.10 unordered_dict
+#### 4.2.9 unordered_dict
 
-`Mapping` 的子类，除不保证遍历顺序外，与 `dict` 接口一致。
+除不保证遍历顺序外，与 `dict` 接口一致。满足映射协议。
 
-#### 4.2.11 set
+#### 4.2.10 set
 
-继承 `Iterable`。
+容器类，可变，可迭代。
 
-#### 4.2.12 Iterable
-
-抽象基类。规定对象如何参与 `for (i : obj)` 及 `*obj` 展开迭代，详见 3.9.2。
-
-#### 4.2.13 Iterator
-
-`Iterable` 的子类，抽象基类。迭代过程中产生的迭代器对象本身的类，详见 3.9.2。
-
-#### 4.2.14 SingletonType
+#### 4.2.11 SingletonType
 
 包含了 SL 中的部分“单例”：
 
@@ -1268,24 +1257,24 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 - NotImplemented
 - StopIteration
 
-#### 4.2.15 property
+#### 4.2.12 property
 
 `property(func_get, func_set=None, func_del=None)`，`Descriptor` 的子类。
 `func_set`、`func_del` 为 `None` 时对应操作按 `Descriptor` 默认行为抛 `AttributeError`。
 `get(self, obj)`：若 `isinstance(obj, type)` 返回 `self`（供内省），否则返回 `func_get(obj)`。
 
-#### 4.2.16 staticmethod
+#### 4.2.13 staticmethod
 
 `staticmethod(func)`，`self.func = func`。纯标签，不是描述器，仅在类体收集属性时取出 `v.func` 使用，
 本身不会成为类属性。
 
-#### 4.2.17 classmethod
+#### 4.2.14 classmethod
 
 `classmethod(func)`，`Descriptor` 的子类。
 `get(self, obj)`：令 `cls = obj if isinstance(obj, type) else type(obj)`，
 返回把 `cls` 绑定为第一参数的可调用对象。
 
-#### 4.2.18 FuncGroup
+#### 4.2.15 FuncGroup
 
 `FuncGroup(*functions, name=None)`
 
@@ -1305,7 +1294,7 @@ f(1, 2) # 输出 4
 f(1.0)  # 抛出 DispatchError
 ```
 
-#### 4.2.19 异常类
+#### 4.2.16 异常类
 
 只列全局的一批常用异常，其余更细分的见 4.3.3 `exceptions` 模块。
 
@@ -1324,7 +1313,7 @@ BaseException
     └── IOError          - 输入输出失败
 ```
 
-#### 4.2.20 CompoundType
+#### 4.2.17 CompoundType
 
 用 `|`, `!`, `?`, `[]` 可以创建**复合类**。
 
@@ -1354,15 +1343,15 @@ BaseException
 以上检查均有短路性，但请不要依赖于此，因为检查的顺序不确定，
 例如 `int | str?` 的实际实现*可能*为 `None | int | str` 而非 `int | str | None`。
 
-#### 4.2.21 range
+#### 4.2.18 range
 
-继承 `Iterable`。
+可迭代。
 
 1. `range(stop)`
 2. `range(start, stop)`
 3. `range(start, stop, step)`
 
-#### 4.2.22 object
+#### 4.2.19 object
 
 所有类的根。可直接实例化（`object()` 得到一个空对象）。
 提供各协议的默认实现：
@@ -1370,18 +1359,18 @@ BaseException
 `__new__(cls)` 分配一个 `cls` 的空实例；
 `__init__(self)` 什么都不做。
 
-#### 4.2.23 type
+#### 4.2.20 type
 
 唯一元类，`__is_final_class__ = True`；一切类都是 `type` 的实例。
 
 1. `type(x)`：单参数，返回 `x` 的类；
 2. `type(name, bases, namespace)`：三参数，动态创建一个类，等价于 `class` 表达式的效果。
 
-#### 4.2.24 Function
+#### 4.2.21 Function
 
 `func` 表达式建立的对象的类。实现 `__op_call__`。
 
-#### 4.2.25 super
+#### 4.2.22 super
 
 `super(cls, obj)`。
 
@@ -1406,29 +1395,42 @@ BaseException
 
 #### 4.3.2 `protocols`
 
+以下几者的判定规则类似：
+`isinstance(obj, X)`/`issubclass(cls, X)` 当且仅当 `type(obj)`/`cls` 的 MRO 上有该协议要求的全部方法，
+且没有一个被标记 `__is_unsupported__`（见 4.1.11 `unsupported`）。
+
 ##### 4.3.2.1 Callable
 
-抽象基类。
-
-`isinstance(obj, Callable)` 当且仅当 `type(obj)` 的 MRO 上有 `__op_call__`；
-`issubclass(cls, Callable)` 当且仅当 `cls` 的 MRO 上有 `__op_call__`。
+抽象基类。要求 `__op_call__`。
 
 ##### 4.3.2.2 Indexable
 
-抽象基类。检查 `__op_index__` 是否存在，用法同 `Callable`。
+抽象基类。要求 `__op_index__`。
 
 ##### 4.3.2.3 Hashable
 
-抽象基类。检查 `__hash__` 是否存在，用法同 `Callable`。
+抽象基类。要求 `__hash__`。
 
-`list`、`dict`、`set`、`unordered_dict` 均不是 `Hashable`。
+`list`、`dict`、`set`、`unordered_dict` 不是 `Hashable`。
+
+##### 4.3.2.4 Iterable
+
+抽象基类。要求 `__iter__`。
+
+##### 4.3.2.5 Iterator
+
+抽象基类。要求 `__iter__` 和 `__next__`。
+
+##### 4.3.2.6 Mapping
+
+抽象基类，对应**映射协议**（要求哪些方法待定，见后续讨论）。
 
 #### 4.3.3 `exceptions`
 
 更细分的异常类，用不到就不用 `import`。目前只有：
 
 ```
-IOError（见 4.2.19）
+IOError（见 4.2.16）
 └── EncodingError - 编码错误，主要在打开文件时
 ```
 
@@ -1447,10 +1449,8 @@ $$
 \text{FuncGroup} \\
 \text{CompoundType} \\
 \text{Descriptor}\left\{\begin{array}{l}\text{property} \\ \text{classmethod} \end{array}\right. \\
-\text{Iterable}\left\{\begin{array}{l}
-\text{str} \\ \text{tuple} \\ \text{list} \\ \text{set} \\ \text{range} \\ \text{Iterator} \\
-\text{Mapping}\left\{\begin{array}{l}\text{dict} \\ \text{unordered_dict}\end{array}\right.
-\end{array}\right. \\
+\text{str} \\ \text{tuple} \\ \text{list} \\ \text{set} \\ \text{range} \\
+\text{dict} \\ \text{unordered_dict} \\
 \text{numbers.Number}\left\{\begin{array}{l}
 \text{complex（尚未设计）} \\
 \text{numbers.Real}\left\{\begin{array}{l}\text{float} \\ \text{int}\left\{\text{bool}\right.\end{array}\right.
