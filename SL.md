@@ -11,7 +11,7 @@ SL 是一种面向对象的编程语言。特点是：
 - 一切皆对象
 - 一切皆表达式——我们再也不说“**执行**”（exec），而说“**求值**”（eval）。
 - 动态类型
-- 自动 GC，主要使用引用计数，在堆大小达到阈值时 STW 进行全堆扫描处理循环引用
+- 自动 GC，主要使用引用计数，辅以堆扫描处理循环引用
 
 ## 2 语法
 
@@ -113,7 +113,7 @@ SL 中有以下**字面量**类型：
 1. 位置传参 `f(1, 2, 3)`；
 2. 关键字传参 `f(x=1, y=2, z=3)`。此时若想表达“赋值的同时传参”请显式地加括号。
 
-且所有的关键字传参必须在位置传参之后，否则会抛出 `SyntaxError`。
+传参顺序的规则见 3.5 所述。
 
 以上运算符：
 
@@ -213,7 +213,7 @@ else x = 200
 - 运算符组成的式是表达式。
 - 用花括号 `{}` 定义的**复合表达式** `{ expr1; expr2; ... }` 是表达式。
 
-**注**：`{}` 也用于字典字面量（2.1.4）、函数体（2.2.6）、类体（2.2.8），
+**注**：`{}` 也用于字典字面量（2.1.4）、函数体（2.2.6）、类体（2.2.7），
 判别规则：
 
 - `func` 或 `class` 之后的 `{}` 为函数体/类体；
@@ -360,15 +360,7 @@ try expr1 ⟦except (Exception1, ...) expr2⟧ ⟦finally expr3⟧
 2. 有默认值的形参、可变长位置形参（这两种之间顺序不限）；
 3. 可变长关键字形参。
 
-#### 2.2.7 装饰器表达式
-
-装饰器 `@decorator` 是表达式。
-
-语法：`@decorator expr`，其中 `decorator` 和 `expr` 均为表达式。
-
-**注意**：若 `expr` 紧邻着就是一个函数表达式或类表达式则不适用本节，那属于函数/类表达式的一部分。
-
-#### 2.2.8 类表达式
+#### 2.2.7 类表达式
 
 类的定义 `class` 是表达式。
 
@@ -384,6 +376,14 @@ try expr1 ⟦except (Exception1, ...) expr2⟧ ⟦finally expr3⟧
 2. `identifier` 为标识符；
 3. `BaseClass` 为表达式；
 4. `{ expr1; ... }` 称为**类体**，由 0 个或多个表达式组成。
+
+#### 2.2.8 装饰器表达式
+
+装饰器 `@decorator` 是表达式。
+
+语法：`@decorator expr`，其中 `decorator` 和 `expr` 均为表达式。
+
+**注意**：若 `expr` 紧邻着就是一个函数表达式或类表达式则不适用本节，那属于函数/类表达式的一部分。
 
 ## 3 语义
 
@@ -606,7 +606,7 @@ try expr1 ⟦except (Exception1, ...) expr2⟧ ⟦finally expr3⟧
 对 `expr3` 求值期间，任何试图跳出这段求值范围的 `return`/`break`/`continue` 都会被拦截并转成 `SyntaxError`；
 完整落在 `expr3` 内部的循环、`expr3` 内定义的函数不受影响。
 字面写在 `expr3` 里、能在编译期直接查出违规的会提前报错；
-查不出来的（例如来自 `eval` 现场编译出的代码，见 4.1.10）由这层运行时拦截兜底，同样抛出 `SyntaxError`。
+查不出来的（例如来自 `eval` 现场编译出的代码，见 4.1.15）由这层运行时拦截兜底，同样抛出 `SyntaxError`。
 
 异常对象的绑定（`__except__`）：
 
@@ -709,22 +709,7 @@ deco( func () {} )
 
 有关函数调用的细节，请见 3.5 所述。
 
-#### 3.4.7 装饰器表达式的值
-
-要求 `decorator` 是 `Callable`，否则抛出 `TypeError`。
-
-`@decorator expr` 的值为 `decorator(expr)`。
-
-例如：
-
-```
-func outer() {}
-class MyClass {
-    not_method = @staticmethod outer # 等价于 not_method = staticmethod(outer)
-}
-```
-
-#### 3.4.8 类表达式的值
+#### 3.4.7 类表达式的值
 
 省略 `identifier` 定义一个**匿名类**，带 `identifier` 定义一个**命名类**；
 该表达式的值都是一个类对象。
@@ -774,9 +759,27 @@ MRO 的计算：
 3. 若 `isinstance(obj, C)`，再调用 `obj.__init__(*args, **kwargs)`；
 4. 最终返回 `obj`。
 
+#### 3.4.8 装饰器表达式的值
+
+要求 `decorator` 是 `Callable`，否则抛出 `TypeError`。
+
+`@decorator expr` 的值为 `decorator(expr)`。
+
+例如：
+
+```
+func outer() {}
+class MyClass {
+    not_method = @staticmethod outer # 等价于 not_method = staticmethod(outer)
+}
+```
+
 ### 3.5 函数调用
 
 调用 `x(arg, kwarg=v, ...)` 时，在 `type(x)` 的 MRO 上查找 `__op_call__` 并调用；否则抛出 `TypeError`。
+
+调用中的实参分两组：位置组（位置实参、`*expr` 展开）在前，关键字组（关键字实参、`**expr` 展开）在后；
+组内顺序不限，但位置组不能出现在关键字组之后，否则抛出 `SyntaxError`。
 
 对于函数对象的调用，应当给所有形参赋值，或是用传参，或是用默认值。捕获列表中的标识符不是形参，不参与该匹配过程。
 
@@ -826,7 +829,7 @@ f(*args, x=1, **extra) # 调用时展开
 
 SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Function Group）对象实现运行时 dispatch，而非通过同名函数定义。
 
-详见 4.2.15 所述。
+详见 4.2.21 所述。
 
 ### 3.8 运算符重载
 
@@ -933,7 +936,7 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 3. 否则若 `type(o)` 的 MRO 上有 `__delattr__`，则调用 `__delattr__(o, attr)`；
 4. 否则 `AttributeError`。
 
-**属性表**不通过任何属性名暴露，唯一的取得方式是内置函数 `attrs(obj)`（见 4.1.7）。
+**属性表**不通过任何属性名暴露，唯一的取得方式是内置函数 `attrs(obj)`（见 4.1.8）。
 
 **注意**：对象对其他对象的引用不止属性表这一种。
 解释器内部还会维护一些不通过属性机制暴露的引用，SL 层均访问不到，纯属 C++ 实现细节。但它们是真实的引用，垃圾回收照样要遍历到。
@@ -1158,19 +1161,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 ### 4.1 内置函数
 
-#### 4.1.1 `input()`
-
-从标准输入读取一行并返回。
-
-返回 `str` 类型的值。
-
-#### 4.1.2 `print(*args, sep=' ', end='\n')`
-
-除去 `file` 和 `flush` 参数，其与 Python 的 `print` 函数行为完全一致。
-
-返回 `None`。
-
-#### 4.1.3 `isinstance(obj, type)`
+#### 4.1.1 `isinstance(obj, type)`
 
 检查 `obj` 是否为 `type` 类型。其中 `type` 可以是具体类也可以是复合类。
 
@@ -1181,7 +1172,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 1. 若 `type` 有 `__instance_check__` 方法，则返回 `type.__instance_check__(obj)`（若返回值不是 `bool`，抛出 `TypeError`）；
 2. 否则返回 `issubclass(type(obj), type)`。
 
-#### 4.1.4 `issubclass(cls, type)`
+#### 4.1.2 `issubclass(cls, type)`
 
 检查 `cls` 是否为 `type` 的子类（`cls` 本身也算）。其中 `type` 可以是具体类也可以是复合类。
 
@@ -1192,7 +1183,65 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 1. 若 `type` 有 `__subclass_check__` 方法，则返回 `type.__subclass_check__(cls)`（若返回值不是 `bool`，抛出 `TypeError`）；
 2. 否则检查 `cls` 是否为 `type` 或其子类。
 
-#### 4.1.5 `import(module_name, lazy=False)`
+#### 4.1.3 `len(obj)`
+
+等价于 `obj.__len__()`，若返回值不是 `int`，抛出 `TypeError`。
+
+#### 4.1.4 `hash(obj)`
+
+等价于 `obj.__hash__()`。若返回值不是 `int`，抛出 `TypeError`。
+
+#### 4.1.5 `getattr(obj, name, ⟦default⟧)`
+
+`name` 为 `str`，等价于 `obj.name`，但属性名在运行时给出。
+
+不带 `default` 时属性不存在则 `AttributeError`；
+带 `default` 时属性不存在则返回 `default`。
+
+#### 4.1.6 `setattr(obj, name, value)`
+
+`name` 为 `str`，等价于 `obj.name = value`。
+
+#### 4.1.7 `hasattr(obj, name)`
+
+等价于 `getattr(obj, name)` 不抛 `AttributeError` 则 `True`，否则 `False`。
+
+#### 4.1.8 `attrs(obj)`
+
+返回 `obj` 的自身属性表（见 3.9.1.2），为实时视图，可读可改内容。
+
+#### 4.1.9 `finalclass(cls)`
+
+要求 `cls` 为类，否则抛出 `TypeError`；
+若 `cls.__abstractmethods__` 非空，也抛出 `TypeError`。
+
+将 `cls.__is_final_class__` 设为 `True`，返回 `cls` 本身。
+
+#### 4.1.10 `abstractmethod(v)`
+
+将 `v.__is_abstract_method__` 设为 `True`，返回 `v` 本身。
+
+可标在普通方法、`property`、`classmethod` 上；
+
+#### 4.1.11 `unsupported(v)`
+
+将 `v.__is_unsupported__` 设为 `True`，返回 `v` 本身。
+
+用于覆盖继承来的默认协议实现、同时让 `protocols` 模块的鸭子类型检查判定为不满足该协议，见 4.3.2。
+
+#### 4.1.12 `input()`
+
+从标准输入读取一行并返回。
+
+返回 `str` 类型的值。
+
+#### 4.1.13 `print(*args, sep=' ', end='\n')`
+
+除去 `file` 和 `flush` 参数，其与 Python 的 `print` 函数行为完全一致。
+
+返回 `None`。
+
+#### 4.1.14 `import(module_name, lazy=False)`
 
 导入名称为 `module_name` 的模块。
 
@@ -1203,28 +1252,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 返回模块对象。
 
-#### 4.1.6 `len(obj)`
-
-等价于 `obj.__len__()`，若返回值不是 `int`，抛出 `TypeError`。
-
-#### 4.1.7 `attrs(obj)`
-
-返回 `obj` 的自身属性表（见 3.9.1.2），为实时视图，可读可改内容。
-
-#### 4.1.8 `finalclass(cls)`
-
-要求 `cls` 为类，否则抛出 `TypeError`；
-若 `cls.__abstractmethods__` 非空，也抛出 `TypeError`。
-
-将 `cls.__is_final_class__` 设为 `True`，返回 `cls` 本身。
-
-#### 4.1.9 `abstractmethod(v)`
-
-将 `v.__is_abstract_method__` 设为 `True`，返回 `v` 本身。
-
-可标在普通方法、`property`、`classmethod` 上；
-
-#### 4.1.10 `eval(code)`
+#### 4.1.15 `eval(code)`
 
 `code` 为 `str`，按 2.2.1 的规则解析为一条或多条表达式。
 
@@ -1237,67 +1265,57 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 `eval` 的值：`code` 的值；若 `code` 中的 `return` 使外层函数返回，则以那次 `return` 的
 语义为准（外层函数直接返回，`eval` 这次调用不再产生值）。
 
-#### 4.1.11 `unsupported(v)`
-
-将 `v.__is_unsupported__` 设为 `True`，返回 `v` 本身。
-
-用于覆盖继承来的默认协议实现、同时让 `protocols` 模块的鸭子类型检查判定为不满足该协议，见 4.3.2。
-
-#### 4.1.12 `hash(obj)`
-
-等价于 `obj.__hash__()`。若返回值不是 `int`，抛出 `TypeError`。
-
-#### 4.1.13 `getattr(obj, name, ⟦default⟧)`
-
-`name` 为 `str`，等价于 `obj.name`，但属性名在运行时给出。
-
-不带 `default` 时属性不存在则 `AttributeError`；
-带 `default` 时属性不存在则返回 `default`。
-
-#### 4.1.14 `setattr(obj, name, value)`
-
-`name` 为 `str`，等价于 `obj.name = value`。
-
-#### 4.1.15 `hasattr(obj, name)`
-
-等价于 `getattr(obj, name)` 不抛 `AttributeError` 则 `True`，否则 `False`。
-
 #### 4.1.16 `exit(code=0)`
 
-抛出 `SystemExit(code)`（见 4.2.16）。一路传播到解释器顶层无人捕获时，解释器终止，退出码为 `code`。
+抛出 `SystemExit(code)`（见 4.2.22）。一路传播到解释器顶层无人捕获时，解释器终止，退出码为 `code`。
 
 要求 `code` 为 int 或 `None`，其中 `None` 被视为 0。
 
 ### 4.2 内置类
 
-#### 4.2.1 NoneType
+#### 4.2.1 object
+
+所有类的根。可直接实例化（`object()` 得到一个空对象）。
+提供各协议的默认实现：
+`__op_eq__`、`__hash__`、`__is_final_class__ = False`、`__is_abstract_method__ = False`；`__abstractmethods__ = ()`；
+`__new__(cls)` 分配一个 `cls` 的空实例；
+`__init__(self)` 什么都不做。
+
+#### 4.2.2 type
+
+唯一元类，`__is_final_class__ = True`；一切类都是 `type` 的实例。
+
+1. `type(x)`：单参数，返回 `x` 的类；
+2. `type(name, bases, namespace)`：三参数，动态创建一个类，等价于 `class` 表达式的效果。
+
+#### 4.2.3 NoneType
 
 只有一个实例，即 `None`。
 
-#### 4.2.2 bool
+#### 4.2.4 int
+
+表示整数，自带高精度。继承 `numbers.Real`。
+
+#### 4.2.5 bool
 
 继承 int。
 
 只有两个实例，即 `True` 和 `False`。
 
-#### 4.2.3 int
-
-表示整数，自带高精度。继承 `numbers.Real`。
-
-#### 4.2.4 float
+#### 4.2.6 float
 
 表示浮点数，底层用 C++ 的 double 实现。继承 `numbers.Real`。
 
 `float` 不会自动转换为 `int`，即便数值恰好是整数；
 反过来 `int` 在某些运算下会自动变成 `float`。
 
-#### 4.2.5 str
+#### 4.2.7 str
 
 表示字符串。严格按 Unicode 码点分割，可迭代且逐码点迭代。
 
 **注意**：str 对象不可变。
 
-#### 4.2.6 tuple
+#### 4.2.8 tuple
 
 容器类。不可变，可迭代。
 
@@ -1305,27 +1323,35 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 **注意**：“不可变”指的是这些引用关系不可变，不蕴含引用的对象自己不可变。
 
-#### 4.2.7 list
+#### 4.2.9 list
 
 容器类，可变，可迭代。
 
 包含任意多个对象的引用。
 
-#### 4.2.8 dict
+#### 4.2.10 dict
 
 可变，键需可哈希。遍历（键、值、键值对）按插入序。满足映射协议（`protocols.Mapping`，见 4.3.2）。
 
 内置类型中，`list`、`dict`、`set` 不可哈希；`tuple` 在其元素均可哈希时可哈希。
 
-#### 4.2.9 unordered_dict
+#### 4.2.11 unordered_dict
 
 除不保证遍历顺序外，与 `dict` 接口一致。满足映射协议。
 
-#### 4.2.10 set
+#### 4.2.12 set
 
 容器类，可变，可迭代。
 
-#### 4.2.11 SingletonType
+#### 4.2.13 range
+
+可迭代。
+
+1. `range(stop)`
+2. `range(start, stop)`
+3. `range(start, stop, step)`
+
+#### 4.2.14 SingletonType
 
 包含了 SL 中的部分“单例”：
 
@@ -1333,65 +1359,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 - NotImplemented
 - StopIteration
 
-#### 4.2.12 property
-
-`property(func_get, func_set=None, func_del=None)`，`Descriptor` 的子类。
-`func_set`、`func_del` 为 `None` 时对应操作按 `Descriptor` 默认行为抛 `AttributeError`。
-`get(self, obj)`：若 `isinstance(obj, type)` 返回 `self`（供内省），否则返回 `func_get(obj)`。
-
-#### 4.2.13 staticmethod
-
-`staticmethod(func)`，`self.func = func`。纯标签，不是描述器，仅在类体收集属性时取出 `v.func` 使用，
-本身不会成为类属性。
-
-#### 4.2.14 classmethod
-
-`classmethod(func)`，`Descriptor` 的子类。
-`get(self, obj)`：令 `cls = obj if isinstance(obj, type) else type(obj)`，
-返回把 `cls` 绑定为第一参数的可调用对象。
-
-#### 4.2.15 FuncGroup
-
-`FuncGroup(*functions, name=None)`
-
-一个例子足以说明 FuncGroup 的用法：
-
-```
-f = FuncGroup(
-    func (x: int) { print(1) },
-    func (x: str) { print(2) },
-    func (x: bool) { print(3) },
-    func (x: int, y: int) { print(4) }
-)
-f(1)    # 输出 1
-f('a')  # 输出 2
-f(True) # 输出 1
-f(1, 2) # 输出 4
-f(1.0)  # 抛出 DispatchError
-```
-
-#### 4.2.16 异常类
-
-只列全局的一批常用异常，其余更细分的见 4.3.3 `exceptions` 模块。
-
-```
-BaseException
-├── SystemExit         - exit() 触发，见 4.1.16
-├── KeyboardInterrupt  - 用户按下 Ctrl + C
-└── Exception
-    ├── SyntaxError    - 语法错误。编译期
-    ├── TypeError      - 类型错误
-    ├── ValueError     - 值不合法
-    ├── NameError      - 变量名未找到
-    ├── AttributeError - 属性不存在或不支持该操作
-    ├── IndexError     - `[]` 下标/键不存在或越界（不再区分序列下标与映射键）
-    ├── MathError      - 数学运算错误（除以零、负数开偶次方根、对非正数取对数、对[-1, 1]以外的数取反三角等）
-    ├── DispatchError  - 函数调用时参数不匹配
-    ├── RecursionError - 递归/调用嵌套过深
-    └── IOError        - 输入输出失败
-```
-
-#### 4.2.17 CompoundType
+#### 4.2.15 CompoundType
 
 用 `|`, `!`, `?`, `[]` 可以创建**复合类**。
 
@@ -1421,34 +1389,28 @@ BaseException
 以上检查均有短路性，但请不要依赖于此，因为检查的顺序不确定，
 例如 `int | str?` 的实际实现*可能*为 `None | int | str` 而非 `int | str | None`。
 
-#### 4.2.18 range
+#### 4.2.16 property
 
-可迭代。
+`property(func_get, func_set=None, func_del=None)`，`Descriptor` 的子类。
+`func_set`、`func_del` 为 `None` 时对应操作按 `Descriptor` 默认行为抛 `AttributeError`。
+`get(self, obj)`：若 `isinstance(obj, type)` 返回 `self`（供内省），否则返回 `func_get(obj)`。
 
-1. `range(stop)`
-2. `range(start, stop)`
-3. `range(start, stop, step)`
+#### 4.2.17 staticmethod
 
-#### 4.2.19 object
+`staticmethod(func)`，`self.func = func`。纯标签，不是描述器，仅在类体收集属性时取出 `v.func` 使用，
+本身不会成为类属性。
 
-所有类的根。可直接实例化（`object()` 得到一个空对象）。
-提供各协议的默认实现：
-`__op_eq__`、`__hash__`、`__is_final_class__ = False`、`__is_abstract_method__ = False`；`__abstractmethods__ = ()`；
-`__new__(cls)` 分配一个 `cls` 的空实例；
-`__init__(self)` 什么都不做。
+#### 4.2.18 classmethod
 
-#### 4.2.20 type
+`classmethod(func)`，`Descriptor` 的子类。
+`get(self, obj)`：令 `cls = obj if isinstance(obj, type) else type(obj)`，
+返回把 `cls` 绑定为第一参数的可调用对象。
 
-唯一元类，`__is_final_class__ = True`；一切类都是 `type` 的实例。
-
-1. `type(x)`：单参数，返回 `x` 的类；
-2. `type(name, bases, namespace)`：三参数，动态创建一个类，等价于 `class` 表达式的效果。
-
-#### 4.2.21 Function
+#### 4.2.19 Function
 
 `func` 表达式建立的对象的类。实现 `__op_call__`。
 
-#### 4.2.22 super
+#### 4.2.20 super
 
 `super(cls, obj)`。
 
@@ -1458,6 +1420,47 @@ BaseException
 找到且是描述器则 `get(obj)`；
 否则原样返回；
 全部找不到则 `AttributeError`。
+
+#### 4.2.21 FuncGroup
+
+`FuncGroup(*functions, name=None)`
+
+一个例子足以说明 FuncGroup 的用法：
+
+```
+f = FuncGroup(
+    func (x: int) { print(1) },
+    func (x: str) { print(2) },
+    func (x: bool) { print(3) },
+    func (x: int, y: int) { print(4) }
+)
+f(1)    # 输出 1
+f('a')  # 输出 2
+f(True) # 输出 1
+f(1, 2) # 输出 4
+f(1.0)  # 抛出 DispatchError
+```
+
+#### 4.2.22 异常类
+
+只列全局的一批常用异常，其余更细分的见 4.3.3 `exceptions` 模块。
+
+```
+BaseException
+├── SystemExit         - exit() 触发，见 4.1.16
+├── KeyboardInterrupt  - 用户按下 Ctrl + C
+└── Exception
+    ├── SyntaxError    - 语法错误。编译期
+    ├── TypeError      - 类型错误
+    ├── ValueError     - 值不合法
+    ├── NameError      - 变量名未找到
+    ├── AttributeError - 属性不存在或不支持该操作
+    ├── IndexError     - `[]` 下标/键不存在或越界（不再区分序列下标与映射键）
+    ├── MathError      - 数学运算错误（除以零、负数开偶次方根、对非正数取对数、对[-1, 1]以外的数取反三角等）
+    ├── DispatchError  - 函数调用时参数不匹配
+    ├── RecursionError - 递归/调用嵌套过深
+    └── IOError        - 输入输出失败
+```
 
 ### 4.3 内置模块
 
@@ -1519,7 +1522,7 @@ BaseException
 更细分的异常类，用不到就不用 `import`。目前只有：
 
 ```
-IOError（见 4.2.16）
+IOError（见 4.2.22）
 └── EncodingError - 编码错误，主要在打开文件时
 ```
 
