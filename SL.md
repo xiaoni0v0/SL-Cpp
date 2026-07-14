@@ -1153,7 +1153,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 具体行为：
 
-1. 若 `type` 有 `__instance_check__` 方法，则返回 `type.__instance_check__(obj)`；
+1. 若 `type` 有 `__instance_check__` 方法，则返回 `type.__instance_check__(obj)`（若返回值不是 `bool`，抛出 `TypeError`）；
 2. 否则返回 `issubclass(type(obj), type)`。
 
 #### 4.1.4 `issubclass(cls, type)`
@@ -1164,7 +1164,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 具体行为：
 
-1. 若 `type` 有 `__subclass_check__` 方法，则返回 `type.__subclass_check__(cls)`；
+1. 若 `type` 有 `__subclass_check__` 方法，则返回 `type.__subclass_check__(cls)`（若返回值不是 `bool`，抛出 `TypeError`）；
 2. 否则检查 `cls` 是否为 `type` 或其子类。
 
 #### 4.1.5 `import(module_name, lazy=False)`
@@ -1180,7 +1180,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.1.6 `len(obj)`
 
-返回容器对象的长度。
+等价于 `obj.__len__()`，若返回值不是 `int`，抛出 `TypeError`。
 
 #### 4.1.7 `attrs(obj)`
 
