@@ -314,7 +314,7 @@ if (cond1) expr1 ⟦elif (cond2) expr2 ...⟧ ⟦else expr3⟧
 语法：
 
 ```
-try expr1 ⟦except (Exception1, ...) expr2⟧ ⟦finally expr3⟧
+try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 ```
 
 `except` 子句可以有 1 个或多个（上面只写了一个），每个 `except` 内 `Exception` 有 1 个或多个；`finally` 可选；
