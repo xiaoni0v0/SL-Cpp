@@ -336,7 +336,7 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 语法：
 
 ```
-⟦@decorator ...⟧ func ⟦identifier⟧ ⟦ [ALL_CAPTURE] ⟧ (ALL_PARAM) ⟦: type⟧ { expr1; ... }
+⟦@decorator ...⟧ func ⟦identifier⟧ ⟦ [ALL_CAPTURE] ⟧ (ALL_PARAM) ⟦: type⟧ ⟦doc⟧ { expr1; ... }
 ```
 
 其中：
@@ -344,7 +344,8 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 1. `decorator` 为表达式；
 2. `identifier` 为标识符；
 3. `type` 为表达式；
-4. `{ expr1; ... }` 称为**函数体**，由 0 个或多个表达式组成。
+4. `doc` 为字符串字面量（常量折叠后）；
+5. `{ expr1; ... }` 称为**函数体**，由 0 个或多个表达式组成。
 
 `[ALL_CAPTURE]` 为**捕获列表**，由 0 个或多个 `ONE_CAPTURE` 组成，语法：
 
@@ -376,7 +377,7 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 语法：
 
 ```
-⟦@decorator ...⟧ class ⟦identifier⟧ ⟦(BaseClass1, ...)⟧ { expr1; ... }
+⟦@decorator ...⟧ class ⟦identifier⟧ ⟦(BaseClass1, ...)⟧ ⟦doc⟧ { expr1; ... }
 ```
 
 其中：
@@ -384,7 +385,8 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 1. `decorator` 为表达式；
 2. `identifier` 为标识符；
 3. `BaseClass` 为表达式；
-4. `{ expr1; ... }` 称为**类体**，由 0 个或多个表达式组成。
+4. `doc` 为字符串字面量（常量折叠后）；
+5. `{ expr1; ... }` 称为**类体**，由 0 个或多个表达式组成。
 
 #### 2.2.8 装饰器表达式
 
@@ -452,15 +454,17 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
    从前到后逐个求每条表达式的值；
 6. 对控制流，见 3.4.5 所述。
 7. 对函数定义
-   `⟦@decorator ...⟧ func identifier[ALL_CAPTURE](x: type_1 = default_value_1, y: type_2 = default_value_2, ...): ret_type`
+   `⟦@decorator ...⟧ func identifier[ALL_CAPTURE](x: type_1 = default_value_1, y: type_2 = default_value_2, ...)⟦: ret_type⟧ ⟦doc⟧`
    若有前缀装饰器，先从前到后（离 `func` 越远的越先）对各 `decorator` 求值；
-   再从前到后处理 `ALL_CAPTURE` 中各项（具体规则见 3.10.4），
+   若有捕获，从前到后处理 `ALL_CAPTURE` 中各项（具体规则见 3.10.4）；
    再从前到后对形参的类型注解和默认值逐个求值，
-   即 `type_1` -> `default_value_1` -> `type_2` -> `default_value_2` -> ... 的顺序，
-   最后（若有 `: ret_type`）对 `ret_type` 求值。
+   即 `type_1` -> `default_value_1` -> `type_2` -> `default_value_2` -> ... 的顺序；
+   若有 `: ret_type`，对 `ret_type` 求值；
+   若有文档字符串，对其求值。
    装饰器的调用发生在函数对象建立完毕之后，从近到远进行；
 8. 对类定义 `⟦@decorator ...⟧ class identifier(BaseClass1, ...)`
    若有前缀装饰器，先从前到后（离 `class` 越远的越先）对各 `decorator` 求值；
+   若有文档字符串，对其求值；
    再各基类从前到后逐个求值；
 9. 对 `except`，各异常类从前到后逐个求值。
 
@@ -660,8 +664,11 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 1. 命名函数的 `__name__` 属性为函数名（字符串），匿名函数不存在 `__name__` 属性。
 2. 命名函数会令当前作用域中名称为 `identifier` 的变量引用该函数最终确定的值（见下）。
 
-**文档字符串**：函数体（按 3.11 折叠后）的第一条表达式若是 `str` 字面量，
-取其值按以下规则去除缩进后，记为函数对象的 `__doc__` 属性；否则不存在 `__doc__` 属性。
+**文档字符串**：若函数签名后提供了 `doc`，取其值按以下规则去除缩进后，
+记为函数对象的 `__doc__` 属性；否则不存在 `__doc__` 属性。
+
+`doc` 必须是字符串字面量或其编译期可折叠的组合（`"a" + "b"`、`"x" * 3` 等），不允许引用变量。
+若需动态文档字符串，请在函数建立后手动设置 `f.__doc__ = xxx`。
 
 去除缩进规则：
 
@@ -740,7 +747,7 @@ deco( func () {} )
 1. 命名类的 `__name__` 属性为类名（字符串），匿名类不存在 `__name__` 属性。
 2. 命名类会令当前作用域中名称为 `identifier` 的变量引用该类最终确定的值（见下）。
 
-**文档字符串**：判断方式与去缩进规则均与函数一致，见 3.4.6。
+**文档字符串**：语义与去缩进规则均与函数一致，见 3.4.6。
 
 若类带有前缀装饰器，建立类对象之后，按从近到远（离 `class` 最近的先来）依次调用装饰器，整个表达式的值就是最终的值；
 若类是命名的，`identifier` 只在最终值确定后绑定一次，建立过程中不会绑定任何中间值。
