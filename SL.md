@@ -1284,10 +1284,23 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 - `code` 中若定义带捕获列表的函数，其定义帧、值捕获取值的作用域，都以调用处当前帧为准；
 - `code` 中若有 `return`/`break`/`continue`，其合法性与目标和直接把 `code` 写在调用处完全一致：
 
-`eval` 的值：`code` 的值；若 `code` 中的 `return` 使外层函数返回，则以那次 `return` 的
+`eval` 的值为 `code` 的值；若 `code` 中的 `return` 使外层函数返回，则以那次 `return` 的
 语义为准（外层函数直接返回，`eval` 这次调用不再产生值）。
 
-#### 4.1.16 `exit(code=0)`
+#### 4.1.16 `eval_isolated(code, globals=None)`
+
+`code` 为 `str`，按 2.2.1 的规则解析为一条或多条表达式。
+
+与 `eval` 不同，`eval_isolated` 在一个与调用处完全隔离的全新全局帧中求值，其 `_L` 即其 `_G`。
+调用处的局部/全局变量、global 标记集在 `eval_isolated` 中均不可见。
+
+`globals` 若传入，必须是 `dict`；其键值对会被载入新帧的 `_G`，作为该次求值的初始全局变量表。
+
+`code` 中若有 `return`/`break`/`continue`，其作用范围仅限于 `code` 内部，不会向外传播到调用者。
+
+`eval_isolated` 的值为 `code` 的值。
+
+#### 4.1.17 `exit(code=0)`
 
 抛出 `SystemExit(code)`（见 4.2.23）。一路传播到解释器顶层无人捕获时，解释器终止，退出码为 `code`。
 
@@ -1477,7 +1490,7 @@ f(1.0)  # 抛出 DispatchError
 
 ```
 BaseException
-├── SystemExit         - exit() 触发，见 4.1.16
+├── SystemExit         - exit() 触发
 ├── KeyboardInterrupt  - 用户按下 Ctrl + C
 └── Exception
     ├── SyntaxError    - 语法错误。编译期
