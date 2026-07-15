@@ -35,14 +35,8 @@ add_executable(SL_Cpp main.cpp
         builtins/classes/exceptions/FileNotFoundError.h
 
         # Interpreter
-        interpreter/Interpreter.cpp
-        interpreter/Interpreter.h
         interpreter/dumper/Dumper.cpp
         interpreter/dumper/Dumper.h
-        interpreter/evaler/Evaler.cpp
-        interpreter/evaler/Evaler.h
-        interpreter/frame/Frame.cpp
-        interpreter/frame/Frame.h
 
         # Parser
         parser/Parser.cpp
@@ -73,7 +67,7 @@ add_executable(SL_Cpp main.cpp
 # 编译选项
 target_compile_options(SL_Cpp PRIVATE
         -Wall -Wextra -pedantic -Wshadow -Wpointer-arith
-        # $<$<CONFIG:Debug>:-Werror>
+        $<$<CONFIG:Debug>:-Werror>
         $<$<CONFIG:Debug>:-g>
         $<$<CONFIG:Debug>:-O0>
         $<$<CONFIG:Release>:-O2>
@@ -113,21 +107,13 @@ FetchContent_MakeAvailable(nlohmann_json cxxopts)
 target_link_libraries(SL_Cpp PRIVATE nlohmann_json::nlohmann_json cxxopts::cxxopts)
 
 # ============================================================
-# 测试（当前只有 lexer；不参与主程序构建，也不会在普通 build 时自动跑，
-# 单独构建 SL_Cpp_Tests 这个 target、再用 ctest 或直接跑它的可执行文件）
+# 测试
 # ============================================================
+
 enable_testing()
 
-FetchContent_Declare(
-        doctest
-        GIT_REPOSITORY https://github.com/doctest/doctest.git
-        GIT_TAG v2.5.3
-        GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(doctest)
-
 add_executable(SL_Cpp_Tests
-        # 被测代码本身：只要 lexer 和它依赖的最小一撮东西，不牵扯 Parser/Analyzer/Interpreter/Executor
+        # 被测代码
         lexer/Lexer.cpp
         lexer/Lexer.h
         lexer/token.h
@@ -141,36 +127,38 @@ add_executable(SL_Cpp_Tests
         test/lexer/test_utils.h
         test/lexer/main_test.cpp
 
+        # 测试代码
         # 2.1.1 注释
         test/lexer/2_1_1_comments/comments_test.cpp
-
         # 2.1.2 关键字与保留字
         test/lexer/2_1_2_keywords_reserved/keywords_test.cpp
         test/lexer/2_1_2_keywords_reserved/reserved_words_test.cpp
-
         # 2.1.3 标识符
         test/lexer/2_1_3_identifiers/identifiers_test.cpp
-
         # 2.1.4 字面量
         test/lexer/2_1_4_literals/none_bool_g_l_ellipsis_test.cpp
         test/lexer/2_1_4_literals/int_test.cpp
         test/lexer/2_1_4_literals/float_test.cpp
         test/lexer/2_1_4_literals/string_test.cpp
         test/lexer/2_1_4_literals/raw_string_test.cpp
-
         # 2.1.5 运算符与符号
         test/lexer/2_1_5_operators/symbols_test.cpp
         test/lexer/2_1_5_operators/dot_disambiguation_test.cpp
-
         # 2.1.6 空白字符
         test/lexer/2_1_6_whitespace/whitespace_test.cpp
-
         # 跨章节：位置追踪、报错
         test/lexer/common/position_tracking_test.cpp
         test/lexer/common/error_handling_test.cpp
 )
-target_include_directories(SL_Cpp_Tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+FetchContent_Declare(
+        doctest
+        GIT_REPOSITORY https://github.com/doctest/doctest.git
+        GIT_TAG v2.5.3
+        GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(doctest)
 target_link_libraries(SL_Cpp_Tests PRIVATE doctest::doctest)
-target_compile_options(SL_Cpp_Tests PRIVATE -Wall -Wextra -pedantic)
+target_compile_options(SL_Cpp_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
 
 add_test(NAME SL_Cpp_Tests COMMAND SL_Cpp_Tests)
