@@ -1,6 +1,5 @@
 // SL.md 2.1.5 运算符——符号本身的识别、贪婪最长匹配。点号单独放在 dot_disambiguation_test.cpp。
 #include "../test_utils.h"
-
 #include "../../../builtins/classes/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>

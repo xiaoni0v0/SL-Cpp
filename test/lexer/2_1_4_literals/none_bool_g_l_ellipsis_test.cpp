@@ -2,7 +2,6 @@
 // （None/True/False/_G/_L 机制上走的是关键字表，2.1.2 keywords_test 已经覆盖过基本识别，
 //  这里只补 2.1.4 语境下、和其他字面量搭配使用时的场景）
 #include "../test_utils.h"
-
 #include <doctest/doctest.h>
 
 TEST_SUITE("2.1.4 None/bool/_G/_L/Ellipsis") {

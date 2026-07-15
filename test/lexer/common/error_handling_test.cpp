@@ -1,12 +1,11 @@
 // 跨章节：SyntaxError 本身的行为——行列信息是否正确带出来、异常类型/继承关系是否符合预期。
 // 各类具体的报错触发条件已经分散在各自章节的测试文件里，这里只关心“报错这件事本身做得对不对”。
 #include "../test_utils.h"
-
 #include "../../../builtins/classes/exceptions/SLException.h"
 #include "../../../builtins/classes/exceptions/SyntaxError.h"
 
-#include <doctest/doctest.h>
 #include <stdexcept>
+#include <doctest/doctest.h>
 
 TEST_SUITE("SyntaxError 本身的行为") {
 

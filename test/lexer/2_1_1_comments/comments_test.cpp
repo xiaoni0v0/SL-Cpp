@@ -1,6 +1,5 @@
 // SL.md 2.1.1 注释
 #include "../test_utils.h"
-
 #include "../../../builtins/classes/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
