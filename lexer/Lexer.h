@@ -2,6 +2,7 @@
 
 #include "token.h"
 
+#include <string>
 #include <vector>
 
 
@@ -18,8 +19,6 @@ class Lexer {
     char32_t advance();
     // 是否读完了
     [[nodiscard]] bool is_eof() const;
-    // 创建一个 token
-    [[nodiscard]] static Token make_token(TokenType type, const std::u32string &value, int row, int col);
     // 抛出 SyntaxError 异常
     [[noreturn]] void error(const std::string &msg) const;
     // 抛出 SyntaxError 异常，提供行列
@@ -36,9 +35,11 @@ class Lexer {
     void read_comment_block();
     // 读字符串字面量。quote 为 ' 或者 "
     Token read_string(char32_t quote);
+    // 读反引号原始字符串字面量：不处理转义，天然支持多行
+    Token read_raw_string();
     // 读数字字面量
     Token read_number();
-    // 读标识符或关键字
+    // 读标识符、关键字、保留字
     Token read_identifier_keyword_reservedword();
     // 读符号
     Token read_symbol();

@@ -7,42 +7,10 @@
 #include <unordered_map>
 #include <utility>
 
-// 工具：Token 类型到字符串的映射
-static constexpr const char *const TOKEN_TYPE_MAPPING[]{
-#define X(name) #name,
-#include "x_token_type.h"
-#undef X
-};
-
-// 工具：关键字字符串到对应 TokenType 的映射
-static const std::unordered_map<std::u32string, TokenType> KEYWORDS_MAPPING{
-#define X(a, b) {U"" #a, TokenType::b},
-#include "x_keyword.h"
-#undef X
-};
-
-// 工具：保留字字符串到对应 TokenType 的映射
-static const std::unordered_map<std::u32string, TokenType> RESERVEDWORDS_MAPPING{
-#define X(a, b) {U"" #a, TokenType::b},
-#include "x_reservedword.h"
-#undef X
-};
-
-// 工具：某些字符到对应转义字符的映射
-// a b f n r t v 0 \ ' "
-static const std::unordered_map<char32_t, char32_t> ESCAPE_CHAR_MAPPING{
-    {U'a', U'\a'},
-    {U'b', U'\b'},
-    {U'f', U'\f'},
-    {U'n', U'\n'},
-    {U'r', U'\r'},
-    {U't', U'\t'},
-    {U'v', U'\v'},
-    {U'0', U'\0'},
-    {U'\\', U'\\'},
-    {U'\'', U'\''},
-    {U'"', U'"'},
-};
+// 工具，创建一个 token
+static Token make_token(const TokenType type, const std::u32string &value, const int row, const int col) {
+    return {type, value, row, col};
+}
 
 char32_t Lexer::peek(const size_t offset) const {
     const size_t idx{pos_ + offset};
@@ -60,10 +28,6 @@ char32_t Lexer::advance() {
 
 bool Lexer::is_eof() const {
     return pos_ >= source_.size();
-}
-
-Token Lexer::make_token(const TokenType type, const std::u32string &value, const int row, const int col) {
-    return {type, value, row, col};
 }
 
 void Lexer::error(const std::string &msg) const {
@@ -103,6 +67,22 @@ void Lexer::read_comment_block() {
 }
 
 Token Lexer::read_string(const char32_t quote) {
+    // 工具：某些字符到对应转义字符的映射
+    // a b f n r t v 0 \ ' "
+    static const std::unordered_map<char32_t, char32_t> ESCAPE_CHAR_MAPPING{
+        {U'a', U'\a'},
+        {U'b', U'\b'},
+        {U'f', U'\f'},
+        {U'n', U'\n'},
+        {U'r', U'\r'},
+        {U't', U'\t'},
+        {U'v', U'\v'},
+        {U'0', U'\0'},
+        {U'\\', U'\\'},
+        {U'\'', U'\''},
+        {U'"', U'"'},
+    };
+
     const int start_row{row_}, start_col{col_};
 
     advance(); // 消耗开头引号
@@ -128,6 +108,19 @@ Token Lexer::read_string(const char32_t quote) {
     error("unterminated string literal", start_row, start_col);
 }
 
+Token Lexer::read_raw_string() {
+    const int start_row{row_}, start_col{col_};
+
+    advance(); // 消耗开头反引号
+    std::u32string str_literal;
+    while (!is_eof()) {
+        const char32_t c{advance()};
+        if (c == U'`') return make_token(TokenType::LITERAL_STR, str_literal, start_row, start_col);
+        str_literal += c;
+    }
+    error("unterminated raw string literal", start_row, start_col);
+}
+
 Token Lexer::read_number() {
     const int start_row{row_}, start_col{col_};
 
@@ -136,10 +129,11 @@ Token Lexer::read_number() {
 
     while (!is_eof() && is_digit(peek())) num_literal += advance();
 
-    if (peek() == U'.' && peek(1) != U'.') {
+    // 只有小数点后紧跟数字才当作 float 的一部分；否则不消耗这个 '.'，留给下一个 token
+    // （例如 `1.` 词法为 `1` 后跟 `.`，`1..2` 词法为 `1`、`..`、`2`）
+    if (peek() == U'.' && is_digit(peek(1))) {
         is_float = true;
         num_literal += advance();
-        if (!is_digit(peek())) error("expected digit after decimal point");
         while (!is_eof() && is_digit(peek())) num_literal += advance();
     }
 
@@ -152,6 +146,20 @@ Token Lexer::read_number() {
 }
 
 Token Lexer::read_identifier_keyword_reservedword() {
+    // 工具：关键字字符串到对应 TokenType 的映射
+    static const std::unordered_map<std::u32string, TokenType> KEYWORDS_MAPPING{
+#define X(a, b) {U"" #a, TokenType::b},
+#include "x_keyword.h"
+#undef X
+    };
+
+    // 工具：保留字字符串到对应 TokenType 的映射
+    static const std::unordered_map<std::u32string, TokenType> RESERVEDWORDS_MAPPING{
+#define X(a, b) {U"" #a, TokenType::b},
+#include "x_reservedword.h"
+#undef X
+    };
+
     const int start_row{row_}, start_col{col_};
 
     std::u32string word;
@@ -301,16 +309,20 @@ Token Lexer::read_symbol() {
         }
         return make_token(TokenType::SIGN_EXCLAIM, U"!", start_row, start_col);
 
-    case U'.': if (peek() == U'.' && peek(1) == U'.') {
+    case U'.': {
+        // 贪婪匹配：尽可能多吃连续的点，最多 3 个
+        // 别忘了此时已经消耗了第一个点
+        size_t dot_count{1};
+        while (dot_count < 3 && peek() == U'.') {
             advance();
-            advance();
-            return make_token(TokenType::LITERAL_ELLIPSIS, U"...", start_row, start_col);
+            dot_count++;
         }
-        if (peek() == U'.') {
-            advance();
-            return make_token(TokenType::SIGN_DOTDOT, U"..", start_row, start_col);
+        switch (dot_count) {
+        case 3: return make_token(TokenType::LITERAL_ELLIPSIS, U"...", start_row, start_col);
+        case 2: return make_token(TokenType::SIGN_DOTDOT, U"..", start_row, start_col);
+        default: return make_token(TokenType::SIGN_DOT, U".", start_row, start_col);
         }
-        return make_token(TokenType::SIGN_DOT, U".", start_row, start_col);
+    }
 
     default: error(std::format("unexpected character '{}'", u32_to_utf8(c)), row_, col_ - 1);
     }
@@ -334,19 +346,21 @@ std::vector<Token> Lexer::tokenize() && {
         // 换行
         if (const char32_t c{peek()}; c == U'\n') {
             // 如果是开头或者上一个 token 是换行/分号，这个换行省了
-            if (all_tokens.empty() || (
-                    all_tokens.back().type == TokenType::NEWLINE || all_tokens.back().type == TokenType::SIGN_SEMICOLON
-                ))
+            if (all_tokens.empty()
+                || all_tokens.back().type == TokenType::NEWLINE
+                || all_tokens.back().type == TokenType::SIGN_SEMICOLON)
                 advance(); // 还是要消耗掉这个'\n'
             else all_tokens.push_back(read_newline());
-
         }
+
         // 单行注释
         else if (c == U'#') { read_comment_line(); }
         // 多行注释
         else if (c == U'/' && peek(1) == U'*') { read_comment_block(); }
         // 字符串
         else if (c == U'"' || c == U'\'') { all_tokens.push_back(read_string(c)); }
+        // 反引号原始字符串
+        else if (c == U'`') { all_tokens.push_back(read_raw_string()); }
         // 数字
         else if (is_digit(c)) { all_tokens.push_back(read_number()); }
         // 标识符 / 关键字 / 保留字
@@ -359,6 +373,13 @@ std::vector<Token> Lexer::tokenize() && {
 }
 
 std::string Lexer::get_typename_by_tokentype(const TokenType type) {
+    // 工具：Token 类型到字符串的映射
+    static constexpr const char *const TOKEN_TYPE_MAPPING[]{
+#define X(name) #name,
+#include "x_token_type.h"
+#undef X
+    };
+
     const size_t
         ind{static_cast<size_t>(type)},
         len{std::size(TOKEN_TYPE_MAPPING)};

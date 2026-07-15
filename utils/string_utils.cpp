@@ -3,7 +3,6 @@
 #include "../builtins/classes/exceptions/EncodingError.h"
 
 #include <cstdint>
-#include <format>
 #include <string>
 
 bool is_digit(const char c) {

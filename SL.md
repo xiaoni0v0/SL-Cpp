@@ -43,17 +43,17 @@ SL 是一种面向对象的编程语言。特点是：
 
 以下列出的是 SL 的**保留字**，目前不是关键字，不能作为标识符使用，对应 token 出现在代码中将无条件引发 `SyntaxError`：
 
+- `assert`
+- `in`
+- `when`, `case`
+- `yield`
+- `with`
+- `async`, `await`
 - `define`
 - `as`
-- `yield`
-- `async`, `await`
-- `in`
 - `const`
 - `static`
-- `with`
-- `when`, `case`
 - `local`
-- `assert`
 
 #### 2.1.3 标识符
 
