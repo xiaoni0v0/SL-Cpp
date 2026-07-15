@@ -335,7 +335,7 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 语法：
 
 ```
-⟦@decorator ...⟧ func ⟦identifier⟧ ⟦ [ALL_CAPTURE] ⟧ (ALL_PARAM) ⟦-> type⟧ { expr1; ... }
+⟦@decorator ...⟧ func ⟦identifier⟧ ⟦ [ALL_CAPTURE] ⟧ (ALL_PARAM) ⟦: type⟧ { expr1; ... }
 ```
 
 其中：
@@ -427,7 +427,8 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
        除了求值次数不同外，它等价于 `a OP1 b and b OP2 c and c ...`
     4. 对 `and`，先对左参数求值，若其真值成立，则对右参数求值并返回；否则直接返回左参数的值；
     5. 对 `or`，先对左参数求值，若其真值成立，则直接返回左参数的值；否则对右参数求值并返回；
-    6. 对赋值运算符
+    6. 对赋值运算符（左值定义见 2.1.5）
+
         1. 简单赋值 `x = expr`
            先对 `expr` 求值，若 `x` 已经引用对象则令 `x` 解除对原对象的引用，再令 `x` 引用结果对象；
         2. 属性赋值 `x.attribute = expr`
@@ -450,11 +451,11 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 5. 对复合表达式 `{ expr1; expr2; ... }`
    从前到后逐个求每条表达式的值；
 6. 对控制流，见 3.4.5 所述。
-7. 对函数定义 `func f[ALL_CAPTURE](x: type_1 = default_value_1, y: type_2 = default_value_2, ...) -> ret_type`
+7. 对函数定义 `func f[ALL_CAPTURE](x: type_1 = default_value_1, y: type_2 = default_value_2, ...): ret_type`
    先从前到后处理 `ALL_CAPTURE` 中各项（具体规则见 3.10.4），
    再从前到后对形参的类型注解和默认值逐个求值，
    即 `type_1` -> `default_value_1` -> `type_2` -> `default_value_2` -> ... 的顺序，
-   最后（若有 `-> ret_type`）对 `ret_type` 求值；
+   最后（若有 `: ret_type`）对 `ret_type` 求值；
 8. 对类定义 `class identifier(BaseClass1, ...)`
    各基类从前到后逐个求值；
 9. 对 `except`，各异常类从前到后逐个求值。
