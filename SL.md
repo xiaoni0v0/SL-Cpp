@@ -845,7 +845,7 @@ f(*args, x=1, **extra) # 调用时展开
 
 SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Function Group）对象实现运行时 dispatch，而非通过同名函数定义。
 
-详见 4.2.21 所述。
+详见 4.2.22 所述。
 
 ### 3.8 运算符重载
 
@@ -1283,7 +1283,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.1.16 `exit(code=0)`
 
-抛出 `SystemExit(code)`（见 4.2.22）。一路传播到解释器顶层无人捕获时，解释器终止，退出码为 `code`。
+抛出 `SystemExit(code)`（见 4.2.23）。一路传播到解释器顶层无人捕获时，解释器终止，退出码为 `code`。
 
 要求 `code` 为 int 或 `None`，其中 `None` 被视为 0。
 
@@ -1310,28 +1310,40 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.2.4 int
 
-表示整数，自带高精度。继承 `numbers.Real`。
+表示整数，自带高精度。
+
+继承 `numbers.Real`。
 
 #### 4.2.5 bool
 
-继承 int。
-
 只有两个实例，即 `True` 和 `False`。
+
+继承 int。
 
 #### 4.2.6 float
 
-表示浮点数，底层用 C++ 的 double 实现。继承 `numbers.Real`。
+表示浮点数，底层用 C++ 的 double 实现。
+
+继承 `numbers.Real`。
 
 `float` 不会自动转换为 `int`，即便数值恰好是整数；
 反过来 `int` 在某些运算下会自动变成 `float`。
 
-#### 4.2.7 str
+#### 4.2.7 complex
+
+表示复数。
+
+继承 `numbers.Number`。
+
+其中实部和虚部分别用一个 float 存储。
+
+#### 4.2.8 str
 
 表示字符串。严格按 Unicode 码点分割，可迭代且逐码点迭代。
 
 **注意**：str 对象不可变。
 
-#### 4.2.8 tuple
+#### 4.2.9 tuple
 
 容器类。不可变，可迭代。
 
@@ -1339,27 +1351,25 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 **注意**：“不可变”指的是这些引用关系不可变，不蕴含引用的对象自己不可变。
 
-#### 4.2.9 list
+#### 4.2.10 list
 
 容器类，可变，可迭代。
 
 包含任意多个对象的引用。
 
-#### 4.2.10 dict
+#### 4.2.11 dict
 
 可变，键需可哈希。遍历（键、值、键值对）按插入序。满足映射协议（`protocols.Mapping`，见 4.3.2）。
 
-内置类型中，`list`、`dict`、`set` 不可哈希；`tuple` 在其元素均可哈希时可哈希。
-
-#### 4.2.11 unordered_dict
+#### 4.2.12 unordered_dict
 
 除不保证遍历顺序外，与 `dict` 接口一致。满足映射协议。
 
-#### 4.2.12 set
+#### 4.2.13 set
 
 容器类，可变，可迭代。
 
-#### 4.2.13 range
+#### 4.2.14 range
 
 可迭代。
 
@@ -1367,7 +1377,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 2. `range(start, stop)`
 3. `range(start, stop, step)`
 
-#### 4.2.14 SingletonType
+#### 4.2.15 SingletonType
 
 包含了 SL 中的部分“单例”：
 
@@ -1375,7 +1385,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 - NotImplemented
 - StopIteration
 
-#### 4.2.15 CompoundType
+#### 4.2.16 CompoundType
 
 用 `|`, `!`, `?`, `[]` 可以创建**复合类**。
 
@@ -1405,28 +1415,28 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 以上检查均有短路性，但请不要依赖于此，因为检查的顺序不确定，
 例如 `int | str?` 的实际实现*可能*为 `None | int | str` 而非 `int | str | None`。
 
-#### 4.2.16 property
+#### 4.2.17 property
 
 `property(func_get, func_set=None, func_del=None)`，`Descriptor` 的子类。
 `func_set`、`func_del` 为 `None` 时对应操作按 `Descriptor` 默认行为抛 `AttributeError`。
 `get(self, obj)`：若 `isinstance(obj, type)` 返回 `self`（供内省），否则返回 `func_get(obj)`。
 
-#### 4.2.17 staticmethod
+#### 4.2.18 staticmethod
 
 `staticmethod(func)`，`self.func = func`。纯标签，不是描述器，仅在类体收集属性时取出 `v.func` 使用，
 本身不会成为类属性。
 
-#### 4.2.18 classmethod
+#### 4.2.19 classmethod
 
 `classmethod(func)`，`Descriptor` 的子类。
 `get(self, obj)`：令 `cls = obj if isinstance(obj, type) else type(obj)`，
 返回把 `cls` 绑定为第一参数的可调用对象。
 
-#### 4.2.19 Function
+#### 4.2.20 Function
 
 `func` 表达式建立的对象的类。实现 `__op_call__`。
 
-#### 4.2.20 super
+#### 4.2.21 super
 
 `super(cls, obj)`。
 
@@ -1437,9 +1447,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 否则原样返回；
 全部找不到则 `AttributeError`。
 
-#### 4.2.21 FuncGroup
-
-`FuncGroup(*functions, name=None)`
+#### 4.2.22 FuncGroup(*functions, name=None)
 
 一个例子足以说明 FuncGroup 的用法：
 
@@ -1457,7 +1465,7 @@ f(1, 2) # 输出 4
 f(1.0)  # 抛出 DispatchError
 ```
 
-#### 4.2.22 异常类
+#### 4.2.23 异常类
 
 只列全局的一批常用异常，其余更细分的见 4.3.3 `exceptions` 模块。
 
@@ -1538,7 +1546,7 @@ BaseException
 更细分的异常类，用不到就不用 `import`。目前只有：
 
 ```
-IOError（见 4.2.22）
+IOError
 └── EncodingError - 编码错误，主要在打开文件时
 ```
 
@@ -1560,7 +1568,7 @@ $$
 \text{str} \\ \text{tuple} \\ \text{list} \\ \text{set} \\ \text{range} \\
 \text{dict} \\ \text{unordered_dict} \\
 \text{numbers.Number}\left\{\begin{array}{l}
-\text{complex（尚未设计）} \\
+\text{complex} \\
 \text{numbers.Real}\left\{\begin{array}{l}\text{float} \\ \text{int}\left\{\text{bool}\right.\end{array}\right.
 \end{array}\right. \\
 \text{BaseException}\left\{\begin{array}{l}
