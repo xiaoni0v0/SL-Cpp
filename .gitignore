@@ -1,6 +1,6 @@
 .idea/
-cmake-build-debug/
-test/
+test/standard/*.md
+test/standard/*.html
 
 *.o
 *.exe
