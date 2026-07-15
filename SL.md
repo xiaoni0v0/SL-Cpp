@@ -347,9 +347,8 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 
 `[ALL_CAPTURE]` 为**捕获列表**，由 0 个或多个 `ONE_CAPTURE` 组成，语法：
 
-1. `identifier`（**值捕获**，捕获当前作用域内同名标识符的值）
-2. `identifier = expr`（**值捕获**，捕获 `expr` 的值，绑定为 `identifier`）
-3. `&identifier`（**引用捕获**）
+1. `identifier ⟦= expr⟧`（**值捕获**，捕获当前作用域内同名标识符的值 / `expr` 的值）
+2. `&identifier`（**引用捕获**）
 
 其中 `identifier` 为标识符，`expr` 为表达式。
 
@@ -452,7 +451,7 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
    从前到后逐个求每条表达式的值；
 6. 对控制流，见 3.4.5 所述。
 7. 对函数定义
-   `⟦@decorator ...⟧ func f[ALL_CAPTURE](x: type_1 = default_value_1, y: type_2 = default_value_2, ...): ret_type`
+   `⟦@decorator ...⟧ func identifier[ALL_CAPTURE](x: type_1 = default_value_1, y: type_2 = default_value_2, ...): ret_type`
    若有前缀装饰器，先从前到后（离 `func` 越远的越先）对各 `decorator` 求值；
    再从前到后处理 `ALL_CAPTURE` 中各项（具体规则见 3.10.4），
    再从前到后对形参的类型注解和默认值逐个求值，
