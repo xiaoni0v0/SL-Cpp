@@ -240,7 +240,7 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         // 括号内允许运算符前换行（如多行链式调用）
         skip_paren_newline();
 
-        const auto &[op, lexeme, op_row, op_col]{peek()};
+        const auto &[op, op_row, op_col, lexeme]{peek()};
         const auto [lbp, rbp]{infix_bp(op)};
 
         // lbp == -1 表示非中缀/后缀运算符；lbp < min_bp 表示绑定力不足，让上层处理
@@ -309,7 +309,7 @@ AstNodePtr Parser::parse_non_op() {
     // 跳过前导换行
     skip_newline();
 
-    switch (const auto &[type, lexeme, row, col]{peek()}; type) {
+    switch (const auto &[type, row, col, lexeme]{peek()}; type) {
     // 字面量
     case TokenType::LITERAL_NONE: return advance(), std::make_unique<AstNodeLiteralNone>(row, col);
     case TokenType::LITERAL_TRUE: return advance(), std::make_unique<AstNodeLiteralBool>(row, col, true);
