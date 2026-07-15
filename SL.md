@@ -451,13 +451,17 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 5. 对复合表达式 `{ expr1; expr2; ... }`
    从前到后逐个求每条表达式的值；
 6. 对控制流，见 3.4.5 所述。
-7. 对函数定义 `func f[ALL_CAPTURE](x: type_1 = default_value_1, y: type_2 = default_value_2, ...): ret_type`
-   先从前到后处理 `ALL_CAPTURE` 中各项（具体规则见 3.10.4），
+7. 对函数定义
+   `⟦@decorator ...⟧ func f[ALL_CAPTURE](x: type_1 = default_value_1, y: type_2 = default_value_2, ...): ret_type`
+   若有前缀装饰器，先从前到后（离 `func` 越远的越先）对各 `decorator` 求值；
+   再从前到后处理 `ALL_CAPTURE` 中各项（具体规则见 3.10.4），
    再从前到后对形参的类型注解和默认值逐个求值，
    即 `type_1` -> `default_value_1` -> `type_2` -> `default_value_2` -> ... 的顺序，
-   最后（若有 `: ret_type`）对 `ret_type` 求值；
-8. 对类定义 `class identifier(BaseClass1, ...)`
-   各基类从前到后逐个求值；
+   最后（若有 `: ret_type`）对 `ret_type` 求值。
+   装饰器的调用发生在函数对象建立完毕之后，从近到远进行；
+8. 对类定义 `⟦@decorator ...⟧ class identifier(BaseClass1, ...)`
+   若有前缀装饰器，先从前到后（离 `class` 越远的越先）对各 `decorator` 求值；
+   再各基类从前到后逐个求值；
 9. 对 `except`，各异常类从前到后逐个求值。
 
 ### 3.4 表达式的值
@@ -949,8 +953,8 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 删 `del o.attr`：
 
 1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则调用 `该属性.delete(o)`；
-2. 否则若 `o` 自身属性表中有 `attr`，则从中删除；
-3. 否则若 `type(o)` 的 MRO 上有 `__delattr__`，则调用 `__delattr__(o, attr)`；
+2. 否则若 `type(o)` 的 MRO 上有 `__delattr__`，则调用 `__delattr__(o, attr)`；
+3. 否则若 `o` 自身属性表中有 `attr`，则从中删除；
 4. 否则 `AttributeError`。
 
 **属性表**不通过任何属性名暴露，唯一的取得方式是内置函数 `attrs(obj)`（见 4.1.8）。
