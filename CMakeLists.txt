@@ -42,6 +42,7 @@ add_executable(SL_Cpp main.cpp
         parser/ast_nodes/ast_nodes.h
         parser/ast_nodes/x_ast_nodes.h
         parser/ast_nodes/details/ast_node.h
+        parser/ast_nodes/details/ast_node_class.h
         parser/ast_nodes/details/ast_node_control_flows.h
         parser/ast_nodes/details/ast_node_decorators.h
         parser/ast_nodes/details/ast_node_func.h
