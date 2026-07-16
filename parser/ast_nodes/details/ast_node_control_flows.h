@@ -74,7 +74,7 @@ struct AstNodeForCond : AstNode {
 };
 
 // for [$] (target : iterable) body（迭代模式）
-// target 必须是标识符，由语义层校验
+// target 必须是左值（标识符/属性访问/元素访问/解构元组或列表），由语义层校验（复用 check_lvalue）
 struct AstNodeForIter : AstNode {
     bool collect_; // true 表示 for $ 收集模式
     AstNodePtr target_;

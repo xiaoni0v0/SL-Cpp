@@ -263,12 +263,12 @@ if (cond1) expr1 ⟦elif (cond2) expr2 ...⟧ ⟦else expr3⟧
 语法：
 
 1. 步进模式：`for ⟦$⟧ (init cond inc) expr`
-2. 迭代模式：`for ⟦$⟧ (identifier : iterable) expr`
+2. 迭代模式：`for ⟦$⟧ (lvalue : iterable) expr`
 
 其中：
 
 1. `init`, `cond`, `inc` 为表达式或空，三者用 `;` 或至少一个换行无歧义地分割（若某个槽为空，则必须使用 `;`）；
-2. `identifier` 为标识符，`iterable` 为表达式；
+2. `lvalue` 为左值（定义见 2.1.5，可以是解构形式），`iterable` 为表达式；
 3. `expr` 为表达式；
 4. 带 `$` 为收集模式，不带为计数模式。
 
@@ -566,9 +566,11 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 1. 步进模式 `for ⟦$⟧ (init cond inc) expr`：
    若 `init`、`inc` 为空，对其求值实为跳过；若 `cond` 为空，对其求值实为返回 `True`。
    先对 `init` 求值并丢弃，然后不断重复：对 `cond` 求值，真值成立则按上述方式处理 `expr`，再对 `inc` 求值并丢弃；否则跳出循环。
-2. 迭代模式 `for ⟦$⟧ (identifier : iterable) expr`：
+2. 迭代模式 `for ⟦$⟧ (lvalue : iterable) expr`：
    要求 `iterable` 具有迭代器协议，否则抛出 `TypeError`。
-   不断从 `iterable` 取出一个元素赋给 `identifier`，然后按上述方式处理 `expr`，直到迭代结束。
+   不断从 `iterable` 取出一个元素，按 3.3 对赋值运算符规定的规则
+   （简单赋值/属性赋值/元素赋值/解构赋值之一，视 `lvalue` 具体形状而定）
+   赋给 `lvalue`，然后按上述方式处理 `expr`，直到迭代结束。
 
 `expr` 中可含有 `break` 和 `continue`，其行为以及对 `for` 的值的影响详见下文。
 

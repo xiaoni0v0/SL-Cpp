@@ -34,8 +34,10 @@ class SyntaxChecker {
 #include "../../parser/ast_nodes/x_ast_nodes.h"
 #undef X
 
-    // 检查一个节点是否可以作为左值（含解构：元组/列表）。要求 node 非空
+    // 检查一个节点是否可以作为左值（含解构：元组/列表，元素里最多一个可以带 * 前缀）。要求 node 非空
     void check_lvalue(const AstNode *node) const;
+    // check_lvalue 的辅助：检查解构元组/列表的各元素，校验"至多一个 *lv"（2.1.5 第 4 点）
+    void check_lvalue_items(const std::vector<AstNodePtr> &items) const;
     // 检查一个节点是否可以作为"简单左值"（标识符/属性访问/元素访问，不含解构），
     // 用于复合赋值这类不支持解构的场合
     void check_simple_lvalue(const AstNode *node) const;

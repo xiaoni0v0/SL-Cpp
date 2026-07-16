@@ -118,9 +118,7 @@ void SyntaxChecker::check(const AstNodeForIter *node) {
     const Context saved = ctx_;
     ctx_.can_star = false;
     ctx_.can_double_star = false;
-    if (!dynamic_cast<const AstNodeIdentifier *>(node->target_.get()))
-        error("for-iter target must be an identifier",
-              node->target_->row_, node->target_->col_);
+    check_lvalue(node->target_.get());
     check(node->iterable_.get());
     ctx_.loop_depth++;
     check(node->body_.get());
@@ -392,16 +390,16 @@ void SyntaxChecker::check(const AstNodeIdentifier *) {
 }
 
 void SyntaxChecker::check(const AstNodeDel *node) {
-    if (!dynamic_cast<const AstNodeIdentifier *>(node->target_.get()))
-        error("del target must be an identifier",
+    // 2.2.3：target 必须是标识符或属性访问
+    if (!dynamic_cast<const AstNodeIdentifier *>(node->target_.get()) &&
+        !dynamic_cast<const AstNodeAttr *>(node->target_.get()))
+        error("del target must be an identifier or attribute access",
               node->target_->row_, node->target_->col_);
 }
 
 void SyntaxChecker::check(const AstNodeGlobal *node) {
+    // identifier_ 语法上就是 token，没有形状可校验，只需要检查作用域限制（2.2.4：只能在局部作用域中使用）
     if (ctx_.func_depth == 0) error("global outside function", node->row_, node->col_);
-    if (!dynamic_cast<const AstNodeIdentifier *>(node->target_.get()))
-        error("global target must be an identifier",
-              node->target_->row_, node->target_->col_);
 }
 
 void SyntaxChecker::check_simple_lvalue(const AstNode *node) const {
@@ -422,15 +420,29 @@ void SyntaxChecker::check_lvalue(const AstNode *node) const {
 
     // (a, b)  [a, b]
     if (const auto *n{dynamic_cast<const AstNodeLiteralTuple *>(node)}) {
-        for (const auto &item : n->items_) check_lvalue(item.get());
+        check_lvalue_items(n->items_);
         return;
     }
     if (const auto *n{dynamic_cast<const AstNodeLiteralList *>(node)}) {
-        for (const auto &item : n->items_) check_lvalue(item.get());
+        check_lvalue_items(n->items_);
         return;
     }
 
     error("lvalue expected before assignment", node->row_, node->col_);
+}
+
+void SyntaxChecker::check_lvalue_items(const std::vector<AstNodePtr> &items) const {
+    bool seen_star = false;
+    for (const auto &item : items) {
+        if (const auto *star{dynamic_cast<const AstNodeStar *>(item.get())}) {
+            // 2.1.5 第 4 点：解构时至多一个左值可以带 * 前缀
+            if (seen_star) error("at most one starred lvalue allowed in destructuring", star->row_, star->col_);
+            seen_star = true;
+            check_lvalue(star->operand_.get());
+        } else {
+            check_lvalue(item.get());
+        }
+    }
 }
 
 SyntaxChecker::SyntaxChecker(AstNodeProgram *root, std::string file_path)

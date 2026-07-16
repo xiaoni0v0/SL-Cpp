@@ -630,8 +630,8 @@ AstNodePtr Parser::parse_global() {
     const int start_row{peek().row}, start_col{peek().col};
     expect(TokenType::KW_GLOBAL);
     skip_newline();
-    // 语法层只解析一个表达式，target 是否为标识符由语义层校验
-    return std::make_unique<AstNodeGlobal>(start_row, start_col, parse_expr());
+    // 语法本身就是 identifier（2.2.4），不是表达式，直接要求一个标识符 token，没有什么好交给语义层判形状的
+    return std::make_unique<AstNodeGlobal>(start_row, start_col, expect(TokenType::IDENTIFIER).lexeme);
 }
 
 AstNodePtr Parser::parse_if() {
@@ -1250,7 +1250,7 @@ Parser::Parser(std::vector<Token> tokens, std::string file_path)
         throw std::runtime_error{"Bad tokens: missing END_OF_FILE token at the end."};
     }
 
-    // 前边不能有 END_OF_FILE
+    // 3. 前边不能有 END_OF_FILE
     const auto it{std::find_if(tokens_.begin(), tokens_.end() - 1,
                                [](const Token &t) { return t.type == TokenType::END_OF_FILE; })};
     if (it != tokens_.end() - 1) throw std::runtime_error("Bad tokens: multiple END_OF_FILE.");
