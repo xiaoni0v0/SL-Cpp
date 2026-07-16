@@ -7,7 +7,7 @@
 #include <utility>
 
 
-// 标识符
+// global target
 struct AstNodeIdentifier : AstNode {
     std::u32string identifier_;
 
@@ -17,13 +17,11 @@ struct AstNodeIdentifier : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "Identifier"}};
-        j["identifier"] = u32_to_utf8(identifier_);
-        return j;
+        return json{{"type", "Identifier"}, {"identifier", u32_to_utf8(identifier_)}};
     }
 };
 
-// del target（target 必须是标识符，由语义层校验）
+// del target
 struct AstNodeDel : AstNode {
     AstNodePtr target_;
 
@@ -33,9 +31,7 @@ struct AstNodeDel : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "Del"}};
-        j["target"] = target_->to_json();
-        return j;
+        return json{{"type", "Del"}, {"target", target_->to_json()}};
     }
 };
 
@@ -49,8 +45,6 @@ struct AstNodeGlobal : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "Global"}};
-        j["target"] = target_->to_json();
-        return j;
+        return json{{"type", "Global"}, {"target", target_->to_json()}};
     }
 };

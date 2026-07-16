@@ -32,16 +32,18 @@ struct AstNodeClass : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "Class"}};
         auto decorators = json::array();
         for (const auto &d : decorators_) decorators.push_back(d->to_json());
-        j["decorators"] = std::move(decorators);
-        j["name"] = name_ ? json(u32_to_utf8(*name_)) : json(nullptr);
         auto bases = json::array();
         for (const auto &base : bases_) bases.push_back(base->to_json());
-        j["bases"] = std::move(bases);
-        j["doc"] = doc_ ? doc_->to_json() : json(nullptr);
-        j["body"] = body_->to_json();
-        return j;
+
+        return json{
+            {"type", "Class"},
+            {"decorators", std::move(decorators)},
+            {"name", name_ ? json(u32_to_utf8(*name_)) : json(nullptr)},
+            {"bases", std::move(bases)},
+            {"doc", doc_ ? doc_->to_json() : json(nullptr)},
+            {"body", body_->to_json()}
+        };
     }
 };

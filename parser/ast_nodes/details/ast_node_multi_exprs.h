@@ -17,11 +17,9 @@ struct AstNodeProgram : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "Program"}};
         auto exprs = json::array();
         for (const auto &e : exprs_) exprs.push_back(e->to_json());
-        j["exprs"] = std::move(exprs);
-        return j;
+        return json{{"type", "Program"}, {"exprs", std::move(exprs)}};
     }
 };
 
@@ -37,10 +35,8 @@ struct AstNodeCompound : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "Compound"}};
         auto exprs = json::array();
         for (const auto &e : exprs_) exprs.push_back(e->to_json());
-        j["exprs"] = std::move(exprs);
-        return j;
+        return json{{"type", "Compound"}, {"exprs", std::move(exprs)}};
     }
 };

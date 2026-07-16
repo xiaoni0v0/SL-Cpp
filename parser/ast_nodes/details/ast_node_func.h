@@ -58,11 +58,8 @@ struct AstNodeFunc : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "Func"}};
         auto decorators = json::array();
         for (const auto &d : decorators_) decorators.push_back(d->to_json());
-        j["decorators"] = std::move(decorators);
-        j["name"] = name_ ? json(u32_to_utf8(*name_)) : json(nullptr);
 
         auto captures = json::array();
         for (const auto &c : captures_)
@@ -71,27 +68,34 @@ struct AstNodeFunc : AstNode {
                 {"identifier", u32_to_utf8(c.identifier_)},
                 {"value_expr", c.value_expr_ ? c.value_expr_->to_json() : json(nullptr)}
             });
-        j["captures"] = std::move(captures);
 
         auto params = json::array();
-        for (const auto &p : params_) {
-            const char *pt_str = p.param_type_ == OneParam::ParamType::Normal
-                                     ? "Normal"
-                                     : p.param_type_ == OneParam::ParamType::StarArgs
-                                     ? "StarArgs"
-                                     : "DoubleStarKwargs";
+        for (const auto &p : params_)
             params.push_back({
                 {"identifier", u32_to_utf8(p.identifier_)},
-                {"param_type", pt_str},
+                {"param_type", param_type_str(p.param_type_)},
                 {"type_annotation", p.type_annotation_ ? p.type_annotation_->to_json() : json(nullptr)},
                 {"default_value", p.default_value_ ? p.default_value_->to_json() : json(nullptr)}
             });
-        }
-        j["params"] = std::move(params);
 
-        j["return_type"] = return_type_ ? return_type_->to_json() : json(nullptr);
-        j["doc"] = doc_ ? doc_->to_json() : json(nullptr);
-        j["body"] = body_->to_json();
-        return j;
+        return json{
+            {"type", "Func"},
+            {"decorators", std::move(decorators)},
+            {"name", name_ ? json(u32_to_utf8(*name_)) : json(nullptr)},
+            {"captures", std::move(captures)},
+            {"params", std::move(params)},
+            {"return_type", return_type_ ? return_type_->to_json() : json(nullptr)},
+            {"doc", doc_ ? doc_->to_json() : json(nullptr)},
+            {"body", body_->to_json()}
+        };
+    }
+
+    [[nodiscard]] static constexpr const char *param_type_str(const OneParam::ParamType pt) {
+        switch (pt) {
+        case OneParam::ParamType::Normal: return "Normal";
+        case OneParam::ParamType::StarArgs: return "StarArgs";
+        case OneParam::ParamType::DoubleStarKwargs: return "DoubleStarKwargs";
+        default: return "<unknown>";
+        }
     }
 };

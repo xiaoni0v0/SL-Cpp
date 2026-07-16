@@ -20,9 +20,7 @@ struct AstNodeStar : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "Star"}};
-        j["operand"] = operand_->to_json();
-        return j;
+        return json{{"type", "Star"}, {"operand", operand_->to_json()}};
     }
 };
 
@@ -36,9 +34,7 @@ struct AstNodeDoubleStar : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "DoubleStar"}};
-        j["operand"] = operand_->to_json();
-        return j;
+        return json{{"type", "DoubleStar"}, {"operand", operand_->to_json()}};
     }
 };
 
@@ -66,27 +62,19 @@ struct AstNodeOpUnary : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        const char *op_str;
-        switch (op_) {
-        case OpType::Question: op_str = "?";
-            break;
-        case OpType::Exclaim: op_str = "!";
-            break;
-        case OpType::Pos: op_str = "+";
-            break;
-        case OpType::Neg: op_str = "-";
-            break;
-        case OpType::BitNot: op_str = "~";
-            break;
-        case OpType::Not: op_str = "not";
-            break;
-        default: op_str = "<unknown>";
-            break;
+        return json{{"type", "OpUnary"}, {"op", op_str(op_)}, {"operand", operand_->to_json()}};
+    }
+
+    [[nodiscard]] static constexpr const char *op_str(const OpType op) {
+        switch (op) {
+        case OpType::Question: return "?";
+        case OpType::Exclaim: return "!";
+        case OpType::Pos: return "+";
+        case OpType::Neg: return "-";
+        case OpType::BitNot: return "~";
+        case OpType::Not: return "not";
+        default: return "<unknown>";
         }
-        json j{{"type", "OpUnary"}};
-        j["op"] = op_str;
-        j["operand"] = operand_->to_json();
-        return j;
     }
 };
 
@@ -105,10 +93,7 @@ struct AstNodeIncDec : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "IncDec"}};
-        j["op"] = op_ == OpType::Inc ? "++" : "--";
-        j["target"] = target_->to_json();
-        return j;
+        return json{{"type", "IncDec"}, {"op", op_ == OpType::Inc ? "++" : "--"}, {"target", target_->to_json()}};
     }
 };
 
@@ -136,15 +121,12 @@ struct AstNodeOpBinary : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "OpBinary"}};
-        j["op"] = op_binary_str(op_);
-        j["left"] = left_->to_json();
-        j["right"] = right_->to_json();
-        return j;
+        return json{{"type", "OpBinary"}, {"op", op_str(op_)}, {"left", left_->to_json()},
+                    {"right", right_->to_json()}};
     }
 
     // AstNodeCompoundAssign 复用同一个 OpType，也复用这个字符串化
-    [[nodiscard]] static const char *op_binary_str(const OpType op) {
+    [[nodiscard]] static constexpr const char *op_str(const OpType op) {
         switch (op) {
         case OpType::Add: return "+";
         case OpType::Sub: return "-";
@@ -182,35 +164,24 @@ struct AstNodeCompare : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "Compare"}};
         auto operands = json::array();
         for (const auto &operand : operands_) operands.push_back(operand->to_json());
-        j["operands"] = std::move(operands);
         auto ops = json::array();
-        for (const auto &op : ops_) {
-            const char *op_str;
-            switch (op) {
-            case OpType::Lt: op_str = "<";
-                break;
-            case OpType::Le: op_str = "<=";
-                break;
-            case OpType::Gt: op_str = ">";
-                break;
-            case OpType::Ge: op_str = ">=";
-                break;
-            case OpType::Eq: op_str = "==";
-                break;
-            case OpType::Ne: op_str = "!=";
-                break;
-            case OpType::Is: op_str = "is";
-                break;
-            default: op_str = "<unknown>";
-                break;
-            }
-            ops.push_back(op_str);
+        for (const auto &op : ops_) ops.push_back(op_str(op));
+        return json{{"type", "Compare"}, {"operands", std::move(operands)}, {"ops", std::move(ops)}};
+    }
+
+    [[nodiscard]] static constexpr const char *op_str(const OpType op) {
+        switch (op) {
+        case OpType::Lt: return "<";
+        case OpType::Le: return "<=";
+        case OpType::Gt: return ">";
+        case OpType::Ge: return ">=";
+        case OpType::Eq: return "==";
+        case OpType::Ne: return "!=";
+        case OpType::Is: return "is";
+        default: return "<unknown>";
         }
-        j["ops"] = std::move(ops);
-        return j;
     }
 };
 
@@ -226,10 +197,7 @@ struct AstNodeAssign : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "Assign"}};
-        j["target"] = target_->to_json();
-        j["value"] = value_->to_json();
-        return j;
+        return json{{"type", "Assign"}, {"target", target_->to_json()}, {"value", value_->to_json()}};
     }
 };
 
@@ -247,10 +215,9 @@ struct AstNodeCompoundAssign : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "CompoundAssign"}};
-        j["target"] = target_->to_json();
-        j["op"] = AstNodeOpBinary::op_binary_str(op_);
-        j["value"] = value_->to_json();
-        return j;
+        return json{
+            {"type", "CompoundAssign"}, {"target", target_->to_json()},
+            {"op", AstNodeOpBinary::op_str(op_)}, {"value", value_->to_json()}
+        };
     }
 };

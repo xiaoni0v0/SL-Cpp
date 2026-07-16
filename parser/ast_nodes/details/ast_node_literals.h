@@ -29,9 +29,7 @@ struct AstNodeLiteralBool : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "LiteralBool"}};
-        j["value"] = value_;
-        return j;
+        return json{{"type", "LiteralBool"}, {"value", value_}};
     }
 };
 
@@ -44,9 +42,7 @@ struct AstNodeLiteralGL : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "LiteralGL"}};
-        j["value"] = (value_ == GLType::G) ? "_G" : "_L";
-        return j;
+        return json{{"type", "LiteralGL"}, {"value", value_ == GLType::G ? "_G" : "_L"}};
     }
 };
 
@@ -61,9 +57,7 @@ struct AstNodeLiteralInt : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "LiteralInt"}};
-        j["raw"] = u32_to_utf8(raw_);
-        return j;
+        return json{{"type", "LiteralInt"}, {"raw", u32_to_utf8(raw_)}};
     }
 };
 
@@ -77,9 +71,7 @@ struct AstNodeLiteralFloat : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "LiteralFloat"}};
-        j["raw"] = u32_to_utf8(raw_);
-        return j;
+        return json{{"type", "LiteralFloat"}, {"raw", u32_to_utf8(raw_)}};
     }
 };
 
@@ -93,9 +85,7 @@ struct AstNodeLiteralStr : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "LiteralStr"}};
-        j["value"] = u32_to_utf8(value_);
-        return j;
+        return json{{"type", "LiteralStr"}, {"value", u32_to_utf8(value_)}};
     }
 };
 
@@ -108,11 +98,9 @@ struct AstNodeLiteralTuple : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "LiteralTuple"}};
         auto items = json::array();
         for (const auto &item : items_) items.push_back(item->to_json());
-        j["items"] = std::move(items);
-        return j;
+        return json{{"type", "LiteralTuple"}, {"items", std::move(items)}};
     }
 };
 
@@ -126,11 +114,9 @@ struct AstNodeLiteralList : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "LiteralList"}};
         auto items = json::array();
         for (const auto &item : items_) items.push_back(item->to_json());
-        j["items"] = std::move(items);
-        return j;
+        return json{{"type", "LiteralList"}, {"items", std::move(items)}};
     }
 };
 
@@ -144,15 +130,11 @@ struct AstNodeLiteralDict : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "LiteralDict"}};
         auto items = json::array();
         for (const auto &[key, val] : items_)
-            items.push_back({
-                {"key", key->to_json()},
-                {"val", val ? val->to_json() : json(nullptr)}
-            });
-        j["items"] = std::move(items);
-        return j;
+            items.push_back({{"key", key->to_json()},
+                             {"val", val ? val->to_json() : json(nullptr)}});
+        return json{{"type", "LiteralDict"}, {"items", std::move(items)}};
     }
 };
 

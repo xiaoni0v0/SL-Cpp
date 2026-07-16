@@ -25,15 +25,14 @@ struct AstNodeCall : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "Call"}};
-        j["object"] = object_->to_json();
         auto args = json::array();
         for (const auto &arg : args_) args.push_back(arg->to_json());
-        j["args"] = std::move(args);
         auto kwargs = json::array();
         for (const auto &[key, val] : kwargs_) kwargs.push_back({{"key", u32_to_utf8(key)}, {"value", val->to_json()}});
-        j["kwargs"] = std::move(kwargs);
-        return j;
+        return json{
+            {"type", "Call"}, {"object", object_->to_json()},
+            {"args", std::move(args)}, {"kwargs", std::move(kwargs)}
+        };
     }
 };
 
@@ -49,12 +48,9 @@ struct AstNodeIndex : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "Index"}};
-        j["object"] = object_->to_json();
         auto args = json::array();
         for (const auto &arg : args_) args.push_back(arg->to_json());
-        j["args"] = std::move(args);
-        return j;
+        return json{{"type", "Index"}, {"object", object_->to_json()}, {"args", std::move(args)}};
     }
 };
 
@@ -70,9 +66,6 @@ struct AstNodeAttr : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "Attr"}};
-        j["object"] = object_->to_json();
-        j["attr"] = u32_to_utf8(attr_);
-        return j;
+        return json{{"type", "Attr"}, {"object", object_->to_json()}, {"attr", u32_to_utf8(attr_)}};
     }
 };

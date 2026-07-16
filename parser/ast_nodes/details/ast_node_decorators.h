@@ -20,9 +20,6 @@ struct AstNodeDecorator : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        json j{{"type", "Decorator"}};
-        j["decorator"] = decorator_->to_json();
-        j["target"] = target_->to_json();
-        return j;
+        return json{{"type", "Decorator"}, {"decorator", decorator_->to_json()}, {"target", target_->to_json()}};
     }
 };
