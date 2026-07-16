@@ -103,13 +103,13 @@ TEST_CASE("= 系列：= / ==") {
 
 TEST_CASE("! 系列：! / !=") {
     CHECK(lex_dump(U"!") == "SIGN_EXCLAIM");
-    CHECK(lex_dump(U"!=") == "SIGN_NEQ");
+    CHECK(lex_dump(U"!=") == "SIGN_NE");
 }
 
 TEST_CASE("spec 2.1.6 举的反例：`a! == b` 不能写成 `a!==b`，两者词法结果不同") {
     CHECK(lex_dump(U"a! == b") == "IDENTIFIER(a) SIGN_EXCLAIM SIGN_EQ IDENTIFIER(b)");
     // 贪婪匹配下 !== 被切成 != 和 =，跟上面那句语义完全不同，这正是 spec 里特别提醒的坑
-    CHECK(lex_dump(U"a!==b") == "IDENTIFIER(a) SIGN_NEQ SIGN_ASSIGN IDENTIFIER(b)");
+    CHECK(lex_dump(U"a!==b") == "IDENTIFIER(a) SIGN_NE SIGN_ASSIGN IDENTIFIER(b)");
 }
 
 TEST_CASE("spec 2.1.6 举的正例：for $ (i : ls) { i ** 2 } 可以完全不加空白地压缩") {

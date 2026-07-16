@@ -84,7 +84,7 @@ X(SIGN_RSHIFT)    // >>
 
 // 符号：比较
 X(SIGN_EQ)  // ==
-X(SIGN_NEQ) // !=
+X(SIGN_NE) // !=
 X(SIGN_LT)  // <
 X(SIGN_LE)  // <=
 X(SIGN_GT)  // >

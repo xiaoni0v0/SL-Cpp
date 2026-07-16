@@ -297,7 +297,7 @@ Token Lexer::read_symbol() {
 
     case U'!': if (peek() == U'=') {
             advance();
-            return make_token(TokenType::SIGN_NEQ, start_row, start_col, U"!=");
+            return make_token(TokenType::SIGN_NE, start_row, start_col, U"!=");
         }
         return make_token(TokenType::SIGN_EXCLAIM, start_row, start_col, U"!");
 

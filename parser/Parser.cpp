@@ -55,7 +55,7 @@ static bool is_compare_op(const TokenType t) {
     case TokenType::SIGN_GT:
     case TokenType::SIGN_GE:
     case TokenType::SIGN_EQ:
-    case TokenType::SIGN_NEQ: return true;
+    case TokenType::SIGN_NE: return true;
     default: return false;
     }
 }
@@ -68,7 +68,7 @@ static AstNodeCompare::OpType token_type_to_compare_op_type(const TokenType t) {
     case TokenType::SIGN_GT: return AstNodeCompare::OpType::Gt;
     case TokenType::SIGN_GE: return AstNodeCompare::OpType::Ge;
     case TokenType::SIGN_EQ: return AstNodeCompare::OpType::Eq;
-    case TokenType::SIGN_NEQ: return AstNodeCompare::OpType::Ne;
+    case TokenType::SIGN_NE: return AstNodeCompare::OpType::Ne;
     default:
         assert(false && "not a compare op token");
     }
@@ -106,7 +106,7 @@ static std::pair<int, int> infix_bp(const TokenType type) {
     case TokenType::SIGN_GT:
     case TokenType::SIGN_GE:
     case TokenType::SIGN_EQ:
-    case TokenType::SIGN_NEQ: return {60, 61};
+    case TokenType::SIGN_NE: return {60, 61};
     case TokenType::KW_IS: return {50, 51}; // is（自成一组的链式比较，不与上面 6 者混链）
     case TokenType::KW_AND: return {30, 31}; // and
     case TokenType::KW_OR: return {20, 21}; // or
