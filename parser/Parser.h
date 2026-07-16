@@ -55,6 +55,15 @@ class Parser {
     AstNodePtr parse_expr_pratt(int min_bp);
 
     /**
+     * 解析 if / while / for 中间槽的条件表达式：
+     * 禁止裸的普通赋值 =（避免 if (x = y) 这种大概率是 == 手误的写法），
+     * 若确实想在条件里赋值，需显式再套一层括号，如 if ((x = y))；
+     * 复合赋值（+= 等）没有 “= 和 == 相混淆” 的手误风险，允许裸写，不受此限制
+     * @return 节点
+     */
+    AstNodePtr parse_cond();
+
+    /**
      * 解析一个无运算符的表达式
      * 不依赖左侧值（字面量、标识符、控制流、前缀运算符等）
      * @return 节点

@@ -342,6 +342,33 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
     return left;
 }
 
+AstNodePtr Parser::parse_cond() {
+    // min_bp=11 卡住裸的赋值类运算符（lbp=10 < 11 会让 Pratt 主循环在它们前面停下）
+    AstNodePtr left{parse_expr_pratt(11)};
+    const Position start_pos{left->pos_};
+
+    skip_paren_newline();
+
+    if (is_assign_op(peek().type)) {
+        if (peek().type == TokenType::SIGN_ASSIGN) {
+            error("bare assignment '=' is not allowed directly in a condition "
+                  "(did you mean '=='? wrap it in an extra pair of parentheses if intentional, e.g. `if ((x = y))`)",
+                  Position{peek().row, peek().col});
+        }
+
+        // 复合赋值 x op= y：没有 = 和 == 混淆的手误风险，允许裸写
+        const auto &[op, op_row, op_col, lexeme]{advance()};
+        const Position op_pos{op_row, op_col};
+        const int rbp{infix_bp(op).second};
+        skip_newline();
+        left = std::make_unique<AstNodeCompoundAssign>(
+            start_pos, std::move(left), assign_compound_to_binary(op), parse_expr_pratt(rbp), op_pos
+            );
+    }
+
+    return left;
+}
+
 AstNodePtr Parser::parse_compare_chain(AstNodePtr left, const Position start_pos,
                                        const TokenType first_op, const Position first_op_pos) {
     // first_op 已经被消耗（由调用处的 parse_expr_pratt 主循环 advance），属于比较组（< <= > >= == !=）
@@ -609,15 +636,17 @@ AstNodePtr Parser::parse_brace_block() {
             advance();
             skip_newline();
             if (check(TokenType::SIGN_RBRACE)) break; // 尾逗号
-            AstNodePtr key{parse_expr()};
-            skip_newline();
-            if (check(TokenType::SIGN_COLON)) {
-                advance(); // 消耗 ':'
+            // 与第一项一致：直接看是不是以 '**' 开头来判断是否为展开项，
+            // 而不是"解析完键之后看有没有冒号"来反推——否则 {k: v, x}（x 既非 **expr 也没有冒号）
+            // 会被误判成合法的展开项，把校验漏过去
+            if (check(TokenType::SIGN_DOUBLESTAR)) {
+                items.emplace_back(parse_expr(), nullptr); // **expr，无 value
+            } else {
+                AstNodePtr key{parse_expr()};
+                skip_newline();
+                expect(TokenType::SIGN_COLON);
                 skip_newline();
                 items.emplace_back(std::move(key), parse_expr());
-            } else {
-                // **expr 展开项（无冒号），语义层校验 key 必须是 AstNodeDoubleStar
-                items.emplace_back(std::move(key), nullptr);
             }
             skip_newline();
         }
@@ -663,7 +692,7 @@ AstNodePtr Parser::parse_if() {
             skip_newline();
             expect(TokenType::SIGN_LPAREN); // 消耗 '('
             paren_depth_++;
-            AstNodePtr cond{parse_expr()};
+            AstNodePtr cond{parse_cond()};
             paren_depth_--;
             expect(TokenType::SIGN_RPAREN); // 消耗 ')'
             skip_newline();
@@ -707,21 +736,23 @@ AstNodePtr Parser::parse_for() {
     paren_depth_++;
     skip_newline();
 
-    // 解析 for 头部的一个槽：遇到 ';', NEWLINE, ')' 则槽为空，返回 nullptr
+    // 解析 for 头部的一个槽：遇到 ';', NEWLINE, ')' 则槽为空，返回 nullptr；
+    // restrict_assign 为 true 时该槽走 parse_cond（禁止裸的普通赋值 =），用于三槽形式的中间 cond 槽；
+    // init/inc 槽本身就是为赋值而生（如 for (i = 0; ...; i += 1)），不加此限制
     auto parse_slot{
-        [&]() -> AstNodePtr {
+        [&](const bool restrict_assign) -> AstNodePtr {
             if (check(TokenType::SIGN_SEMICOLON) ||
                 check(TokenType::NEWLINE) ||
                 check(TokenType::SIGN_RPAREN))
                 return nullptr;
-            return parse_expr();
+            return restrict_assign ? parse_cond() : parse_expr();
         }
     };
 
-    // 先读第一个槽（可能为空）。它要么是迭代目标（后跟 ':'），要么是条件形式的 init
-    AstNodePtr first{parse_slot()};
+    // 先读第一个槽（可能为空）。它要么是迭代目标（后跟 ':'），要么是步进模式的 init
+    AstNodePtr first{parse_slot(false)};
 
-    // 1. 第一个槽后紧跟 ':' → 迭代形式：for [$] (target : iterable) body
+    // 1. 第一个槽后紧跟 ':' → 迭代模式：for [$] (target : iterable) body
     if (check_over_newline(TokenType::SIGN_COLON)) {
         skip_newline();
         advance(); // 消耗 ':'
@@ -738,22 +769,14 @@ AstNodePtr Parser::parse_for() {
             );
     }
 
-    // 2. 第一个槽后紧跟 ')' → 条件形式：for [$] (cond) body，first 即 cond
-    if (check_over_newline(TokenType::SIGN_RPAREN)) {
-        // 条件形式要求括号内有一个表达式；空括号 for () 非法（无限循环请用 for (;;)）
-        if (!first) error("empty for header");
-        skip_newline();
-        paren_depth_--;
-        expect(TokenType::SIGN_RPAREN);
-        skip_newline();
-        AstNodePtr body{parse_expr()};
-        return std::make_unique<AstNodeForCond>(
-            start_pos, collect,
-            nullptr, std::move(first), nullptr, std::move(body)
-            );
+    // 2. for ()：第一个槽为空、且直接紧跟 ')'，即整个头部彻底为空。
+    //    SL.md 2.2.5.2 只有步进模式（三槽用 ';'/换行分隔，空槽也须显式 ';'）和迭代模式两种语法，
+    //    没有"裸单表达式当条件"的第三种写法；无限循环请用 for (;;)，纯条件循环请用 while (cond)。
+    if (!first && check_over_newline(TokenType::SIGN_RPAREN)) {
+        error("empty for header (for an infinite loop use `for (;;)`; for a plain condition use `while (cond)`)");
     }
 
-    // 3. 否则为完整的计数-条件形式：for [$] (init SEP cond SEP inc) body，first 即 init
+    // 3. 否则为步进模式：for [$] (init SEP cond SEP inc) body，first 即 init
     //    SEP（分隔符）为 ';' 或至少一个换行；两个槽之间必须有 SEP，否则无法无歧义地分割
     //    注：括号内 paren_depth_ > 0，槽末尾的换行可能已经被上一个槽内部 Pratt 循环的边界检查
     //    （skip_paren_newline）提前吃掉，此时再直接 check(NEWLINE) 会误判为"没有分隔符"，
@@ -773,9 +796,9 @@ AstNodePtr Parser::parse_for() {
     };
 
     consume_sep();
-    AstNodePtr cond{parse_slot()};
+    AstNodePtr cond{parse_slot(true)};
     consume_sep();
-    AstNodePtr inc{parse_slot()};
+    AstNodePtr inc{parse_slot(false)};
     skip_newline();
 
     paren_depth_--;
@@ -801,7 +824,7 @@ AstNodePtr Parser::parse_while() {
 
     expect(TokenType::SIGN_LPAREN); // 消耗 '('
     paren_depth_++;
-    AstNodePtr cond{parse_expr()};
+    AstNodePtr cond{parse_cond()};
     paren_depth_--;
     expect(TokenType::SIGN_RPAREN); // 消耗 ')'
     skip_newline();
