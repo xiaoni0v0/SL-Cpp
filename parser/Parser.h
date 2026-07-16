@@ -9,13 +9,9 @@
 
 class Parser {
     const std::vector<Token> tokens_;
+    size_t pos_{0}; // 当前 token 的索引
+    int paren_depth_{0}; // 未闭合的 '(' 和 '[' 深度（不含 '{'）
     const std::string file_path_;
-    // 当前 token 的索引
-    size_t pos_{0};
-    // 未闭合的 '(' 和 '[' 深度（不含 '{'）
-    int paren_depth_{0};
-
-    // ── token 操作 ─────────────────────────────────────────────────────────
 
     // 往后看 token
     [[nodiscard]] const Token &peek() const;
@@ -34,12 +30,8 @@ class Parser {
     // 无条件跳过 NEWLINE 和 ';'
     void skip_terminator();
 
-    // ── 错误 ──────────────────────────────────────────────────────────────
-
     [[noreturn]] void error(const std::string &msg) const;
     [[noreturn]] void error(const std::string &msg, int row, int col) const;
-
-    // ── 解析 ──────────────────────────────────────────────────────────────
 
     /**
      * 尽可能多地解析表达式，直到 EOF 或 '}'
@@ -98,8 +90,6 @@ class Parser {
     // 装饰器：先收集连续的前缀 @decorator，再看紧跟的是 func/class（挂到对应节点的 decorators_ 上）
     // 还是任意表达式（通用形式 2.2.8，包成 AstNodeDecorator 链）
     AstNodePtr parse_decorator();
-
-    // ── 辅助 ──────────────────────────────────────────────────────────
 
     // '(' 已消耗、paren_depth_ 已自增后调用
     AstNodePtr finish_call(AstNodePtr callee, int row, int col);

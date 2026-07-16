@@ -9,6 +9,7 @@
 #include <format>
 #include <memory>
 #include <optional>
+#include <ranges>
 
 // token 类型转换为一元运算符类型
 static AstNodeOpUnary::OpType token_type_to_unary_op_type(const TokenType t) {
@@ -571,14 +572,14 @@ AstNodePtr Parser::parse_brace_block() {
     }
 
     // ** 开头必定是字典展开项，否则先解析第一个表达式再看 ':'
-    const bool first_is_spread{check(TokenType::SIGN_DOUBLESTAR)};
+    const bool first_is_doublestar{check(TokenType::SIGN_DOUBLESTAR)};
     AstNodePtr first{parse_expr()};
 
     // 字典字面量 {k: v, ...} 或 {**d, ...}
-    if (first_is_spread || check_over_newline(TokenType::SIGN_COLON)) {
+    if (first_is_doublestar || check_over_newline(TokenType::SIGN_COLON)) {
         std::vector<std::pair<AstNodePtr, AstNodePtr>> items;
 
-        if (first_is_spread) {
+        if (first_is_doublestar) {
             items.emplace_back(std::move(first), nullptr); // **expr，无 value
         } else {
             skip_newline();
@@ -687,6 +688,7 @@ AstNodePtr Parser::parse_for() {
     skip_newline();
 
     expect(TokenType::SIGN_LPAREN); // 消耗 '('
+    paren_depth_++;
     skip_newline();
 
     // 解析 for 头部的一个槽：遇到 ';', NEWLINE, ')' 则槽为空，返回 nullptr
@@ -710,6 +712,7 @@ AstNodePtr Parser::parse_for() {
         skip_newline();
         AstNodePtr iterable{parse_expr()};
         skip_newline();
+        paren_depth_--;
         expect(TokenType::SIGN_RPAREN);
         skip_newline();
         AstNodePtr body{parse_expr()};
@@ -724,6 +727,7 @@ AstNodePtr Parser::parse_for() {
         // 条件形式要求括号内有一个表达式；空括号 for () 非法（无限循环请用 for (;;)）
         if (!first) error("empty for header");
         skip_newline();
+        paren_depth_--;
         expect(TokenType::SIGN_RPAREN);
         skip_newline();
         AstNodePtr body{parse_expr()};
@@ -735,13 +739,19 @@ AstNodePtr Parser::parse_for() {
 
     // 3. 否则为完整的计数-条件形式：for [$] (init SEP cond SEP inc) body，first 即 init
     //    SEP（分隔符）为 ';' 或至少一个换行；两个槽之间必须有 SEP，否则无法无歧义地分割
+    //    注：括号内 paren_depth_ > 0，槽末尾的换行可能已经被上一个槽内部 Pratt 循环的边界检查
+    //    （skip_paren_newline）提前吃掉，此时再直接 check(NEWLINE) 会误判为"没有分隔符"，
+    //    所以改为比较"当前 token 所在行"与"上一个已消耗 token 所在行"是否不同来判断换行分隔符是否存在
     auto consume_sep{
         [&] {
-            if (!check(TokenType::NEWLINE) && !check(TokenType::SIGN_SEMICOLON)) {
+            if (check(TokenType::SIGN_SEMICOLON)) {
+                advance(); // 消耗 ';'
+                skip_newline();
+                return;
+            }
+            if (tokens_[pos_ - 1].row == peek().row) {
                 error("expected ';' or newline to separate the expressions in a for header");
             }
-            skip_newline();
-            if (check(TokenType::SIGN_SEMICOLON)) advance(); // 消耗 ';'
             skip_newline();
         }
     };
@@ -752,6 +762,7 @@ AstNodePtr Parser::parse_for() {
     AstNodePtr inc{parse_slot()};
     skip_newline();
 
+    paren_depth_--;
     expect(TokenType::SIGN_RPAREN); // 消耗 ')'
     skip_newline();
     AstNodePtr body{parse_expr()};
@@ -801,21 +812,21 @@ AstNodePtr Parser::parse_try() {
             skip_newline();
             expect(TokenType::SIGN_LPAREN); // 消耗 '('
             paren_depth_++;
-            skip_paren_newline();
+            skip_newline();
 
             // 解析 Exception1, ...
             std::vector<AstNodePtr> excs;
             excs.push_back(parse_expr());
-            skip_paren_newline();
+            skip_newline();
             while (check(TokenType::SIGN_COMMA)) {
                 advance(); // 消耗 ','
-                skip_paren_newline();
+                skip_newline();
                 if (check(TokenType::SIGN_RPAREN)) break; // 尾逗号
                 excs.push_back(parse_expr());
-                skip_paren_newline();
+                skip_newline();
             }
 
-            skip_paren_newline();
+            skip_newline();
             paren_depth_--;
             expect(TokenType::SIGN_RPAREN); // 消耗 ')'
             skip_newline();
@@ -1003,23 +1014,25 @@ AstNodePtr Parser::parse_decorator() {
         entries.push_back({deco_row, deco_col, std::move(decorator)});
     }
 
-    // 紧邻 func/class：这些装饰器是函数/类表达式自己产生式的一部分（2.2.6/2.2.7），
+    // 紧邻 func/class：这些装饰器是函数/类表达式自己产生式的一部分，
     // 直接挂到对应节点的 decorators_ 上，不包一层 AstNodeDecorator
     if (check(TokenType::KW_FUNC)) {
         std::vector<AstNodePtr> decorators;
+        decorators.reserve(entries.size());
         for (auto &e : entries) decorators.push_back(std::move(e.expr));
         return parse_func(std::move(decorators));
     }
     if (check(TokenType::KW_CLASS)) {
         std::vector<AstNodePtr> decorators;
+        decorators.reserve(entries.size());
         for (auto &e : entries) decorators.push_back(std::move(e.expr));
         return parse_class(std::move(decorators));
     }
 
     // 通用形式（2.2.8）：@d1 @d2 ... expr ≡ d1(d2(...(expr)))，从最贴近 expr 的装饰器开始向外包裹
     AstNodePtr target{parse_expr()};
-    for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
-        target = std::make_unique<AstNodeDecorator>(it->row, it->col, std::move(it->expr), std::move(target));
+    for (auto &[row, col, expr] : std::views::reverse(entries)) {
+        target = std::make_unique<AstNodeDecorator>(row, col, std::move(expr), std::move(target));
     }
     return target;
 }
@@ -1031,24 +1044,24 @@ AstNodePtr Parser::finish_call(AstNodePtr callee, int row, int col) {
 
     skip_newline();
     while (!check(TokenType::SIGN_RPAREN)) {
-        skip_paren_newline();
+        skip_newline();
 
         if (at_kwarg()) {
             // 关键字参数 name = value
             auto name = advance().lexeme; // IDENTIFIER
-            skip_paren_newline();
+            skip_newline();
             expect(TokenType::SIGN_ASSIGN);
-            skip_paren_newline();
+            skip_newline();
             kwargs.emplace_back(std::move(name), parse_expr());
         } else {
             // 位置参数，含 *expr / **expr 展开（参数顺序合法性由语义层校验）
             args.push_back(parse_expr());
         }
 
-        skip_paren_newline();
+        skip_newline();
         if (check(TokenType::SIGN_COMMA)) {
             advance();
-            skip_paren_newline();
+            skip_newline();
         } else {
             break;
         }
