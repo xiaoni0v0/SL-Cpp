@@ -10,11 +10,9 @@
 #include <memory>
 #include <optional>
 
-// token 类型转换为一元运算符类型
+// token 类型转换为一元运算符类型（不含 ++/--，见 token_type_to_incdec_op_type）
 static AstNodeOpUnary::OpType token_type_to_unary_op_type(const TokenType t) {
     switch (t) {
-    case TokenType::SIGN_DOUBLEPLUS: return AstNodeOpUnary::OpType::Inc;
-    case TokenType::SIGN_DOUBLEMINUS: return AstNodeOpUnary::OpType::Dec;
     case TokenType::SIGN_PLUS: return AstNodeOpUnary::OpType::Pos;
     case TokenType::SIGN_MINUS: return AstNodeOpUnary::OpType::Neg;
     case TokenType::SIGN_TILDE: return AstNodeOpUnary::OpType::BitNot;
@@ -26,7 +24,17 @@ static AstNodeOpUnary::OpType token_type_to_unary_op_type(const TokenType t) {
     }
 }
 
-// token 类型转换为二元运算符类型
+// token 类型转换为 ++/-- 的运算类型
+static AstNodeIncDec::OpType token_type_to_incdec_op_type(const TokenType t) {
+    switch (t) {
+    case TokenType::SIGN_DOUBLEPLUS: return AstNodeIncDec::OpType::Inc;
+    case TokenType::SIGN_DOUBLEMINUS: return AstNodeIncDec::OpType::Dec;
+    default:
+        assert(false && "not an inc/dec op token");
+    }
+}
+
+// token 类型转换为二元运算符类型（不含比较运算符，见 token_type_to_compare_op_type）
 static AstNodeOpBinary::OpType token_type_to_binary_op_type(const TokenType t) {
     switch (t) {
     case TokenType::SIGN_PLUS: return AstNodeOpBinary::OpType::Add;
@@ -41,13 +49,6 @@ static AstNodeOpBinary::OpType token_type_to_binary_op_type(const TokenType t) {
     case TokenType::SIGN_CARET: return AstNodeOpBinary::OpType::BitXor;
     case TokenType::SIGN_LSHIFT: return AstNodeOpBinary::OpType::LShift;
     case TokenType::SIGN_RSHIFT: return AstNodeOpBinary::OpType::RShift;
-    case TokenType::SIGN_EQ: return AstNodeOpBinary::OpType::Eq;
-    case TokenType::SIGN_NEQ: return AstNodeOpBinary::OpType::Ne;
-    case TokenType::SIGN_LT: return AstNodeOpBinary::OpType::Lt;
-    case TokenType::SIGN_LE: return AstNodeOpBinary::OpType::Le;
-    case TokenType::SIGN_GT: return AstNodeOpBinary::OpType::Gt;
-    case TokenType::SIGN_GE: return AstNodeOpBinary::OpType::Ge;
-    case TokenType::KW_IS: return AstNodeOpBinary::OpType::Is;
     case TokenType::KW_AND: return AstNodeOpBinary::OpType::And;
     case TokenType::KW_OR: return AstNodeOpBinary::OpType::Or;
     case TokenType::SIGN_DOTDOT: return AstNodeOpBinary::OpType::Range;
@@ -56,38 +57,70 @@ static AstNodeOpBinary::OpType token_type_to_binary_op_type(const TokenType t) {
     }
 }
 
-// 运算符绑定力表
-// 对中缀/后缀运算符，返回 {lbp, rbp}
-// {-1,-1} 表示不是中缀/后缀运算符
-static std::pair<int, int> infix_bp(const TokenType type) {
-    switch (type) {
-    case TokenType::SIGN_DOT: return {160, 160};
-    case TokenType::SIGN_LPAREN:
-    case TokenType::SIGN_LBRACKET: return {160, -1}; // 函数调用、索引
-    case TokenType::SIGN_QUESTION:
-    case TokenType::SIGN_EXCLAIM: return {150, -1}; // ? !
-    case TokenType::SIGN_DOUBLESTAR: return {140, 139}; // **
-    case TokenType::SIGN_STAR:
-    case TokenType::SIGN_SLASH:
-    case TokenType::SIGN_DOUBLESLASH:
-    case TokenType::SIGN_PERCENT: return {120, 120}; // * / // %
-    case TokenType::SIGN_PLUS:
-    case TokenType::SIGN_MINUS: return {110, 110}; // + -
-    case TokenType::SIGN_DOTDOT: return {100, 100}; // ..
-    case TokenType::SIGN_LSHIFT:
-    case TokenType::SIGN_RSHIFT: return {90, 90}; // << >>
-    case TokenType::SIGN_AMPERSAND: return {80, 80}; // &
-    case TokenType::SIGN_CARET: return {70, 70}; // ^
-    case TokenType::SIGN_PIPE: return {60, 60}; // |
+// 是否是比较组（== != < <= > >=）的运算符 token；is 自成一组，不算在内
+static bool is_compare_group_a(const TokenType t) {
+    switch (t) {
     case TokenType::SIGN_LT:
     case TokenType::SIGN_LE:
     case TokenType::SIGN_GT:
     case TokenType::SIGN_GE:
     case TokenType::SIGN_EQ:
-    case TokenType::SIGN_NEQ:
-    case TokenType::KW_IS: return {50, 50}; // < <= > >= == != is
-    case TokenType::KW_AND: return {30, 30}; // and
-    case TokenType::KW_OR: return {20, 20}; // or
+    case TokenType::SIGN_NEQ: return true;
+    default: return false;
+    }
+}
+
+// token 类型转换为比较运算类型
+static AstNodeCompare::OpType token_type_to_compare_op_type(const TokenType t) {
+    switch (t) {
+    case TokenType::SIGN_LT: return AstNodeCompare::OpType::Lt;
+    case TokenType::SIGN_LE: return AstNodeCompare::OpType::Le;
+    case TokenType::SIGN_GT: return AstNodeCompare::OpType::Gt;
+    case TokenType::SIGN_GE: return AstNodeCompare::OpType::Ge;
+    case TokenType::SIGN_EQ: return AstNodeCompare::OpType::Eq;
+    case TokenType::SIGN_NEQ: return AstNodeCompare::OpType::Ne;
+    case TokenType::KW_IS: return AstNodeCompare::OpType::Is;
+    default:
+        assert(false && "not a compare op token");
+    }
+}
+
+// 运算符绑定力表
+// 对中缀/后缀运算符，返回 {lbp, rbp}
+// {-1,-1} 表示不是中缀/后缀运算符
+// 注：左结合运算符 rbp = lbp + 1（保证 parse_expr_pratt(rbp) 不会把同优先级的下一个算子吞进右操作数，
+//    否则会变成事实上的右结合，如 `1 - 2 - 3` 就会被错误地解析成 `1 - (2 - 3)`）；
+//    右结合运算符（**、赋值类）则 rbp = lbp - 1，允许同优先级递归吞并。
+static std::pair<int, int> infix_bp(const TokenType type) {
+    switch (type) {
+    case TokenType::SIGN_DOT: return {180, 180}; // rbp 未使用，'.' 后直接 expect(IDENTIFIER)，不递归
+    case TokenType::SIGN_LPAREN:
+    case TokenType::SIGN_LBRACKET: return {180, -1}; // 函数调用、索引
+    case TokenType::SIGN_QUESTION:
+    case TokenType::SIGN_EXCLAIM: return {160, -1}; // ? !
+    case TokenType::SIGN_DOUBLESTAR: return {150, 149}; // **（右结合）
+    case TokenType::SIGN_STAR:
+    case TokenType::SIGN_SLASH:
+    case TokenType::SIGN_DOUBLESLASH:
+    case TokenType::SIGN_PERCENT: return {130, 131}; // * / // %
+    case TokenType::SIGN_PLUS:
+    case TokenType::SIGN_MINUS: return {120, 121}; // + -
+    case TokenType::SIGN_DOTDOT: return {110, 111}; // ..
+    case TokenType::SIGN_LSHIFT:
+    case TokenType::SIGN_RSHIFT: return {100, 101}; // << >>
+    case TokenType::SIGN_AMPERSAND: return {90, 91}; // &
+    case TokenType::SIGN_CARET: return {80, 81}; // ^
+    case TokenType::SIGN_PIPE: return {70, 71}; // |
+    // < <= > >= == !=（链式比较，见 parse_compare_chain；rbp 未被使用，链内自行控制操作数的 min_bp）
+    case TokenType::SIGN_LT:
+    case TokenType::SIGN_LE:
+    case TokenType::SIGN_GT:
+    case TokenType::SIGN_GE:
+    case TokenType::SIGN_EQ:
+    case TokenType::SIGN_NEQ: return {60, 61};
+    case TokenType::KW_IS: return {50, 51}; // is（自成一组的链式比较，不与上面 6 者混链）
+    case TokenType::KW_AND: return {30, 31}; // and
+    case TokenType::KW_OR: return {20, 21}; // or
     // 赋值（右结合）
     case TokenType::SIGN_ASSIGN:
     case TokenType::SIGN_PLUS_ASSIGN:
@@ -294,6 +327,12 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
             continue;
         }
 
+        // 比较运算（链式）：== != < <= > >= 一组，is 自成一组，组间不链式
+        if (is_compare_group_a(op) || op == TokenType::KW_IS) {
+            left = parse_compare_chain(std::move(left), start_row, start_col, op);
+            continue;
+        }
+
         // 普通二元运算符（运算符在行尾时右侧可换行）
         skip_newline();
         left = std::make_unique<AstNodeOpBinary>(
@@ -303,6 +342,37 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
     }
 
     return left;
+}
+
+AstNodePtr Parser::parse_compare_chain(AstNodePtr left, const int start_row, const int start_col, const TokenType first_op) {
+    // first_op 已经被消耗（由调用处的 parse_expr_pratt 主循环 advance）
+    const bool is_group_is{first_op == TokenType::KW_IS};
+    // 链内每个后续操作数用"自己所在组的优先级 + 1"解析，防止同组递归吞并（链式循环自己处理连续项）
+    const int operand_min_bp{is_group_is ? 51 : 61};
+
+    std::vector<AstNodePtr> operands;
+    std::vector<AstNodeCompare::OpType> ops;
+
+    operands.push_back(std::move(left));
+    ops.push_back(token_type_to_compare_op_type(first_op));
+
+    skip_newline();
+    operands.push_back(parse_expr_pratt(operand_min_bp));
+
+    while (true) {
+        skip_paren_newline();
+        const TokenType next_op{peek().type};
+        const bool next_is_is{next_op == TokenType::KW_IS};
+        const bool same_group{is_group_is ? next_is_is : (!next_is_is && is_compare_group_a(next_op))};
+        if (!same_group) break;
+
+        advance(); // 消耗运算符
+        ops.push_back(token_type_to_compare_op_type(next_op));
+        skip_newline();
+        operands.push_back(parse_expr_pratt(operand_min_bp));
+    }
+
+    return std::make_unique<AstNodeCompare>(start_row, start_col, std::move(operands), std::move(ops));
 }
 
 AstNodePtr Parser::parse_non_op() {
@@ -335,24 +405,30 @@ AstNodePtr Parser::parse_non_op() {
     // 标识符
     case TokenType::IDENTIFIER: return std::make_unique<AstNodeIdentifier>(row, col, advance().lexeme);
 
-    // 解包 / 展开
+    // 解包 / 展开（操作数按"单目运算符"那一档的优先级 140 解析，与 +x/-x/~x 一致）
     case TokenType::SIGN_STAR:
         // *iterable
-        return advance(), std::make_unique<AstNodeStar>(row, col, parse_expr_pratt(130));
+        return advance(), std::make_unique<AstNodeStar>(row, col, parse_expr_pratt(140));
     case TokenType::SIGN_DOUBLESTAR:
         // **mapping
-        return advance(), std::make_unique<AstNodeDoubleStar>(row, col, parse_expr_pratt(130));
+        return advance(), std::make_unique<AstNodeDoubleStar>(row, col, parse_expr_pratt(140));
 
-    // 前缀运算符
+    // 自增自减（优先级 170，独立于其他一元运算符：target 是左值，由语义层校验）
     case TokenType::SIGN_DOUBLEPLUS:
-    case TokenType::SIGN_DOUBLEMINUS:
+    case TokenType::SIGN_DOUBLEMINUS: {
+        const TokenType token_type{advance().type};
+        return std::make_unique<AstNodeIncDec>(
+            row, col, token_type_to_incdec_op_type(token_type), parse_expr_pratt(170)
+            );
+    }
+    // 前缀运算符
     case TokenType::SIGN_PLUS:
     case TokenType::SIGN_MINUS:
     case TokenType::SIGN_TILDE: {
-        // 单目优先级 130
+        // 单目优先级 140
         const TokenType token_type{advance().type};
         return std::make_unique<AstNodeOpUnary>(
-            row, col, token_type_to_unary_op_type(token_type), parse_expr_pratt(130)
+            row, col, token_type_to_unary_op_type(token_type), parse_expr_pratt(140)
             );
     }
     case TokenType::KW_NOT:
@@ -366,6 +442,7 @@ AstNodePtr Parser::parse_non_op() {
     // 控制流
     case TokenType::KW_IF: return parse_if();
     case TokenType::KW_FOR: return parse_for();
+    case TokenType::KW_WHILE: return parse_while();
     case TokenType::KW_BREAK: return advance(), std::make_unique<AstNodeBreak>(row, col);
     case TokenType::KW_CONTINUE: return advance(), std::make_unique<AstNodeContinue>(row, col);
     case TokenType::KW_RETURN: return parse_return();
@@ -379,7 +456,7 @@ AstNodePtr Parser::parse_non_op() {
     case TokenType::SIGN_AT: return parse_decorator();
 
     // 类
-    case TokenType::KW_CLASS: error("'class' is not yet implemented", row, col);
+    case TokenType::KW_CLASS: return parse_class();
 
     // 遇到 EOF：括号内多半是没闭合，否则是缺了表达式
     case TokenType::END_OF_FILE: {
@@ -554,11 +631,11 @@ AstNodePtr Parser::parse_if() {
     const int start_row{peek().row}, start_col{peek().col};
     expect(TokenType::KW_IF);
 
-    std::vector<AstNodeIf::AstCondAndExpr> clauses;
+    std::vector<AstNodeIf::AstNodeCondAndExpr> clauses;
 
     // 解析一个 if/elif 子句的条件和主体
     auto parse_cond_and_body{
-        [&]() -> AstNodeIf::AstCondAndExpr {
+        [&]() -> AstNodeIf::AstNodeCondAndExpr {
             skip_newline();
             expect(TokenType::SIGN_LPAREN); // 消耗 '('
             paren_depth_++;
@@ -678,6 +755,30 @@ AstNodePtr Parser::parse_for() {
         );
 }
 
+AstNodePtr Parser::parse_while() {
+    // while [$] (cond) body 语义上就是 init/inc 皆空的 for，直接复用 AstNodeForCond，不单独建节点类型
+    const int start_row{peek().row}, start_col{peek().col};
+    expect(TokenType::KW_WHILE);
+    skip_newline();
+
+    const bool collect{check(TokenType::SIGN_DOLLAR)};
+    if (collect) advance(); // 消耗 '$'
+    skip_newline();
+
+    expect(TokenType::SIGN_LPAREN); // 消耗 '('
+    paren_depth_++;
+    AstNodePtr cond{parse_expr()};
+    paren_depth_--;
+    expect(TokenType::SIGN_RPAREN); // 消耗 ')'
+    skip_newline();
+
+    AstNodePtr body{parse_expr()};
+
+    return std::make_unique<AstNodeForCond>(
+        start_row, start_col, collect, nullptr, std::move(cond), nullptr, std::move(body)
+        );
+}
+
 AstNodePtr Parser::parse_try() {
     const int start_row{peek().row}, start_col{peek().col};
     expect(TokenType::KW_TRY);
@@ -689,7 +790,7 @@ AstNodePtr Parser::parse_try() {
     // 解析一个 except 子句的异常列表和主体：except (Exc1, Exc2, ...) body
     // 与 if 的 parse_cond_and_body 平行，区别是括号内为一个或多个表达式
     auto parse_excs_and_body{
-        [&]() -> AstNodeTry::AstExceptAndExpr {
+        [&]() -> AstNodeTry::AstNodeExceptAndExpr {
             skip_newline();
             expect(TokenType::SIGN_LPAREN); // 消耗 '('
             paren_depth_++;
@@ -716,7 +817,7 @@ AstNodePtr Parser::parse_try() {
         }
     };
 
-    std::vector<AstNodeTry::AstExceptAndExpr> except_clauses;
+    std::vector<AstNodeTry::AstNodeExceptAndExpr> except_clauses;
 
     // 解析 except 子句（可在下一行）
     while (check_over_newline(TokenType::KW_EXCEPT)) {
@@ -766,7 +867,7 @@ AstNodePtr Parser::parse_raise() {
     return std::make_unique<AstNodeRaise>(start_row, start_col, parse_expr());
 }
 
-AstNodePtr Parser::parse_func() {
+AstNodePtr Parser::parse_func(std::vector<AstNodePtr> decorators) {
     const int start_row{peek().row}, start_col{peek().col};
     expect(TokenType::KW_FUNC);
     skip_newline();
@@ -778,12 +879,20 @@ AstNodePtr Parser::parse_func() {
         skip_newline();
     }
 
+    // 可选捕获列表 [captures]
+    std::vector<AstNodeFunc::OneCapture> captures;
+    if (check(TokenType::SIGN_LBRACKET)) {
+        advance(); // 消耗 '['
+        captures = finish_func_captures();
+        skip_newline();
+    }
+
     // 形参列表（合法性由语义层检查）
     expect(TokenType::SIGN_LPAREN);
     paren_depth_++;
     skip_newline();
 
-    std::vector<AstNodeFunc::Param> params{};
+    std::vector<AstNodeFunc::OneParam> params{};
     params.push_back(parse_func_param());
     skip_newline();
 
@@ -799,6 +908,22 @@ AstNodePtr Parser::parse_func() {
     expect(TokenType::SIGN_RPAREN);
     skip_newline();
 
+    // 可选返回类型 : type
+    AstNodePtr return_type;
+    if (check(TokenType::SIGN_COLON)) {
+        advance(); // 消耗 ':'
+        skip_newline();
+        return_type = parse_expr();
+        skip_newline();
+    }
+
+    // 可选文档字符串（下一个 token 不是 '{' 则视为 doc；是否为合法的常量折叠字符串由语义层校验）
+    AstNodePtr doc;
+    if (!check(TokenType::SIGN_LBRACE)) {
+        doc = parse_expr();
+        skip_newline();
+    }
+
     // 函数体：{ ... }
     const int body_row{peek().row}, body_col{peek().col};
     expect(TokenType::SIGN_LBRACE);
@@ -806,32 +931,90 @@ AstNodePtr Parser::parse_func() {
     expect(TokenType::SIGN_RBRACE);
 
     return std::make_unique<AstNodeFunc>(
-        start_row, start_col, std::move(name), std::move(params),
+        start_row, start_col, std::move(decorators), std::move(name), std::move(captures), std::move(params),
+        std::move(return_type), std::move(doc),
+        std::make_unique<AstNodeProgram>(body_row, body_col, std::move(body_exprs))
+        );
+}
+
+AstNodePtr Parser::parse_class(std::vector<AstNodePtr> decorators) {
+    const int start_row{peek().row}, start_col{peek().col};
+    expect(TokenType::KW_CLASS);
+    skip_newline();
+
+    // 可选类名（无名即匿名类）
+    std::optional<std::u32string> name;
+    if (check(TokenType::IDENTIFIER)) {
+        name = advance().lexeme;
+        skip_newline();
+    }
+
+    // 可选基类列表 (BaseClass1, ...)
+    std::vector<AstNodePtr> bases;
+    if (check(TokenType::SIGN_LPAREN)) {
+        advance(); // 消耗 '('
+        paren_depth_++;
+        bases = finish_class_bases();
+        skip_newline();
+    }
+
+    // 可选文档字符串（下一个 token 不是 '{' 则视为 doc）
+    AstNodePtr doc;
+    if (!check(TokenType::SIGN_LBRACE)) {
+        doc = parse_expr();
+        skip_newline();
+    }
+
+    // 类体：{ ... }
+    const int body_row{peek().row}, body_col{peek().col};
+    expect(TokenType::SIGN_LBRACE);
+    std::vector body_exprs{parse_exprs()};
+    expect(TokenType::SIGN_RBRACE);
+
+    return std::make_unique<AstNodeClass>(
+        start_row, start_col, std::move(decorators), std::move(name), std::move(bases), std::move(doc),
         std::make_unique<AstNodeProgram>(body_row, body_col, std::move(body_exprs))
         );
 }
 
 AstNodePtr Parser::parse_decorator() {
-    const int start_row{peek().row}, start_col{peek().col};
-    expect(TokenType::SIGN_AT);
-    skip_newline();
+    // 先把连续的前缀 @decorator 全部收集起来（不预先假设后面接的是 func/class 还是任意表达式），
+    // 每项记住自己的位置，供后面（通用形式分支）构造对应节点时使用
+    struct DecoratorEntry {
+        int row, col;
+        AstNodePtr expr;
+    };
+    std::vector<DecoratorEntry> entries;
 
-    // 解析装饰器表达式（Pratt 在遇到 func / @ 前会自然停止）
-    AstNodePtr decorator = parse_expr();
-    skip_newline();
+    while (check(TokenType::SIGN_AT)) {
+        const int deco_row{peek().row}, deco_col{peek().col};
+        advance(); // 消耗 '@'
+        skip_newline();
+        // 解析装饰器表达式（Pratt 在遇到 func / class / @ 前会自然停止，因为它们都不是中缀运算符）
+        AstNodePtr decorator{parse_expr()};
+        skip_newline();
+        entries.push_back({deco_row, deco_col, std::move(decorator)});
+    }
 
-    // 装饰在函数上
+    // 紧邻 func/class：这些装饰器是函数/类表达式自己产生式的一部分（2.2.6/2.2.7），
+    // 直接挂到对应节点的 decorators_ 上，不包一层 AstNodeDecorator
     if (check(TokenType::KW_FUNC)) {
-        AstNodePtr target = parse_func();
-        return std::make_unique<AstNodeDecorator>(start_row, start_col, std::move(decorator), std::move(target));
+        std::vector<AstNodePtr> decorators;
+        for (auto &e : entries) decorators.push_back(std::move(e.expr));
+        return parse_func(std::move(decorators));
     }
-    // 装饰在装饰器上
-    if (check(TokenType::SIGN_AT)) {
-        AstNodePtr target = parse_decorator(); // 链式装饰器
-        return std::make_unique<AstNodeDecorator>(start_row, start_col, std::move(decorator), std::move(target));
+    if (check(TokenType::KW_CLASS)) {
+        std::vector<AstNodePtr> decorators;
+        for (auto &e : entries) decorators.push_back(std::move(e.expr));
+        return parse_class(std::move(decorators));
     }
 
-    error("expected 'func' or '@' after decorator", peek().row, peek().col);
+    // 通用形式（2.2.8）：@d1 @d2 ... expr ≡ d1(d2(...(expr)))，从最贴近 expr 的装饰器开始向外包裹
+    AstNodePtr target{parse_expr()};
+    for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
+        target = std::make_unique<AstNodeDecorator>(it->row, it->col, std::move(it->expr), std::move(target));
+    }
+    return target;
 }
 
 AstNodePtr Parser::finish_call(AstNodePtr callee, int row, int col) {
@@ -905,6 +1088,97 @@ AstNodePtr Parser::finish_index(AstNodePtr obj, int row, int col) {
     return std::make_unique<AstNodeIndex>(row, col, std::move(obj), std::move(args));
 }
 
+std::vector<AstNodeFunc::OneCapture> Parser::finish_func_captures() {
+    // '[' 已消耗
+    paren_depth_++;
+    skip_newline();
+
+    std::vector<AstNodeFunc::OneCapture> captures;
+
+    // 空捕获列表 []
+    if (check(TokenType::SIGN_RBRACKET)) {
+        advance(); // 消耗 ']'
+        paren_depth_--;
+        return captures;
+    }
+
+    captures.push_back(parse_func_capture());
+    skip_newline();
+
+    while (check(TokenType::SIGN_COMMA)) {
+        advance(); // 消耗 ','
+        skip_newline();
+        if (check(TokenType::SIGN_RBRACKET)) break; // 尾逗号
+        captures.push_back(parse_func_capture());
+        skip_newline();
+    }
+
+    if (!check(TokenType::SIGN_RBRACKET)) error("expected ']' to close capture list");
+    advance(); // 消耗 ']'
+    paren_depth_--;
+
+    return captures;
+}
+
+AstNodeFunc::OneCapture Parser::parse_func_capture() {
+    AstNodeFunc::OneCapture c{};
+
+    skip_newline();
+
+    // &identifier（引用捕获）
+    if (check(TokenType::SIGN_AMPERSAND)) {
+        advance(); // 消耗 '&'
+        skip_newline();
+        c.capture_type_ = AstNodeFunc::OneCapture::CaptureType::Reference;
+        c.identifier_ = expect(TokenType::IDENTIFIER).lexeme;
+        return c;
+    }
+
+    // identifier ⟦= expr⟧（值捕获）
+    c.capture_type_ = AstNodeFunc::OneCapture::CaptureType::Value;
+    c.identifier_ = expect(TokenType::IDENTIFIER).lexeme;
+    skip_newline();
+
+    if (check(TokenType::SIGN_ASSIGN)) {
+        advance(); // 消耗 '='
+        skip_newline();
+        c.value_expr_ = parse_expr();
+    }
+
+    return c;
+}
+
+std::vector<AstNodePtr> Parser::finish_class_bases() {
+    // '(' 已消耗，paren_depth_ 已自增
+    skip_newline();
+
+    std::vector<AstNodePtr> bases;
+
+    // 空基类列表 ()
+    if (check(TokenType::SIGN_RPAREN)) {
+        advance(); // 消耗 ')'
+        paren_depth_--;
+        return bases;
+    }
+
+    bases.push_back(parse_expr());
+    skip_newline();
+
+    while (check(TokenType::SIGN_COMMA)) {
+        advance(); // 消耗 ','
+        skip_newline();
+        if (check(TokenType::SIGN_RPAREN)) break; // 尾逗号
+        bases.push_back(parse_expr());
+        skip_newline();
+    }
+
+    if (!check(TokenType::SIGN_RPAREN)) error("expected ')' to close base class list");
+    advance(); // 消耗 ')'
+    paren_depth_--;
+
+    return bases;
+}
+
 bool Parser::at_kwarg() const {
     if (!check(TokenType::IDENTIFIER)) return false;
     // 跳过 IDENTIFIER 之后可能的 NEWLINE，看是否为 '='
@@ -913,8 +1187,8 @@ bool Parser::at_kwarg() const {
     return i < tokens_.size() && tokens_[i].type == TokenType::SIGN_ASSIGN;
 }
 
-AstNodeFunc::Param Parser::parse_func_param() {
-    AstNodeFunc::Param p{};
+AstNodeFunc::OneParam Parser::parse_func_param() {
+    AstNodeFunc::OneParam p{};
 
     skip_newline();
 
@@ -922,20 +1196,20 @@ AstNodeFunc::Param Parser::parse_func_param() {
     if (check(TokenType::SIGN_DOUBLESTAR)) {
         advance(); // 消耗 '**'
         skip_newline();
-        p.param_type = AstNodeFunc::Param::ParamType::DoubleStarKwargs;
-        p.identifier = expect(TokenType::IDENTIFIER).lexeme;
+        p.param_type_ = AstNodeFunc::OneParam::ParamType::DoubleStarKwargs;
+        p.identifier_ = expect(TokenType::IDENTIFIER).lexeme;
     }
     // *args
     else if (check(TokenType::SIGN_STAR)) {
         advance(); // 消耗 '*'
         skip_newline();
-        p.param_type = AstNodeFunc::Param::ParamType::StarArgs;
-        p.identifier = expect(TokenType::IDENTIFIER).lexeme;
+        p.param_type_ = AstNodeFunc::OneParam::ParamType::StarArgs;
+        p.identifier_ = expect(TokenType::IDENTIFIER).lexeme;
     }
     // arg
     else {
-        p.param_type = AstNodeFunc::Param::ParamType::Normal;
-        p.identifier = expect(TokenType::IDENTIFIER).lexeme;
+        p.param_type_ = AstNodeFunc::OneParam::ParamType::Normal;
+        p.identifier_ = expect(TokenType::IDENTIFIER).lexeme;
     }
 
     skip_newline();
@@ -944,7 +1218,7 @@ AstNodeFunc::Param Parser::parse_func_param() {
     if (check(TokenType::SIGN_COLON)) {
         advance(); // 消耗 ':'
         skip_newline();
-        p.type_annotation = parse_expr_pratt(11); // 停在 '=' 之前（lbp=10 < 11）
+        p.type_annotation_ = parse_expr_pratt(11); // 停在 '=' 之前（lbp=10 < 11）
         skip_newline();
     }
 
@@ -952,7 +1226,7 @@ AstNodeFunc::Param Parser::parse_func_param() {
     if (check(TokenType::SIGN_ASSIGN)) {
         advance(); // 消耗 '='
         skip_newline();
-        p.default_value = parse_expr();
+        p.default_value_ = parse_expr();
         skip_newline();
     }
 

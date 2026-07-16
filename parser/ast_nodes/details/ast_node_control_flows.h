@@ -13,26 +13,38 @@
 struct AstNodeIf : AstNode {
 
     // if/elif 子句，作为 AstNodeIf 的组成部分
-    struct AstCondAndExpr {
+    struct AstNodeCondAndExpr {
         AstNodePtr cond_;
         AstNodePtr body_;
 
-        AstCondAndExpr(AstNodePtr cond, AstNodePtr body)
+        AstNodeCondAndExpr(AstNodePtr cond, AstNodePtr body)
             : cond_{std::move(cond)}, body_{std::move(body)} {
         }
     };
 
-    std::vector<AstCondAndExpr> clauses_; // 非空
+    std::vector<AstNodeCondAndExpr> clauses_; // 非空
     AstNodePtr else_expr_; // nullptr 表示无 else
 
     AstNodeIf(const int row, const int col,
-              std::vector<AstCondAndExpr> clauses,
+              std::vector<AstNodeCondAndExpr> clauses,
               AstNodePtr else_expr)
         : AstNode{row, col}, clauses_{std::move(clauses)}, else_expr_{std::move(else_expr)} {
     }
+
+    [[nodiscard]] json to_json() const override {
+        json j{{"type", "If"}};
+        auto clauses = json::array();
+        for (const auto &clause : clauses_)
+            clauses.push_back({{"cond", clause.cond_->to_json()},
+                               {"body", clause.body_->to_json()}});
+        j["clauses"] = std::move(clauses);
+        j["else_expr"] = else_expr_ ? else_expr_->to_json() : json(nullptr);
+        return j;
+    }
 };
 
-// for [$] (init cond inc) body（计数/条件模式）
+// for [$] (init cond inc) body
+// while [$] (cond) body 等价于 init_/inc_ 均为空的这种形式，语法层直接复用本节点
 struct AstNodeForCond : AstNode {
     bool collect_; // true 表示 for $ 收集模式
     AstNodePtr init_; // nullptr 表示空
@@ -48,6 +60,16 @@ struct AstNodeForCond : AstNode {
                    AstNodePtr body)
         : AstNode{row, col}, collect_{collect},
           init_{std::move(init)}, cond_{std::move(cond)}, inc_{std::move(inc)}, body_{std::move(body)} {
+    }
+
+    [[nodiscard]] json to_json() const override {
+        json j{{"type", "ForCond"}};
+        j["collect"] = collect_;
+        j["init"] = init_ ? init_->to_json() : json(nullptr);
+        j["cond"] = cond_ ? cond_->to_json() : json(nullptr);
+        j["inc"] = inc_ ? inc_->to_json() : json(nullptr);
+        j["body"] = body_->to_json();
+        return j;
     }
 };
 
@@ -67,17 +89,34 @@ struct AstNodeForIter : AstNode {
         : AstNode{row, col}, collect_{collect},
           target_{std::move(target)}, iterable_{std::move(iterable)}, body_{std::move(body)} {
     }
+
+    [[nodiscard]] json to_json() const override {
+        json j{{"type", "ForIter"}};
+        j["collect"] = collect_;
+        j["target"] = target_->to_json();
+        j["iterable"] = iterable_->to_json();
+        j["body"] = body_->to_json();
+        return j;
+    }
 };
 
 struct AstNodeBreak : AstNode {
     AstNodeBreak(const int row, const int col)
         : AstNode{row, col} {
     }
+
+    [[nodiscard]] json to_json() const override {
+        return json{{"type", "Break"}};
+    }
 };
 
 struct AstNodeContinue : AstNode {
     AstNodeContinue(const int row, const int col)
         : AstNode{row, col} {
+    }
+
+    [[nodiscard]] json to_json() const override {
+        return json{{"type", "Continue"}};
     }
 };
 
@@ -89,32 +128,51 @@ struct AstNodeReturn : AstNode {
                   AstNodePtr value)
         : AstNode{row, col}, value_{std::move(value)} {
     }
+
+    [[nodiscard]] json to_json() const override {
+        json j{{"type", "Return"}};
+        j["value"] = value_ ? value_->to_json() : json(nullptr);
+        return j;
+    }
 };
 
-// try expr [except (Exception, ...) expr]+ [finally expr]
+// try expr [except (Exception, ...) expr]* [finally expr]
 struct AstNodeTry : AstNode {
     // except 子句，作为 AstNodeTry 的组成部分
-    struct AstExceptAndExpr {
+    struct AstNodeExceptAndExpr {
         std::vector<AstNodePtr> exceptions_;
         AstNodePtr body_;
 
-        AstExceptAndExpr(std::vector<AstNodePtr> exception, AstNodePtr body)
+        AstNodeExceptAndExpr(std::vector<AstNodePtr> exception, AstNodePtr body)
             : exceptions_{std::move(exception)}, body_{std::move(body)} {
         }
     };
 
     AstNodePtr try_expr_;
-
     // 以下两者不可同时为空
-    std::vector<AstExceptAndExpr> except_clauses_; // 可空
+    std::vector<AstNodeExceptAndExpr> except_clauses_; // 可空
     AstNodePtr finally_expr_; // nullptr 表示无 finally
 
     AstNodeTry(const int row, const int col,
                AstNodePtr try_expr,
-               std::vector<AstExceptAndExpr> except_clauses,
+               std::vector<AstNodeExceptAndExpr> except_clauses,
                AstNodePtr finally_expr)
         : AstNode{row, col}, try_expr_{std::move(try_expr)},
           except_clauses_{std::move(except_clauses)}, finally_expr_{std::move(finally_expr)} {
+    }
+
+    [[nodiscard]] json to_json() const override {
+        json j{{"type", "Try"}};
+        j["try_expr"] = try_expr_->to_json();
+        auto except_clauses = json::array();
+        for (const auto &clause : except_clauses_) {
+            auto exceptions = json::array();
+            for (const auto &exc : clause.exceptions_) exceptions.push_back(exc->to_json());
+            except_clauses.push_back({{"exceptions", std::move(exceptions)}, {"body", clause.body_->to_json()}});
+        }
+        j["except_clauses"] = std::move(except_clauses);
+        j["finally_expr"] = finally_expr_ ? finally_expr_->to_json() : json(nullptr);
+        return j;
     }
 };
 
@@ -124,5 +182,11 @@ struct AstNodeRaise : AstNode {
     AstNodeRaise(const int row, const int col,
                  AstNodePtr value)
         : AstNode{row, col}, value_{std::move(value)} {
+    }
+
+    [[nodiscard]] json to_json() const override {
+        json j{{"type", "Raise"}};
+        j["value"] = value_->to_json();
+        return j;
     }
 };

@@ -11,7 +11,7 @@ class SyntaxChecker {
 
     struct Context {
         int func_depth{0};
-        int for_depth{0};
+        int loop_depth{0}; // for、while 共用（break/continue 是否合法）
         bool can_star{false};
         bool can_double_star{false};
     } ctx_{};
@@ -34,8 +34,11 @@ class SyntaxChecker {
 #include "../../parser/ast_nodes/x_ast_nodes.h"
 #undef X
 
-    // 检查一个节点是否可以作为左值。要求 node 非空
+    // 检查一个节点是否可以作为左值（含解构：元组/列表）。要求 node 非空
     void check_lvalue(const AstNode *node) const;
+    // 检查一个节点是否可以作为"简单左值"（标识符/属性访问/元素访问，不含解构），
+    // 用于 ++/--、复合赋值这类不支持解构的场合
+    void check_simple_lvalue(const AstNode *node) const;
 
 public:
     /**

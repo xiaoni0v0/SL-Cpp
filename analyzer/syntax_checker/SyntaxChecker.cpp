@@ -109,7 +109,7 @@ void SyntaxChecker::check(const AstNodeForCond *node) {
     check(node->init_.get());
     check(node->cond_.get());
     check(node->inc_.get());
-    ctx_.for_depth++;
+    ctx_.loop_depth++;
     check(node->body_.get());
     ctx_ = saved;
 }
@@ -122,17 +122,17 @@ void SyntaxChecker::check(const AstNodeForIter *node) {
         error("for-iter target must be an identifier",
               node->target_->row_, node->target_->col_);
     check(node->iterable_.get());
-    ctx_.for_depth++;
+    ctx_.loop_depth++;
     check(node->body_.get());
     ctx_ = saved;
 }
 
 void SyntaxChecker::check(const AstNodeBreak *node) {
-    if (ctx_.for_depth == 0) error("break outside for loop", node->row_, node->col_);
+    if (ctx_.loop_depth == 0) error("break outside for/while loop", node->row_, node->col_);
 }
 
 void SyntaxChecker::check(const AstNodeContinue *node) {
-    if (ctx_.for_depth == 0) error("continue outside for loop", node->row_, node->col_);
+    if (ctx_.loop_depth == 0) error("continue outside for/while loop", node->row_, node->col_);
 }
 
 void SyntaxChecker::check(const AstNodeReturn *node) {
@@ -178,25 +178,36 @@ void SyntaxChecker::check(const AstNodeDecorator *node) {
 }
 
 void SyntaxChecker::check(const AstNodeFunc *node) {
-    using PT = AstNodeFunc::Param::ParamType;
+    using PT = AstNodeFunc::OneParam::ParamType;
 
     const Context saved = ctx_;
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    // 形参顺序与重复检查
+    for (const auto &deco : node->decorators_) check(deco.get());
+
+    // 捕获列表、形参列表内部及两者之间标识符均不可重复（2.2.6）
     std::unordered_set<std::u32string> seen_names;
+
+    for (const auto &capture : node->captures_) {
+        if (!seen_names.insert(capture.identifier_).second)
+            error("duplicate name in capture/parameter list", node->row_, node->col_);
+        if (capture.value_expr_) check(capture.value_expr_.get());
+    }
+
+    // 形参顺序与重复检查
     bool seen_star_args = false;
     bool seen_double_star = false;
     bool seen_default = false;
 
     for (const auto &param : node->params_) {
-        if (!seen_names.insert(param.identifier).second) error("duplicate parameter name", node->row_, node->col_);
+        if (!seen_names.insert(param.identifier_).second)
+            error("duplicate name in capture/parameter list", node->row_, node->col_);
         if (seen_double_star) error("parameter after **kwargs", node->row_, node->col_);
 
-        switch (param.param_type) {
+        switch (param.param_type_) {
         case PT::Normal: if (seen_star_args) error("normal parameter after *args", node->row_, node->col_);
-            if (param.default_value) seen_default = true;
+            if (param.default_value_) seen_default = true;
             else if (seen_default) error("non-default parameter after default parameter", node->row_, node->col_);
             break;
         case PT::StarArgs: if (seen_star_args) error("duplicate *args", node->row_, node->col_);
@@ -206,13 +217,33 @@ void SyntaxChecker::check(const AstNodeFunc *node) {
             break;
         }
 
-        if (param.type_annotation) check(param.type_annotation.get());
-        if (param.default_value) check(param.default_value.get());
+        if (param.type_annotation_) check(param.type_annotation_.get());
+        if (param.default_value_) check(param.default_value_.get());
     }
 
-    // 进入函数体（新上下文，for 深度归零）
+    if (node->return_type_) check(node->return_type_.get());
+    if (node->doc_) check(node->doc_.get());
+
+    // 进入函数体（新上下文，func 深度 +1，loop 深度归零）
     ctx_.func_depth++;
-    ctx_.for_depth = 0;
+    ctx_.loop_depth = 0;
+    check(node->body_.get());
+
+    ctx_ = saved;
+}
+
+void SyntaxChecker::check(const AstNodeClass *node) {
+    const Context saved = ctx_;
+    ctx_.can_star = false;
+    ctx_.can_double_star = false;
+
+    for (const auto &deco : node->decorators_) check(deco.get());
+    for (const auto &base : node->bases_) check(base.get());
+    if (node->doc_) check(node->doc_.get());
+
+    // 类体执行更像顶层脚本：不允许裸 return/break/continue（3.4.7 未提及 return 语义）
+    ctx_.func_depth = 0;
+    ctx_.loop_depth = 0;
     check(node->body_.get());
 
     ctx_ = saved;
@@ -314,12 +345,24 @@ void SyntaxChecker::check(const AstNodeOpUnary *node) {
     ctx_ = saved;
 }
 
+void SyntaxChecker::check(const AstNodeIncDec *node) {
+    check_simple_lvalue(node->target_.get());
+}
+
 void SyntaxChecker::check(const AstNodeOpBinary *node) {
     const Context saved = ctx_;
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     check(node->left_.get());
     check(node->right_.get());
+    ctx_ = saved;
+}
+
+void SyntaxChecker::check(const AstNodeCompare *node) {
+    const Context saved = ctx_;
+    ctx_.can_star = false;
+    ctx_.can_double_star = false;
+    for (const auto &operand : node->operands_) check(operand.get());
     ctx_ = saved;
 }
 
@@ -333,7 +376,7 @@ void SyntaxChecker::check(const AstNodeAssign *node) {
 }
 
 void SyntaxChecker::check(const AstNodeCompoundAssign *node) {
-    // check_simple_lvalue(node->target_.get());
+    check_simple_lvalue(node->target_.get());
     const Context saved = ctx_;
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -355,6 +398,16 @@ void SyntaxChecker::check(const AstNodeGlobal *node) {
     if (!dynamic_cast<const AstNodeIdentifier *>(node->target_.get()))
         error("global target must be an identifier",
               node->target_->row_, node->target_->col_);
+}
+
+void SyntaxChecker::check_simple_lvalue(const AstNode *node) const {
+    // a  a[ind]  a.x（不含解构，用于 ++/--、复合赋值）
+    if (dynamic_cast<const AstNodeIdentifier *>(node)) return;
+    if (dynamic_cast<const AstNodeIndex *>(node)) return;
+    if (dynamic_cast<const AstNodeAttr *>(node)) return;
+
+    error("identifier, attribute access, or index expression expected before ++/--/op=",
+          node->row_, node->col_);
 }
 
 void SyntaxChecker::check_lvalue(const AstNode *node) const {

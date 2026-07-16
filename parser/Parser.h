@@ -83,15 +83,20 @@ class Parser {
     AstNodePtr parse_if();
     // for
     AstNodePtr parse_for();
+    // while
+    AstNodePtr parse_while();
     // try-except-finally
     AstNodePtr parse_try();
     // return
     AstNodePtr parse_return();
     // raise
     AstNodePtr parse_raise();
-    // 函数
-    AstNodePtr parse_func();
-    // 装饰器
+    // 函数；decorators 是已经解析好、紧邻在 func 前面的前缀装饰器（属于函数表达式自己的语法，2.2.6）
+    AstNodePtr parse_func(std::vector<AstNodePtr> decorators = {});
+    // 类；decorators 同上（2.2.7）
+    AstNodePtr parse_class(std::vector<AstNodePtr> decorators = {});
+    // 装饰器：先收集连续的前缀 @decorator，再看紧跟的是 func/class（挂到对应节点的 decorators_ 上）
+    // 还是任意表达式（通用形式 2.2.8，包成 AstNodeDecorator 链）
     AstNodePtr parse_decorator();
 
     // ── 辅助 ──────────────────────────────────────────────────────────
@@ -104,7 +109,16 @@ class Parser {
     [[nodiscard]] bool at_kwarg() const;
 
     // 函数形参
-    AstNodeFunc::Param parse_func_param();
+    AstNodeFunc::OneParam parse_func_param();
+    // 单个捕获项：identifier / identifier = expr / &identifier
+    AstNodeFunc::OneCapture parse_func_capture();
+    // '[' 已消耗后调用，解析到并消耗 ']'
+    std::vector<AstNodeFunc::OneCapture> finish_func_captures();
+    // '(' 已消耗、paren_depth_ 已自增后调用，解析到并消耗 ')'（基类列表，仅位置参数）
+    std::vector<AstNodePtr> finish_class_bases();
+
+    // 链式比较：left 已解析完毕，first_op 是刚 advance 掉的第一个比较运算符 token
+    AstNodePtr parse_compare_chain(AstNodePtr left, int start_row, int start_col, TokenType first_op);
 
 public:
     /**

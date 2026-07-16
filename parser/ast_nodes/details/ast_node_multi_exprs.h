@@ -7,13 +7,21 @@
 #include <vector>
 
 
-// 整个文件、函数体，值为 return 后的值
+// 整个文件、函数体、类体
 struct AstNodeProgram : AstNode {
     std::vector<AstNodePtr> exprs_;
 
     AstNodeProgram(const int row, const int col,
                    std::vector<AstNodePtr> exprs)
         : AstNode{row, col}, exprs_{std::move(exprs)} {
+    }
+
+    [[nodiscard]] json to_json() const override {
+        json j{{"type", "Program"}};
+        auto exprs = json::array();
+        for (const auto &e : exprs_) exprs.push_back(e->to_json());
+        j["exprs"] = std::move(exprs);
+        return j;
     }
 };
 
@@ -26,5 +34,13 @@ struct AstNodeCompound : AstNode {
     AstNodeCompound(const int row, const int col,
                     std::vector<AstNodePtr> exprs)
         : AstNode{row, col}, exprs_{std::move(exprs)} {
+    }
+
+    [[nodiscard]] json to_json() const override {
+        json j{{"type", "Compound"}};
+        auto exprs = json::array();
+        for (const auto &e : exprs_) exprs.push_back(e->to_json());
+        j["exprs"] = std::move(exprs);
+        return j;
     }
 };

@@ -35,8 +35,6 @@ add_executable(SL_Cpp main.cpp
         builtins/classes/exceptions/FileNotFoundError.h
 
         # Interpreter
-        interpreter/dumper/Dumper.cpp
-        interpreter/dumper/Dumper.h
 
         # Parser
         parser/Parser.cpp
