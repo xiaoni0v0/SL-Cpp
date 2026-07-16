@@ -2,7 +2,6 @@
 
 #include "../analyzer/Analyzer.h"
 #include "../builtins/classes/exceptions/SLException.h"
-#include "../interpreter/dumper/Dumper.h"
 #include "../lexer/Lexer.h"
 #include "../parser/Parser.h"
 #include "../parser/ast_nodes/details/ast_node_multi_exprs.h"
@@ -52,9 +51,7 @@ int Executor::run() const {
 
     try {
         ast = Parser{std::move(tokens), file_path}.parse();
-        const Dumper dumper{};
-        dumper.dump(ast.get());
-        std::cout << std::endl;
+        std::cout << ast->to_json() << std::endl;
     } catch (SLException &e) {
         std::cerr << e.what() << std::endl;
         return 1;

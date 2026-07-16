@@ -37,7 +37,7 @@ class SyntaxChecker {
     // 检查一个节点是否可以作为左值（含解构：元组/列表）。要求 node 非空
     void check_lvalue(const AstNode *node) const;
     // 检查一个节点是否可以作为"简单左值"（标识符/属性访问/元素访问，不含解构），
-    // 用于 ++/--、复合赋值这类不支持解构的场合
+    // 用于复合赋值这类不支持解构的场合
     void check_simple_lvalue(const AstNode *node) const;
 
 public:

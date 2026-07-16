@@ -67,9 +67,7 @@ X(SIGN_DOLLAR)    // $
 
 // 符号：算术运算符
 X(SIGN_PLUS)        // +
-X(SIGN_DOUBLEPLUS)  // ++
 X(SIGN_MINUS)       // -
-X(SIGN_DOUBLEMINUS) // --
 X(SIGN_STAR)        // *
 X(SIGN_DOUBLESTAR)  // **
 X(SIGN_SLASH)       // /

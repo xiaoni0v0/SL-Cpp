@@ -10,7 +10,7 @@
 #include <memory>
 #include <optional>
 
-// token 类型转换为一元运算符类型（不含 ++/--，见 token_type_to_incdec_op_type）
+// token 类型转换为一元运算符类型
 static AstNodeOpUnary::OpType token_type_to_unary_op_type(const TokenType t) {
     switch (t) {
     case TokenType::SIGN_PLUS: return AstNodeOpUnary::OpType::Pos;
@@ -21,16 +21,6 @@ static AstNodeOpUnary::OpType token_type_to_unary_op_type(const TokenType t) {
     case TokenType::SIGN_EXCLAIM: return AstNodeOpUnary::OpType::Exclaim;
     default:
         assert(false && "not a unary op token");
-    }
-}
-
-// token 类型转换为 ++/-- 的运算类型
-static AstNodeIncDec::OpType token_type_to_incdec_op_type(const TokenType t) {
-    switch (t) {
-    case TokenType::SIGN_DOUBLEPLUS: return AstNodeIncDec::OpType::Inc;
-    case TokenType::SIGN_DOUBLEMINUS: return AstNodeIncDec::OpType::Dec;
-    default:
-        assert(false && "not an inc/dec op token");
     }
 }
 
@@ -57,8 +47,8 @@ static AstNodeOpBinary::OpType token_type_to_binary_op_type(const TokenType t) {
     }
 }
 
-// 是否是比较组（== != < <= > >=）的运算符 token；is 自成一组，不算在内
-static bool is_compare_group_a(const TokenType t) {
+// 是否是比较组（== != < <= > >=）的运算符 token；is 不属于这一组，也不共用 AstNodeCompare，见 AstNodeIs
+static bool is_compare_op(const TokenType t) {
     switch (t) {
     case TokenType::SIGN_LT:
     case TokenType::SIGN_LE:
@@ -79,7 +69,6 @@ static AstNodeCompare::OpType token_type_to_compare_op_type(const TokenType t) {
     case TokenType::SIGN_GE: return AstNodeCompare::OpType::Ge;
     case TokenType::SIGN_EQ: return AstNodeCompare::OpType::Eq;
     case TokenType::SIGN_NEQ: return AstNodeCompare::OpType::Ne;
-    case TokenType::KW_IS: return AstNodeCompare::OpType::Is;
     default:
         assert(false && "not a compare op token");
     }
@@ -93,9 +82,9 @@ static AstNodeCompare::OpType token_type_to_compare_op_type(const TokenType t) {
 //    右结合运算符（**、赋值类）则 rbp = lbp - 1，允许同优先级递归吞并。
 static std::pair<int, int> infix_bp(const TokenType type) {
     switch (type) {
-    case TokenType::SIGN_DOT: return {180, 180}; // rbp 未使用，'.' 后直接 expect(IDENTIFIER)，不递归
+    case TokenType::SIGN_DOT: return {170, 170}; // rbp 未使用，'.' 后直接 expect(IDENTIFIER)，不递归
     case TokenType::SIGN_LPAREN:
-    case TokenType::SIGN_LBRACKET: return {180, -1}; // 函数调用、索引
+    case TokenType::SIGN_LBRACKET: return {170, -1}; // 函数调用、索引
     case TokenType::SIGN_QUESTION:
     case TokenType::SIGN_EXCLAIM: return {160, -1}; // ? !
     case TokenType::SIGN_DOUBLESTAR: return {150, 149}; // **（右结合）
@@ -327,9 +316,15 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
             continue;
         }
 
-        // 比较运算（链式）：== != < <= > >= 一组，is 自成一组，组间不链式
-        if (is_compare_group_a(op) || op == TokenType::KW_IS) {
+        // 比较运算（链式）：== != < <= > >= 一组，用 AstNodeCompare
+        if (is_compare_op(op)) {
             left = parse_compare_chain(std::move(left), start_row, start_col, op);
+            continue;
+        }
+
+        // is（链式，自成一组，不与上面 6 者混链）：不可重载、不走 AstNodeCompare，用专门的 AstNodeIs
+        if (op == TokenType::KW_IS) {
+            left = parse_is_chain(std::move(left), start_row, start_col);
             continue;
         }
 
@@ -344,11 +339,11 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
     return left;
 }
 
-AstNodePtr Parser::parse_compare_chain(AstNodePtr left, const int start_row, const int start_col, const TokenType first_op) {
-    // first_op 已经被消耗（由调用处的 parse_expr_pratt 主循环 advance）
-    const bool is_group_is{first_op == TokenType::KW_IS};
-    // 链内每个后续操作数用"自己所在组的优先级 + 1"解析，防止同组递归吞并（链式循环自己处理连续项）
-    const int operand_min_bp{is_group_is ? 51 : 61};
+AstNodePtr Parser::parse_compare_chain(AstNodePtr left, const int start_row, const int start_col,
+                                       const TokenType first_op) {
+    // first_op 已经被消耗（由调用处的 parse_expr_pratt 主循环 advance），属于比较组（< <= > >= == !=）
+    // 后续操作数用"比较组优先级 60 + 1"解析，防止同组递归吞并（链式循环自己处理连续项）
+    constexpr int operand_min_bp{61};
 
     std::vector<AstNodePtr> operands;
     std::vector<AstNodeCompare::OpType> ops;
@@ -361,18 +356,38 @@ AstNodePtr Parser::parse_compare_chain(AstNodePtr left, const int start_row, con
 
     while (true) {
         skip_paren_newline();
-        const TokenType next_op{peek().type};
-        const bool next_is_is{next_op == TokenType::KW_IS};
-        const bool same_group{is_group_is ? next_is_is : (!next_is_is && is_compare_group_a(next_op))};
-        if (!same_group) break;
+        if (!is_compare_op(peek().type)) break;
 
-        advance(); // 消耗运算符
+        const TokenType next_op{advance().type}; // 消耗运算符
         ops.push_back(token_type_to_compare_op_type(next_op));
         skip_newline();
         operands.push_back(parse_expr_pratt(operand_min_bp));
     }
 
     return std::make_unique<AstNodeCompare>(start_row, start_col, std::move(operands), std::move(ops));
+}
+
+AstNodePtr Parser::parse_is_chain(AstNodePtr left, const int start_row, const int start_col) {
+    // 第一个 'is' 已经被消耗（由调用处的 parse_expr_pratt 主循环 advance）
+    // 后续操作数用"is 优先级 50 + 1"解析，防止递归吞并（链式循环自己处理连续的 is）
+    constexpr int operand_min_bp{51};
+
+    std::vector<AstNodePtr> operands;
+    operands.push_back(std::move(left));
+
+    skip_newline();
+    operands.push_back(parse_expr_pratt(operand_min_bp));
+
+    while (true) {
+        skip_paren_newline();
+        if (!check(TokenType::KW_IS)) break;
+
+        advance(); // 消耗 'is'
+        skip_newline();
+        operands.push_back(parse_expr_pratt(operand_min_bp));
+    }
+
+    return std::make_unique<AstNodeIs>(start_row, start_col, std::move(operands));
 }
 
 AstNodePtr Parser::parse_non_op() {
@@ -413,14 +428,6 @@ AstNodePtr Parser::parse_non_op() {
         // **mapping
         return advance(), std::make_unique<AstNodeDoubleStar>(row, col, parse_expr_pratt(140));
 
-    // 自增自减（优先级 170，独立于其他一元运算符：target 是左值，由语义层校验）
-    case TokenType::SIGN_DOUBLEPLUS:
-    case TokenType::SIGN_DOUBLEMINUS: {
-        const TokenType token_type{advance().type};
-        return std::make_unique<AstNodeIncDec>(
-            row, col, token_type_to_incdec_op_type(token_type), parse_expr_pratt(170)
-            );
-    }
     // 前缀运算符
     case TokenType::SIGN_PLUS:
     case TokenType::SIGN_MINUS:

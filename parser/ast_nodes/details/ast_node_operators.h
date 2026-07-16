@@ -38,7 +38,7 @@ struct AstNodeDoubleStar : AstNode {
     }
 };
 
-// 一元运算符：+x  -x  ~x  not x  x?  x!（不含 ++x/--x）
+// 一元运算符：+x  -x  ~x  not x  x?  x!
 struct AstNodeOpUnary : AstNode {
     enum class OpType {
         // 160
@@ -75,25 +75,6 @@ struct AstNodeOpUnary : AstNode {
         case OpType::Not: return "not";
         default: return "<unknown>";
         }
-    }
-};
-
-// ++x  --x（优先级 170，独立于其他一元运算符：target 是被写入的左值，不是纯求值）
-struct AstNodeIncDec : AstNode {
-    enum class OpType { Inc, Dec };
-
-    OpType op_;
-    // target 必须是标识符/属性访问/元素访问，由语义层校验
-    AstNodePtr target_;
-
-    AstNodeIncDec(const int row, const int col,
-                  const OpType op,
-                  AstNodePtr target)
-        : AstNode{row, col}, op_{op}, target_{std::move(target)} {
-    }
-
-    [[nodiscard]] json to_json() const override {
-        return json{{"type", "IncDec"}, {"op", op_ == OpType::Inc ? "++" : "--"}, {"target", target_->to_json()}};
     }
 };
 
@@ -148,10 +129,9 @@ struct AstNodeOpBinary : AstNode {
     }
 };
 
-// 比较运算：a OP1 b ⟦OP2 c ...⟧（== != < <= > >= 一组，is 自成一组，组间不可链式）
-// 单个比较（operands_.size() == 2）也用这个节点表示，不与 AstNodeOpBinary 重复表达同一种语义
+// 比较运算：a OP1 b ⟦OP2 c ...⟧（== != < <= > >= 一组）
 struct AstNodeCompare : AstNode {
-    enum class OpType { Lt, Le, Gt, Ge, Eq, Ne, Is };
+    enum class OpType { Lt, Le, Gt, Ge, Eq, Ne };
 
     // operands_.size() == ops_.size() + 1，operands_.size() >= 2
     std::vector<AstNodePtr> operands_;
@@ -179,9 +159,26 @@ struct AstNodeCompare : AstNode {
         case OpType::Ge: return ">=";
         case OpType::Eq: return "==";
         case OpType::Ne: return "!=";
-        case OpType::Is: return "is";
         default: return "<unknown>";
         }
+    }
+};
+
+// a is b ⟦is c ...⟧（链式，语义/求值顺序同 AstNodeCompare，但 is 不可重载，不可与比较符混链，
+// 运算符固定不需要 ops_，只需要按顺序两两取相邻 operands_ 做身份比较）
+struct AstNodeIs : AstNode {
+    // operands_.size() >= 2
+    std::vector<AstNodePtr> operands_;
+
+    AstNodeIs(const int row, const int col,
+              std::vector<AstNodePtr> operands)
+        : AstNode{row, col}, operands_{std::move(operands)} {
+    }
+
+    [[nodiscard]] json to_json() const override {
+        auto operands = json::array();
+        for (const auto &operand : operands_) operands.push_back(operand->to_json());
+        return json{{"type", "Is"}, {"operands", std::move(operands)}};
     }
 };
 

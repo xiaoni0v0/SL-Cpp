@@ -32,18 +32,18 @@ TEST_CASE("永远只有单字符形式的几个") {
 
 TEST_SUITE("2.1.5 符号：贪婪最长匹配（多字符优先于短的）") {
 
-TEST_CASE("+ 系列：+ / ++ / +=，长的优先") {
+TEST_CASE("+ 系列：+ / +=") {
     CHECK(lex_dump(U"+") == "SIGN_PLUS");
-    CHECK(lex_dump(U"++") == "SIGN_DOUBLEPLUS");
     CHECK(lex_dump(U"+=") == "SIGN_PLUS_ASSIGN");
-    CHECK(lex_dump(U"+++") == "SIGN_DOUBLEPLUS SIGN_PLUS"); // 不是 SIGN_PLUS SIGN_DOUBLEPLUS
+    CHECK(lex_dump(U"++") == "SIGN_PLUS SIGN_PLUS");
+    CHECK(lex_dump(U"+++") == "SIGN_PLUS SIGN_PLUS SIGN_PLUS");
 }
 
-TEST_CASE("- 系列：- / -- / -=") {
+TEST_CASE("- 系列：- / -=") {
     CHECK(lex_dump(U"-") == "SIGN_MINUS");
-    CHECK(lex_dump(U"--") == "SIGN_DOUBLEMINUS");
     CHECK(lex_dump(U"-=") == "SIGN_MINUS_ASSIGN");
-    CHECK(lex_dump(U"---") == "SIGN_DOUBLEMINUS SIGN_MINUS");
+    CHECK(lex_dump(U"--") == "SIGN_MINUS SIGN_MINUS");
+    CHECK(lex_dump(U"---") == "SIGN_MINUS SIGN_MINUS SIGN_MINUS");
 }
 
 TEST_CASE("* 系列：* / ** / *= / **=，四层长度都要对") {

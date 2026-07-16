@@ -197,21 +197,13 @@ Token Lexer::read_symbol() {
     case U'?': return make_token(TokenType::SIGN_QUESTION, start_row, start_col, U"?");
 
     // 对于可能的多字符符号
-    case U'+': if (peek() == U'+') {
-            advance();
-            return make_token(TokenType::SIGN_DOUBLEPLUS, start_row, start_col, U"++");
-        }
-        if (peek() == U'=') {
+    case U'+': if (peek() == U'=') {
             advance();
             return make_token(TokenType::SIGN_PLUS_ASSIGN, start_row, start_col, U"+=");
         }
         return make_token(TokenType::SIGN_PLUS, start_row, start_col, U"+");
 
-    case U'-': if (peek() == U'-') {
-            advance();
-            return make_token(TokenType::SIGN_DOUBLEMINUS, start_row, start_col, U"--");
-        }
-        if (peek() == U'=') {
+    case U'-': if (peek() == U'=') {
             advance();
             return make_token(TokenType::SIGN_MINUS_ASSIGN, start_row, start_col, U"-=");
         }

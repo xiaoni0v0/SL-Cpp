@@ -345,10 +345,6 @@ void SyntaxChecker::check(const AstNodeOpUnary *node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeIncDec *node) {
-    check_simple_lvalue(node->target_.get());
-}
-
 void SyntaxChecker::check(const AstNodeOpBinary *node) {
     const Context saved = ctx_;
     ctx_.can_star = false;
@@ -359,6 +355,14 @@ void SyntaxChecker::check(const AstNodeOpBinary *node) {
 }
 
 void SyntaxChecker::check(const AstNodeCompare *node) {
+    const Context saved = ctx_;
+    ctx_.can_star = false;
+    ctx_.can_double_star = false;
+    for (const auto &operand : node->operands_) check(operand.get());
+    ctx_ = saved;
+}
+
+void SyntaxChecker::check(const AstNodeIs *node) {
     const Context saved = ctx_;
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -401,12 +405,12 @@ void SyntaxChecker::check(const AstNodeGlobal *node) {
 }
 
 void SyntaxChecker::check_simple_lvalue(const AstNode *node) const {
-    // a  a[ind]  a.x（不含解构，用于 ++/--、复合赋值）
+    // a  a[ind]  a.x（不含解构，用于复合赋值）
     if (dynamic_cast<const AstNodeIdentifier *>(node)) return;
     if (dynamic_cast<const AstNodeIndex *>(node)) return;
     if (dynamic_cast<const AstNodeAttr *>(node)) return;
 
-    error("identifier, attribute access, or index expression expected before ++/--/op=",
+    error("identifier, attribute access, or index expression expected before op=",
           node->row_, node->col_);
 }
 
