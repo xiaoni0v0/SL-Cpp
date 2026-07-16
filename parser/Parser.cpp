@@ -283,8 +283,8 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         if (is_assign_op(op)) {
             skip_newline();
             return std::make_unique<AstNodeCompoundAssign>(
-                start_row, start_col, std::move(left), op_row, op_col,
-                assign_compound_to_binary(op), parse_expr_pratt(rbp)
+                start_row, start_col, std::move(left), assign_compound_to_binary(op),
+                parse_expr_pratt(rbp), op_row, op_col
                 );
         }
 
@@ -315,7 +315,8 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         if (op == TokenType::SIGN_DOT) {
             skip_newline();
             left = std::make_unique<AstNodeAttr>(
-                start_row, start_col, op_row, op_col, std::move(left), expect(TokenType::IDENTIFIER).lexeme
+                start_row, start_col, std::move(left),
+                expect(TokenType::IDENTIFIER).lexeme, op_row, op_col
                 );
             continue;
         }
