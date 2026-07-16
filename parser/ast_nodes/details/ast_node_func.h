@@ -37,6 +37,7 @@ struct AstNodeFunc : AstNode {
 
     // 前缀装饰器
     std::vector<AstNodePtr> decorators_; // 可空
+    std::vector<Position> decorator_positions_; // 每个装饰器自己的 '@' 位置，跟 decorators_ 一一对应
     std::optional<std::u32string> name_; // nullopt 表示匿名函数
     std::vector<OneCapture> captures_; // 可空
     std::vector<OneParam> params_; // 可空
@@ -44,17 +45,18 @@ struct AstNodeFunc : AstNode {
     AstNodePtr doc_; // nullptr 表示无文档字符串
     AstNodeProgramPtr body_;
 
-    AstNodeFunc(const int row, const int col,
-                std::vector<AstNodePtr> decorators,
-                std::optional<std::u32string> name,
-                std::vector<OneCapture> captures,
-                std::vector<OneParam> params,
-                AstNodePtr return_type,
-                AstNodePtr doc,
-                AstNodeProgramPtr body)
-        : AstNode{row, col}, decorators_{std::move(decorators)}, name_{std::move(name)},
-          captures_{std::move(captures)}, params_{std::move(params)}, return_type_{std::move(return_type)},
-          doc_{std::move(doc)}, body_{std::move(body)} {
+    explicit AstNodeFunc(const Position pos,
+                         std::vector<AstNodePtr> decorators,
+                         std::vector<Position> decorator_positions,
+                         std::optional<std::u32string> name,
+                         std::vector<OneCapture> captures,
+                         std::vector<OneParam> params,
+                         AstNodePtr return_type,
+                         AstNodePtr doc,
+                         AstNodeProgramPtr body)
+        : AstNode{pos}, decorators_{std::move(decorators)}, decorator_positions_{std::move(decorator_positions)},
+          name_{std::move(name)}, captures_{std::move(captures)}, params_{std::move(params)},
+          return_type_{std::move(return_type)}, doc_{std::move(doc)}, body_{std::move(body)} {
     }
 
     [[nodiscard]] json to_json() const override {

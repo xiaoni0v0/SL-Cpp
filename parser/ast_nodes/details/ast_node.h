@@ -5,13 +5,18 @@
 
 using json = nlohmann::ordered_json;
 
+// 源码里的一个位置（行、列）
+struct Position {
+    int row;
+    int col;
+};
+
 // AST 节点的基类
 struct AstNode {
-    // 开始的行和列
-    int row_;
-    int col_;
+    // 开始的位置
+    Position pos_;
 
-    AstNode(const int row, const int col) : row_{row}, col_{col} {
+    explicit AstNode(const Position pos) : pos_{pos} {
     }
 
     virtual ~AstNode() = default;

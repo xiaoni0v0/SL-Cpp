@@ -197,7 +197,7 @@ const Token &Parser::expect(const TokenType expected_type) {
         error(std::format("expected {} but got {}",
                           Lexer::get_typename_by_tokentype(expected_type),
                           Lexer::get_typename_by_tokentype(token.type)),
-              token.row, token.col);
+              Position{token.row, token.col});
     }
     return advance();
 }
@@ -219,8 +219,8 @@ void Parser::error(const std::string &msg) const {
     throw SyntaxError{file_path_, token.row, token.col, msg};
 }
 
-void Parser::error(const std::string &msg, const int row, const int col) const {
-    throw SyntaxError{file_path_, row, col, msg};
+void Parser::error(const std::string &msg, const Position pos) const {
+    throw SyntaxError{file_path_, pos.row, pos.col, msg};
 }
 
 std::vector<AstNodePtr> Parser::parse_exprs() {
@@ -257,13 +257,14 @@ AstNodePtr Parser::parse_expr() {
 AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
     AstNodePtr left{parse_non_op()};
 
-    const int start_row{left->row_}, start_col{left->col_};
+    const Position start_pos{left->pos_};
 
     while (true) {
         // 括号内允许运算符前换行（如多行链式调用）
         skip_paren_newline();
 
         const auto &[op, op_row, op_col, lexeme]{peek()};
+        const Position op_pos{op_row, op_col};
         const auto [lbp, rbp]{infix_bp(op)};
 
         // lbp == -1 表示非中缀/后缀运算符；lbp < min_bp 表示绑定力不足，让上层处理
@@ -275,7 +276,7 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         if (op == TokenType::SIGN_ASSIGN) {
             skip_newline();
             return std::make_unique<AstNodeAssign>(
-                start_row, start_col, std::move(left), parse_expr_pratt(rbp)
+                start_pos, std::move(left), parse_expr_pratt(rbp)
                 );
         }
 
@@ -283,80 +284,77 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         if (is_assign_op(op)) {
             skip_newline();
             return std::make_unique<AstNodeCompoundAssign>(
-                start_row, start_col, std::move(left), assign_compound_to_binary(op),
-                parse_expr_pratt(rbp), op_row, op_col
+                start_pos, std::move(left), assign_compound_to_binary(op), parse_expr_pratt(rbp), op_pos
                 );
         }
 
         // 后缀 x?  x!（节点位置取整个表达式的起始位置，而非运算符自己的位置，下同；
-        // op_row/op_col 是运算符自己的位置，另外单独记）
+        // op_pos 是运算符自己的位置，另外单独记）
         if (op == TokenType::SIGN_QUESTION || op == TokenType::SIGN_EXCLAIM) {
             left = std::make_unique<AstNodeOpUnary>(
-                start_row, start_col, token_type_to_unary_op_type(op), std::move(left), op_row, op_col
+                start_pos, token_type_to_unary_op_type(op), std::move(left), op_pos
                 );
             continue;
         }
 
-        // 函数调用 f(...)
+        // 函数调用 f(...)（op_pos 即 '(' 自己的位置）
         if (op == TokenType::SIGN_LPAREN) {
             paren_depth_++;
-            left = finish_call(std::move(left), start_row, start_col);
+            left = finish_call(std::move(left), start_pos, op_pos);
             continue;
         }
 
-        // 索引 x[...]
+        // 索引 x[...]（op_pos 即 '[' 自己的位置）
         if (op == TokenType::SIGN_LBRACKET) {
             paren_depth_++;
-            left = finish_index(std::move(left), start_row, start_col);
+            left = finish_index(std::move(left), start_pos, op_pos);
             continue;
         }
 
-        // 属性访问 x.attr（'.' 在行尾时 attr 可换行；op_row/op_col 即 '.' 自己的位置）
+        // 属性访问 x.attr（'.' 在行尾时 attr 可换行；op_pos 即 '.' 自己的位置）
         if (op == TokenType::SIGN_DOT) {
             skip_newline();
             left = std::make_unique<AstNodeAttr>(
-                start_row, start_col, std::move(left),
-                expect(TokenType::IDENTIFIER).lexeme, op_row, op_col
+                start_pos, std::move(left), expect(TokenType::IDENTIFIER).lexeme, op_pos
                 );
             continue;
         }
 
         // 比较运算（链式）：== != < <= > >= 一组，用 AstNodeCompare
         if (is_compare_op(op)) {
-            left = parse_compare_chain(std::move(left), start_row, start_col, op, op_row, op_col);
+            left = parse_compare_chain(std::move(left), start_pos, op, op_pos);
             continue;
         }
 
         // is（链式，自成一组，不与上面 6 者混链）：不可重载、不走 AstNodeCompare，用专门的 AstNodeIs
         if (op == TokenType::KW_IS) {
-            left = parse_is_chain(std::move(left), start_row, start_col, op_row, op_col);
+            left = parse_is_chain(std::move(left), start_pos, op_pos);
             continue;
         }
 
-        // 普通二元运算符（运算符在行尾时右侧可换行；节点位置取左操作数的起始位置，op_row/op_col 才是运算符自己的位置）
+        // 普通二元运算符（运算符在行尾时右侧可换行；节点位置取左操作数的起始位置，op_pos 才是运算符自己的位置）
         skip_newline();
         left = std::make_unique<AstNodeOpBinary>(
-            start_row, start_col, token_type_to_binary_op_type(op),
-            std::move(left), parse_expr_pratt(rbp), op_row, op_col
+            start_pos, token_type_to_binary_op_type(op), std::move(left), parse_expr_pratt(rbp), op_pos
             );
     }
 
     return left;
 }
 
-AstNodePtr Parser::parse_compare_chain(AstNodePtr left, const int start_row, const int start_col,
-                                       const TokenType first_op, const int first_op_row, const int first_op_col) {
+AstNodePtr Parser::parse_compare_chain(AstNodePtr left, const Position start_pos,
+                                       const TokenType first_op, const Position first_op_pos) {
     // first_op 已经被消耗（由调用处的 parse_expr_pratt 主循环 advance），属于比较组（< <= > >= == !=）
     // 后续操作数用"比较组优先级 60 + 1"解析，防止同组递归吞并（链式循环自己处理连续项）
     constexpr int operand_min_bp{61};
 
     std::vector<AstNodePtr> operands;
     std::vector<AstNodeCompare::OpType> ops;
-    std::vector<std::pair<int, int>> op_positions;
+    std::vector<Position> op_positions;
 
     operands.push_back(std::move(left));
     ops.push_back(token_type_to_compare_op_type(first_op));
-    op_positions.emplace_back(first_op_row, first_op_col);
+    op_positions.push_back(first_op_pos);
 
     skip_newline();
     operands.push_back(parse_expr_pratt(operand_min_bp));
@@ -365,29 +363,28 @@ AstNodePtr Parser::parse_compare_chain(AstNodePtr left, const int start_row, con
         skip_paren_newline();
         if (!is_compare_op(peek().type)) break;
 
-        const int next_op_row{peek().row}, next_op_col{peek().col};
+        const Position next_op_pos{peek().row, peek().col};
         const TokenType next_op{advance().type}; // 消耗运算符
         ops.push_back(token_type_to_compare_op_type(next_op));
-        op_positions.emplace_back(next_op_row, next_op_col);
+        op_positions.push_back(next_op_pos);
         skip_newline();
         operands.push_back(parse_expr_pratt(operand_min_bp));
     }
 
     return std::make_unique<AstNodeCompare>(
-        start_row, start_col, std::move(ops), std::move(operands), std::move(op_positions)
+        start_pos, std::move(ops), std::move(operands), std::move(op_positions)
         );
 }
 
-AstNodePtr Parser::parse_is_chain(AstNodePtr left, const int start_row, const int start_col,
-                                  const int first_is_row, const int first_is_col) {
+AstNodePtr Parser::parse_is_chain(AstNodePtr left, const Position start_pos, const Position first_is_pos) {
     // 第一个 'is' 已经被消耗（由调用处的 parse_expr_pratt 主循环 advance）
     // 后续操作数用"is 优先级 50 + 1"解析，防止递归吞并（链式循环自己处理连续的 is）
     constexpr int operand_min_bp{51};
 
     std::vector<AstNodePtr> operands;
-    std::vector<std::pair<int, int>> op_positions;
+    std::vector<Position> op_positions;
     operands.push_back(std::move(left));
-    op_positions.emplace_back(first_is_row, first_is_col);
+    op_positions.push_back(first_is_pos);
 
     skip_newline();
     operands.push_back(parse_expr_pratt(operand_min_bp));
@@ -402,61 +399,64 @@ AstNodePtr Parser::parse_is_chain(AstNodePtr left, const int start_row, const in
         operands.push_back(parse_expr_pratt(operand_min_bp));
     }
 
-    return std::make_unique<AstNodeIs>(start_row, start_col, std::move(operands), std::move(op_positions));
+    return std::make_unique<AstNodeIs>(start_pos, std::move(operands), std::move(op_positions));
 }
 
 AstNodePtr Parser::parse_non_op() {
     // 跳过前导换行
     skip_newline();
 
-    switch (const auto &[type, row, col, lexeme]{peek()}; type) {
+    const auto &[type, row, col, lexeme]{peek()};
+    const Position pos{row, col};
+
+    switch (type) {
     // 字面量
-    case TokenType::LITERAL_NONE: return advance(), std::make_unique<AstNodeLiteralNone>(row, col);
-    case TokenType::LITERAL_TRUE: return advance(), std::make_unique<AstNodeLiteralBool>(row, col, true);
-    case TokenType::LITERAL_FALSE: return advance(), std::make_unique<AstNodeLiteralBool>(row, col, false);
+    case TokenType::LITERAL_NONE: return advance(), std::make_unique<AstNodeLiteralNone>(pos);
+    case TokenType::LITERAL_TRUE: return advance(), std::make_unique<AstNodeLiteralBool>(pos, true);
+    case TokenType::LITERAL_FALSE: return advance(), std::make_unique<AstNodeLiteralBool>(pos, false);
     case TokenType::LITERAL_G:
         // _G
-        return advance(), std::make_unique<AstNodeLiteralGL>(row, col, AstNodeLiteralGL::GLType::G);
+        return advance(), std::make_unique<AstNodeLiteralGL>(pos, AstNodeLiteralGL::GLType::G);
     case TokenType::LITERAL_L:
         // _L
-        return advance(), std::make_unique<AstNodeLiteralGL>(row, col, AstNodeLiteralGL::GLType::L);
-    case TokenType::LITERAL_ELLIPSIS: return advance(), std::make_unique<AstNodeLiteralEllipsis>(row, col);
-    case TokenType::LITERAL_INT: return std::make_unique<AstNodeLiteralInt>(row, col, advance().lexeme);
-    case TokenType::LITERAL_FLOAT: return std::make_unique<AstNodeLiteralFloat>(row, col, advance().lexeme);
-    case TokenType::LITERAL_STR: return std::make_unique<AstNodeLiteralStr>(row, col, advance().lexeme);
+        return advance(), std::make_unique<AstNodeLiteralGL>(pos, AstNodeLiteralGL::GLType::L);
+    case TokenType::LITERAL_ELLIPSIS: return advance(), std::make_unique<AstNodeLiteralEllipsis>(pos);
+    case TokenType::LITERAL_INT: return std::make_unique<AstNodeLiteralInt>(pos, advance().lexeme);
+    case TokenType::LITERAL_FLOAT: return std::make_unique<AstNodeLiteralFloat>(pos, advance().lexeme);
+    case TokenType::LITERAL_STR: return std::make_unique<AstNodeLiteralStr>(pos, advance().lexeme);
 
-    // 分组 / 元组
+    // 分组、元组
     case TokenType::SIGN_LPAREN: return parse_paren_or_tuple();
     // 列表
     case TokenType::SIGN_LBRACKET: return parse_list();
-    // 复合表达式
+    // 字典、复合表达式
     case TokenType::SIGN_LBRACE: return parse_brace_block();
 
     // 标识符
-    case TokenType::IDENTIFIER: return std::make_unique<AstNodeIdentifier>(row, col, advance().lexeme);
+    case TokenType::IDENTIFIER: return std::make_unique<AstNodeIdentifier>(pos, advance().lexeme);
 
-    // 解包 / 展开（操作数按"单目运算符"那一档的优先级 140 解析，与 +x/-x/~x 一致）
+    // 解包 / 展开（操作数按“单目运算符”那一档的优先级 140 解析，与 +x/-x/~x 一致）
     case TokenType::SIGN_STAR:
         // *iterable
-        return advance(), std::make_unique<AstNodeStar>(row, col, parse_expr_pratt(140));
+        return advance(), std::make_unique<AstNodeStar>(pos, parse_expr_pratt(140));
     case TokenType::SIGN_DOUBLESTAR:
         // **mapping
-        return advance(), std::make_unique<AstNodeDoubleStar>(row, col, parse_expr_pratt(140));
+        return advance(), std::make_unique<AstNodeDoubleStar>(pos, parse_expr_pratt(140));
 
-    // 前缀运算符（op_row/op_col 就是运算符自己的位置，前缀形式下和 row/col 重合）
+    // 前缀运算符（运算符自己的位置就是 pos，前缀形式下和整个表达式的起始位置重合）
     case TokenType::SIGN_PLUS:
     case TokenType::SIGN_MINUS:
     case TokenType::SIGN_TILDE: {
         // 单目优先级 140
         const TokenType token_type{advance().type};
         return std::make_unique<AstNodeOpUnary>(
-            row, col, token_type_to_unary_op_type(token_type), parse_expr_pratt(140), row, col
+            pos, token_type_to_unary_op_type(token_type), parse_expr_pratt(140), pos
             );
     }
     case TokenType::KW_NOT:
         // not 优先级 40
         return advance(), std::make_unique<AstNodeOpUnary>(
-                   row, col, AstNodeOpUnary::OpType::Not, parse_expr_pratt(40), row, col
+                   pos, AstNodeOpUnary::OpType::Not, parse_expr_pratt(40), pos
                    );
 
     // del / global
@@ -467,8 +467,8 @@ AstNodePtr Parser::parse_non_op() {
     case TokenType::KW_IF: return parse_if();
     case TokenType::KW_FOR: return parse_for();
     case TokenType::KW_WHILE: return parse_while();
-    case TokenType::KW_BREAK: return advance(), std::make_unique<AstNodeBreak>(row, col);
-    case TokenType::KW_CONTINUE: return advance(), std::make_unique<AstNodeContinue>(row, col);
+    case TokenType::KW_BREAK: return advance(), std::make_unique<AstNodeBreak>(pos);
+    case TokenType::KW_CONTINUE: return advance(), std::make_unique<AstNodeContinue>(pos);
     case TokenType::KW_RETURN: return parse_return();
     case TokenType::KW_TRY: return parse_try();
     case TokenType::KW_RAISE: return parse_raise();
@@ -484,17 +484,17 @@ AstNodePtr Parser::parse_non_op() {
 
     // 遇到 EOF：括号内多半是没闭合，否则是缺了表达式
     case TokenType::END_OF_FILE: {
-        if (paren_depth_ > 0) error("unexpected end of file (unclosed bracket)", row, col);
-        error("unexpected end of file (expected an expression)", row, col);
+        if (paren_depth_ > 0) error("unexpected end of file (unclosed bracket)", pos);
+        error("unexpected end of file (expected an expression)", pos);
     }
 
     // 错误
-    default: error(std::format("unexpected token '{}'", u32_to_utf8(lexeme)), row, col);
+    default: error(std::format("unexpected token '{}'", u32_to_utf8(lexeme)), pos);
     }
 }
 
 AstNodePtr Parser::parse_paren_or_tuple() {
-    const int start_row{peek().row}, start_col{peek().col};
+    const Position start_pos{peek().row, peek().col};
 
     expect(TokenType::SIGN_LPAREN); // 消耗 '('
     paren_depth_++;
@@ -505,7 +505,7 @@ AstNodePtr Parser::parse_paren_or_tuple() {
     if (check(TokenType::SIGN_RPAREN)) {
         advance(); // 消耗 ')'
         paren_depth_--;
-        return std::make_unique<AstNodeLiteralTuple>(start_row, start_col, std::vector<AstNodePtr>{});
+        return std::make_unique<AstNodeLiteralTuple>(start_pos, std::vector<AstNodePtr>{});
     }
 
     // 第一个表达式
@@ -535,11 +535,11 @@ AstNodePtr Parser::parse_paren_or_tuple() {
     advance(); // 消耗 ')'
     paren_depth_--;
 
-    return std::make_unique<AstNodeLiteralTuple>(start_row, start_col, std::move(items));
+    return std::make_unique<AstNodeLiteralTuple>(start_pos, std::move(items));
 }
 
 AstNodePtr Parser::parse_list() {
-    const int start_row{peek().row}, start_col{peek().col};
+    const Position start_pos{peek().row, peek().col};
 
     expect(TokenType::SIGN_LBRACKET); // 消耗 '['
     paren_depth_++;
@@ -550,7 +550,7 @@ AstNodePtr Parser::parse_list() {
     if (check(TokenType::SIGN_RBRACKET)) {
         advance(); // 消耗 ']'
         paren_depth_--;
-        return std::make_unique<AstNodeLiteralList>(start_row, start_col, std::vector<AstNodePtr>{});
+        return std::make_unique<AstNodeLiteralList>(start_pos, std::vector<AstNodePtr>{});
     }
 
     std::vector<AstNodePtr> items;
@@ -570,11 +570,11 @@ AstNodePtr Parser::parse_list() {
     advance(); // 消耗 ']'
     paren_depth_--;
 
-    return std::make_unique<AstNodeLiteralList>(start_row, start_col, std::move(items));
+    return std::make_unique<AstNodeLiteralList>(start_pos, std::move(items));
 }
 
 AstNodePtr Parser::parse_brace_block() {
-    const int start_row{peek().row}, start_col{peek().col};
+    const Position start_pos{peek().row, peek().col};
 
     expect(TokenType::SIGN_LBRACE); // 消耗 '{'
 
@@ -584,7 +584,7 @@ AstNodePtr Parser::parse_brace_block() {
     // 空 {} → 空的复合表达式
     if (check(TokenType::SIGN_RBRACE)) {
         advance();
-        return std::make_unique<AstNodeCompound>(start_row, start_col, std::vector<AstNodePtr>{});
+        return std::make_unique<AstNodeCompound>(start_pos, std::vector<AstNodePtr>{});
     }
 
     // ** 开头必定是字典展开项，否则先解析第一个表达式再看 ':'
@@ -624,7 +624,7 @@ AstNodePtr Parser::parse_brace_block() {
 
         skip_newline();
         expect(TokenType::SIGN_RBRACE);
-        return std::make_unique<AstNodeLiteralDict>(start_row, start_col, std::move(items));
+        return std::make_unique<AstNodeLiteralDict>(start_pos, std::move(items));
     }
 
     // 复合表达式 {expr; ...}
@@ -632,27 +632,27 @@ AstNodePtr Parser::parse_brace_block() {
     exprs.push_back(std::move(first));
     for (AstNodePtr &e : parse_exprs()) exprs.push_back(std::move(e));
     expect(TokenType::SIGN_RBRACE);
-    return std::make_unique<AstNodeCompound>(start_row, start_col, std::move(exprs));
+    return std::make_unique<AstNodeCompound>(start_pos, std::move(exprs));
 }
 
 AstNodePtr Parser::parse_del() {
-    const int start_row{peek().row}, start_col{peek().col};
+    const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_DEL);
     skip_newline();
     // 语法层只解析一个表达式，target 是否为标识符由语义层校验
-    return std::make_unique<AstNodeDel>(start_row, start_col, parse_expr());
+    return std::make_unique<AstNodeDel>(start_pos, parse_expr());
 }
 
 AstNodePtr Parser::parse_global() {
-    const int start_row{peek().row}, start_col{peek().col};
+    const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_GLOBAL);
     skip_newline();
     // 语法本身就是 identifier（2.2.4），不是表达式，直接要求一个标识符 token，没有什么好交给语义层判形状的
-    return std::make_unique<AstNodeGlobal>(start_row, start_col, expect(TokenType::IDENTIFIER).lexeme);
+    return std::make_unique<AstNodeGlobal>(start_pos, expect(TokenType::IDENTIFIER).lexeme);
 }
 
 AstNodePtr Parser::parse_if() {
-    const int start_row{peek().row}, start_col{peek().col};
+    const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_IF);
 
     std::vector<AstNodeIf::AstNodeCondAndExpr> clauses;
@@ -687,15 +687,15 @@ AstNodePtr Parser::parse_if() {
         expect(TokenType::KW_ELSE);
         skip_newline();
 
-        return std::make_unique<AstNodeIf>(start_row, start_col, std::move(clauses), parse_expr());
+        return std::make_unique<AstNodeIf>(start_pos, std::move(clauses), parse_expr());
     }
 
     // 无 else
-    return std::make_unique<AstNodeIf>(start_row, start_col, std::move(clauses), nullptr);
+    return std::make_unique<AstNodeIf>(start_pos, std::move(clauses), nullptr);
 }
 
 AstNodePtr Parser::parse_for() {
-    const int start_row{peek().row}, start_col{peek().col};
+    const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_FOR);
     skip_newline();
 
@@ -733,7 +733,7 @@ AstNodePtr Parser::parse_for() {
         skip_newline();
         AstNodePtr body{parse_expr()};
         return std::make_unique<AstNodeForIter>(
-            start_row, start_col, collect,
+            start_pos, collect,
             std::move(first), std::move(iterable), std::move(body)
             );
     }
@@ -748,7 +748,7 @@ AstNodePtr Parser::parse_for() {
         skip_newline();
         AstNodePtr body{parse_expr()};
         return std::make_unique<AstNodeForCond>(
-            start_row, start_col, collect,
+            start_pos, collect,
             nullptr, std::move(first), nullptr, std::move(body)
             );
     }
@@ -784,14 +784,14 @@ AstNodePtr Parser::parse_for() {
     AstNodePtr body{parse_expr()};
 
     return std::make_unique<AstNodeForCond>(
-        start_row, start_col, collect,
+        start_pos, collect,
         std::move(first), std::move(cond), std::move(inc), std::move(body)
         );
 }
 
 AstNodePtr Parser::parse_while() {
     // while [$] (cond) body 语义上就是 init/inc 皆空的 for，直接复用 AstNodeForCond，不单独建节点类型
-    const int start_row{peek().row}, start_col{peek().col};
+    const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_WHILE);
     skip_newline();
 
@@ -809,12 +809,12 @@ AstNodePtr Parser::parse_while() {
     AstNodePtr body{parse_expr()};
 
     return std::make_unique<AstNodeForCond>(
-        start_row, start_col, collect, nullptr, std::move(cond), nullptr, std::move(body)
+        start_pos, collect, nullptr, std::move(cond), nullptr, std::move(body)
         );
 }
 
 AstNodePtr Parser::parse_try() {
-    const int start_row{peek().row}, start_col{peek().col};
+    const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_TRY);
 
     // 与 if 不同：try 后没有 '()'，直接跟主体
@@ -867,20 +867,20 @@ AstNodePtr Parser::parse_try() {
         skip_newline();
 
         return std::make_unique<AstNodeTry>(
-            start_row, start_col,
+            start_pos,
             std::move(try_expr), std::move(except_clauses), parse_expr()
             );
     }
 
     // 注：except / finally 至少有一个，这一约束交由语义层检查
     return std::make_unique<AstNodeTry>(
-        start_row, start_col,
+        start_pos,
         std::move(try_expr), std::move(except_clauses), nullptr
         );
 }
 
 AstNodePtr Parser::parse_return() {
-    const int start_row{peek().row}, start_col{peek().col};
+    const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_RETURN);
     // 若紧跟终止符则为裸 return（值为 None）
     // 终止符 = 语句终止符 NEWLINE, ';', EOF, '}'
@@ -889,22 +889,21 @@ AstNodePtr Parser::parse_return() {
         check(TokenType::END_OF_FILE) || check(TokenType::SIGN_RBRACE) ||
         check(TokenType::SIGN_RPAREN) || check(TokenType::SIGN_RBRACKET) ||
         check(TokenType::SIGN_COMMA))
-        return std::make_unique<AstNodeReturn>(start_row, start_col, nullptr);
+        return std::make_unique<AstNodeReturn>(start_pos, nullptr);
 
-    return std::make_unique<AstNodeReturn>(start_row, start_col, parse_expr());
+    return std::make_unique<AstNodeReturn>(start_pos, parse_expr());
 }
 
 AstNodePtr Parser::parse_raise() {
-    const int start_row{peek().row}, start_col{peek().col};
+    const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_RAISE);
     skip_newline();
-    return std::make_unique<AstNodeRaise>(start_row, start_col, parse_expr());
+    return std::make_unique<AstNodeRaise>(start_pos, parse_expr());
 }
 
-AstNodePtr Parser::parse_func(std::vector<AstNodePtr> decorators, const int deco_row, const int deco_col) {
-    const auto [start_row, start_col]{
-        decorators.empty() ? std::pair{peek().row, peek().col} : std::pair{deco_row, deco_col}
-    };
+AstNodePtr Parser::parse_func(std::vector<AstNodePtr> decorators, std::vector<Position> decorator_positions,
+                              const Position deco_pos) {
+    const Position start_pos{decorators.empty() ? Position{peek().row, peek().col} : deco_pos};
     expect(TokenType::KW_FUNC);
     skip_newline();
 
@@ -961,22 +960,21 @@ AstNodePtr Parser::parse_func(std::vector<AstNodePtr> decorators, const int deco
     }
 
     // 函数体：{ ... }
-    const int body_row{peek().row}, body_col{peek().col};
+    const Position body_pos{peek().row, peek().col};
     expect(TokenType::SIGN_LBRACE);
     std::vector body_exprs{parse_exprs()};
     expect(TokenType::SIGN_RBRACE);
 
     return std::make_unique<AstNodeFunc>(
-        start_row, start_col, std::move(decorators), std::move(name), std::move(captures), std::move(params),
-        std::move(return_type), std::move(doc),
-        std::make_unique<AstNodeProgram>(body_row, body_col, std::move(body_exprs))
+        start_pos, std::move(decorators), std::move(decorator_positions), std::move(name),
+        std::move(captures), std::move(params), std::move(return_type), std::move(doc),
+        std::make_unique<AstNodeProgram>(body_pos, std::move(body_exprs))
         );
 }
 
-AstNodePtr Parser::parse_class(std::vector<AstNodePtr> decorators, const int deco_row, const int deco_col) {
-    const auto [start_row, start_col]{
-        decorators.empty() ? std::pair{peek().row, peek().col} : std::pair{deco_row, deco_col}
-    };
+AstNodePtr Parser::parse_class(std::vector<AstNodePtr> decorators, std::vector<Position> decorator_positions,
+                               const Position deco_pos) {
+    const Position start_pos{decorators.empty() ? Position{peek().row, peek().col} : deco_pos};
     expect(TokenType::KW_CLASS);
     skip_newline();
 
@@ -1004,14 +1002,15 @@ AstNodePtr Parser::parse_class(std::vector<AstNodePtr> decorators, const int dec
     }
 
     // 类体：{ ... }
-    const int body_row{peek().row}, body_col{peek().col};
+    const Position body_pos{peek().row, peek().col};
     expect(TokenType::SIGN_LBRACE);
     std::vector body_exprs{parse_exprs()};
     expect(TokenType::SIGN_RBRACE);
 
     return std::make_unique<AstNodeClass>(
-        start_row, start_col, std::move(decorators), std::move(name), std::move(bases), std::move(doc),
-        std::make_unique<AstNodeProgram>(body_row, body_col, std::move(body_exprs))
+        start_pos, std::move(decorators), std::move(decorator_positions), std::move(name),
+        std::move(bases), std::move(doc),
+        std::make_unique<AstNodeProgram>(body_pos, std::move(body_exprs))
         );
 }
 
@@ -1019,48 +1018,58 @@ AstNodePtr Parser::parse_decorator() {
     // 先把连续的前缀 @decorator 全部收集起来（不预先假设后面接的是 func/class 还是任意表达式），
     // 每项记住自己的位置，供后面（通用形式分支）构造对应节点时使用
     struct DecoratorEntry {
-        int row, col;
+        Position pos;
         AstNodePtr expr;
     };
     std::vector<DecoratorEntry> entries;
 
     while (check(TokenType::SIGN_AT)) {
-        const int deco_row{peek().row}, deco_col{peek().col};
+        const Position deco_pos{peek().row, peek().col};
         advance(); // 消耗 '@'
         skip_newline();
         // 解析装饰器表达式（Pratt 在遇到 func / class / @ 前会自然停止，因为它们都不是中缀运算符）
         AstNodePtr decorator{parse_expr()};
         skip_newline();
-        entries.push_back({deco_row, deco_col, std::move(decorator)});
+        entries.push_back({deco_pos, std::move(decorator)});
     }
 
     // 紧邻 func/class：这些装饰器是函数/类表达式自己产生式的一部分，
     // 直接挂到对应节点的 decorators_ 上，不包一层 AstNodeDecorator；节点自己的起始位置也相应地
     // 从第一个 '@' 算起（parse_decorator 只在当前 token 就是 '@' 时才会被调用，entries 必然非空）
     if (check(TokenType::KW_FUNC)) {
-        const int deco_row{entries.front().row}, deco_col{entries.front().col};
+        const Position deco_pos{entries.front().pos};
         std::vector<AstNodePtr> decorators;
+        std::vector<Position> decorator_positions;
         decorators.reserve(entries.size());
-        for (auto &e : entries) decorators.push_back(std::move(e.expr));
-        return parse_func(std::move(decorators), deco_row, deco_col);
+        decorator_positions.reserve(entries.size());
+        for (auto &e : entries) {
+            decorators.push_back(std::move(e.expr));
+            decorator_positions.push_back(e.pos);
+        }
+        return parse_func(std::move(decorators), std::move(decorator_positions), deco_pos);
     }
     if (check(TokenType::KW_CLASS)) {
-        const int deco_row{entries.front().row}, deco_col{entries.front().col};
+        const Position deco_pos{entries.front().pos};
         std::vector<AstNodePtr> decorators;
+        std::vector<Position> decorator_positions;
         decorators.reserve(entries.size());
-        for (auto &e : entries) decorators.push_back(std::move(e.expr));
-        return parse_class(std::move(decorators), deco_row, deco_col);
+        decorator_positions.reserve(entries.size());
+        for (auto &e : entries) {
+            decorators.push_back(std::move(e.expr));
+            decorator_positions.push_back(e.pos);
+        }
+        return parse_class(std::move(decorators), std::move(decorator_positions), deco_pos);
     }
 
     // 通用形式（2.2.8）：@d1 @d2 ... expr ≡ d1(d2(...(expr)))，从最贴近 expr 的装饰器开始向外包裹
     AstNodePtr target{parse_expr()};
-    for (auto &[row, col, expr] : std::views::reverse(entries)) {
-        target = std::make_unique<AstNodeDecorator>(row, col, std::move(expr), std::move(target));
+    for (auto &[pos, expr] : std::views::reverse(entries)) {
+        target = std::make_unique<AstNodeDecorator>(pos, std::move(expr), std::move(target));
     }
     return target;
 }
 
-AstNodePtr Parser::finish_call(AstNodePtr callee, int row, int col) {
+AstNodePtr Parser::finish_call(AstNodePtr callee, const Position pos, const Position paren_pos) {
     // '(' 已消耗，paren_depth_ 已自增
     std::vector<AstNodePtr> args;
     std::vector<std::pair<std::u32string, AstNodePtr>> kwargs;
@@ -1091,14 +1100,14 @@ AstNodePtr Parser::finish_call(AstNodePtr callee, int row, int col) {
     }
 
     skip_newline();
-    if (!check(TokenType::SIGN_RPAREN)) error("expected ')' to close function call", peek().row, peek().col);
+    if (!check(TokenType::SIGN_RPAREN)) error("expected ')' to close function call", Position{peek().row, peek().col});
     advance();
     paren_depth_--;
 
-    return std::make_unique<AstNodeCall>(row, col, std::move(callee), std::move(args), std::move(kwargs));
+    return std::make_unique<AstNodeCall>(pos, std::move(callee), std::move(args), std::move(kwargs), paren_pos);
 }
 
-AstNodePtr Parser::finish_index(AstNodePtr obj, int row, int col) {
+AstNodePtr Parser::finish_index(AstNodePtr obj, const Position pos, const Position bracket_pos) {
     // '[' 已消耗，paren_depth_ 已自增
     skip_newline();
 
@@ -1123,12 +1132,12 @@ AstNodePtr Parser::finish_index(AstNodePtr obj, int row, int col) {
     skip_newline();
     if (!check(TokenType::SIGN_RBRACKET))
         error("expected ']' to close index expression",
-              peek().row, peek().col);
+              Position{peek().row, peek().col});
 
     advance();
     paren_depth_--;
 
-    return std::make_unique<AstNodeIndex>(row, col, std::move(obj), std::move(args));
+    return std::make_unique<AstNodeIndex>(pos, std::move(obj), std::move(args), bracket_pos);
 }
 
 std::vector<AstNodeFunc::OneCapture> Parser::finish_func_captures() {
@@ -1293,7 +1302,7 @@ Parser::Parser(std::vector<Token> tokens, std::string file_path)
 }
 
 AstNodeProgramPtr Parser::parse() && {
-    const int start_row{peek().row}, start_col{peek().col};
+    const Position start_pos{peek().row, peek().col};
 
     // 解析一个若干个表达式
     std::vector exprs{parse_exprs()};
@@ -1301,5 +1310,5 @@ AstNodeProgramPtr Parser::parse() && {
     // 必须是解析完了，否则肯定是语法错误
     expect(TokenType::END_OF_FILE);
 
-    return std::make_unique<AstNodeProgram>(start_row, start_col, std::move(exprs));
+    return std::make_unique<AstNodeProgram>(start_pos, std::move(exprs));
 }

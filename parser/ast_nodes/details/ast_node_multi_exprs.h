@@ -11,9 +11,9 @@
 struct AstNodeProgram : AstNode {
     std::vector<AstNodePtr> exprs_;
 
-    AstNodeProgram(const int row, const int col,
-                   std::vector<AstNodePtr> exprs)
-        : AstNode{row, col}, exprs_{std::move(exprs)} {
+    explicit AstNodeProgram(const Position pos,
+                            std::vector<AstNodePtr> exprs)
+        : AstNode{pos}, exprs_{std::move(exprs)} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -29,9 +29,9 @@ using AstNodeProgramPtr = std::unique_ptr<AstNodeProgram>;
 struct AstNodeCompound : AstNode {
     std::vector<AstNodePtr> exprs_;
 
-    AstNodeCompound(const int row, const int col,
-                    std::vector<AstNodePtr> exprs)
-        : AstNode{row, col}, exprs_{std::move(exprs)} {
+    explicit AstNodeCompound(const Position pos,
+                             std::vector<AstNodePtr> exprs)
+        : AstNode{pos}, exprs_{std::move(exprs)} {
     }
 
     [[nodiscard]] json to_json() const override {

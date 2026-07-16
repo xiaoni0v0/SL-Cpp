@@ -25,10 +25,10 @@ struct AstNodeIf : AstNode {
     std::vector<AstNodeCondAndExpr> clauses_; // 非空
     AstNodePtr else_expr_; // nullptr 表示无 else
 
-    AstNodeIf(const int row, const int col,
-              std::vector<AstNodeCondAndExpr> clauses,
-              AstNodePtr else_expr)
-        : AstNode{row, col}, clauses_{std::move(clauses)}, else_expr_{std::move(else_expr)} {
+    explicit AstNodeIf(const Position pos,
+                       std::vector<AstNodeCondAndExpr> clauses,
+                       AstNodePtr else_expr)
+        : AstNode{pos}, clauses_{std::move(clauses)}, else_expr_{std::move(else_expr)} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -52,13 +52,11 @@ struct AstNodeForCond : AstNode {
     AstNodePtr inc_; // nullptr 表示空
     AstNodePtr body_;
 
-    AstNodeForCond(const int row, const int col,
-                   const bool collect,
-                   AstNodePtr init,
-                   AstNodePtr cond,
-                   AstNodePtr inc,
-                   AstNodePtr body)
-        : AstNode{row, col}, collect_{collect},
+    explicit AstNodeForCond(const Position pos,
+                            const bool collect,
+                            AstNodePtr init, AstNodePtr cond, AstNodePtr inc,
+                            AstNodePtr body)
+        : AstNode{pos}, collect_{collect},
           init_{std::move(init)}, cond_{std::move(cond)}, inc_{std::move(inc)}, body_{std::move(body)} {
     }
 
@@ -81,12 +79,11 @@ struct AstNodeForIter : AstNode {
     AstNodePtr iterable_;
     AstNodePtr body_;
 
-    AstNodeForIter(const int row, const int col,
-                   const bool collect,
-                   AstNodePtr target,
-                   AstNodePtr iterable,
-                   AstNodePtr body)
-        : AstNode{row, col}, collect_{collect},
+    explicit AstNodeForIter(const Position pos,
+                            const bool collect,
+                            AstNodePtr target, AstNodePtr iterable,
+                            AstNodePtr body)
+        : AstNode{pos}, collect_{collect},
           target_{std::move(target)}, iterable_{std::move(iterable)}, body_{std::move(body)} {
     }
 
@@ -99,8 +96,8 @@ struct AstNodeForIter : AstNode {
 };
 
 struct AstNodeBreak : AstNode {
-    AstNodeBreak(const int row, const int col)
-        : AstNode{row, col} {
+    explicit AstNodeBreak(const Position pos)
+        : AstNode{pos} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -109,8 +106,8 @@ struct AstNodeBreak : AstNode {
 };
 
 struct AstNodeContinue : AstNode {
-    AstNodeContinue(const int row, const int col)
-        : AstNode{row, col} {
+    explicit AstNodeContinue(const Position pos)
+        : AstNode{pos} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -122,9 +119,9 @@ struct AstNodeContinue : AstNode {
 struct AstNodeReturn : AstNode {
     AstNodePtr value_; // nullptr 表示无（等价于 return None）
 
-    AstNodeReturn(const int row, const int col,
-                  AstNodePtr value)
-        : AstNode{row, col}, value_{std::move(value)} {
+    explicit AstNodeReturn(const Position pos,
+                           AstNodePtr value)
+        : AstNode{pos}, value_{std::move(value)} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -149,11 +146,11 @@ struct AstNodeTry : AstNode {
     std::vector<AstNodeExceptAndExpr> except_clauses_; // 可空
     AstNodePtr finally_expr_; // nullptr 表示无 finally
 
-    AstNodeTry(const int row, const int col,
-               AstNodePtr try_expr,
-               std::vector<AstNodeExceptAndExpr> except_clauses,
-               AstNodePtr finally_expr)
-        : AstNode{row, col}, try_expr_{std::move(try_expr)},
+    explicit AstNodeTry(const Position pos,
+                        AstNodePtr try_expr,
+                        std::vector<AstNodeExceptAndExpr> except_clauses,
+                        AstNodePtr finally_expr)
+        : AstNode{pos}, try_expr_{std::move(try_expr)},
           except_clauses_{std::move(except_clauses)}, finally_expr_{std::move(finally_expr)} {
     }
 
@@ -175,9 +172,9 @@ struct AstNodeTry : AstNode {
 struct AstNodeRaise : AstNode {
     AstNodePtr value_;
 
-    AstNodeRaise(const int row, const int col,
-                 AstNodePtr value)
-        : AstNode{row, col}, value_{std::move(value)} {
+    explicit AstNodeRaise(const Position pos,
+                          AstNodePtr value)
+        : AstNode{pos}, value_{std::move(value)} {
     }
 
     [[nodiscard]] json to_json() const override {

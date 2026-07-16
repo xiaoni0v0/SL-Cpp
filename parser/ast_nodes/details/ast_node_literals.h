@@ -10,8 +10,8 @@
 
 // None
 struct AstNodeLiteralNone : AstNode {
-    AstNodeLiteralNone(const int row, const int col)
-        : AstNode{row, col} {
+    explicit AstNodeLiteralNone(const Position pos)
+        : AstNode{pos} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -23,9 +23,9 @@ struct AstNodeLiteralNone : AstNode {
 struct AstNodeLiteralBool : AstNode {
     bool value_;
 
-    AstNodeLiteralBool(const int row, const int col,
-                       const bool value)
-        : AstNode{row, col}, value_{value} {
+    explicit AstNodeLiteralBool(const Position pos,
+                                const bool value)
+        : AstNode{pos}, value_{value} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -36,9 +36,9 @@ struct AstNodeLiteralBool : AstNode {
 struct AstNodeLiteralGL : AstNode {
     enum class GLType { G, L } value_;
 
-    AstNodeLiteralGL(const int row, const int col,
-                     const GLType value)
-        : AstNode{row, col}, value_{value} {
+    explicit AstNodeLiteralGL(const Position pos,
+                              const GLType value)
+        : AstNode{pos}, value_{value} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -48,12 +48,11 @@ struct AstNodeLiteralGL : AstNode {
 
 // int
 struct AstNodeLiteralInt : AstNode {
-    // 保留原文，解释器按需转换（"123" -> 123）
     std::u32string raw_;
 
-    AstNodeLiteralInt(const int row, const int col,
-                      std::u32string raw)
-        : AstNode{row, col}, raw_{std::move(raw)} {
+    explicit AstNodeLiteralInt(const Position pos,
+                               std::u32string raw)
+        : AstNode{pos}, raw_{std::move(raw)} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -65,9 +64,9 @@ struct AstNodeLiteralInt : AstNode {
 struct AstNodeLiteralFloat : AstNode {
     std::u32string raw_;
 
-    AstNodeLiteralFloat(const int row, const int col,
-                        std::u32string raw)
-        : AstNode{row, col}, raw_{std::move(raw)} {
+    explicit AstNodeLiteralFloat(const Position pos,
+                                 std::u32string raw)
+        : AstNode{pos}, raw_{std::move(raw)} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -80,8 +79,8 @@ struct AstNodeLiteralStr : AstNode {
     // Lexer 已处理转义，value 为最终字符串内容
     std::u32string value_;
 
-    AstNodeLiteralStr(const int row, const int col, std::u32string value)
-        : AstNode{row, col}, value_{std::move(value)} {
+    explicit AstNodeLiteralStr(const Position pos, std::u32string value)
+        : AstNode{pos}, value_{std::move(value)} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -93,8 +92,8 @@ struct AstNodeLiteralStr : AstNode {
 struct AstNodeLiteralTuple : AstNode {
     std::vector<AstNodePtr> items_; // 可空
 
-    AstNodeLiteralTuple(const int row, const int col, std::vector<AstNodePtr> items)
-        : AstNode{row, col}, items_{std::move(items)} {
+    explicit AstNodeLiteralTuple(const Position pos, std::vector<AstNodePtr> items)
+        : AstNode{pos}, items_{std::move(items)} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -108,9 +107,9 @@ struct AstNodeLiteralTuple : AstNode {
 struct AstNodeLiteralList : AstNode {
     std::vector<AstNodePtr> items_; // 可空
 
-    AstNodeLiteralList(const int row, const int col,
-                       std::vector<AstNodePtr> items)
-        : AstNode{row, col}, items_{std::move(items)} {
+    explicit AstNodeLiteralList(const Position pos,
+                                std::vector<AstNodePtr> items)
+        : AstNode{pos}, items_{std::move(items)} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -120,13 +119,13 @@ struct AstNodeLiteralList : AstNode {
     }
 };
 
-// ['k1': 'v1', 'k2': 'v2']
+// {'k1': 'v1', 'k2': 'v2'}
 struct AstNodeLiteralDict : AstNode {
     std::vector<std::pair<AstNodePtr, AstNodePtr>> items_; // 可空
 
-    AstNodeLiteralDict(const int row, const int col,
-                       std::vector<std::pair<AstNodePtr, AstNodePtr>> items)
-        : AstNode{row, col}, items_{std::move(items)} {
+    explicit AstNodeLiteralDict(const Position pos,
+                                std::vector<std::pair<AstNodePtr, AstNodePtr>> items)
+        : AstNode{pos}, items_{std::move(items)} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -140,8 +139,8 @@ struct AstNodeLiteralDict : AstNode {
 
 // ...
 struct AstNodeLiteralEllipsis : AstNode {
-    AstNodeLiteralEllipsis(const int row, const int col)
-        : AstNode{row, col} {
+    explicit AstNodeLiteralEllipsis(const Position pos)
+        : AstNode{pos} {
     }
 
     [[nodiscard]] json to_json() const override {

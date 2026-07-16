@@ -6,16 +6,16 @@
 #include <ranges>
 #include <unordered_set>
 
-void SyntaxChecker::error(const std::string &msg, const int row, const int col) const {
-    throw SyntaxError{file_path_, row, col, msg};
+void SyntaxChecker::error(const std::string &msg, const Position pos) const {
+    throw SyntaxError{file_path_, pos.row, pos.col, msg};
 }
 
 void SyntaxChecker::require_not_null(const AstNodePtr &node) const {
-    if (!node) error("unexpected null node", 0, 0);
+    if (!node) error("unexpected null node", Position{0, 0});
 }
 
 void SyntaxChecker::require_not_null(const std::u32string &name) const {
-    if (name.empty()) error("unexpected null name", 0, 0);
+    if (name.empty()) error("unexpected null name", Position{0, 0});
 }
 
 void SyntaxChecker::check(const AstNode *node) {
@@ -42,7 +42,7 @@ void SyntaxChecker::check(const AstNodeCall *node) {
     ctx_.can_double_star = true;
     for (const auto &arg : node->args_) {
         if (dynamic_cast<const AstNodeDoubleStar *>(arg.get())) seen_double_star = true;
-        else if (seen_double_star) error("argument after ** spread", arg->row_, arg->col_);
+        else if (seen_double_star) error("argument after ** spread", arg->pos_);
         check(arg.get());
     }
 
@@ -126,15 +126,15 @@ void SyntaxChecker::check(const AstNodeForIter *node) {
 }
 
 void SyntaxChecker::check(const AstNodeBreak *node) {
-    if (ctx_.loop_depth == 0) error("break outside for/while loop", node->row_, node->col_);
+    if (ctx_.loop_depth == 0) error("break outside for/while loop", node->pos_);
 }
 
 void SyntaxChecker::check(const AstNodeContinue *node) {
-    if (ctx_.loop_depth == 0) error("continue outside for/while loop", node->row_, node->col_);
+    if (ctx_.loop_depth == 0) error("continue outside for/while loop", node->pos_);
 }
 
 void SyntaxChecker::check(const AstNodeReturn *node) {
-    if (ctx_.func_depth == 0) error("return outside function", node->row_, node->col_);
+    if (ctx_.func_depth == 0) error("return outside function", node->pos_);
     const Context saved = ctx_;
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -148,7 +148,7 @@ void SyntaxChecker::check(const AstNodeTry *node) {
     ctx_.can_double_star = false;
     if (node->except_clauses_.empty() && !node->finally_expr_)
         error("try must have at least one except or finally",
-              node->row_, node->col_);
+              node->pos_);
     check(node->try_expr_.get());
     for (const auto &clause : node->except_clauses_) {
         for (const auto &exc : clause.exceptions_) check(exc.get());
@@ -189,7 +189,8 @@ void SyntaxChecker::check(const AstNodeFunc *node) {
 
     for (const auto &capture : node->captures_) {
         if (!seen_names.insert(capture.identifier_).second)
-            error("duplicate name in capture/parameter list", node->row_, node->col_);
+            error("duplicate name in capture/parameter list",
+                  node->pos_);
         if (capture.value_expr_) check(capture.value_expr_.get());
     }
 
@@ -199,16 +200,15 @@ void SyntaxChecker::check(const AstNodeFunc *node) {
     bool seen_default = false;
 
     for (const auto &param : node->params_) {
-        if (!seen_names.insert(param.identifier_).second)
-            error("duplicate name in capture/parameter list", node->row_, node->col_);
-        if (seen_double_star) error("parameter after **kwargs", node->row_, node->col_);
+        if (!seen_names.insert(param.identifier_).second) error("duplicate name in capture/parameter list", node->pos_);
+        if (seen_double_star) error("parameter after **kwargs", node->pos_);
 
         switch (param.param_type_) {
-        case PT::Normal: if (seen_star_args) error("normal parameter after *args", node->row_, node->col_);
+        case PT::Normal: if (seen_star_args) error("normal parameter after *args", node->pos_);
             if (param.default_value_) seen_default = true;
-            else if (seen_default) error("non-default parameter after default parameter", node->row_, node->col_);
+            else if (seen_default) error("non-default parameter after default parameter", node->pos_);
             break;
-        case PT::StarArgs: if (seen_star_args) error("duplicate *args", node->row_, node->col_);
+        case PT::StarArgs: if (seen_star_args) error("duplicate *args", node->pos_);
             seen_star_args = true;
             break;
         case PT::DoubleStarKwargs: seen_double_star = true;
@@ -314,9 +314,7 @@ void SyntaxChecker::check(const AstNodeCompound *node) {
 }
 
 void SyntaxChecker::check(const AstNodeStar *node) {
-    if (!ctx_.can_star)
-        error("* can only appear in tuple, list, or function call arguments",
-              node->row_, node->col_);
+    if (!ctx_.can_star) error("* can only appear in tuple, list, or function call arguments", node->pos_);
     const Context saved = ctx_;
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -325,9 +323,7 @@ void SyntaxChecker::check(const AstNodeStar *node) {
 }
 
 void SyntaxChecker::check(const AstNodeDoubleStar *node) {
-    if (!ctx_.can_double_star)
-        error("** can only appear in dict literal or function call arguments",
-              node->row_, node->col_);
+    if (!ctx_.can_double_star) error("** can only appear in dict literal or function call arguments", node->pos_);
     const Context saved = ctx_;
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -393,13 +389,12 @@ void SyntaxChecker::check(const AstNodeDel *node) {
     // 2.2.3：target 必须是标识符或属性访问
     if (!dynamic_cast<const AstNodeIdentifier *>(node->target_.get()) &&
         !dynamic_cast<const AstNodeAttr *>(node->target_.get()))
-        error("del target must be an identifier or attribute access",
-              node->target_->row_, node->target_->col_);
+        error("del target must be an identifier or attribute access", node->target_->pos_);
 }
 
 void SyntaxChecker::check(const AstNodeGlobal *node) {
     // identifier_ 语法上就是 token，没有形状可校验，只需要检查作用域限制（2.2.4：只能在局部作用域中使用）
-    if (ctx_.func_depth == 0) error("global outside function", node->row_, node->col_);
+    if (ctx_.func_depth == 0) error("global outside function", node->pos_);
 }
 
 void SyntaxChecker::check_simple_lvalue(const AstNode *node) const {
@@ -408,8 +403,7 @@ void SyntaxChecker::check_simple_lvalue(const AstNode *node) const {
     if (dynamic_cast<const AstNodeIndex *>(node)) return;
     if (dynamic_cast<const AstNodeAttr *>(node)) return;
 
-    error("identifier, attribute access, or index expression expected before op=",
-          node->row_, node->col_);
+    error("identifier, attribute access, or index expression expected before op=", node->pos_);
 }
 
 void SyntaxChecker::check_lvalue(const AstNode *node) const {
@@ -428,7 +422,7 @@ void SyntaxChecker::check_lvalue(const AstNode *node) const {
         return;
     }
 
-    error("lvalue expected before assignment", node->row_, node->col_);
+    error("lvalue expected before assignment", node->pos_);
 }
 
 void SyntaxChecker::check_lvalue_items(const std::vector<AstNodePtr> &items) const {
@@ -436,7 +430,7 @@ void SyntaxChecker::check_lvalue_items(const std::vector<AstNodePtr> &items) con
     for (const auto &item : items) {
         if (const auto *star{dynamic_cast<const AstNodeStar *>(item.get())}) {
             // 2.1.5 第 4 点：解构时至多一个左值可以带 * 前缀
-            if (seen_star) error("at most one starred lvalue allowed in destructuring", star->row_, star->col_);
+            if (seen_star) error("at most one starred lvalue allowed in destructuring", star->pos_);
             seen_star = true;
             check_lvalue(star->operand_.get());
         } else {

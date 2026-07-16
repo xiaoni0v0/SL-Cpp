@@ -11,9 +11,9 @@
 struct AstNodeIdentifier : AstNode {
     std::u32string identifier_;
 
-    AstNodeIdentifier(const int row, const int col,
-                      std::u32string identifier)
-        : AstNode{row, col}, identifier_{std::move(identifier)} {
+    explicit AstNodeIdentifier(const Position pos,
+                               std::u32string identifier)
+        : AstNode{pos}, identifier_{std::move(identifier)} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -25,9 +25,9 @@ struct AstNodeIdentifier : AstNode {
 struct AstNodeDel : AstNode {
     AstNodePtr target_;
 
-    AstNodeDel(const int row, const int col,
-               AstNodePtr target)
-        : AstNode{row, col}, target_{std::move(target)} {
+    explicit AstNodeDel(const Position pos,
+                        AstNodePtr target)
+        : AstNode{pos}, target_{std::move(target)} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -39,9 +39,9 @@ struct AstNodeDel : AstNode {
 struct AstNodeGlobal : AstNode {
     std::u32string identifier_;
 
-    AstNodeGlobal(const int row, const int col,
-                  std::u32string identifier)
-        : AstNode{row, col}, identifier_{std::move(identifier)} {
+    explicit AstNodeGlobal(const Position pos,
+                           std::u32string identifier)
+        : AstNode{pos}, identifier_{std::move(identifier)} {
     }
 
     [[nodiscard]] json to_json() const override {

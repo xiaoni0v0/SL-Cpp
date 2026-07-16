@@ -16,12 +16,15 @@ struct AstNodeCall : AstNode {
     AstNodePtr object_;
     std::vector<AstNodePtr> args_;
     std::vector<std::pair<std::u32string, AstNodePtr>> kwargs_;
+    Position paren_pos_; // '(' 自己的位置
 
-    AstNodeCall(const int row, const int col,
-                AstNodePtr object,
-                std::vector<AstNodePtr> args,
-                std::vector<std::pair<std::u32string, AstNodePtr>> kwargs)
-        : AstNode{row, col}, object_{std::move(object)}, args_{std::move(args)}, kwargs_{std::move(kwargs)} {
+    explicit AstNodeCall(const Position pos,
+                         AstNodePtr object,
+                         std::vector<AstNodePtr> args,
+                         std::vector<std::pair<std::u32string, AstNodePtr>> kwargs,
+                         const Position paren_pos)
+        : AstNode{pos}, object_{std::move(object)}, args_{std::move(args)}, kwargs_{std::move(kwargs)},
+          paren_pos_{paren_pos} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -40,11 +43,13 @@ struct AstNodeCall : AstNode {
 struct AstNodeIndex : AstNode {
     AstNodePtr object_;
     std::vector<AstNodePtr> args_;
+    Position bracket_pos_; // '[' 自己的位置
 
-    AstNodeIndex(const int row, const int col,
-                 AstNodePtr object,
-                 std::vector<AstNodePtr> args)
-        : AstNode{row, col}, object_{std::move(object)}, args_{std::move(args)} {
+    explicit AstNodeIndex(const Position pos,
+                          AstNodePtr object,
+                          std::vector<AstNodePtr> args,
+                          const Position bracket_pos)
+        : AstNode{pos}, object_{std::move(object)}, args_{std::move(args)}, bracket_pos_{bracket_pos} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -58,15 +63,13 @@ struct AstNodeIndex : AstNode {
 struct AstNodeAttr : AstNode {
     AstNodePtr object_;
     std::u32string attr_;
-    // '.' 自己的位置
-    int dot_row_, dot_col_;
+    Position dot_pos_; // '.' 自己的位置
 
-    AstNodeAttr(const int row, const int col,
-                AstNodePtr object,
-                std::u32string attr,
-                const int dot_row, const int dot_col)
-        : AstNode{row, col}, object_{std::move(object)}, attr_{std::move(attr)},
-          dot_row_{dot_row}, dot_col_{dot_col} {
+    explicit AstNodeAttr(const Position pos,
+                         AstNodePtr object,
+                         std::u32string attr,
+                         const Position dot_pos)
+        : AstNode{pos}, object_{std::move(object)}, attr_{std::move(attr)}, dot_pos_{dot_pos} {
     }
 
     [[nodiscard]] json to_json() const override {

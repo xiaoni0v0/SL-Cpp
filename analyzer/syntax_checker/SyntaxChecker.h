@@ -17,13 +17,13 @@ class SyntaxChecker {
     } ctx_{};
 
     // 报错
-    [[noreturn]] void error(const std::string &msg, int row, int col) const;
+    [[noreturn]] void error(const std::string &msg, Position pos) const;
     void require_not_null(const AstNodePtr &node) const;
     void require_not_null(const std::u32string &name) const;
 
     template <typename T>
     void require_not_null(const std::vector<T> &name) const {
-        if (name.empty()) error("unexpected null vector", 0, 0);
+        if (name.empty()) error("unexpected null vector", Position{0, 0});
     }
 
     // 检查节点，dispatch

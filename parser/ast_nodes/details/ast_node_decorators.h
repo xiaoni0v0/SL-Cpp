@@ -13,10 +13,10 @@ struct AstNodeDecorator : AstNode {
     AstNodePtr decorator_;
     AstNodePtr target_;
 
-    AstNodeDecorator(const int row, const int col,
-                     AstNodePtr decorator,
-                     AstNodePtr target)
-        : AstNode{row, col}, decorator_{std::move(decorator)}, target_{std::move(target)} {
+    explicit AstNodeDecorator(const Position pos,
+                              AstNodePtr decorator,
+                              AstNodePtr target)
+        : AstNode{pos}, decorator_{std::move(decorator)}, target_{std::move(target)} {
     }
 
     [[nodiscard]] json to_json() const override {
