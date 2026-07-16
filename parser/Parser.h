@@ -84,9 +84,11 @@ class Parser {
     // raise
     AstNodePtr parse_raise();
     // 函数；decorators 是已经解析好、紧邻在 func 前面的前缀装饰器（属于函数表达式自己的语法，2.2.6）
-    AstNodePtr parse_func(std::vector<AstNodePtr> decorators = {});
-    // 类；decorators 同上（2.2.7）
-    AstNodePtr parse_class(std::vector<AstNodePtr> decorators = {});
+    // deco_row/deco_col：decorators 非空时，是第一个 '@' 的位置，作为整个节点的起始位置（decorators_ 也是
+    // 这个节点自己的字段，节点的"开始的行和列"理应从装饰器算起）；decorators 为空时忽略，节点用 func 自身位置
+    AstNodePtr parse_func(std::vector<AstNodePtr> decorators = {}, int deco_row = 0, int deco_col = 0);
+    // 类；decorators/deco_row/deco_col 同上（2.2.7）
+    AstNodePtr parse_class(std::vector<AstNodePtr> decorators = {}, int deco_row = 0, int deco_col = 0);
     // 装饰器：先收集连续的前缀 @decorator，再看紧跟的是 func/class（挂到对应节点的 decorators_ 上）
     // 还是任意表达式（通用形式 2.2.8，包成 AstNodeDecorator 链）
     AstNodePtr parse_decorator();
@@ -107,10 +109,13 @@ class Parser {
     // '(' 已消耗、paren_depth_ 已自增后调用，解析到并消耗 ')'（基类列表，仅位置参数）
     std::vector<AstNodePtr> finish_class_bases();
 
-    // 链式比较（< <= > >= == !=）：left 已解析完毕，first_op 是刚 advance 掉的第一个比较运算符 token
-    AstNodePtr parse_compare_chain(AstNodePtr left, int start_row, int start_col, TokenType first_op);
+    // 链式比较（< <= > >= == !=）：left 已解析完毕，first_op 是刚 advance 掉的第一个比较运算符 token，
+    // first_op_row/first_op_col 是这个运算符自己的位置（存进 AstNodeCompare::op_positions_）
+    AstNodePtr parse_compare_chain(AstNodePtr left, int start_row, int start_col,
+                                   TokenType first_op, int first_op_row, int first_op_col);
     // 链式 is：left 已解析完毕，第一个 'is' 已被 advance 掉；is 不可重载，不与上面共用 AstNodeCompare
-    AstNodePtr parse_is_chain(AstNodePtr left, int start_row, int start_col);
+    // first_is_row/first_is_col 是第一个 'is' 自己的位置（存进 AstNodeIs::op_positions_）
+    AstNodePtr parse_is_chain(AstNodePtr left, int start_row, int start_col, int first_is_row, int first_is_col);
 
 public:
     /**

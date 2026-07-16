@@ -283,57 +283,60 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         if (is_assign_op(op)) {
             skip_newline();
             return std::make_unique<AstNodeCompoundAssign>(
-                start_row, start_col, std::move(left),
+                start_row, start_col, std::move(left), op_row, op_col,
                 assign_compound_to_binary(op), parse_expr_pratt(rbp)
                 );
         }
 
-        // 后缀 x?  x!
+        // 后缀 x?  x!（节点位置取整个表达式的起始位置，而非运算符自己的位置，下同；
+        // op_row/op_col 是运算符自己的位置，另外单独记）
         if (op == TokenType::SIGN_QUESTION || op == TokenType::SIGN_EXCLAIM) {
-            left = std::make_unique<AstNodeOpUnary>(op_row, op_col, token_type_to_unary_op_type(op), std::move(left));
+            left = std::make_unique<AstNodeOpUnary>(
+                start_row, start_col, token_type_to_unary_op_type(op), std::move(left), op_row, op_col
+                );
             continue;
         }
 
         // 函数调用 f(...)
         if (op == TokenType::SIGN_LPAREN) {
             paren_depth_++;
-            left = finish_call(std::move(left), op_row, op_col);
+            left = finish_call(std::move(left), start_row, start_col);
             continue;
         }
 
         // 索引 x[...]
         if (op == TokenType::SIGN_LBRACKET) {
             paren_depth_++;
-            left = finish_index(std::move(left), op_row, op_col);
+            left = finish_index(std::move(left), start_row, start_col);
             continue;
         }
 
-        // 属性访问 x.attr（'.' 在行尾时 attr 可换行）
+        // 属性访问 x.attr（'.' 在行尾时 attr 可换行；op_row/op_col 即 '.' 自己的位置）
         if (op == TokenType::SIGN_DOT) {
             skip_newline();
             left = std::make_unique<AstNodeAttr>(
-                op_row, op_col, std::move(left), expect(TokenType::IDENTIFIER).lexeme
+                start_row, start_col, op_row, op_col, std::move(left), expect(TokenType::IDENTIFIER).lexeme
                 );
             continue;
         }
 
         // 比较运算（链式）：== != < <= > >= 一组，用 AstNodeCompare
         if (is_compare_op(op)) {
-            left = parse_compare_chain(std::move(left), start_row, start_col, op);
+            left = parse_compare_chain(std::move(left), start_row, start_col, op, op_row, op_col);
             continue;
         }
 
         // is（链式，自成一组，不与上面 6 者混链）：不可重载、不走 AstNodeCompare，用专门的 AstNodeIs
         if (op == TokenType::KW_IS) {
-            left = parse_is_chain(std::move(left), start_row, start_col);
+            left = parse_is_chain(std::move(left), start_row, start_col, op_row, op_col);
             continue;
         }
 
-        // 普通二元运算符（运算符在行尾时右侧可换行）
+        // 普通二元运算符（运算符在行尾时右侧可换行；节点位置取左操作数的起始位置，op_row/op_col 才是运算符自己的位置）
         skip_newline();
         left = std::make_unique<AstNodeOpBinary>(
-            op_row, op_col, token_type_to_binary_op_type(op),
-            std::move(left), parse_expr_pratt(rbp)
+            start_row, start_col, token_type_to_binary_op_type(op),
+            std::move(left), parse_expr_pratt(rbp), op_row, op_col
             );
     }
 
@@ -341,16 +344,18 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
 }
 
 AstNodePtr Parser::parse_compare_chain(AstNodePtr left, const int start_row, const int start_col,
-                                       const TokenType first_op) {
+                                       const TokenType first_op, const int first_op_row, const int first_op_col) {
     // first_op 已经被消耗（由调用处的 parse_expr_pratt 主循环 advance），属于比较组（< <= > >= == !=）
     // 后续操作数用"比较组优先级 60 + 1"解析，防止同组递归吞并（链式循环自己处理连续项）
     constexpr int operand_min_bp{61};
 
     std::vector<AstNodePtr> operands;
     std::vector<AstNodeCompare::OpType> ops;
+    std::vector<std::pair<int, int>> op_positions;
 
     operands.push_back(std::move(left));
     ops.push_back(token_type_to_compare_op_type(first_op));
+    op_positions.emplace_back(first_op_row, first_op_col);
 
     skip_newline();
     operands.push_back(parse_expr_pratt(operand_min_bp));
@@ -359,22 +364,29 @@ AstNodePtr Parser::parse_compare_chain(AstNodePtr left, const int start_row, con
         skip_paren_newline();
         if (!is_compare_op(peek().type)) break;
 
+        const int next_op_row{peek().row}, next_op_col{peek().col};
         const TokenType next_op{advance().type}; // 消耗运算符
         ops.push_back(token_type_to_compare_op_type(next_op));
+        op_positions.emplace_back(next_op_row, next_op_col);
         skip_newline();
         operands.push_back(parse_expr_pratt(operand_min_bp));
     }
 
-    return std::make_unique<AstNodeCompare>(start_row, start_col, std::move(operands), std::move(ops));
+    return std::make_unique<AstNodeCompare>(
+        start_row, start_col, std::move(ops), std::move(operands), std::move(op_positions)
+        );
 }
 
-AstNodePtr Parser::parse_is_chain(AstNodePtr left, const int start_row, const int start_col) {
+AstNodePtr Parser::parse_is_chain(AstNodePtr left, const int start_row, const int start_col,
+                                  const int first_is_row, const int first_is_col) {
     // 第一个 'is' 已经被消耗（由调用处的 parse_expr_pratt 主循环 advance）
     // 后续操作数用"is 优先级 50 + 1"解析，防止递归吞并（链式循环自己处理连续的 is）
     constexpr int operand_min_bp{51};
 
     std::vector<AstNodePtr> operands;
+    std::vector<std::pair<int, int>> op_positions;
     operands.push_back(std::move(left));
+    op_positions.emplace_back(first_is_row, first_is_col);
 
     skip_newline();
     operands.push_back(parse_expr_pratt(operand_min_bp));
@@ -383,12 +395,13 @@ AstNodePtr Parser::parse_is_chain(AstNodePtr left, const int start_row, const in
         skip_paren_newline();
         if (!check(TokenType::KW_IS)) break;
 
+        op_positions.emplace_back(peek().row, peek().col);
         advance(); // 消耗 'is'
         skip_newline();
         operands.push_back(parse_expr_pratt(operand_min_bp));
     }
 
-    return std::make_unique<AstNodeIs>(start_row, start_col, std::move(operands));
+    return std::make_unique<AstNodeIs>(start_row, start_col, std::move(operands), std::move(op_positions));
 }
 
 AstNodePtr Parser::parse_non_op() {
@@ -429,19 +442,21 @@ AstNodePtr Parser::parse_non_op() {
         // **mapping
         return advance(), std::make_unique<AstNodeDoubleStar>(row, col, parse_expr_pratt(140));
 
-    // 前缀运算符
+    // 前缀运算符（op_row/op_col 就是运算符自己的位置，前缀形式下和 row/col 重合）
     case TokenType::SIGN_PLUS:
     case TokenType::SIGN_MINUS:
     case TokenType::SIGN_TILDE: {
         // 单目优先级 140
         const TokenType token_type{advance().type};
         return std::make_unique<AstNodeOpUnary>(
-            row, col, token_type_to_unary_op_type(token_type), parse_expr_pratt(140)
+            row, col, token_type_to_unary_op_type(token_type), parse_expr_pratt(140), row, col
             );
     }
     case TokenType::KW_NOT:
         // not 优先级 40
-        return advance(), std::make_unique<AstNodeOpUnary>(row, col, AstNodeOpUnary::OpType::Not, parse_expr_pratt(40));
+        return advance(), std::make_unique<AstNodeOpUnary>(
+                   row, col, AstNodeOpUnary::OpType::Not, parse_expr_pratt(40), row, col
+                   );
 
     // del / global
     case TokenType::KW_DEL: return parse_del();
@@ -885,8 +900,10 @@ AstNodePtr Parser::parse_raise() {
     return std::make_unique<AstNodeRaise>(start_row, start_col, parse_expr());
 }
 
-AstNodePtr Parser::parse_func(std::vector<AstNodePtr> decorators) {
-    const int start_row{peek().row}, start_col{peek().col};
+AstNodePtr Parser::parse_func(std::vector<AstNodePtr> decorators, const int deco_row, const int deco_col) {
+    const auto [start_row, start_col]{
+        decorators.empty() ? std::pair{peek().row, peek().col} : std::pair{deco_row, deco_col}
+    };
     expect(TokenType::KW_FUNC);
     skip_newline();
 
@@ -955,8 +972,10 @@ AstNodePtr Parser::parse_func(std::vector<AstNodePtr> decorators) {
         );
 }
 
-AstNodePtr Parser::parse_class(std::vector<AstNodePtr> decorators) {
-    const int start_row{peek().row}, start_col{peek().col};
+AstNodePtr Parser::parse_class(std::vector<AstNodePtr> decorators, const int deco_row, const int deco_col) {
+    const auto [start_row, start_col]{
+        decorators.empty() ? std::pair{peek().row, peek().col} : std::pair{deco_row, deco_col}
+    };
     expect(TokenType::KW_CLASS);
     skip_newline();
 
@@ -1015,18 +1034,21 @@ AstNodePtr Parser::parse_decorator() {
     }
 
     // 紧邻 func/class：这些装饰器是函数/类表达式自己产生式的一部分，
-    // 直接挂到对应节点的 decorators_ 上，不包一层 AstNodeDecorator
+    // 直接挂到对应节点的 decorators_ 上，不包一层 AstNodeDecorator；节点自己的起始位置也相应地
+    // 从第一个 '@' 算起（parse_decorator 只在当前 token 就是 '@' 时才会被调用，entries 必然非空）
     if (check(TokenType::KW_FUNC)) {
+        const int deco_row{entries.front().row}, deco_col{entries.front().col};
         std::vector<AstNodePtr> decorators;
         decorators.reserve(entries.size());
         for (auto &e : entries) decorators.push_back(std::move(e.expr));
-        return parse_func(std::move(decorators));
+        return parse_func(std::move(decorators), deco_row, deco_col);
     }
     if (check(TokenType::KW_CLASS)) {
+        const int deco_row{entries.front().row}, deco_col{entries.front().col};
         std::vector<AstNodePtr> decorators;
         decorators.reserve(entries.size());
         for (auto &e : entries) decorators.push_back(std::move(e.expr));
-        return parse_class(std::move(decorators));
+        return parse_class(std::move(decorators), deco_row, deco_col);
     }
 
     // 通用形式（2.2.8）：@d1 @d2 ... expr ≡ d1(d2(...(expr)))，从最贴近 expr 的装饰器开始向外包裹

@@ -54,11 +54,14 @@ struct AstNodeOpUnary : AstNode {
 
     OpType op_;
     AstNodePtr operand_;
+    // 运算符自己的位置
+    int op_row_, op_col_;
 
     AstNodeOpUnary(const int row, const int col,
                    const OpType op,
-                   AstNodePtr operand)
-        : AstNode{row, col}, op_{op}, operand_{std::move(operand)} {
+                   AstNodePtr operand,
+                   const int op_row, const int op_col)
+        : AstNode{row, col}, op_{op}, operand_{std::move(operand)}, op_row_{op_row}, op_col_{op_col} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -93,12 +96,16 @@ struct AstNodeOpBinary : AstNode {
 
     OpType op_;
     AstNodePtr left_, right_;
+    // 运算符自己的位置
+    int op_row_, op_col_;
 
     AstNodeOpBinary(const int row, const int col,
                     const OpType op,
                     AstNodePtr left,
-                    AstNodePtr right)
-        : AstNode{row, col}, op_{op}, left_{std::move(left)}, right_{std::move(right)} {
+                    AstNodePtr right,
+                    const int op_row, const int op_col)
+        : AstNode{row, col}, op_{op}, left_{std::move(left)}, right_{std::move(right)},
+          op_row_{op_row}, op_col_{op_col} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -134,13 +141,17 @@ struct AstNodeCompare : AstNode {
     enum class OpType { Lt, Le, Gt, Ge, Eq, Ne };
 
     // operands_.size() == ops_.size() + 1，operands_.size() >= 2
-    std::vector<AstNodePtr> operands_;
     std::vector<OpType> ops_;
+    std::vector<AstNodePtr> operands_;
+    // 链中每个运算符自己的位置，跟 ops_ 一一对应
+    std::vector<std::pair<int, int>> op_positions_;
 
     AstNodeCompare(const int row, const int col,
+                   std::vector<OpType> ops,
                    std::vector<AstNodePtr> operands,
-                   std::vector<OpType> ops)
-        : AstNode{row, col}, operands_{std::move(operands)}, ops_{std::move(ops)} {
+                   std::vector<std::pair<int, int>> op_positions)
+        : AstNode{row, col}, ops_{std::move(ops)}, operands_{std::move(operands)},
+          op_positions_{std::move(op_positions)} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -164,15 +175,17 @@ struct AstNodeCompare : AstNode {
     }
 };
 
-// a is b ⟦is c ...⟧（链式，语义/求值顺序同 AstNodeCompare，但 is 不可重载，不可与比较符混链，
-// 运算符固定不需要 ops_，只需要按顺序两两取相邻 operands_ 做身份比较）
+// a is b ⟦is c ...⟧（is）
 struct AstNodeIs : AstNode {
     // operands_.size() >= 2
     std::vector<AstNodePtr> operands_;
+    // 链中每个 'is' 自己的位置，op_positions_.size() == operands_.size() - 1
+    std::vector<std::pair<int, int>> op_positions_;
 
     AstNodeIs(const int row, const int col,
-              std::vector<AstNodePtr> operands)
-        : AstNode{row, col}, operands_{std::move(operands)} {
+              std::vector<AstNodePtr> operands,
+              std::vector<std::pair<int, int>> op_positions)
+        : AstNode{row, col}, operands_{std::move(operands)}, op_positions_{std::move(op_positions)} {
     }
 
     [[nodiscard]] json to_json() const override {
@@ -203,12 +216,16 @@ struct AstNodeCompoundAssign : AstNode {
     AstNodePtr target_;
     AstNodeOpBinary::OpType op_;
     AstNodePtr value_;
+    // op= 这个运算符自己的位置（不同于 row_/col_，后者是整个赋值表达式的起始位置，即 target_ 的起始位置）
+    int op_row_, op_col_;
 
     AstNodeCompoundAssign(const int row, const int col,
                           AstNodePtr target,
                           const AstNodeOpBinary::OpType op,
-                          AstNodePtr value)
-        : AstNode{row, col}, target_{std::move(target)}, op_{op}, value_{std::move(value)} {
+                          AstNodePtr value,
+                          const int op_row, const int op_col)
+        : AstNode{row, col}, target_{std::move(target)}, op_{op}, value_{std::move(value)},
+          op_row_{op_row}, op_col_{op_col} {
     }
 
     [[nodiscard]] json to_json() const override {

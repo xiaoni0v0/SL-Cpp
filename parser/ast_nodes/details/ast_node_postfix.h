@@ -58,11 +58,15 @@ struct AstNodeIndex : AstNode {
 struct AstNodeAttr : AstNode {
     AstNodePtr object_;
     std::u32string attr_;
+    // '.' 自己的位置
+    int dot_row_, dot_col_;
 
     AstNodeAttr(const int row, const int col,
                 AstNodePtr object,
-                std::u32string attr)
-        : AstNode{row, col}, object_{std::move(object)}, attr_{std::move(attr)} {
+                std::u32string attr,
+                const int dot_row, const int dot_col)
+        : AstNode{row, col}, object_{std::move(object)}, attr_{std::move(attr)},
+          dot_row_{dot_row}, dot_col_{dot_col} {
     }
 
     [[nodiscard]] json to_json() const override {
