@@ -34,8 +34,6 @@ add_executable(SL_Cpp main.cpp
         builtins/classes/exceptions/EncodingError.h
         builtins/classes/exceptions/FileNotFoundError.h
 
-        # Interpreter
-
         # Parser
         parser/Parser.cpp
         parser/Parser.h
