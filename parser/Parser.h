@@ -60,16 +60,14 @@ class Parser {
 
     /**
      * 解析 if / while / for 中间槽的条件表达式：
-     * 禁止裸的普通赋值 =（避免 if (x = y) 这种大概率是 == 手误的写法），
-     * 若确实想在条件里赋值，需显式再套一层括号，如 if ((x = y))；
-     * 复合赋值（+= 等）没有 “= 和 == 相混淆” 的手误风险，允许裸写，不受此限制
+     * 禁止裸的普通赋值 =
      * @return 节点
      */
     AstNodePtr parse_cond();
 
     /**
      * 解析一个无运算符的表达式
-     * 不依赖左侧值（字面量、标识符、控制流、前缀运算符等）
+     * 不依赖左侧值
      * @return 节点
      */
     AstNodePtr parse_non_op();
@@ -96,17 +94,17 @@ class Parser {
     AstNodePtr parse_return();
     // raise
     AstNodePtr parse_raise();
-    // 函数；decorators 是已经解析好、紧邻在 func 前面的前缀装饰器（属于函数表达式自己的语法，2.2.6），
-    // decorator_positions 是每个装饰器自己 '@' 的位置，跟 decorators 一一对应
-    // deco_pos：decorators 非空时，是第一个 '@' 的位置，作为整个节点的起始位置（decorators_ 也是
-    // 这个节点自己的字段，节点的"开始的行和列"理应从装饰器算起）；decorators 为空时忽略，节点用 func 自身位置
-    AstNodePtr parse_func(std::vector<AstNodePtr> decorators = {}, std::vector<Position> decorator_positions = {},
+    // 函数
+    // decorators 是已经解析好、紧邻在 func 前面的前缀装饰器
+    AstNodePtr parse_func(std::vector<AstNodePtr> decorators = {},
+                          std::vector<Position> decorator_positions = {},
                           Position deco_pos = {});
-    // 类；decorators/decorator_positions/deco_pos 同上（2.2.7）
-    AstNodePtr parse_class(std::vector<AstNodePtr> decorators = {}, std::vector<Position> decorator_positions = {},
+    // 类
+    AstNodePtr parse_class(std::vector<AstNodePtr> decorators = {},
+                           std::vector<Position> decorator_positions = {},
                            Position deco_pos = {});
-    // 装饰器：先收集连续的前缀 @decorator，再看紧跟的是 func/class（挂到对应节点的 decorators_ 上）
-    // 还是任意表达式（通用形式 2.2.8，包成 AstNodeDecorator 链）
+    // 装饰器
+    // 先收集连续的前缀 @decorator，再看紧跟的是 func/class 还是任意表达式
     AstNodePtr parse_decorator();
 
     // '(' 已消耗、paren_depth_ 已自增后调用；paren_pos 是这个 '(' 自己的位置
