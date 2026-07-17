@@ -769,6 +769,13 @@ AstNodePtr Parser::parse_for() {
                 error("expected ';' or newline to separate the expressions in a for header");
             }
             skip_newline();
+
+            // 换行分隔（不是显式 ';'）之后如果直接是 ')'，说明后面这一槽整个是空的——
+            // SL.md 2.2.5.2 规定"若某个槽为空，则必须使用 ';'"，光凭换行判不出"这一槽是故意留空"
+            // 还是"用户没写完就把括号关了"，所以这种写法不能接受，必须显式补一个 ';'
+            if (check(TokenType::SIGN_RPAREN)) {
+                error("an empty slot in a for header must be marked with ';', a newline alone is not enough");
+            }
         }
     };
 

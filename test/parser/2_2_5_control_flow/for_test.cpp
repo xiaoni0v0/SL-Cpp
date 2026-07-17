@@ -100,6 +100,26 @@ TEST_CASE("槽之间缺分隔符报错") {
     CHECK_THROWS_AS(parse_program(U"for (i = 0 i < 10; i += 1) body"), SyntaxError);
 }
 
+TEST_CASE("换行不能替代 ';' 来标记空槽：只写两个换行分隔的槽就直接收尾必须报错，"
+    "不能把第三槽悄悄当成空的接受掉") {
+    // for(a\nb\n) {} —— a、b 两个槽之间确实是合法的换行分隔，
+    // 但 b 后面只有一个换行就直接是 ')'，第三槽（inc）既没写内容也没有显式 ';'，
+    // 不能被默认接受成"inc 为空"（SL.md 2.2.5.2：空槽必须显式用 ';'）
+    CHECK_THROWS_AS(parse_program(U"for (a\nb\n) body"), SyntaxError);
+    // 退化到只有一个槽的情况同理：换行之后直接收尾，不能被当成"只写了 init，cond/inc 隐式为空"
+    CHECK_THROWS_AS(parse_program(U"for (a\n) body"), SyntaxError);
+    // 前面的槽用显式 ';' 标记为空，不代表后面的槽也能只凭换行标记为空——
+    // init 用 ';' 正确标空，但 inc 只有换行、没有显式 ';'，同样要报错
+    CHECK_THROWS_AS(parse_program(U"for (; c\n) body"), SyntaxError);
+}
+
+TEST_CASE("换行 + 换行分隔的空槽必须紧跟着显式 ';' 才行：加上分号就恢复合法") {
+    CHECK(parse_json(U"for (a\nb\n;) body") == nlohmann::json{
+          {"type", "ForCond"}, {"collect", false}, {"init", ident("a")}, {"cond", ident("b")},
+          {"inc", nullptr}, {"body", ident("body")}
+          });
+}
+
 TEST_CASE("for () 彻底为空报错，提示改用 for (;;) 或 while (cond)") {
     CHECK_THROWS_AS(parse_program(U"for () body"), SyntaxError);
 }
