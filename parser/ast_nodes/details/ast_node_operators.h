@@ -81,7 +81,7 @@ struct AstNodeOpUnary : AstNode {
     }
 };
 
-// 二元运算符：+  -  *  /  //  %  **  &  |  ^  <<  >>  and  or  ..（比较运算符见 AstNodeCompare）
+// 二元运算符：+  -  *  /  //  %  **  &  |  ^  <<  >>  and  or  ..
 struct AstNodeOpBinary : AstNode {
     enum class OpType {
         // 算术

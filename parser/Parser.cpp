@@ -27,7 +27,7 @@ static AstNodeOpUnary::OpType token_type_to_unary_op_type(const TokenType t) {
     }
 }
 
-// token 类型转换为二元运算符类型（不含比较运算符，见 token_type_to_compare_op_type）
+// token 类型转换为二元运算符类型（不含比较运算符）
 static AstNodeOpBinary::OpType token_type_to_binary_op_type(const TokenType t) {
     switch (t) {
     // @formatter:off
@@ -52,7 +52,7 @@ static AstNodeOpBinary::OpType token_type_to_binary_op_type(const TokenType t) {
     }
 }
 
-// 是否是比较组（== != < <= > >=）的运算符 token；is 不属于这一组，也不共用 AstNodeCompare，见 AstNodeIs
+// 是否是比较组（== != < <= > >=）的运算符 token
 static bool is_compare_op(const TokenType t) {
     switch (t) {
     case TokenType::SIGN_LT:
@@ -103,7 +103,7 @@ static std::pair<int, int> infix_bp(const TokenType type) {
     case TokenType::SIGN_AMPERSAND:  return {90, 91}; // &
     case TokenType::SIGN_CARET:      return {80, 81}; // ^
     case TokenType::SIGN_PIPE:       return {70, 71}; // |
-    // < <= > >= == !=（链式比较，见 parse_compare_chain；rbp 未被使用，链内自行控制操作数的 min_bp）
+    // < <= > >= == !=（链式比较；rbp 未被使用，链内自行控制操作数的 min_bp）
     case TokenType::SIGN_LT:
     case TokenType::SIGN_LE:
     case TokenType::SIGN_GT:
