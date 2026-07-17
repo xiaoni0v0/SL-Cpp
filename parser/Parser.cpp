@@ -200,8 +200,8 @@ bool Parser::check_over_newline(const TokenType type) const {
 const Token &Parser::expect(const TokenType expected_type) {
     if (const Token &token{peek()}; token.type != expected_type) {
         error(std::format("expected {} but got {}",
-                          Lexer::get_typename_by_tokentype(expected_type),
-                          Lexer::get_typename_by_tokentype(token.type)),
+                          Lexer::get_displayname_by_tokentype(expected_type),
+                          Lexer::get_displayname_by_tokentype(token.type)),
               Position{token.row, token.col});
     }
     return advance();

@@ -69,12 +69,37 @@ TEST_CASE("未闭合字符串（到 EOF 都没有匹配的引号）报 SyntaxErr
     CHECK_THROWS_AS(lex(U"'abc"), SyntaxError);
 }
 
-TEST_CASE("反斜杠在字符串结尾、后面直接 EOF 报错") {
-    CHECK_THROWS_AS(lex(U"\"abc\\"), SyntaxError);
+TEST_CASE("反斜杠在字符串结尾、后面直接 EOF 报错，消息说明是转义序列未完整结束，且指向反斜杠自己的列") {
+    try {
+        lex(U"\"abc\\"); // "=col1 a=2 b=3 c=4 \=5，反斜杠在第 5 列
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("unterminated") != std::string::npos);
+        CHECK(msg.find("escape") != std::string::npos);
+        CHECK(msg.find(":1:5:") != std::string::npos);
+    }
 }
 
-TEST_CASE("反斜杠后紧跟换行也报错（不允许用反斜杠续行）") {
-    CHECK_THROWS_AS(lex(U"\"abc\\\ndef\""), SyntaxError);
+TEST_CASE("未知转义序列报错的列指向反斜杠自己，不是后面那个字符") {
+    try {
+        lex(U"\"\\q\""); // "=col1 \=2 q=3，反斜杠在第 2 列
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find(":1:2:") != std::string::npos);
+    }
+}
+
+TEST_CASE("反斜杠后紧跟换行也报错（不允许用反斜杠续行），同一条消息") {
+    try {
+        lex(U"\"abc\\\ndef\"");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("unterminated") != std::string::npos);
+        CHECK(msg.find("escape") != std::string::npos);
+    }
 }
 
 TEST_CASE("字符串前后可以正常和其他 token 组合") {

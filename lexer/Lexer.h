@@ -59,9 +59,16 @@ public:
     std::vector<Token> tokenize() &&;
 
     /**
-     * 获取 token 类型的字符串表示
+     * TokenType::SIGN_LPAREN -> "SIGN_LPAREN"
      * @param type token 类型
      * @return     token 类型的字符串表示
      */
     static std::string get_typename_by_tokentype(TokenType type);
+
+    /**
+     * TokenType::SIGN_LPAREN -> "("
+     * @param type token 类型
+     * @return     token 类型的用户可读名称
+     */
+    static std::string get_displayname_by_tokentype(TokenType type);
 };

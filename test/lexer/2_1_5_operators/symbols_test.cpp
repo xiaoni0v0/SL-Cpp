@@ -127,4 +127,15 @@ TEST_CASE("完全不认识的字符报 SyntaxError") {
     CHECK_THROWS_AS(lex(U"\\"), SyntaxError); // 裸反斜杠，不在任何符号表里
 }
 
+TEST_CASE("报错的行列指向那个字符本身，不是行首") {
+    const std::u32string src{U'a', U' ', static_cast<char32_t>(0x20AC)}; // "a €"，€ 在第 3 列
+    try {
+        lex(src);
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find(":1:3:") != std::string::npos);
+    }
+}
+
 }

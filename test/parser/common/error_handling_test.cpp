@@ -37,6 +37,19 @@ TEST_CASE("报错行列指向出问题的具体位置，不是文件开头") {
     }
 }
 
+TEST_CASE("expect() 报错信息用用户可读的 token 名字，不泄漏内部枚举名") {
+    try {
+        parse_program(U"if a) b"); // 缺左括号：期望 '(' 实际是标识符 a
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("'('") != std::string::npos);
+        CHECK(msg.find("an identifier") != std::string::npos);
+        CHECK(msg.find("SIGN_LPAREN") == std::string::npos);
+        CHECK(msg.find("IDENTIFIER") == std::string::npos);
+    }
+}
+
 TEST_CASE("汇总：各类会触发 SyntaxError 的场景（分散测试过的，这里过一遍总览，确认互不干扰）") {
     CHECK_THROWS_AS(parse_program(U"1."), SyntaxError); // 属性访问缺属性名
     CHECK_THROWS_AS(parse_program(U"(1, 2"), SyntaxError); // 未闭合的元组

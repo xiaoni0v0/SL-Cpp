@@ -93,13 +93,15 @@ Token Lexer::read_string(const char32_t quote) {
 
         // 转义字符
         if (c == U'\\') {
-            if (is_eof() || peek() == U'\n') error("unexpected end of string escape", row_, col_ - 1);
+            const int esc_row{row_}, esc_col{col_ - 1}; // 反斜杠自己的位置
+
+            if (is_eof() || peek() == U'\n') error("unterminated escape sequence in string literal", esc_row, esc_col);
 
             const char32_t esc{advance()};
             if (const auto it{ESCAPE_CHAR_MAPPING.find(esc)}; it != ESCAPE_CHAR_MAPPING.end()) {
                 str_literal += it->second;
             } else {
-                error(std::format("unknown escape sequence '\\{}'", u32_to_utf8(esc)), row_, col_ - 2);
+                error(std::format("unknown escape sequence '\\{}'", u32_to_utf8(esc)), esc_row, esc_col);
             }
         } else {
             str_literal += c;
@@ -315,7 +317,7 @@ Token Lexer::read_symbol() {
         }
     }
 
-    default: error(std::format("unexpected character '{}'", u32_to_utf8(c)), row_, col_ - 1);
+    default: error(std::format("unexpected character '{}'", u32_to_utf8(c)), start_row, start_col);
     }
 }
 
@@ -364,7 +366,6 @@ std::vector<Token> Lexer::tokenize() && {
 }
 
 std::string Lexer::get_typename_by_tokentype(const TokenType type) {
-    // 工具：Token 类型到字符串的映射
     static constexpr const char *const TOKEN_TYPE_MAPPING[]{
 #define X(name) #name,
 #include "x_token_type.h"
@@ -376,4 +377,116 @@ std::string Lexer::get_typename_by_tokentype(const TokenType type) {
         len{std::size(TOKEN_TYPE_MAPPING)};
     if (ind >= len) return "<unknown token type>";
     return TOKEN_TYPE_MAPPING[ind];
+}
+
+std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
+    switch (type) {
+    // @formatter:off
+    case TokenType::LITERAL_NONE:            return "'None'";
+    case TokenType::LITERAL_TRUE:            return "'True'";
+    case TokenType::LITERAL_FALSE:           return "'False'";
+    case TokenType::LITERAL_G:               return "'_G'";
+    case TokenType::LITERAL_L:               return "'_L'";
+    case TokenType::LITERAL_ELLIPSIS:        return "'...'";
+    case TokenType::LITERAL_INT:             return "an integer literal";
+    case TokenType::LITERAL_FLOAT:           return "a float literal";
+    case TokenType::LITERAL_STR:             return "a string literal";
+
+    case TokenType::IDENTIFIER:              return "an identifier";
+
+    case TokenType::KW_NOT:                  return "'not'";
+    case TokenType::KW_AND:                  return "'and'";
+    case TokenType::KW_OR:                   return "'or'";
+    case TokenType::KW_IS:                   return "'is'";
+    case TokenType::KW_DEL:                  return "'del'";
+    case TokenType::KW_GLOBAL:               return "'global'";
+    case TokenType::KW_IF:                   return "'if'";
+    case TokenType::KW_ELIF:                 return "'elif'";
+    case TokenType::KW_ELSE:                 return "'else'";
+    case TokenType::KW_FOR:                  return "'for'";
+    case TokenType::KW_WHILE:                return "'while'";
+    case TokenType::KW_BREAK:                return "'break'";
+    case TokenType::KW_CONTINUE:             return "'continue'";
+    case TokenType::KW_FUNC:                 return "'func'";
+    case TokenType::KW_RETURN:               return "'return'";
+    case TokenType::KW_RAISE:                return "'raise'";
+    case TokenType::KW_TRY:                  return "'try'";
+    case TokenType::KW_EXCEPT:               return "'except'";
+    case TokenType::KW_FINALLY:              return "'finally'";
+    case TokenType::KW_CLASS:                return "'class'";
+
+    case TokenType::RW_ASSERT:               return "'assert'";
+    case TokenType::RW_IN:                   return "'in'";
+    case TokenType::RW_WHEN:                 return "'when'";
+    case TokenType::RW_CASE:                 return "'case'";
+    case TokenType::RW_YIELD:                return "'yield'";
+    case TokenType::RW_WITH:                 return "'with'";
+    case TokenType::RW_ASYNC:                return "'async'";
+    case TokenType::RW_AWAIT:                return "'await'";
+    case TokenType::RW_DEFINE:               return "'define'";
+    case TokenType::RW_AS:                   return "'as'";
+    case TokenType::RW_CONST:                return "'const'";
+    case TokenType::RW_STATIC:               return "'static'";
+    case TokenType::RW_LOCAL:                return "'local'";
+
+    case TokenType::SIGN_LPAREN:             return "'('";
+    case TokenType::SIGN_RPAREN:             return "')'";
+    case TokenType::SIGN_LBRACKET:           return "'['";
+    case TokenType::SIGN_RBRACKET:           return "']'";
+    case TokenType::SIGN_LBRACE:             return "'{'";
+    case TokenType::SIGN_RBRACE:             return "'}'";
+
+    case TokenType::SIGN_COMMA:              return "','";
+    case TokenType::SIGN_SEMICOLON:          return "';'";
+    case TokenType::SIGN_COLON:              return "':'";
+    case TokenType::SIGN_AT:                 return "'@'";
+    case TokenType::SIGN_DOLLAR:             return "'$'";
+
+    case TokenType::SIGN_PLUS:               return "'+'";
+    case TokenType::SIGN_MINUS:              return "'-'";
+    case TokenType::SIGN_STAR:               return "'*'";
+    case TokenType::SIGN_DOUBLESTAR:         return "'**'";
+    case TokenType::SIGN_SLASH:              return "'/'";
+    case TokenType::SIGN_DOUBLESLASH:        return "'//'";
+    case TokenType::SIGN_PERCENT:            return "'%'";
+
+    case TokenType::SIGN_AMPERSAND:          return "'&'";
+    case TokenType::SIGN_PIPE:               return "'|'";
+    case TokenType::SIGN_CARET:              return "'^'";
+    case TokenType::SIGN_TILDE:              return "'~'";
+    case TokenType::SIGN_LSHIFT:             return "'<<'";
+    case TokenType::SIGN_RSHIFT:             return "'>>'";
+
+    case TokenType::SIGN_EQ:                 return "'=='";
+    case TokenType::SIGN_NE:                 return "'!='";
+    case TokenType::SIGN_LT:                 return "'<'";
+    case TokenType::SIGN_LE:                 return "'<='";
+    case TokenType::SIGN_GT:                 return "'>'";
+    case TokenType::SIGN_GE:                 return "'>='";
+
+    case TokenType::SIGN_ASSIGN:             return "'='";
+
+    case TokenType::SIGN_PLUS_ASSIGN:        return "'+='";
+    case TokenType::SIGN_MINUS_ASSIGN:       return "'-='";
+    case TokenType::SIGN_STAR_ASSIGN:        return "'*='";
+    case TokenType::SIGN_DOUBLESTAR_ASSIGN:  return "'**='";
+    case TokenType::SIGN_SLASH_ASSIGN:       return "'/='";
+    case TokenType::SIGN_DOUBLESLASH_ASSIGN: return "'//='";
+    case TokenType::SIGN_PERCENT_ASSIGN:     return "'%='";
+    case TokenType::SIGN_AMPERSAND_ASSIGN:   return "'&='";
+    case TokenType::SIGN_PIPE_ASSIGN:        return "'|='";
+    case TokenType::SIGN_CARET_ASSIGN:       return "'^='";
+    case TokenType::SIGN_LSHIFT_ASSIGN:      return "'<<='";
+    case TokenType::SIGN_RSHIFT_ASSIGN:      return "'>>='";
+
+    case TokenType::SIGN_DOT:                return "'.'";
+    case TokenType::SIGN_DOTDOT:             return "'..'";
+    case TokenType::SIGN_QUESTION:           return "'?'";
+    case TokenType::SIGN_EXCLAIM:            return "'!'";
+
+    case TokenType::NEWLINE:                 return "a newline";
+    case TokenType::END_OF_FILE:             return "end of file";
+    // @formatter:on
+    default: return "<unknown token type>";
+    }
 }
