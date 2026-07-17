@@ -45,13 +45,14 @@ TEST_CASE("d = e +\\nf：二元运算符只有左操作数，不完整，合并�
           });
 }
 
-TEST_CASE("x.\\nfunc()：'.' 只有左操作数，不完整，合并") {
-    CHECK(parse_program_json(U"x.\nfunc()") == nlohmann::json{
+TEST_CASE("x.\\nm()：'.' 只有左操作数，不完整，合并（SL.md 原例用的属性名是 func，"
+    "但 func 是关键字不能当属性名，这里换成 m）") {
+    CHECK(parse_program_json(U"x.\nm()") == nlohmann::json{
           {"type", "Program"}, {
           "exprs", nlohmann::json::array({
               {
               {"type", "Call"},
-              {"object", {{"type", "Attr"}, {"object", ident("x")}, {"attr", "func"}}},
+              {"object", {{"type", "Attr"}, {"object", ident("x")}, {"attr", "m"}}},
               {"args", nlohmann::json::array()}, {"kwargs", nlohmann::json::array()}
               }
               })
@@ -59,17 +60,17 @@ TEST_CASE("x.\\nfunc()：'.' 只有左操作数，不完整，合并") {
           });
 }
 
-TEST_CASE("x\\n.func()：第一行 x 已经是完整表达式，不合并；第二条以 '.' 开头解析失败，抛异常") {
-    CHECK_THROWS_AS(parse_program(U"x\n.func()"), SyntaxError);
+TEST_CASE("x\\n.m()：第一行 x 已经是完整表达式，不合并；第二条以 '.' 开头解析失败，抛异常") {
+    CHECK_THROWS_AS(parse_program(U"x\n.m()"), SyntaxError);
 }
 
-TEST_CASE("(x\\n.func()\\n)：括号未闭合，表达式不完整，持续合并直到收尾") {
-    CHECK(parse_program_json(U"(x\n.func()\n)") == nlohmann::json{
+TEST_CASE("(x\\n.m()\\n)：括号未闭合，表达式不完整，持续合并直到收尾") {
+    CHECK(parse_program_json(U"(x\n.m()\n)") == nlohmann::json{
           {"type", "Program"}, {
           "exprs", nlohmann::json::array({
               {
               {"type", "Call"},
-              {"object", {{"type", "Attr"}, {"object", ident("x")}, {"attr", "func"}}},
+              {"object", {{"type", "Attr"}, {"object", ident("x")}, {"attr", "m"}}},
               {"args", nlohmann::json::array()}, {"kwargs", nlohmann::json::array()}
               }
               })

@@ -123,7 +123,7 @@ TEST_CASE("展开项后面也支持尾逗号") {
           });
 }
 
-TEST_CASE("回归测试：第二项及以后既不是 ** 开头也没有冒号，必须报错（曾经的 bug：被静默当成合法展开项）") {
+TEST_CASE("第二项及以后既不是 ** 开头也没有冒号，必须报错，不能被静默当成合法展开项") {
     CHECK_THROWS_AS(parse_program(U"{k: v, x}"), SyntaxError);
     CHECK_THROWS_AS(parse_program(U"{k: v, x, y: z}"), SyntaxError);
 }
@@ -132,8 +132,7 @@ TEST_CASE("回归测试：第二项及以后既不是 ** 开头也没有冒号�
 
 TEST_SUITE("2.2.2 复合表达式内部也必须有合法分隔符") {
 
-TEST_CASE("回归测试：判别用的 first 和后续表达式之间没有分隔符必须报错，"
-    "跟顶层 a b 同一个错误（曾经的 bug：first 绕过了 parse_exprs 内部的终止符检查，被静默接受）") {
+TEST_CASE("判别用的 first 和后续表达式之间没有分隔符必须报错，跟顶层 a b 同一个错误") {
     CHECK_THROWS_AS(parse_program(U"{k v}"), SyntaxError);
     CHECK_THROWS_AS(parse_program(U"{a b; c}"), SyntaxError);
 }

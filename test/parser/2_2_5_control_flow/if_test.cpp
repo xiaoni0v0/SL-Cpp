@@ -1,5 +1,5 @@
 // SL.md 2.2.5.1 if 表达式：if (cond1) expr1 [elif (cond2) expr2 ...] [else expr3]
-// 重点覆盖本次会话新加的规则：cond 槽禁止裸的普通赋值 =（需要显式再套一层括号），但允许裸的复合赋值。
+// 重点覆盖：cond 槽禁止裸的普通赋值 =（需要显式再套一层括号），但允许裸的复合赋值。
 #include "../test_utils.h"
 #include "../../../builtins/classes/exceptions/SyntaxError.h"
 

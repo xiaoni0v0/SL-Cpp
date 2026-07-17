@@ -144,17 +144,19 @@ TEST_CASE("混合捕获，空捕获列表 []") {
 TEST_SUITE("2.2.6 func——返回类型/文档字符串") {
 
 TEST_CASE("返回类型") {
-    const auto j{parse_json(U"func f(): int {}")};
+    // 注意：用 = 而不是 auto j{...}——花括号初始化一个已经构造好的 json 对象，
+    // 会被当成"用这一个元素构造数组"，而不是拷贝这个对象本身
+    const auto j = parse_json(U"func f(): int {}");
     CHECK(j["return_type"] == ident("int"));
 }
 
 TEST_CASE("文档字符串（紧跟在形参/返回类型之后，函数体之前，没有冒号等前缀）") {
-    const auto j{parse_json(U"func f() 'doc' {}")};
+    const auto j = parse_json(U"func f() 'doc' {}");
     CHECK(j["doc"] == nlohmann::json{{"type", "LiteralStr"}, {"value", "doc"}});
 }
 
 TEST_CASE("返回类型和文档字符串同时出现") {
-    const auto j{parse_json(U"func f(): int 'doc' {}")};
+    const auto j = parse_json(U"func f(): int 'doc' {}");
     CHECK(j["return_type"] == ident("int"));
     CHECK(j["doc"] == nlohmann::json{{"type", "LiteralStr"}, {"value", "doc"}});
 }

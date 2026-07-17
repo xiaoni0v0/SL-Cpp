@@ -94,12 +94,15 @@ TEST_CASE("单元素元组必须有尾逗号 (1,)") {
 }
 
 TEST_CASE("多元素元组，尾逗号可选") {
-    const auto expected{nlohmann::json::parse(
+    // 注意：这里必须用 = 而不是 nlohmann::json expected{...}——花括号初始化遇到"唯一的初始化项
+    // 本身已经是个 json 对象"时，会被 nlohmann 的构造函数当成"用一个元素构造数组"，
+    // 而不是拷贝这个对象本身，得到的会是包了一层数组的错误结果
+    const nlohmann::json expected = nlohmann::json::parse(
         R"({"type":"LiteralTuple","items":[
             {"type":"LiteralInt","raw":"1"},
             {"type":"LiteralInt","raw":"2"},
             {"type":"LiteralInt","raw":"3"}
-        ]})")};
+        ]})");
     CHECK(parse_json(U"(1, 2, 3)") == expected);
     CHECK(parse_json(U"(1, 2, 3,)") == expected);
 }
@@ -138,12 +141,12 @@ TEST_CASE("单元素列表不需要尾逗号") {
 }
 
 TEST_CASE("多元素列表，尾逗号可选") {
-    const auto expected{nlohmann::json::parse(
+    const nlohmann::json expected = nlohmann::json::parse(
         R"({"type":"LiteralList","items":[
             {"type":"LiteralInt","raw":"1"},
             {"type":"LiteralInt","raw":"2"},
             {"type":"LiteralInt","raw":"3"}
-        ]})")};
+        ]})");
     CHECK(parse_json(U"[1, 2, 3]") == expected);
     CHECK(parse_json(U"[1, 2, 3,]") == expected);
 }

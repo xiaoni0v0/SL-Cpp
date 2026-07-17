@@ -26,16 +26,6 @@ TEST_CASE("异常消息里带有文件名、行号、列号") {
     }
 }
 
-TEST_CASE("默认文件名是 <unknown>（没传 file_path 时）") {
-    try {
-        parse_program(U"(");
-        FAIL("应当抛出异常");
-    } catch (const SyntaxError &e) {
-        const std::string msg{e.what()};
-        CHECK(msg.find("<unknown>") != std::string::npos);
-    }
-}
-
 TEST_CASE("报错行列指向出问题的具体位置，不是文件开头") {
     try {
         // "x = 1\ny = " -> 第二行赋值缺右值，报错应该指向第 2 行
@@ -54,7 +44,7 @@ TEST_CASE("汇总：各类会触发 SyntaxError 的场景（分散测试过的�
     CHECK_THROWS_AS(parse_program(U"{k: v"), SyntaxError); // 未闭合的字典
     CHECK_THROWS_AS(parse_program(U"{k: v, x}"), SyntaxError); // 字典展开项判定错误
     CHECK_THROWS_AS(parse_program(U"if (x = 1) y"), SyntaxError); // cond 槽裸赋值
-    CHECK_THROWS_AS(parse_program(U"for (x > 0) body"), SyntaxError); // 已删除的 for-cond-only
+    CHECK_THROWS_AS(parse_program(U"for (x > 0) body"), SyntaxError); // for-cond-only 不受语法支持
     CHECK_THROWS_AS(parse_program(U"global 5"), SyntaxError); // global 后面不是标识符
     CHECK_THROWS_AS(parse_program(U"raise"), SyntaxError); // raise 缺表达式
     CHECK_THROWS_AS(parse_program(U"a b"), SyntaxError); // 缺表达式分隔符

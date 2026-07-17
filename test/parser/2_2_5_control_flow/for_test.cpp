@@ -1,7 +1,7 @@
 // SL.md 2.2.5.2 for 表达式：
 //   步进模式 for [$] (init cond inc) expr；迭代模式 for [$] (lvalue : iterable) expr。
-// 本次会话相关改动，这里重点覆盖：
-//   1. 曾经存在、但从未被 SL.md 授权的"裸单表达式当条件" for (cond) body 分支已删除，现在必须报错；
+// 这里重点覆盖：
+//   1. "裸单表达式当条件" for (cond) body 不是 SL.md 授权的语法，必须报错；
 //   2. 中间 cond 槽禁止裸的普通赋值 =（init/inc 不受限）；
 //   3. for () 彻底为空时的专门报错。
 #include "../test_utils.h"
@@ -104,7 +104,7 @@ TEST_CASE("for () 彻底为空报错，提示改用 for (;;) 或 while (cond)") 
     CHECK_THROWS_AS(parse_program(U"for () body"), SyntaxError);
 }
 
-TEST_CASE("裸单表达式当条件已不再支持（未被 SL.md 授权的旧分支，已删除）：for (cond) body 必须报错") {
+TEST_CASE("裸单表达式当条件不受语法支持（未被 SL.md 授权）：for (cond) body 必须报错") {
     CHECK_THROWS_AS(parse_program(U"for (x > 0) body"), SyntaxError);
     CHECK_THROWS_AS(parse_program(U"for $ (x > 0) body"), SyntaxError);
 }

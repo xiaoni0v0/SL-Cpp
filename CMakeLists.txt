@@ -116,7 +116,7 @@ target_link_libraries(SL_Cpp PRIVATE nlohmann_json::nlohmann_json cxxopts::cxxop
 
 enable_testing()
 
-add_executable(SL_Cpp_Tests
+add_executable(SL_Cpp_Lexer_Tests
         # 被测代码
         lexer/Lexer.cpp
         lexer/Lexer.h
@@ -155,10 +155,10 @@ add_executable(SL_Cpp_Tests
         test/lexer/common/error_handling_test.cpp
 )
 
-target_compile_options(SL_Cpp_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
-target_link_libraries(SL_Cpp_Tests PRIVATE doctest::doctest)
+target_compile_options(SL_Cpp_Lexer_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
+target_link_libraries(SL_Cpp_Lexer_Tests PRIVATE doctest::doctest)
 
-add_test(NAME SL_Cpp_Tests COMMAND SL_Cpp_Tests)
+add_test(NAME SL_Cpp_Lexer_Tests COMMAND SL_Cpp_Lexer_Tests)
 
 add_executable(SL_Cpp_Parser_Tests
         # 被测代码

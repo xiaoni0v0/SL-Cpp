@@ -1,4 +1,4 @@
-// 跨章节：本次会话新增的 Position 相关字段是否记录正确。
+// 跨章节：AST 节点里 Position 相关字段是否记录正确。
 // AstNode::to_json() 不序列化位置信息（纯结构性 dump），所以这里全部直接 dynamic_cast 取字段断言，
 // 不走 parse_json()。列号从 1 开始（跟 lexer 的 test/lexer/common/position_tracking_test.cpp 一致）。
 #include "../test_utils.h"
