@@ -12,7 +12,7 @@
 #include <ranges>
 
 // token 类型转换为一元运算符类型
-static AstNodeOpUnary::OpType token_type_to_unary_op_type(const TokenType t) {
+static std::optional<AstNodeOpUnary::OpType> token_type_to_unary_op_type(const TokenType t) {
     switch (t) {
     // @formatter:off
     case TokenType::SIGN_PLUS:     return AstNodeOpUnary::OpType::Pos;
@@ -22,13 +22,12 @@ static AstNodeOpUnary::OpType token_type_to_unary_op_type(const TokenType t) {
     case TokenType::SIGN_QUESTION: return AstNodeOpUnary::OpType::Question;
     case TokenType::SIGN_EXCLAIM:  return AstNodeOpUnary::OpType::Exclaim;
     // @formatter:on
-    default:
-        assert(false && "not a unary op token");
+    default: return std::nullopt;
     }
 }
 
 // token 类型转换为二元运算符类型（不含比较运算符）
-static AstNodeOpBinary::OpType token_type_to_binary_op_type(const TokenType t) {
+static std::optional<AstNodeOpBinary::OpType> token_type_to_binary_op_type(const TokenType t) {
     switch (t) {
     // @formatter:off
     case TokenType::SIGN_PLUS:        return AstNodeOpBinary::OpType::Add;
@@ -47,26 +46,12 @@ static AstNodeOpBinary::OpType token_type_to_binary_op_type(const TokenType t) {
     case TokenType::KW_OR:            return AstNodeOpBinary::OpType::Or;
     case TokenType::SIGN_DOTDOT:      return AstNodeOpBinary::OpType::Range;
     // @formatter:on
-    default:
-        assert(false && "not a binary op token");
+    default: return std::nullopt;
     }
 }
 
-// 是否是比较组（== != < <= > >=）的运算符 token
-static bool is_compare_op(const TokenType t) {
-    switch (t) {
-    case TokenType::SIGN_LT:
-    case TokenType::SIGN_LE:
-    case TokenType::SIGN_GT:
-    case TokenType::SIGN_GE:
-    case TokenType::SIGN_EQ:
-    case TokenType::SIGN_NE: return true;
-    default: return false;
-    }
-}
-
-// token 类型转换为比较运算类型
-static AstNodeCompare::OpType token_type_to_compare_op_type(const TokenType t) {
+// token 类型是否属于比较组（== != < <= > >=），是则转换成对应的 AstNodeCompare::OpType，否则 nullopt
+static std::optional<AstNodeCompare::OpType> token_type_to_compare_op_type(const TokenType t) {
     switch (t) {
     case TokenType::SIGN_LT: return AstNodeCompare::OpType::Lt;
     case TokenType::SIGN_LE: return AstNodeCompare::OpType::Le;
@@ -74,8 +59,7 @@ static AstNodeCompare::OpType token_type_to_compare_op_type(const TokenType t) {
     case TokenType::SIGN_GE: return AstNodeCompare::OpType::Ge;
     case TokenType::SIGN_EQ: return AstNodeCompare::OpType::Eq;
     case TokenType::SIGN_NE: return AstNodeCompare::OpType::Ne;
-    default:
-        assert(false && "not a compare op token");
+    default: return std::nullopt;
     }
 }
 
@@ -132,28 +116,8 @@ static std::pair<int, int> infix_bp(const TokenType type) {
     }
 }
 
-// 返回是否是赋值运算符
-static bool is_assign_op(const TokenType type) {
-    switch (type) {
-    case TokenType::SIGN_ASSIGN:
-    case TokenType::SIGN_PLUS_ASSIGN:
-    case TokenType::SIGN_MINUS_ASSIGN:
-    case TokenType::SIGN_STAR_ASSIGN:
-    case TokenType::SIGN_DOUBLESTAR_ASSIGN:
-    case TokenType::SIGN_SLASH_ASSIGN:
-    case TokenType::SIGN_DOUBLESLASH_ASSIGN:
-    case TokenType::SIGN_PERCENT_ASSIGN:
-    case TokenType::SIGN_AMPERSAND_ASSIGN:
-    case TokenType::SIGN_PIPE_ASSIGN:
-    case TokenType::SIGN_CARET_ASSIGN:
-    case TokenType::SIGN_LSHIFT_ASSIGN:
-    case TokenType::SIGN_RSHIFT_ASSIGN: return true;
-    default: return false;
-    }
-}
-
-// 复合赋值 op= 对应的二元运算符
-static AstNodeOpBinary::OpType assign_compound_to_binary(const TokenType op) {
+// token 类型是否是复合赋值 op=，是则转换成对应的二元运算符，否则 nullopt
+static std::optional<AstNodeOpBinary::OpType> assign_compound_to_binary(const TokenType op) {
     switch (op) {
     // @formatter:off
     case TokenType::SIGN_PLUS_ASSIGN:        return AstNodeOpBinary::OpType::Add;
@@ -169,8 +133,7 @@ static AstNodeOpBinary::OpType assign_compound_to_binary(const TokenType op) {
     case TokenType::SIGN_LSHIFT_ASSIGN:      return AstNodeOpBinary::OpType::LShift;
     case TokenType::SIGN_RSHIFT_ASSIGN:      return AstNodeOpBinary::OpType::RShift;
     // @formatter:on
-    default:
-        assert(false && "not a compound assign op");
+    default: return std::nullopt;
     }
 }
 
@@ -179,7 +142,6 @@ const Token &Parser::peek() const {
 }
 
 const Token &Parser::advance() {
-    assert(pos_ < tokens_.size());
     return tokens_[pos_++];
 }
 
@@ -296,10 +258,10 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         }
 
         // 复合赋值 x op= y
-        if (is_assign_op(op)) {
+        if (const auto compound_op{assign_compound_to_binary(op)}) {
             skip_newline();
             return std::make_unique<AstNodeCompoundAssign>(
-                start_pos, std::move(left), assign_compound_to_binary(op), parse_expr_pratt(rbp), op_pos
+                start_pos, std::move(left), *compound_op, parse_expr_pratt(rbp), op_pos
                 );
         }
 
@@ -307,7 +269,7 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         // op_pos 是运算符自己的位置，另外单独记）
         if (op == TokenType::SIGN_QUESTION || op == TokenType::SIGN_EXCLAIM) {
             left = std::make_unique<AstNodeOpUnary>(
-                start_pos, token_type_to_unary_op_type(op), std::move(left), op_pos
+                start_pos, *token_type_to_unary_op_type(op), std::move(left), op_pos
                 );
             continue;
         }
@@ -336,8 +298,8 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         }
 
         // 比较运算（链式）：== != < <= > >= 一组，用 AstNodeCompare
-        if (is_compare_op(op)) {
-            left = parse_compare_chain(std::move(left), start_pos, op, op_pos);
+        if (const auto compare_op{token_type_to_compare_op_type(op)}) {
+            left = parse_compare_chain(std::move(left), start_pos, *compare_op, op_pos);
             continue;
         }
 
@@ -350,7 +312,7 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         // 普通二元运算符（运算符在行尾时右侧可换行；节点位置取左操作数的起始位置，op_pos 才是运算符自己的位置）
         skip_newline();
         left = std::make_unique<AstNodeOpBinary>(
-            start_pos, token_type_to_binary_op_type(op), std::move(left), parse_expr_pratt(rbp), op_pos
+            start_pos, *token_type_to_binary_op_type(op), std::move(left), parse_expr_pratt(rbp), op_pos
             );
     }
 
@@ -364,20 +326,20 @@ AstNodePtr Parser::parse_cond() {
 
     skip_paren_newline();
 
-    if (is_assign_op(peek().type)) {
-        if (peek().type == TokenType::SIGN_ASSIGN) {
-            error("bare assignment '=' is not allowed directly in a condition "
-                  "(did you mean '=='? wrap it in an extra pair of parentheses if intentional, e.g. `if ((x = y))`)",
-                  Position{peek().row, peek().col});
-        }
+    if (peek().type == TokenType::SIGN_ASSIGN) {
+        error("bare assignment '=' is not allowed directly in a condition "
+              "(did you mean '=='? wrap it in an extra pair of parentheses if intentional, e.g. `if ((x = y))`)",
+              Position{peek().row, peek().col});
+    }
 
-        // 复合赋值 x op= y：没有 = 和 == 混淆的手误风险，允许裸写
+    // 复合赋值 x op= y：没有 = 和 == 混淆的手误风险，允许裸写
+    if (const auto compound_op{assign_compound_to_binary(peek().type)}) {
         const auto &[op, op_row, op_col, lexeme]{advance()};
         const Position op_pos{op_row, op_col};
         const int rbp{infix_bp(op).second};
         skip_newline();
         left = std::make_unique<AstNodeCompoundAssign>(
-            start_pos, std::move(left), assign_compound_to_binary(op), parse_expr_pratt(rbp), op_pos
+            start_pos, std::move(left), *compound_op, parse_expr_pratt(rbp), op_pos
             );
     }
 
@@ -385,8 +347,9 @@ AstNodePtr Parser::parse_cond() {
 }
 
 AstNodePtr Parser::parse_compare_chain(AstNodePtr left, const Position start_pos,
-                                       const TokenType first_op, const Position first_op_pos) {
-    // first_op 已经被消耗（由调用处的 parse_expr_pratt 主循环 advance），属于比较组（< <= > >= == !=）
+                                       const AstNodeCompare::OpType first_op, const Position first_op_pos) {
+    // first_op 对应的 token 已经被消耗（由调用处的 parse_expr_pratt 主循环 advance），属于比较组
+    // （< <= > >= == !=），调用处已经用 token_type_to_compare_op_type 转换过
     // 后续操作数用"比较组优先级 60 + 1"解析，防止同组递归吞并（链式循环自己处理连续项）
     constexpr int operand_min_bp{61};
 
@@ -395,7 +358,7 @@ AstNodePtr Parser::parse_compare_chain(AstNodePtr left, const Position start_pos
     std::vector<Position> op_positions;
 
     operands.push_back(std::move(left));
-    ops.push_back(token_type_to_compare_op_type(first_op));
+    ops.push_back(first_op);
     op_positions.push_back(first_op_pos);
 
     skip_newline();
@@ -403,11 +366,12 @@ AstNodePtr Parser::parse_compare_chain(AstNodePtr left, const Position start_pos
 
     while (true) {
         skip_paren_newline();
-        if (!is_compare_op(peek().type)) break;
+        const auto next_op{token_type_to_compare_op_type(peek().type)};
+        if (!next_op) break;
 
         const Position next_op_pos{peek().row, peek().col};
-        const TokenType next_op{advance().type}; // 消耗运算符
-        ops.push_back(token_type_to_compare_op_type(next_op));
+        advance(); // 消耗运算符
+        ops.push_back(*next_op);
         op_positions.push_back(next_op_pos);
         skip_newline();
         operands.push_back(parse_expr_pratt(operand_min_bp));
@@ -492,7 +456,7 @@ AstNodePtr Parser::parse_non_op() {
         // 单目优先级 140
         const TokenType token_type{advance().type};
         return std::make_unique<AstNodeOpUnary>(
-            pos, token_type_to_unary_op_type(token_type), parse_expr_pratt(140), pos
+            pos, *token_type_to_unary_op_type(token_type), parse_expr_pratt(140), pos
             );
     }
     case TokenType::KW_NOT:

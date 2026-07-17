@@ -124,9 +124,11 @@ class Parser {
     // '(' 已消耗、paren_depth_ 已自增后调用，解析到并消耗 ')'（基类列表，仅位置参数）
     std::vector<AstNodePtr> finish_class_bases();
 
-    // 链式比较（< <= > >= == !=）：left 已解析完毕，first_op 是刚 advance 掉的第一个比较运算符 token，
+    // 链式比较（< <= > >= == !=）：left 已解析完毕，first_op 是刚 advance 掉的第一个比较运算符
+    // 对应的 AstNodeCompare::OpType（调用处已经用 token_type_to_compare_op_type 转换过），
     // first_op_pos 是这个运算符自己的位置（存进 AstNodeCompare::op_positions_）
-    AstNodePtr parse_compare_chain(AstNodePtr left, Position start_pos, TokenType first_op, Position first_op_pos);
+    AstNodePtr parse_compare_chain(AstNodePtr left, Position start_pos, AstNodeCompare::OpType first_op,
+                                   Position first_op_pos);
     // 链式 is：left 已解析完毕，第一个 'is' 已被 advance 掉；is 不可重载，不与上面共用 AstNodeCompare
     // first_is_pos 是第一个 'is' 自己的位置（存进 AstNodeIs::op_positions_）
     AstNodePtr parse_is_chain(AstNodePtr left, Position start_pos, Position first_is_pos);
