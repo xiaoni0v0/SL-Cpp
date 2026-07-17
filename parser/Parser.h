@@ -34,15 +34,15 @@ class Parser {
     [[noreturn]] void error(const std::string &msg) const;
     [[noreturn]] void error(const std::string &msg, Position pos) const;
 
+    // 检查当前位置是不是一条表达式合法的终止符（换行、';'、EOF、'}'），不是则抛语法错误
+    void check_expr_terminator() const;
+
     /**
      * 尽可能多地解析表达式，直到 EOF 或 '}'
      * 不消耗 EOF 或 '}'
-     * @param first 可选，调用处已经提前解析好、需要一起纳入终止符校验的第一条表达式
-     *              （用于 parse_brace_block 判别字典/复合表达式时提前解析出来的那一条，
-     *              保证它和后续表达式之间也必须有合法分隔符，不会绕过检查）
      * @return 节点数组
      */
-    std::vector<AstNodePtr> parse_exprs(AstNodePtr first = nullptr);
+    std::vector<AstNodePtr> parse_exprs();
 
     /**
      * 解析一个表达式

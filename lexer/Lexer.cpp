@@ -485,7 +485,7 @@ std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
     case TokenType::SIGN_EXCLAIM:            return "'!'";
 
     case TokenType::NEWLINE:                 return "a newline";
-    case TokenType::END_OF_FILE:             return "end of file";
+    case TokenType::END_OF_FILE:             return "EOF";
     // @formatter:on
     default: return "<unknown token type>";
     }

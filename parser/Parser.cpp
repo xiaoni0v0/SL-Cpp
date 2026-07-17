@@ -190,26 +190,18 @@ void Parser::error(const std::string &msg, const Position pos) const {
     throw SyntaxError{file_path_, pos.row, pos.col, msg};
 }
 
-std::vector<AstNodePtr> Parser::parse_exprs(AstNodePtr first) {
-    std::vector<AstNodePtr> exprs;
-
-    // 一条表达式解析完以后，紧跟的必须是合法的终止符（换行、';'、EOF、'}'），否则语法错误；
-    // first（如果有）和循环体内部解析出的每一条都要过这道检查，不能有漏网之鱼
-    auto check_terminator{
-        [&] {
-            if (!(
-                check(TokenType::NEWLINE) || check(TokenType::SIGN_SEMICOLON)
-                || check(TokenType::END_OF_FILE) || check(TokenType::SIGN_RBRACE)
-            )) {
-                error("expected newline or ';' after expression (newline recommended)");
-            }
-        }
-    };
-
-    if (first) {
-        exprs.push_back(std::move(first));
-        check_terminator();
+void Parser::check_expr_terminator() const {
+    switch (peek().type) {
+    case TokenType::NEWLINE:
+    case TokenType::SIGN_SEMICOLON:
+    case TokenType::END_OF_FILE:
+    case TokenType::SIGN_RBRACE: break;
+    default: error("expected newline or ';' after expression (newline recommended)");
     }
+}
+
+std::vector<AstNodePtr> Parser::parse_exprs() {
+    std::vector<AstNodePtr> exprs;
 
     // 跳过前导终止符
     skip_terminator();
@@ -217,7 +209,7 @@ std::vector<AstNodePtr> Parser::parse_exprs(AstNodePtr first) {
     // 不是 EOF 也不是 }
     while (!check(TokenType::END_OF_FILE) && !check(TokenType::SIGN_RBRACE)) {
         exprs.push_back(parse_expr());
-        check_terminator();
+        check_expr_terminator();
         // 消耗剩余终止符
         skip_terminator();
     }
@@ -635,9 +627,12 @@ AstNodePtr Parser::parse_brace_block() {
         return std::make_unique<AstNodeLiteralDict>(start_pos, std::move(items));
     }
 
-    // 复合表达式 {expr; ...}；first 传给 parse_exprs 一并做终止符校验（见该函数注释），
-    // 不能自己 push_back 完事——否则 first 和后续表达式之间没有分隔符也不会被发现
-    std::vector<AstNodePtr> exprs{parse_exprs(std::move(first))};
+    // 复合表达式 {expr; ...}；first 是提前解析出来判别字典/复合表达式用的，没有走 parse_exprs
+    // 循环体本身，这里手动过一遍同一道终止符检查，否则 first 和后续表达式之间没有分隔符也不会被发现
+    check_expr_terminator();
+    std::vector<AstNodePtr> exprs;
+    exprs.push_back(std::move(first));
+    for (AstNodePtr &e : parse_exprs()) exprs.push_back(std::move(e));
     expect(TokenType::SIGN_RBRACE);
     return std::make_unique<AstNodeCompound>(start_pos, std::move(exprs));
 }
