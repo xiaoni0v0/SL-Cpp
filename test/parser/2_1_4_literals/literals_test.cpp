@@ -127,6 +127,22 @@ TEST_CASE("未闭合的元组/分组抛异常") {
     CHECK_THROWS_AS(parse_program(U"(1"), SyntaxError);
 }
 
+TEST_CASE("报错措辞跟有没有见过逗号走：已经确认是元组才说'元组没闭合'，"
+    "还看不出来是分组表达式还是元组时不能咬定是元组") {
+    try {
+        parse_program(U"(1, 2"); // 见过逗号，确定是元组
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        CHECK(std::string{e.what()}.find("tuple") != std::string::npos);
+    }
+    try {
+        parse_program(U"(1"); // 没见过逗号，分不清是分组表达式还是元组
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        CHECK(std::string{e.what()}.find("tuple") == std::string::npos);
+    }
+}
+
 }
 
 TEST_SUITE("2.1.4 列表") {

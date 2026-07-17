@@ -312,7 +312,7 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
 }
 
 AstNodePtr Parser::parse_cond() {
-    // min_bp=11 卡住裸的赋值类运算符（lbp=10 < 11 会让 Pratt 主循环在它们前面停下）
+    // min_bp=11 卡住裸的赋值类运算符
     AstNodePtr left{parse_expr_pratt(11)};
     const Position start_pos{left->pos_};
 
@@ -320,18 +320,16 @@ AstNodePtr Parser::parse_cond() {
 
     if (peek().type == TokenType::SIGN_ASSIGN) {
         error("bare assignment '=' is not allowed directly in a condition "
-              "(did you mean '=='? wrap it in an extra pair of parentheses if intentional, e.g. `if ((x = y))`)",
+              "(did you mean '=='? wrap it in an extra pair of parentheses if intentional)",
               Position{peek().row, peek().col});
     }
 
-    // 复合赋值 x op= y：没有 = 和 == 混淆的手误风险，允许裸写
+    // 复合赋值 x op= y 允许裸写
     if (const auto compound_op{assign_compound_to_binary(peek().type)}) {
         const auto &[op, op_row, op_col, lexeme]{advance()};
-        const Position op_pos{op_row, op_col};
-        const int rbp{infix_bp(op).second};
         skip_newline();
         left = std::make_unique<AstNodeCompoundAssign>(
-            start_pos, std::move(left), *compound_op, parse_expr_pratt(rbp), op_pos
+            start_pos, std::move(left), *compound_op, parse_expr_pratt(infix_bp(op).second), Position{op_row, op_col}
             );
     }
 
@@ -521,7 +519,11 @@ AstNodePtr Parser::parse_paren_or_tuple() {
     std::vector<AstNodePtr> items;
     items.push_back(std::move(first_item));
 
+    // 走到这还没见过任何 ','，这时候还分不清分组表达式 (expr) 还是元组 (expr, ...)
+    bool saw_comma{false};
+
     while (check(TokenType::SIGN_COMMA)) {
+        saw_comma = true;
         advance(); // 消耗 ','
         skip_newline();
         if (check(TokenType::SIGN_RPAREN)) break; // 尾逗号
@@ -529,7 +531,11 @@ AstNodePtr Parser::parse_paren_or_tuple() {
         skip_newline();
     }
 
-    if (!check(TokenType::SIGN_RPAREN)) error("expected ')' to close tuple");
+    if (!check(TokenType::SIGN_RPAREN)) {
+        error(saw_comma
+                  ? "expected ')' to close tuple"
+                  : "expected ')' to close the parentheses");
+    }
     advance(); // 消耗 ')'
     paren_depth_--;
 
@@ -586,14 +592,14 @@ AstNodePtr Parser::parse_brace_block() {
     }
 
     // ** 开头必定是字典展开项，否则先解析第一个表达式再看 ':'
-    const bool first_is_doublestar{check(TokenType::SIGN_DOUBLESTAR)};
+    const bool is_first_doublestar{check(TokenType::SIGN_DOUBLESTAR)};
     AstNodePtr first{parse_expr()};
 
     // 字典字面量 {k: v, ...} 或 {**d, ...}
-    if (first_is_doublestar || check_over_newline(TokenType::SIGN_COLON)) {
+    if (is_first_doublestar || check_over_newline(TokenType::SIGN_COLON)) {
         std::vector<std::pair<AstNodePtr, AstNodePtr>> items;
 
-        if (first_is_doublestar) {
+        if (is_first_doublestar) {
             items.emplace_back(std::move(first), nullptr); // **expr，无 value
         } else {
             skip_newline();
@@ -608,8 +614,6 @@ AstNodePtr Parser::parse_brace_block() {
             skip_newline();
             if (check(TokenType::SIGN_RBRACE)) break; // 尾逗号
             // 与第一项一致：直接看是不是以 '**' 开头来判断是否为展开项，
-            // 而不是"解析完键之后看有没有冒号"来反推——否则 {k: v, x}（x 既非 **expr 也没有冒号）
-            // 会被误判成合法的展开项，把校验漏过去
             if (check(TokenType::SIGN_DOUBLESTAR)) {
                 items.emplace_back(parse_expr(), nullptr); // **expr，无 value
             } else {
@@ -628,11 +632,11 @@ AstNodePtr Parser::parse_brace_block() {
     }
 
     // 复合表达式 {expr; ...}；first 是提前解析出来判别字典/复合表达式用的，没有走 parse_exprs
-    // 循环体本身，这里手动过一遍同一道终止符检查，否则 first 和后续表达式之间没有分隔符也不会被发现
+    // 循环体本身，这里手动过一遍同一道终止符检查，防止 first 和后续表达式之间没有分隔符
     check_expr_terminator();
     std::vector<AstNodePtr> exprs;
     exprs.push_back(std::move(first));
-    for (AstNodePtr &e : parse_exprs()) exprs.push_back(std::move(e));
+    for (AstNodePtr &expr : parse_exprs()) exprs.push_back(std::move(expr));
     expect(TokenType::SIGN_RBRACE);
     return std::make_unique<AstNodeCompound>(start_pos, std::move(exprs));
 }
@@ -649,7 +653,7 @@ AstNodePtr Parser::parse_global() {
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_GLOBAL);
     skip_newline();
-    // 语法本身就是 identifier（2.2.4），不是表达式，直接要求一个标识符 token，没有什么好交给语义层判形状的
+    // 语法本身就是 identifier（2.2.4），不是表达式，直接要求一个标识符 token，不用交给语义层判形状
     return std::make_unique<AstNodeGlobal>(start_pos, expect(TokenType::IDENTIFIER).lexeme);
 }
 
@@ -786,7 +790,6 @@ AstNodePtr Parser::parse_for() {
 }
 
 AstNodePtr Parser::parse_while() {
-    // while [$] (cond) body 语义上就是 init/inc 皆空的 for，直接复用 AstNodeForCond，不单独建节点类型
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_WHILE);
     skip_newline();
