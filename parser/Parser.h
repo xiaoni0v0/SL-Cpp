@@ -3,6 +3,7 @@
 #include "../lexer/token.h"
 #include "ast_nodes/ast_nodes.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -36,9 +37,12 @@ class Parser {
     /**
      * 尽可能多地解析表达式，直到 EOF 或 '}'
      * 不消耗 EOF 或 '}'
+     * @param first 可选，调用处已经提前解析好、需要一起纳入终止符校验的第一条表达式
+     *              （用于 parse_brace_block 判别字典/复合表达式时提前解析出来的那一条，
+     *              保证它和后续表达式之间也必须有合法分隔符，不会绕过检查）
      * @return 节点数组
      */
-    std::vector<AstNodePtr> parse_exprs();
+    std::vector<AstNodePtr> parse_exprs(AstNodePtr first = nullptr);
 
     /**
      * 解析一个表达式
@@ -112,8 +116,9 @@ class Parser {
     // 检测当前位置是否为关键字参数（IDENTIFIER 之后跳过 NEWLINE 见到 '='）
     [[nodiscard]] bool at_kwarg() const;
 
-    // 函数形参
-    AstNodeFunc::OneParam parse_func_param();
+    // 函数形参；当前位置已经是 ')'（形参列表为空，或者已经解析完最后一个形参）时返回 nullopt，
+    // 不消耗任何 token——由调用处决定"没有形参"是该结束列表还是别的处理
+    std::optional<AstNodeFunc::OneParam> parse_func_param();
     // 单个捕获项：identifier / identifier = expr / &identifier
     AstNodeFunc::OneCapture parse_func_capture();
     // '[' 已消耗后调用，解析到并消耗 ']'

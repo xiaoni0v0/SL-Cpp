@@ -6,6 +6,28 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
+# 第三方库
+include(FetchContent)
+FetchContent_Declare(
+        nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.12.0
+        GIT_SHALLOW TRUE
+)
+FetchContent_Declare(
+        cxxopts
+        GIT_REPOSITORY https://github.com/jarro2783/cxxopts.git
+        GIT_TAG v3.3.1
+        GIT_SHALLOW TRUE
+)
+FetchContent_Declare(
+        doctest
+        GIT_REPOSITORY https://github.com/doctest/doctest.git
+        GIT_TAG v2.5.3
+        GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(nlohmann_json cxxopts doctest)
+
 # 所有的源文件
 add_executable(SL_Cpp main.cpp
         # utils
@@ -86,21 +108,6 @@ target_precompile_headers(SL_Cpp PRIVATE
         <format>
 )
 
-# 第三方库
-include(FetchContent)
-FetchContent_Declare(
-        nlohmann_json
-        GIT_REPOSITORY https://github.com/nlohmann/json.git
-        GIT_TAG v3.12.0
-        GIT_SHALLOW TRUE
-)
-FetchContent_Declare(
-        cxxopts
-        GIT_REPOSITORY https://github.com/jarro2783/cxxopts.git
-        GIT_TAG v3.3.1
-        GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(nlohmann_json cxxopts)
 target_link_libraries(SL_Cpp PRIVATE nlohmann_json::nlohmann_json cxxopts::cxxopts)
 
 # ============================================================
@@ -148,14 +155,73 @@ add_executable(SL_Cpp_Tests
         test/lexer/common/error_handling_test.cpp
 )
 
-FetchContent_Declare(
-        doctest
-        GIT_REPOSITORY https://github.com/doctest/doctest.git
-        GIT_TAG v2.5.3
-        GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(doctest)
-target_link_libraries(SL_Cpp_Tests PRIVATE doctest::doctest)
 target_compile_options(SL_Cpp_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
+target_link_libraries(SL_Cpp_Tests PRIVATE doctest::doctest)
 
 add_test(NAME SL_Cpp_Tests COMMAND SL_Cpp_Tests)
+
+add_executable(SL_Cpp_Parser_Tests
+        # 被测代码
+        lexer/Lexer.cpp
+        lexer/Lexer.h
+        lexer/token.h
+        lexer/x_token_type.h
+        lexer/x_keyword.h
+        lexer/x_reservedword.h
+        utils/string_utils.cpp
+        utils/string_utils.h
+        parser/Parser.cpp
+        parser/Parser.h
+        parser/ast_nodes/ast_nodes.h
+        parser/ast_nodes/x_ast_nodes.h
+        parser/ast_nodes/details/ast_node.h
+        parser/ast_nodes/details/ast_node_class.h
+        parser/ast_nodes/details/ast_node_control_flows.h
+        parser/ast_nodes/details/ast_node_decorators.h
+        parser/ast_nodes/details/ast_node_func.h
+        parser/ast_nodes/details/ast_node_literals.h
+        parser/ast_nodes/details/ast_node_multi_exprs.h
+        parser/ast_nodes/details/ast_node_operators.h
+        parser/ast_nodes/details/ast_node_postfix.h
+        parser/ast_nodes/details/ast_node_var.h
+
+        # 测试工具
+        test/parser/test_utils.h
+        test/parser/main_test.cpp
+
+        # 测试代码
+        # 2.1.4 字面量
+        test/parser/2_1_4_literals/literals_test.cpp
+        # 2.1.5 运算符
+        test/parser/2_1_5_operators/precedence_test.cpp
+        test/parser/2_1_5_operators/compare_is_assign_test.cpp
+        # 2.2.1 表达式分隔符
+        test/parser/2_2_1_separators/separator_test.cpp
+        # 2.2.2 基本表达式（{} 判别规则）
+        test/parser/2_2_2_basic_exprs/compound_dict_test.cpp
+        # 2.2.3 del
+        test/parser/2_2_3_del/del_test.cpp
+        # 2.2.4 global
+        test/parser/2_2_4_global/global_test.cpp
+        # 2.2.5 控制流
+        test/parser/2_2_5_control_flow/if_test.cpp
+        test/parser/2_2_5_control_flow/for_test.cpp
+        test/parser/2_2_5_control_flow/while_test.cpp
+        test/parser/2_2_5_control_flow/break_continue_test.cpp
+        test/parser/2_2_5_control_flow/return_test.cpp
+        test/parser/2_2_5_control_flow/try_test.cpp
+        test/parser/2_2_5_control_flow/raise_test.cpp
+        # 2.2.6 函数
+        test/parser/2_2_6_func/func_test.cpp
+        # 2.2.7 类
+        test/parser/2_2_7_class/class_test.cpp
+        # 2.2.8 装饰器
+        test/parser/2_2_8_decorator/decorator_test.cpp
+        # 跨章节：位置追踪、报错
+        test/parser/common/position_tracking_test.cpp
+        test/parser/common/error_handling_test.cpp
+)
+target_compile_options(SL_Cpp_Parser_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
+target_link_libraries(SL_Cpp_Parser_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
+
+add_test(NAME SL_Cpp_Parser_Tests COMMAND SL_Cpp_Parser_Tests)

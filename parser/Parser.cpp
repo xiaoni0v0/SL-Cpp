@@ -223,8 +223,26 @@ void Parser::error(const std::string &msg, const Position pos) const {
     throw SyntaxError{file_path_, pos.row, pos.col, msg};
 }
 
-std::vector<AstNodePtr> Parser::parse_exprs() {
+std::vector<AstNodePtr> Parser::parse_exprs(AstNodePtr first) {
     std::vector<AstNodePtr> exprs;
+
+    // 一条表达式解析完以后，紧跟的必须是合法的终止符（换行、';'、EOF、'}'），否则语法错误；
+    // first（如果有）和循环体内部解析出的每一条都要过这道检查，不能有漏网之鱼
+    auto check_terminator{
+        [&] {
+            if (!(
+                check(TokenType::NEWLINE) || check(TokenType::SIGN_SEMICOLON)
+                || check(TokenType::END_OF_FILE) || check(TokenType::SIGN_RBRACE)
+            )) {
+                error("expected newline or ';' after expression (newline recommended)");
+            }
+        }
+    };
+
+    if (first) {
+        exprs.push_back(std::move(first));
+        check_terminator();
+    }
 
     // 跳过前导终止符
     skip_terminator();
@@ -232,15 +250,7 @@ std::vector<AstNodePtr> Parser::parse_exprs() {
     // 不是 EOF 也不是 }
     while (!check(TokenType::END_OF_FILE) && !check(TokenType::SIGN_RBRACE)) {
         exprs.push_back(parse_expr());
-
-        // 如果一个表达式结尾了还不是换行、';'、EOF、}，则语法错误
-        if (!(
-            check(TokenType::NEWLINE) || check(TokenType::SIGN_SEMICOLON)
-            || check(TokenType::END_OF_FILE) || check(TokenType::SIGN_RBRACE)
-        )) {
-            error("expected newline or ';' after expression (newline recommended)");
-        }
-
+        check_terminator();
         // 消耗剩余终止符
         skip_terminator();
     }
@@ -656,10 +666,9 @@ AstNodePtr Parser::parse_brace_block() {
         return std::make_unique<AstNodeLiteralDict>(start_pos, std::move(items));
     }
 
-    // 复合表达式 {expr; ...}
-    std::vector<AstNodePtr> exprs;
-    exprs.push_back(std::move(first));
-    for (AstNodePtr &e : parse_exprs()) exprs.push_back(std::move(e));
+    // 复合表达式 {expr; ...}；first 传给 parse_exprs 一并做终止符校验（见该函数注释），
+    // 不能自己 push_back 完事——否则 first 和后续表达式之间没有分隔符也不会被发现
+    std::vector<AstNodePtr> exprs{parse_exprs(std::move(first))};
     expect(TokenType::SIGN_RBRACE);
     return std::make_unique<AstNodeCompound>(start_pos, std::move(exprs));
 }
@@ -951,15 +960,17 @@ AstNodePtr Parser::parse_func(std::vector<AstNodePtr> decorators, std::vector<Po
     skip_newline();
 
     std::vector<AstNodeFunc::OneParam> params{};
-    params.push_back(parse_func_param());
-    skip_newline();
+    if (auto p{parse_func_param()}) {
+        params.push_back(std::move(*p));
+        skip_newline();
 
-    while (check(TokenType::SIGN_COMMA)) {
-        advance(); // 消耗 ','
-        skip_newline();
-        if (check(TokenType::SIGN_RPAREN)) break; // 允许尾逗号
-        params.push_back(parse_func_param());
-        skip_newline();
+        while (check(TokenType::SIGN_COMMA)) {
+            advance(); // 消耗 ','
+            skip_newline();
+            if (check(TokenType::SIGN_RPAREN)) break; // 允许尾逗号
+            params.push_back(std::move(*parse_func_param())); // 已排除紧跟 ')' 的情况，必然非空
+            skip_newline();
+        }
     }
 
     paren_depth_--;
@@ -1262,10 +1273,13 @@ bool Parser::at_kwarg() const {
     return i < tokens_.size() && tokens_[i].type == TokenType::SIGN_ASSIGN;
 }
 
-AstNodeFunc::OneParam Parser::parse_func_param() {
-    AstNodeFunc::OneParam p{};
-
+std::optional<AstNodeFunc::OneParam> Parser::parse_func_param() {
     skip_newline();
+
+    // 空参数列表，或者上一个形参后面没有更多了：不消耗 ')'，让调用处自己去 expect
+    if (check(TokenType::SIGN_RPAREN)) return std::nullopt;
+
+    AstNodeFunc::OneParam p{};
 
     // **kwargs
     if (check(TokenType::SIGN_DOUBLESTAR)) {
