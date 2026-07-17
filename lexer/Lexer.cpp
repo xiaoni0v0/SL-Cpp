@@ -130,7 +130,6 @@ Token Lexer::read_number() {
     while (!is_eof() && is_digit(peek())) num_literal += advance();
 
     // 只有小数点后紧跟数字才当作 float 的一部分；否则不消耗这个 '.'，留给下一个 token
-    // （例如 `1.` 词法为 `1` 后跟 `.`，`1..2` 词法为 `1`、`..`、`2`）
     if (peek() == U'.' && is_digit(peek(1))) {
         is_float = true;
         num_literal += advance();
