@@ -12,7 +12,12 @@
 #include <iostream>
 #include <string>
 
-Executor::Executor(std::string s) : file_path{std::move(s)} {
+static std::string path_abspath(const std::string &path) {
+    std::error_code ec;
+    return std::filesystem::absolute(path, ec).string();
+}
+
+Executor::Executor(const std::string &s) : file_path{path_abspath(s)} {
 }
 
 int Executor::run() const {
@@ -26,7 +31,7 @@ int Executor::run() const {
     std::vector<Token> tokens;
 
     try {
-        tokens = Lexer{utf8_to_u32(file_read_all(file_path)), file_path}.tokenize();
+        tokens = Lexer{utf8_to_u32(file_read_all(file_path), file_path), file_path}.tokenize();
         for (const auto &token : tokens) {
             std::cout << Lexer::get_typename_by_tokentype(token.type);
             if (!(token.type == TokenType::NEWLINE || token.type == TokenType::END_OF_FILE)) {
