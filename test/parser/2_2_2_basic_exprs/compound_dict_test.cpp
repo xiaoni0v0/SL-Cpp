@@ -1,5 +1,6 @@
 // SL.md 2.2.2 基本表达式——`{}` 的判别规则：
-//   func/class 之后的 {} 为函数体/类体；否则第一项以 ** 开头或紧跟 ':' 为字典字面量；都不满足为复合表达式。
+//   func/class 之后的 {} 为函数体/类体；否则第一个表达式本身是 ** 展开项（分组括号不影响判定，
+//   见 SL.md 3.6）或其后紧跟 ':' 为字典字面量；都不满足为复合表达式。
 // 这里只测判别规则本身和复合表达式的形状；字典各类项的具体语义（key 是否任意表达式等）已在
 // 2_1_4_literals/literals_test.cpp 测过。
 #include "../test_utils.h"
@@ -100,7 +101,7 @@ TEST_CASE("残缺的键值对报错") {
 
 }
 
-TEST_SUITE("2.2.2 字典展开项：按 ** 前缀直接判定（不是靠有没有冒号反推）") {
+TEST_SUITE("2.2.2 字典展开项：按表达式本身是不是 ** 展开判定（不是靠有没有冒号反推）") {
 
 TEST_CASE("展开项可以出现在第一项之外的位置") {
     CHECK(parse_json(U"{k: v, **d2}") == nlohmann::json{
@@ -139,9 +140,30 @@ TEST_CASE("展开项后面也支持尾逗号") {
           });
 }
 
-TEST_CASE("第二项及以后既不是 ** 开头也没有冒号，必须报错，不能被静默当成合法展开项") {
+TEST_CASE("第二项及以后既不是 ** 展开也没有冒号，必须报错，不能被静默当成合法展开项") {
     CHECK_THROWS_AS(parse_program(U"{k: v, x}"), SyntaxError);
     CHECK_THROWS_AS(parse_program(U"{k: v, x, y: z}"), SyntaxError);
+}
+
+TEST_CASE("展开项外面套分组括号是透明的：{(**d)} 就是 {**d}（与 f((**d)) ≡ f(**d) 一致）") {
+    CHECK(parse_json(U"{(**d)}") == parse_json(U"{**d}"));
+    CHECK(parse_json(U"{((**d))}") == parse_json(U"{**d}"));
+    CHECK(parse_json(U"{k: v, (**d2)}") == parse_json(U"{k: v, **d2}"));
+    CHECK(parse_json(U"f((**d))") == parse_json(U"f(**d)"));
+}
+
+TEST_CASE("判定看的是整个表达式的根节点：** 展开只是子表达式时不算展开项") {
+    // {**d + x} 的第一个表达式是二元加法（** 只作用到 d，加法把整个展开节点包了进去），
+    // 根节点不是展开项、后面也没有冒号 → 复合表达式
+    //（其中的展开节点位于非法位置，由语义层按 SL.md 3.6 拒绝，不是语法层的事）
+    CHECK(parse_json(U"{**d + x}")["type"] == "Compound");
+    // 已确定是字典后（有 k: v 项），后续项是 '**d + x' 这种根不是展开、又没冒号的表达式 → 报错
+    CHECK_THROWS_AS(parse_program(U"{k: v, **d + x}"), SyntaxError);
+}
+
+TEST_CASE("加括号的展开项跟不加括号的一样不能带 value") {
+    CHECK_THROWS_AS(parse_program(U"{(**d): v}"), SyntaxError);
+    CHECK_THROWS_AS(parse_program(U"{**d: v}"), SyntaxError);
 }
 
 }
