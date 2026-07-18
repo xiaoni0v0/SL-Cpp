@@ -3,7 +3,7 @@
 #include "../lexer/token.h"
 #include "ast_nodes/ast_nodes.h"
 
-#include <optional>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -36,6 +36,13 @@ class Parser {
 
     // 检查当前位置是不是一条表达式合法的终止符（换行、';'、EOF、'}'），不是则抛语法错误
     void check_expr_terminator() const;
+
+    // 括号内 "item (',' item)* [',']" 形式的逗号列表的公共部分：起始括号已消耗、paren_depth_ 已自增后调用；
+    // 允许整个列表为空（不检测、不报错——是否允许空、空时该干什么由调用方自己决定）；
+    // 每解析一项调用一次 parse_item，具体怎么解析、解析结果塞进哪个容器都由调用方的闭包决定；
+    // 不消耗、不检查收尾的右括号——同样交给调用方（不同调用处的"未闭合"错误文案不一样）
+    // @return 循环期间是否真的消耗过至少一个 ','（分组 (expr) 与单元素元组 (expr,) 靠这个区分）
+    bool parse_comma_list(TokenType close, const std::function<void()> &parse_item);
 
     /**
      * 尽可能多地解析表达式，直到 EOF 或 '}'
@@ -114,9 +121,8 @@ class Parser {
     // 检测当前位置是否为关键字参数（IDENTIFIER 之后跳过 NEWLINE 见到 '='）
     [[nodiscard]] bool at_kwarg() const;
 
-    // 函数形参；当前位置已经是 ')'（形参列表为空，或者已经解析完最后一个形参）时返回 nullopt，
-    // 不消耗任何 token——由调用处决定"没有形参"是该结束列表还是别的处理
-    std::optional<AstNodeFunc::OneParam> parse_func_param();
+    // 单个函数形参：*args / **kwargs / 普通形参（可选类型注解、可选默认值）
+    AstNodeFunc::OneParam parse_func_param();
     // 单个捕获项：identifier / identifier = expr / &identifier
     AstNodeFunc::OneCapture parse_func_capture();
     // '[' 已消耗后调用，解析到并消耗 ']'

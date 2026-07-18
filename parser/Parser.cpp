@@ -5,7 +5,6 @@
 #include "../utils/string_utils.h"
 
 #include <algorithm>
-#include <cassert>
 #include <format>
 #include <memory>
 #include <optional>
@@ -198,6 +197,24 @@ void Parser::check_expr_terminator() const {
     case TokenType::SIGN_RBRACE: break;
     default: error("expected newline or ';' after expression (newline recommended)");
     }
+}
+
+bool Parser::parse_comma_list(const TokenType close, const std::function<void()> &parse_item) {
+    skip_newline();
+    bool saw_comma{false};
+    if (!check(close)) {
+        parse_item(); // 委托给回调函数
+        skip_newline();
+        while (check(TokenType::SIGN_COMMA)) {
+            saw_comma = true;
+            advance(); // 消耗 ','
+            skip_newline();
+            if (check(close)) break; // 尾逗号
+            parse_item();
+            skip_newline();
+        }
+    }
+    return saw_comma;
 }
 
 std::vector<AstNodePtr> Parser::parse_exprs() {
@@ -495,41 +512,10 @@ AstNodePtr Parser::parse_paren_or_tuple() {
     expect(TokenType::SIGN_LPAREN); // 消耗 '('
     paren_depth_++;
 
-    skip_newline();
-
-    // 空元组 ()
-    if (check(TokenType::SIGN_RPAREN)) {
-        advance(); // 消耗 ')'
-        paren_depth_--;
-        return std::make_unique<AstNodeLiteralTuple>(start_pos, std::vector<AstNodePtr>{});
-    }
-
-    // 第一个表达式
-    AstNodePtr first_item{parse_expr()};
-
-    skip_newline();
-
-    // 分组 (expr)
-    if (check(TokenType::SIGN_RPAREN)) {
-        advance(); // 消耗 ')'
-        paren_depth_--;
-        return first_item;
-    }
-
     std::vector<AstNodePtr> items;
-    items.push_back(std::move(first_item));
-
-    // 走到这还没见过任何 ','，这时候还分不清分组表达式 (expr) 还是元组 (expr, ...)
-    bool saw_comma{false};
-
-    while (check(TokenType::SIGN_COMMA)) {
-        saw_comma = true;
-        advance(); // 消耗 ','
-        skip_newline();
-        if (check(TokenType::SIGN_RPAREN)) break; // 尾逗号
-        items.push_back(parse_expr());
-        skip_newline();
-    }
+    const bool saw_comma{
+        parse_comma_list(TokenType::SIGN_RPAREN, [&] { items.push_back(parse_expr()); })
+    };
 
     if (!check(TokenType::SIGN_RPAREN)) {
         error(saw_comma
@@ -538,6 +524,9 @@ AstNodePtr Parser::parse_paren_or_tuple() {
     }
     advance(); // 消耗 ')'
     paren_depth_--;
+
+    // 恰好一项且没见过 ','：(expr) 是分组，不是元组，直接返回内部表达式本身
+    if (items.size() == 1 && !saw_comma) return std::move(items[0]);
 
     return std::make_unique<AstNodeLiteralTuple>(start_pos, std::move(items));
 }
@@ -548,27 +537,8 @@ AstNodePtr Parser::parse_list() {
     expect(TokenType::SIGN_LBRACKET); // 消耗 '['
     paren_depth_++;
 
-    skip_newline();
-
-    // 空列表 []
-    if (check(TokenType::SIGN_RBRACKET)) {
-        advance(); // 消耗 ']'
-        paren_depth_--;
-        return std::make_unique<AstNodeLiteralList>(start_pos, std::vector<AstNodePtr>{});
-    }
-
     std::vector<AstNodePtr> items;
-    items.push_back(parse_expr());
-
-    skip_newline();
-
-    while (check(TokenType::SIGN_COMMA)) {
-        advance(); // 消耗 ','
-        skip_newline();
-        if (check(TokenType::SIGN_RBRACKET)) break; // 尾逗号
-        items.push_back(parse_expr());
-        skip_newline();
-    }
+    parse_comma_list(TokenType::SIGN_RBRACKET, [&] { items.push_back(parse_expr()); });
 
     if (!check(TokenType::SIGN_RBRACKET)) error("expected ']' to close list literal");
     advance(); // 消耗 ']'
@@ -645,7 +615,6 @@ AstNodePtr Parser::parse_del() {
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_DEL);
     skip_newline();
-    // 语法层只解析一个表达式，target 是否为标识符由语义层校验
     return std::make_unique<AstNodeDel>(start_pos, parse_expr());
 }
 
@@ -653,7 +622,6 @@ AstNodePtr Parser::parse_global() {
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_GLOBAL);
     skip_newline();
-    // 语法本身就是 identifier（2.2.4），不是表达式，直接要求一个标识符 token，不用交给语义层判形状
     return std::make_unique<AstNodeGlobal>(start_pos, expect(TokenType::IDENTIFIER).lexeme);
 }
 
@@ -663,7 +631,7 @@ AstNodePtr Parser::parse_if() {
 
     std::vector<AstNodeIf::AstNodeCondAndExpr> clauses;
 
-    // 解析一个 if/elif 子句的条件和主体
+    // 解析一个 if/elif 子句的条件和主体：if/elif (cond) body
     auto parse_cond_and_body{
         [&]() -> AstNodeIf::AstNodeCondAndExpr {
             skip_newline();
@@ -823,32 +791,22 @@ AstNodePtr Parser::parse_try() {
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_TRY);
 
-    // 与 if 不同：try 后没有 '()'，直接跟主体
+    // try 后没有 '()'，直接跟主体
     skip_newline();
     AstNodePtr try_expr{parse_expr()};
 
     // 解析一个 except 子句的异常列表和主体：except (Exc1, Exc2, ...) body
-    // 与 if 的 parse_cond_and_body 平行，区别是括号内为一个或多个表达式
     auto parse_excs_and_body{
         [&]() -> AstNodeTry::AstNodeExceptAndExpr {
             skip_newline();
             expect(TokenType::SIGN_LPAREN); // 消耗 '('
             paren_depth_++;
-            skip_newline();
 
             // 解析 Exception1, ...
             std::vector<AstNodePtr> excs;
-            excs.push_back(parse_expr());
-            skip_newline();
-            while (check(TokenType::SIGN_COMMA)) {
-                advance(); // 消耗 ','
-                skip_newline();
-                if (check(TokenType::SIGN_RPAREN)) break; // 尾逗号
-                excs.push_back(parse_expr());
-                skip_newline();
-            }
+            parse_comma_list(TokenType::SIGN_RPAREN, [&] { excs.push_back(parse_expr()); });
+            if (excs.empty()) error("except requires at least one exception type");
 
-            skip_newline();
             paren_depth_--;
             expect(TokenType::SIGN_RPAREN); // 消耗 ')'
             skip_newline();
@@ -889,12 +847,10 @@ AstNodePtr Parser::parse_return() {
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_RETURN);
     // 若紧跟终止符则为裸 return（值为 None）
-    // 终止符 = 语句终止符 NEWLINE, ';', EOF, '}'
-    //        + 括号语境的闭合 / 分隔符 ')', ']', ','（如 for(;;return)、(return,)、[return]、f(return)）
-    if (check(TokenType::NEWLINE) || check(TokenType::SIGN_SEMICOLON) ||
-        check(TokenType::END_OF_FILE) || check(TokenType::SIGN_RBRACE) ||
-        check(TokenType::SIGN_RPAREN) || check(TokenType::SIGN_RBRACKET) ||
-        check(TokenType::SIGN_COMMA))
+    // 语句终止符 NEWLINE, ';', EOF, '}' + 括号语境的闭合 / 分隔符 ')', ']', ','
+    if (check(TokenType::NEWLINE) || check(TokenType::SIGN_SEMICOLON) || check(TokenType::END_OF_FILE)
+        || check(TokenType::SIGN_RBRACE) || check(TokenType::SIGN_RPAREN) || check(TokenType::SIGN_RBRACKET)
+        || check(TokenType::SIGN_COMMA))
         return std::make_unique<AstNodeReturn>(start_pos, nullptr);
 
     return std::make_unique<AstNodeReturn>(start_pos, parse_expr());
@@ -931,21 +887,9 @@ AstNodePtr Parser::parse_func(std::vector<AstNodePtr> decorators, std::vector<Po
     // 形参列表（合法性由语义层检查）
     expect(TokenType::SIGN_LPAREN);
     paren_depth_++;
-    skip_newline();
 
-    std::vector<AstNodeFunc::OneParam> params{};
-    if (auto p{parse_func_param()}) {
-        params.push_back(std::move(*p));
-        skip_newline();
-
-        while (check(TokenType::SIGN_COMMA)) {
-            advance(); // 消耗 ','
-            skip_newline();
-            if (check(TokenType::SIGN_RPAREN)) break; // 允许尾逗号
-            params.push_back(std::move(*parse_func_param())); // 已排除紧跟 ')' 的情况，必然非空
-            skip_newline();
-        }
-    }
+    std::vector<AstNodeFunc::OneParam> params;
+    parse_comma_list(TokenType::SIGN_RPAREN, [&] { params.push_back(parse_func_param()); });
 
     paren_depth_--;
     expect(TokenType::SIGN_RPAREN);
@@ -1082,10 +1026,7 @@ AstNodePtr Parser::finish_call(AstNodePtr callee, const Position pos, const Posi
     std::vector<AstNodePtr> args;
     std::vector<std::pair<std::u32string, AstNodePtr>> kwargs;
 
-    skip_newline();
-    while (!check(TokenType::SIGN_RPAREN)) {
-        skip_newline();
-
+    parse_comma_list(TokenType::SIGN_RPAREN, [&] {
         if (at_kwarg()) {
             // 关键字参数 name = value
             auto name = advance().lexeme; // IDENTIFIER
@@ -1097,17 +1038,8 @@ AstNodePtr Parser::finish_call(AstNodePtr callee, const Position pos, const Posi
             // 位置参数，含 *expr / **expr 展开（参数顺序合法性由语义层校验）
             args.push_back(parse_expr());
         }
+    });
 
-        skip_newline();
-        if (check(TokenType::SIGN_COMMA)) {
-            advance();
-            skip_newline();
-        } else {
-            break;
-        }
-    }
-
-    skip_newline();
     if (!check(TokenType::SIGN_RPAREN)) error("expected ')' to close function call", Position{peek().row, peek().col});
     advance();
     paren_depth_--;
@@ -1117,27 +1049,12 @@ AstNodePtr Parser::finish_call(AstNodePtr callee, const Position pos, const Posi
 
 AstNodePtr Parser::finish_index(AstNodePtr obj, const Position pos, const Position bracket_pos) {
     // '[' 已消耗，paren_depth_ 已自增
-    skip_newline();
-
-    // 遇到了 a[]，不允许，需要至少一个参数
-    if (check(TokenType::SIGN_RBRACKET)) {
-        error("expected at least one argument for indexing");
-    }
-
     std::vector<AstNodePtr> args;
-    args.push_back(parse_expr());
+    parse_comma_list(TokenType::SIGN_RBRACKET, [&] { args.push_back(parse_expr()); });
 
-    skip_newline();
+    // a[]：不允许，索引至少需要一个下标
+    if (args.empty()) error("expected at least one argument for indexing");
 
-    while (check(TokenType::SIGN_COMMA)) {
-        advance(); // 消耗 ','
-        skip_newline();
-        if (check(TokenType::SIGN_RBRACKET)) break; // 尾逗号
-        args.push_back(parse_expr());
-        skip_newline();
-    }
-
-    skip_newline();
     if (!check(TokenType::SIGN_RBRACKET))
         error("expected ']' to close index expression",
               Position{peek().row, peek().col});
@@ -1151,27 +1068,9 @@ AstNodePtr Parser::finish_index(AstNodePtr obj, const Position pos, const Positi
 std::vector<AstNodeFunc::OneCapture> Parser::finish_func_captures() {
     // '[' 已消耗
     paren_depth_++;
-    skip_newline();
 
     std::vector<AstNodeFunc::OneCapture> captures;
-
-    // 空捕获列表 []
-    if (check(TokenType::SIGN_RBRACKET)) {
-        advance(); // 消耗 ']'
-        paren_depth_--;
-        return captures;
-    }
-
-    captures.push_back(parse_func_capture());
-    skip_newline();
-
-    while (check(TokenType::SIGN_COMMA)) {
-        advance(); // 消耗 ','
-        skip_newline();
-        if (check(TokenType::SIGN_RBRACKET)) break; // 尾逗号
-        captures.push_back(parse_func_capture());
-        skip_newline();
-    }
+    parse_comma_list(TokenType::SIGN_RBRACKET, [&] { captures.push_back(parse_func_capture()); });
 
     if (!check(TokenType::SIGN_RBRACKET)) error("expected ']' to close capture list");
     advance(); // 消耗 ']'
@@ -1210,27 +1109,8 @@ AstNodeFunc::OneCapture Parser::parse_func_capture() {
 
 std::vector<AstNodePtr> Parser::finish_class_bases() {
     // '(' 已消耗，paren_depth_ 已自增
-    skip_newline();
-
     std::vector<AstNodePtr> bases;
-
-    // 空基类列表 ()
-    if (check(TokenType::SIGN_RPAREN)) {
-        advance(); // 消耗 ')'
-        paren_depth_--;
-        return bases;
-    }
-
-    bases.push_back(parse_expr());
-    skip_newline();
-
-    while (check(TokenType::SIGN_COMMA)) {
-        advance(); // 消耗 ','
-        skip_newline();
-        if (check(TokenType::SIGN_RPAREN)) break; // 尾逗号
-        bases.push_back(parse_expr());
-        skip_newline();
-    }
+    parse_comma_list(TokenType::SIGN_RPAREN, [&] { bases.push_back(parse_expr()); });
 
     if (!check(TokenType::SIGN_RPAREN)) error("expected ')' to close base class list");
     advance(); // 消耗 ')'
@@ -1247,11 +1127,8 @@ bool Parser::at_kwarg() const {
     return i < tokens_.size() && tokens_[i].type == TokenType::SIGN_ASSIGN;
 }
 
-std::optional<AstNodeFunc::OneParam> Parser::parse_func_param() {
+AstNodeFunc::OneParam Parser::parse_func_param() {
     skip_newline();
-
-    // 空参数列表，或者上一个形参后面没有更多了：不消耗 ')'，让调用处自己去 expect
-    if (check(TokenType::SIGN_RPAREN)) return std::nullopt;
 
     AstNodeFunc::OneParam p{};
 

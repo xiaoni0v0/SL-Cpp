@@ -120,6 +120,32 @@ TEST_CASE("换行 + 换行分隔的空槽必须紧跟着显式 ';' 才行：加�
           });
 }
 
+TEST_CASE("头部开头的换行只是格式，不影响三槽的判定") {
+    CHECK(parse_json(U"for (\ni = 0; i < 10; i += 1) body") == nlohmann::json{
+          {"type", "ForCond"}, {"collect", false},
+          {"init", {{"type", "Assign"}, {"target", ident("i")}, {"value", int_lit("0")}}},
+          {
+          "cond", {
+          {"type", "Compare"}, {"operands", nlohmann::json::array({ident("i"), int_lit("10")})},
+          {"ops", nlohmann::json::array({"<"})}
+          }
+          },
+          {"inc", {{"type", "CompoundAssign"}, {"target", ident("i")}, {"op", "+"}, {"value", int_lit("1")}}},
+          {"body", ident("body")}
+          });
+}
+
+TEST_CASE("换行分隔符之间允许多个空行，不只是恰好一个换行") {
+    CHECK(parse_json(U"for (a\n\n\nb\n\n\nc) body") == nlohmann::json{
+          {"type", "ForCond"}, {"collect", false},
+          {"init", ident("a")}, {"cond", ident("b")}, {"inc", ident("c")}, {"body", ident("body")}
+          });
+}
+
+TEST_CASE("只用一个显式 ';' 就想收尾（少了第二个分隔符/第三槽）必须报错") {
+    CHECK_THROWS_AS(parse_program(U"for (;) body"), SyntaxError);
+}
+
 TEST_CASE("for () 彻底为空报错，提示改用 for (;;) 或 while (cond)") {
     CHECK_THROWS_AS(parse_program(U"for () body"), SyntaxError);
 }
