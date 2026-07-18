@@ -552,7 +552,14 @@ AstNodePtr Parser::parse_brace_block() {
 
     expect(TokenType::SIGN_LBRACE); // 消耗 '{'
 
-    // 前导换行不影响字典/复合表达式的判别（两者开头都允许换行），可以直接跳过
+    const int outer_paren_depth{paren_depth_};
+    paren_depth_ = 0;
+    AstNodePtr block{finish_brace_block(start_pos)};
+    paren_depth_ = outer_paren_depth;
+    return block;
+}
+
+AstNodePtr Parser::finish_brace_block(const Position start_pos) {
     skip_newline();
 
     // 空 {} → 空的复合表达式
@@ -562,10 +569,6 @@ AstNodePtr Parser::parse_brace_block() {
     }
 
     // 前导 ';' 是复合表达式专属的语句分隔符，字典字面量的第一项绝不可能是它：
-    // 一旦见到就说明这必然是复合表达式，后面哪怕长得像 'k: v' 也不能再被判成字典——
-    // 不能像原来那样直接用 skip_terminator() 把这个信号连同换行一起吃掉再判别，
-    // 那样会导致 "{; a: b}" 这种输入丢失了 ';' 这个"必然是复合表达式"的信号，
-    // 被误判成字典 {a: b}
     if (check(TokenType::SIGN_SEMICOLON)) {
         std::vector exprs{parse_exprs()};
         expect(TokenType::SIGN_RBRACE);
@@ -922,10 +925,14 @@ AstNodePtr Parser::parse_func(std::vector<AstNodePtr> decorators, std::vector<Po
         skip_newline();
     }
 
-    // 函数体：{ ... }
+    // 函数体：{ ... }（块内换行重新充当语句分隔符，暂存并清零 paren_depth_
+    // 与 parse_brace_block 同理，防止外层括号的续行规则吃掉函数体内的换行）
     const Position body_pos{peek().row, peek().col};
     expect(TokenType::SIGN_LBRACE);
+    const int outer_paren_depth{paren_depth_};
+    paren_depth_ = 0;
     std::vector body_exprs{parse_exprs()};
+    paren_depth_ = outer_paren_depth;
     expect(TokenType::SIGN_RBRACE);
 
     return std::make_unique<AstNodeFunc>(
@@ -964,10 +971,13 @@ AstNodePtr Parser::parse_class(std::vector<AstNodePtr> decorators, std::vector<P
         skip_newline();
     }
 
-    // 类体：{ ... }
+    // 类体：{ ... }（同函数体：暂存并清零 paren_depth_，块内换行重新充当语句分隔符）
     const Position body_pos{peek().row, peek().col};
     expect(TokenType::SIGN_LBRACE);
+    const int outer_paren_depth{paren_depth_};
+    paren_depth_ = 0;
     std::vector body_exprs{parse_exprs()};
+    paren_depth_ = outer_paren_depth;
     expect(TokenType::SIGN_RBRACE);
 
     return std::make_unique<AstNodeClass>(

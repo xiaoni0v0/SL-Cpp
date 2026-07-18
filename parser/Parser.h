@@ -83,8 +83,10 @@ class Parser {
     AstNodePtr parse_paren_or_tuple();
     // 列表 [expr1, expr2]
     AstNodePtr parse_list();
-    // 字典 {k1: v1, ...} 或块（复合表达式 / 函数体 / 类体）
+    // 字典 {k1: v1, ...} 或复合表达式
     AstNodePtr parse_brace_block();
+    // parse_brace_block 的内部：'{' 已消耗、paren_depth_ 已清零后调用，解析到并消耗 '}'
+    AstNodePtr finish_brace_block(Position start_pos);
     // del
     AstNodePtr parse_del();
     // global
