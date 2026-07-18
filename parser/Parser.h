@@ -87,6 +87,9 @@ class Parser {
     AstNodePtr parse_brace_block();
     // parse_brace_block 的内部：'{' 已消耗、paren_depth_ 已清零后调用，解析到并消耗 '}'
     AstNodePtr finish_brace_block(Position start_pos);
+    // 字典分支：finish_brace_block 已判别为字典、第一项的 key（或整个 '**' 展开项）已解析为
+    // first 后调用，解析剩余部分到并消耗 '}'
+    AstNodePtr finish_dict(Position start_pos, AstNodePtr first, bool is_first_doublestar);
     // del
     AstNodePtr parse_del();
     // global

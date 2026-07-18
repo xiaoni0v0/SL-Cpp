@@ -562,15 +562,11 @@ AstNodePtr Parser::parse_brace_block() {
 AstNodePtr Parser::finish_brace_block(const Position start_pos) {
     skip_newline();
 
-    // 空 {} → 空的复合表达式
-    if (check(TokenType::SIGN_RBRACE)) {
-        advance();
-        return std::make_unique<AstNodeCompound>(start_pos, std::vector<AstNodePtr>{});
-    }
+    std::vector<AstNodePtr> exprs;
 
-    // 前导 ';' 是复合表达式专属的语句分隔符，字典字面量的第一项绝不可能是它：
-    if (check(TokenType::SIGN_SEMICOLON)) {
-        std::vector exprs{parse_exprs()};
+    // 一见到 '}'（空块）或 ';' 就已经确定是复合表达式
+    if (check(TokenType::SIGN_RBRACE) || check(TokenType::SIGN_SEMICOLON)) {
+        for (AstNodePtr &expr : parse_exprs()) exprs.push_back(std::move(expr));
         expect(TokenType::SIGN_RBRACE);
         return std::make_unique<AstNodeCompound>(start_pos, std::move(exprs));
     }
@@ -579,50 +575,53 @@ AstNodePtr Parser::finish_brace_block(const Position start_pos) {
     const bool is_first_doublestar{check(TokenType::SIGN_DOUBLESTAR)};
     AstNodePtr first{parse_expr()};
 
-    // 字典字面量 {k: v, ...} 或 {**d, ...}
     if (is_first_doublestar || check_over_newline(TokenType::SIGN_COLON)) {
-        std::vector<std::pair<AstNodePtr, AstNodePtr>> items;
-
-        if (is_first_doublestar) {
-            items.emplace_back(std::move(first), nullptr); // **expr，无 value
-        } else {
-            skip_newline();
-            advance(); // 消耗 ':'
-            skip_newline();
-            items.emplace_back(std::move(first), parse_expr());
-        }
-
-        skip_newline();
-        while (check(TokenType::SIGN_COMMA)) {
-            advance();
-            skip_newline();
-            if (check(TokenType::SIGN_RBRACE)) break; // 尾逗号
-            // 与第一项一致：直接看是不是以 '**' 开头来判断是否为展开项，
-            if (check(TokenType::SIGN_DOUBLESTAR)) {
-                items.emplace_back(parse_expr(), nullptr); // **expr，无 value
-            } else {
-                AstNodePtr key{parse_expr()};
-                skip_newline();
-                expect(TokenType::SIGN_COLON);
-                skip_newline();
-                items.emplace_back(std::move(key), parse_expr());
-            }
-            skip_newline();
-        }
-
-        skip_newline();
-        expect(TokenType::SIGN_RBRACE);
-        return std::make_unique<AstNodeLiteralDict>(start_pos, std::move(items));
+        return finish_dict(start_pos, std::move(first), is_first_doublestar);
     }
 
-    // 复合表达式 {expr; ...}；first 是提前解析出来判别字典/复合表达式用的，没有走 parse_exprs
-    // 循环体本身，这里手动过一遍同一道终止符检查，防止 first 和后续表达式之间没有分隔符
+    // 不是字典 → first 是复合表达式的第一条语句；它没走 parse_exprs 的循环体，
+    // 这里手动过一遍同一道终止符检查，防止 first 和后续表达式之间没有分隔符
     check_expr_terminator();
-    std::vector<AstNodePtr> exprs;
     exprs.push_back(std::move(first));
+
     for (AstNodePtr &expr : parse_exprs()) exprs.push_back(std::move(expr));
     expect(TokenType::SIGN_RBRACE);
     return std::make_unique<AstNodeCompound>(start_pos, std::move(exprs));
+}
+
+AstNodePtr Parser::finish_dict(const Position start_pos, AstNodePtr first, const bool is_first_doublestar) {
+    std::vector<std::pair<AstNodePtr, AstNodePtr>> items;
+
+    if (is_first_doublestar) {
+        items.emplace_back(std::move(first), nullptr); // **expr，无 value
+    } else {
+        skip_newline();
+        advance(); // 消耗 ':'
+        skip_newline();
+        items.emplace_back(std::move(first), parse_expr());
+    }
+
+    skip_newline();
+    while (check(TokenType::SIGN_COMMA)) {
+        advance();
+        skip_newline();
+        if (check(TokenType::SIGN_RBRACE)) break; // 尾逗号
+        // 与第一项一致：直接看是不是以 '**' 开头来判断是否为展开项，
+        if (check(TokenType::SIGN_DOUBLESTAR)) {
+            items.emplace_back(parse_expr(), nullptr); // **expr，无 value
+        } else {
+            AstNodePtr key{parse_expr()};
+            skip_newline();
+            expect(TokenType::SIGN_COLON);
+            skip_newline();
+            items.emplace_back(std::move(key), parse_expr());
+        }
+        skip_newline();
+    }
+
+    skip_newline();
+    expect(TokenType::SIGN_RBRACE);
+    return std::make_unique<AstNodeLiteralDict>(start_pos, std::move(items));
 }
 
 AstNodePtr Parser::parse_del() {
@@ -669,17 +668,16 @@ AstNodePtr Parser::parse_if() {
         clauses.push_back(parse_cond_and_body());
     }
 
-    // 解析可选的 else（可在下一行）
+    // 解析可选的 else（可在下一行），无 else 则保持 nullptr
+    AstNodePtr else_expr;
     if (check_over_newline(TokenType::KW_ELSE)) {
         skip_newline();
         expect(TokenType::KW_ELSE);
         skip_newline();
-
-        return std::make_unique<AstNodeIf>(start_pos, std::move(clauses), parse_expr());
+        else_expr = parse_expr();
     }
 
-    // 无 else
-    return std::make_unique<AstNodeIf>(start_pos, std::move(clauses), nullptr);
+    return std::make_unique<AstNodeIf>(start_pos, std::move(clauses), std::move(else_expr));
 }
 
 AstNodePtr Parser::parse_for() {
@@ -838,22 +836,19 @@ AstNodePtr Parser::parse_try() {
         except_clauses.push_back(parse_excs_and_body());
     }
 
-    // 解析可选的 finally（可在下一行）
+    // 解析可选的 finally（可在下一行），无 finally 则保持 nullptr
+    AstNodePtr finally_expr;
     if (check_over_newline(TokenType::KW_FINALLY)) {
         skip_newline();
         expect(TokenType::KW_FINALLY);
         skip_newline();
-
-        return std::make_unique<AstNodeTry>(
-            start_pos,
-            std::move(try_expr), std::move(except_clauses), parse_expr()
-            );
+        finally_expr = parse_expr();
     }
 
     // 注：except / finally 至少有一个，这一约束交由语义层检查
     return std::make_unique<AstNodeTry>(
         start_pos,
-        std::move(try_expr), std::move(except_clauses), nullptr
+        std::move(try_expr), std::move(except_clauses), std::move(finally_expr)
         );
 }
 
@@ -862,12 +857,10 @@ AstNodePtr Parser::parse_return() {
     expect(TokenType::KW_RETURN);
     // 若紧跟终止符则为裸 return（值为 None）
     // 语句终止符 NEWLINE, ';', EOF, '}' + 括号语境的闭合 / 分隔符 ')', ']', ','
-    if (check(TokenType::NEWLINE) || check(TokenType::SIGN_SEMICOLON) || check(TokenType::END_OF_FILE)
-        || check(TokenType::SIGN_RBRACE) || check(TokenType::SIGN_RPAREN) || check(TokenType::SIGN_RBRACKET)
-        || check(TokenType::SIGN_COMMA))
-        return std::make_unique<AstNodeReturn>(start_pos, nullptr);
-
-    return std::make_unique<AstNodeReturn>(start_pos, parse_expr());
+    const bool bare{check(TokenType::NEWLINE) || check(TokenType::SIGN_SEMICOLON) || check(TokenType::END_OF_FILE)
+                    || check(TokenType::SIGN_RBRACE) || check(TokenType::SIGN_RPAREN)
+                    || check(TokenType::SIGN_RBRACKET) || check(TokenType::SIGN_COMMA)};
+    return std::make_unique<AstNodeReturn>(start_pos, bare ? nullptr : parse_expr());
 }
 
 AstNodePtr Parser::parse_raise() {
@@ -1009,7 +1002,7 @@ AstNodePtr Parser::parse_decorator() {
     // 紧邻 func/class：这些装饰器是函数/类表达式自己产生式的一部分，
     // 直接挂到对应节点的 decorators_ 上，不包一层 AstNodeDecorator；节点自己的起始位置也相应地
     // 从第一个 '@' 算起（parse_decorator 只在当前 token 就是 '@' 时才会被调用，entries 必然非空）
-    if (check(TokenType::KW_FUNC)) {
+    if (check(TokenType::KW_FUNC) || check(TokenType::KW_CLASS)) {
         const Position deco_pos{entries.front().pos};
         std::vector<AstNodePtr> decorators;
         std::vector<Position> decorator_positions;
@@ -1019,19 +1012,9 @@ AstNodePtr Parser::parse_decorator() {
             decorators.push_back(std::move(e.expr));
             decorator_positions.push_back(e.pos);
         }
-        return parse_func(std::move(decorators), std::move(decorator_positions), deco_pos);
-    }
-    if (check(TokenType::KW_CLASS)) {
-        const Position deco_pos{entries.front().pos};
-        std::vector<AstNodePtr> decorators;
-        std::vector<Position> decorator_positions;
-        decorators.reserve(entries.size());
-        decorator_positions.reserve(entries.size());
-        for (auto &e : entries) {
-            decorators.push_back(std::move(e.expr));
-            decorator_positions.push_back(e.pos);
-        }
-        return parse_class(std::move(decorators), std::move(decorator_positions), deco_pos);
+        return check(TokenType::KW_FUNC)
+                   ? parse_func(std::move(decorators), std::move(decorator_positions), deco_pos)
+                   : parse_class(std::move(decorators), std::move(decorator_positions), deco_pos);
     }
 
     // 通用形式（2.2.8）：@d1 @d2 ... expr ≡ d1(d2(...(expr)))，从最贴近 expr 的装饰器开始向外包裹
