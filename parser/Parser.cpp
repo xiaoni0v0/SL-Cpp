@@ -148,9 +148,9 @@ bool Parser::check(const TokenType type) const {
     return pos_ < tokens_.size() && tokens_[pos_].type == type;
 }
 
-bool Parser::check_over_newline(const TokenType type) const {
+bool Parser::check_over_newline(const TokenType type, const std::optional<size_t> start) const {
     const size_t len{tokens_.size()};
-    for (size_t i{pos_}; i < len; i++) {
+    for (size_t i{start.value_or(pos_)}; i < len; i++) {
         if (tokens_[i].type != TokenType::NEWLINE) {
             return tokens_[i].type == type;
         }
@@ -491,8 +491,12 @@ AstNodePtr Parser::parse_brace() {
 
     // 是 ** 或者后边有冒号 -> 一定是字典
     if (dynamic_cast<AstNodeDoubleStar *>(first.get()) || check_over_newline(TokenType::SIGN_COLON)) {
+        // 恢复必须在 finish_dict 解析完全部内容（包括第一项之后的所有 key/value）之后再做，
+        // 否则字典剩余部分会在错误的（外层）paren_depth_ 下解析，块内换行会被外层括号的
+        // 续行规则误吞——跟 parse_brace 开头重置 paren_depth_ 要解决的问题是同一类 bug
+        AstNodePtr dict{finish_dict(start_pos, std::move(first))};
         paren_depth_ = outer_paren_depth;
-        return finish_dict(start_pos, std::move(first));
+        return dict;
     }
 
     // 否则一定是复合表达式
@@ -1136,7 +1140,8 @@ AstNodePtr Parser::finish_call(AstNodePtr callee, const Position pos, const Posi
     std::vector<std::pair<std::u32string, AstNodePtr>> kwargs;
 
     finish_comma_batch(TokenType::SIGN_RPAREN, [&] {
-        if (at_kwarg()) {
+        // 关键字参数的判定：当前是 IDENTIFIER，且跳过其后可能的换行紧跟 '='
+        if (check(TokenType::IDENTIFIER) && check_over_newline(TokenType::SIGN_ASSIGN, pos_ + 1)) {
             // 关键字参数 name = value
             auto name = advance().lexeme; // IDENTIFIER
             skip_newline();

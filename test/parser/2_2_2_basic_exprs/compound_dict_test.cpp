@@ -333,6 +333,14 @@ TEST_CASE("调用实参里的字典：键与 ':' 之间的换行照常允许") {
           });
 }
 
+TEST_CASE("字典的 value 续行判定同样不受外层括号影响：不会把换行后的运算符误接进 value") {
+    // v 后面换行紧跟 '+'：块内语境若没有正确屏蔽外层括号的深度，会被误当成延续行
+    // 合并成 "v + w"；正确行为是换行终止了这个 value，后面单独的 '+ w' 不构成
+    // 合法的字典收尾，必须报错——跟没有外层调用包裹时的顶层 {k: v\n+ w} 完全一致
+    CHECK_THROWS_AS(parse_program(U"{k: v\n+ w}"), SyntaxError);
+    CHECK_THROWS_AS(parse_program(U"f({k: v\n+ w})"), SyntaxError);
+}
+
 TEST_CASE("字典值是复合表达式、整体又在调用实参里：逐层语境正确切换") {
     CHECK(parse_json(U"f({k: {a\nb}})")["args"][0] == nlohmann::json{
           {"type", "LiteralDict"},
