@@ -552,13 +552,24 @@ AstNodePtr Parser::parse_brace_block() {
 
     expect(TokenType::SIGN_LBRACE); // 消耗 '{'
 
-    // 跳过前导终止符
-    skip_terminator();
+    // 前导换行不影响字典/复合表达式的判别（两者开头都允许换行），可以直接跳过
+    skip_newline();
 
     // 空 {} → 空的复合表达式
     if (check(TokenType::SIGN_RBRACE)) {
         advance();
         return std::make_unique<AstNodeCompound>(start_pos, std::vector<AstNodePtr>{});
+    }
+
+    // 前导 ';' 是复合表达式专属的语句分隔符，字典字面量的第一项绝不可能是它：
+    // 一旦见到就说明这必然是复合表达式，后面哪怕长得像 'k: v' 也不能再被判成字典——
+    // 不能像原来那样直接用 skip_terminator() 把这个信号连同换行一起吃掉再判别，
+    // 那样会导致 "{; a: b}" 这种输入丢失了 ';' 这个"必然是复合表达式"的信号，
+    // 被误判成字典 {a: b}
+    if (check(TokenType::SIGN_SEMICOLON)) {
+        std::vector exprs{parse_exprs()};
+        expect(TokenType::SIGN_RBRACE);
+        return std::make_unique<AstNodeCompound>(start_pos, std::move(exprs));
     }
 
     // ** 开头必定是字典展开项，否则先解析第一个表达式再看 ':'

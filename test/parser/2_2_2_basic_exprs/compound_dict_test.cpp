@@ -182,4 +182,19 @@ TEST_CASE("字典值可以是复合表达式，复合表达式里也可以嵌字
           });
 }
 
+TEST_CASE("前导 ';' 强制判为复合表达式，即使后面长得像字典的 'k: v' 也不能被判成字典") {
+    // 一旦见到前导 ';'，字典这个可能性就被排除了；剩下的 "a : b" 不是合法的复合表达式项
+    // （单条表达式后面不能直接跟 ':'），必须报错，不能被静默解析成 {a: b} 这样的字典
+    CHECK_THROWS_AS(parse_program(U"{; a : b}"), SyntaxError);
+}
+
+TEST_CASE("前导 ';' 本身只是个空的起始分隔符，不影响后面正常的复合表达式") {
+    CHECK(parse_json(U"{; a}") == nlohmann::json{
+          {"type", "Compound"}, {"exprs", nlohmann::json::array({ident("a")})}
+          });
+    CHECK(parse_json(U"{; a; b}") == nlohmann::json{
+          {"type", "Compound"}, {"exprs", nlohmann::json::array({ident("a"), ident("b")})}
+          });
+}
+
 }
