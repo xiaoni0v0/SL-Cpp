@@ -203,7 +203,6 @@ std::vector<AstNodePtr> Parser::parse_exprs() {
 
     // 跳过前导终止符
     skip_terminator();
-
     // 不是 EOF 也不是 }
     while (!check(TokenType::END_OF_FILE) && !check(TokenType::SIGN_RBRACE)) {
         exprs.push_back(parse_expr());
@@ -229,7 +228,6 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
     while (true) {
         // 括号内允许运算符前换行（如多行链式调用）
         skip_paren_newline();
-
         const auto &[op, op_row, op_col, lexeme]{peek()};
         const Position op_pos{op_row, op_col};
         const auto [lbp, rbp]{infix_bp(op)};
@@ -310,7 +308,6 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
 AstNodePtr Parser::parse_non_op() {
     // 跳过前导换行
     skip_newline();
-
     const auto &[type, row, col, lexeme]{peek()};
     const Position pos{row, col};
 
@@ -406,7 +403,6 @@ AstNodePtr Parser::parse_expr_as_cond() {
     const Position start_pos{left->pos_};
 
     skip_paren_newline();
-
     if (peek().type == TokenType::SIGN_ASSIGN) {
         error("bare assignment '=' is not allowed directly in a condition "
               "(did you mean '=='? wrap it in an extra pair of parentheses if intentional)",
@@ -475,7 +471,6 @@ AstNodePtr Parser::parse_brace() {
     paren_depth_ = 0;
 
     skip_newline();
-
     // 一见到 '}'（空块）或 ';' 就已经确定是复合表达式
     if (check(TokenType::SIGN_RBRACE) || check(TokenType::SIGN_SEMICOLON)) {
         std::vector exprs{parse_exprs()};
@@ -570,11 +565,9 @@ AstNodePtr Parser::parse_for() {
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_FOR);
     skip_newline();
-
     const bool collect{check(TokenType::SIGN_DOLLAR)};
     if (collect) expect(TokenType::SIGN_DOLLAR); // 消耗 '$'
     skip_newline();
-
     expect(TokenType::SIGN_LPAREN); // 消耗 '('
     paren_depth_++;
     skip_newline();
@@ -635,7 +628,6 @@ AstNodePtr Parser::parse_for() {
                 error("expected ';' or newline to separate the expressions in a for header");
             }
             skip_newline();
-
             // 换行分隔（不是显式 ';'）之后如果直接是 ')'，说明后面这一槽整个是空的——
             // SL.md 2.2.5.2 规定"若某个槽为空，则必须使用 ';'"，光凭换行判不出"这一槽是故意留空"
             // 还是"用户没写完就把括号关了"，所以这种写法不能接受，必须显式补一个 ';'
@@ -650,7 +642,6 @@ AstNodePtr Parser::parse_for() {
     consume_sep();
     AstNodePtr inc{parse_slot(false)};
     skip_newline();
-
     expect(TokenType::SIGN_RPAREN); // 消耗 ')'
     paren_depth_--;
     skip_newline();
@@ -666,18 +657,15 @@ AstNodePtr Parser::parse_while() {
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_WHILE);
     skip_newline();
-
     const bool collect{check(TokenType::SIGN_DOLLAR)};
     if (collect) expect(TokenType::SIGN_DOLLAR); // 消耗 '$'
     skip_newline();
-
     expect(TokenType::SIGN_LPAREN); // 消耗 '('
     paren_depth_++;
     AstNodePtr cond{parse_expr_as_cond()};
     expect(TokenType::SIGN_RPAREN); // 消耗 ')'
     paren_depth_--;
     skip_newline();
-
     AstNodePtr body{parse_expr()};
 
     return std::make_unique<AstNodeForCond>(
@@ -762,7 +750,6 @@ AstNodePtr Parser::parse_func(std::vector<AstNodePtr> decorators,
     const Position start_pos{decorators.empty() ? Position{peek().row, peek().col} : deco_pos};
     expect(TokenType::KW_FUNC);
     skip_newline();
-
     // 可选函数名（无名即匿名函数）
     std::optional<std::u32string> name;
     if (check(TokenType::IDENTIFIER)) {
@@ -782,7 +769,6 @@ AstNodePtr Parser::parse_func(std::vector<AstNodePtr> decorators,
     expect(TokenType::SIGN_LPAREN);
     std::vector params{finish_func_params()};
     skip_newline();
-
     // 可选返回类型 : type
     AstNodePtr return_type;
     if (check(TokenType::SIGN_COLON)) {
@@ -822,7 +808,6 @@ AstNodePtr Parser::parse_class(std::vector<AstNodePtr> decorators,
     const Position start_pos{decorators.empty() ? Position{peek().row, peek().col} : deco_pos};
     expect(TokenType::KW_CLASS);
     skip_newline();
-
     // 可选类名（无名即匿名类）
     std::optional<std::u32string> name;
     if (check(TokenType::IDENTIFIER)) {
@@ -1013,7 +998,6 @@ AstNodePtr Parser::finish_dict(const Position start_pos, AstNodePtr first) {
 
     emplace_item(std::move(first));
     skip_newline();
-
     while (check(TokenType::SIGN_COMMA)) {
         expect(TokenType::SIGN_COMMA); // 消耗 ','
         skip_newline();
@@ -1022,17 +1006,18 @@ AstNodePtr Parser::finish_dict(const Position start_pos, AstNodePtr first) {
         skip_newline();
     }
 
-    skip_newline();
+    // 走到这里 pos_ 必然已经紧跟在某次 skip_newline() 之后（循环的每条出路都是这样），
+    // 不需要在 expect(RBRACE) 前再补一次
     expect(TokenType::SIGN_RBRACE);
     return std::make_unique<AstNodeLiteralDict>(start_pos, std::move(items));
 }
 
 std::vector<AstNodeFunc::OneParam> Parser::finish_func_params() {
     // 解析一个参数
+    // parse_item 只会在 finish_comma_batch 里被紧跟在一次 skip_newline() 之后调用，
+    // 不需要在这里再重复跳一次
     auto parse_one_param{
         [&]()-> AstNodeFunc::OneParam {
-            skip_newline();
-
             AstNodeFunc::OneParam p{};
 
             // **kwargs
@@ -1056,7 +1041,6 @@ std::vector<AstNodeFunc::OneParam> Parser::finish_func_params() {
             }
 
             skip_newline();
-
             // 类型注解
             if (check(TokenType::SIGN_COLON)) {
                 expect(TokenType::SIGN_COLON); // 消耗 ':'
@@ -1089,12 +1073,11 @@ std::vector<AstNodeFunc::OneParam> Parser::finish_func_params() {
 }
 
 std::vector<AstNodeFunc::OneCapture> Parser::finish_func_captures() {
-    // 解析一个捕获
+    // 解析一个捕获；parse_item 只会在 finish_comma_batch 里被紧跟在一次 skip_newline() 之后
+    // 调用，不需要在这里再重复跳一次
     auto parse_one_capture{
         [&]() -> AstNodeFunc::OneCapture {
             AstNodeFunc::OneCapture c{};
-
-            skip_newline();
 
             // &identifier（引用捕获）
             if (check(TokenType::SIGN_AMPERSAND)) {
@@ -1109,7 +1092,6 @@ std::vector<AstNodeFunc::OneCapture> Parser::finish_func_captures() {
             c.capture_type_ = AstNodeFunc::OneCapture::CaptureType::Value;
             c.identifier_ = expect(TokenType::IDENTIFIER).lexeme;
             skip_newline();
-
             if (check(TokenType::SIGN_ASSIGN)) {
                 expect(TokenType::SIGN_ASSIGN); // 消耗 '='
                 skip_newline();
