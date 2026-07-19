@@ -99,13 +99,15 @@ target_link_options(SL_Cpp PRIVATE
 
 # 预编译头
 target_precompile_headers(SL_Cpp PRIVATE
-        <string>
-        <vector>
-        <memory>
-        <utility>
-        <optional>
-        <stdexcept>
+        <algorithm>
         <format>
+        <memory>
+        <optional>
+        <ranges>
+        <stdexcept>
+        <string>
+        <utility>
+        <vector>
 )
 
 target_link_libraries(SL_Cpp PRIVATE nlohmann_json::nlohmann_json cxxopts::cxxopts)
