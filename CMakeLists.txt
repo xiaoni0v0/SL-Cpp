@@ -6,6 +6,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
+if (NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "" AND
+        NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
+    message(FATAL_ERROR
+            "不支持的编译器前端命令行风格 CMAKE_CXX_COMPILER_FRONTEND_VARIANT=\"${CMAKE_CXX_COMPILER_FRONTEND_VARIANT}\"")
+endif ()
+
 # 第三方库
 include(FetchContent)
 FetchContent_Declare(
@@ -29,7 +35,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(nlohmann_json cxxopts doctest)
 
 # 所有的源文件
-add_executable(SL_Cpp main.cpp
+add_executable(SL main.cpp
         # utils
         utils/string_utils.cpp
         utils/string_utils.h
@@ -84,8 +90,8 @@ add_executable(SL_Cpp main.cpp
 )
 
 # 编译选项
-target_compile_options(SL_Cpp PRIVATE
-        -Wall -Wextra -pedantic -Wshadow -Wpointer-arith
+target_compile_options(SL PRIVATE
+        -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Winvalid-pch
         $<$<CONFIG:Debug>:-Werror>
         $<$<CONFIG:Debug>:-g>
         $<$<CONFIG:Debug>:-O0>
@@ -93,14 +99,16 @@ target_compile_options(SL_Cpp PRIVATE
 )
 
 # 链接选项
-target_link_options(SL_Cpp PRIVATE
+target_link_options(SL PRIVATE
         $<$<CONFIG:Release>:-static>
 )
 
 # 预编译头
-target_precompile_headers(SL_Cpp PRIVATE
+target_precompile_headers(SL PRIVATE
         <algorithm>
+        <filesystem>
         <format>
+        <iostream>
         <memory>
         <optional>
         <ranges>
@@ -111,7 +119,7 @@ target_precompile_headers(SL_Cpp PRIVATE
         <nlohmann/json.hpp>
 )
 
-target_link_libraries(SL_Cpp PRIVATE nlohmann_json::nlohmann_json cxxopts::cxxopts)
+target_link_libraries(SL PRIVATE nlohmann_json::nlohmann_json cxxopts::cxxopts)
 
 # ============================================================
 # 测试
