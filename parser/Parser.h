@@ -35,7 +35,6 @@ class Parser {
     void skip_terminator();
 
     [[noreturn]] void error(const std::string &msg) const;
-    [[noreturn]] void error(const std::string &msg, Position pos) const;
 
     /**
      * 尽可能多地解析表达式，直到 EOF 或 '}'
@@ -143,7 +142,7 @@ public:
      * @param tokens    由 Lexer 输出的 tokens
      * @param file_path 文件路径，默认为 "<unknown>"
      */
-    explicit Parser(std::vector<Token> tokens, std::string file_path);
+    explicit Parser(std::vector<Token> tokens, std::string file_path = "<unknown>");
 
     /**
      * 将 tokens 解析成 AST，只能调用一次（右值限定）

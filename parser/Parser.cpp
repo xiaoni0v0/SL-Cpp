@@ -195,10 +195,6 @@ void Parser::error(const std::string &msg) const {
     throw SyntaxError{file_path_, token.row, token.col, msg};
 }
 
-void Parser::error(const std::string &msg, const Position pos) const {
-    throw SyntaxError{file_path_, pos.row, pos.col, msg};
-}
-
 std::vector<AstNodePtr> Parser::parse_exprs() {
     std::vector<AstNodePtr> exprs;
 
@@ -407,13 +403,12 @@ AstNodePtr Parser::parse_non_op() {
     // 前缀运算符
     case TokenType::SIGN_PLUS:
     case TokenType::SIGN_MINUS:
-    case TokenType::SIGN_TILDE: {
+    case TokenType::SIGN_TILDE:
         // 单目优先级 140
         return advance(), // 消耗 '+' 或 '-' 或 '~'
                std::make_unique<AstNodeOpUnary>(
                    pos, *token_type_to_unary_op_type(type), parse_expr_pratt(140), pos
                    );
-    }
     case TokenType::KW_NOT:
         // not 优先级 40
         return expect(TokenType::KW_NOT), // 消耗 'not'
@@ -448,12 +443,12 @@ AstNodePtr Parser::parse_non_op() {
 
     // 遇到 EOF：括号内多半是没闭合，否则是缺了表达式
     case TokenType::END_OF_FILE: {
-        if (paren_depth_ > 0) error("unexpected end of file (unclosed bracket)", pos);
-        error("unexpected end of file (expected an expression)", pos);
+        if (paren_depth_ > 0) error("unexpected end of file (unclosed bracket)");
+        error("unexpected end of file (expected an expression)");
     }
 
     // 错误
-    default: error(std::format("unexpected token '{}'", u32_to_utf8(lexeme)), pos);
+    default: error(std::format("unexpected token '{}'", u32_to_utf8(lexeme)));
     }
 }
 
@@ -465,8 +460,7 @@ AstNodePtr Parser::parse_expr_as_cond() {
     skip_paren_newline();
     if (peek().type == TokenType::SIGN_ASSIGN) {
         error("bare assignment '=' is not allowed directly in a condition "
-              "(did you mean '=='? wrap it in an extra pair of parentheses if intentional)",
-              Position{peek().row, peek().col});
+            "(did you mean '=='? wrap it in an extra pair of parentheses if intentional)");
     }
 
     // 复合赋值 x op= y 允许裸写
@@ -650,18 +644,12 @@ AstNodePtr Parser::parse_for() {
             );
     }
 
-    // 2. for ()：第一个槽为空、且直接紧跟 ')'，即整个头部彻底为空。
-    //    SL.md 2.2.5.2 只有步进模式（三槽用 ';'/换行分隔，空槽也须显式 ';'）和迭代模式两种语法，
-    //    没有"裸单表达式当条件"的第三种写法；无限循环请用 for (;;)，纯条件循环请用 while (cond)。
+    // 第一个槽为空、且直接紧跟 ')'，即整个头部彻底为空：for ()
     if (!first && check_over_newline(TokenType::SIGN_RPAREN)) {
         error("empty for header (for an infinite loop use `for (;;)`; for a plain condition use `while (cond)`)");
     }
 
-    // 3. 否则为步进模式：for [$] (init SEP cond SEP inc) body，first 即 init
-    //    SEP（分隔符）为 ';' 或至少一个换行；两个槽之间必须有 SEP，否则无法无歧义地分割
-    //    注：括号内 paren_depth_ > 0，槽末尾的换行可能已经被上一个槽内部 Pratt 循环的边界检查
-    //    （skip_paren_newline）提前吃掉，此时再直接 check(NEWLINE) 会误判为"没有分隔符"，
-    //    所以改为比较"当前 token 所在行"与"上一个已消耗 token 所在行"是否不同来判断换行分隔符是否存在
+    // 否则为步进模式：for [$] (init SEP cond SEP inc) body，first 即 init
     auto consume_sep{
         [&] {
             if (check(TokenType::SIGN_SEMICOLON)) {
@@ -669,13 +657,12 @@ AstNodePtr Parser::parse_for() {
                 skip_newline();
                 return;
             }
+            // 上一个已消耗的 token 和当前 token 之间是不是隔着至少一次真实换行（比较两者的行号）
             if (tokens_[pos_ - 1].row == peek().row) {
                 error("expected ';' or newline to separate the expressions in a for header");
             }
             skip_newline();
-            // 换行分隔（不是显式 ';'）之后如果直接是 ')'，说明后面这一槽整个是空的——
-            // SL.md 2.2.5.2 规定"若某个槽为空，则必须使用 ';'"，光凭换行判不出"这一槽是故意留空"
-            // 还是"用户没写完就把括号关了"，所以这种写法不能接受，必须显式补一个 ';'
+            // 换行分隔（不是显式 ';'）之后如果直接是 ')'，说明后面这一槽整个是空的
             if (check(TokenType::SIGN_RPAREN)) {
                 error("an empty slot in a for header must be marked with ';', a newline alone is not enough");
             }
@@ -1087,7 +1074,7 @@ AstNodePtr Parser::finish_call(AstNodePtr obj, const Position start_pos) {
         }
     });
 
-    if (!check(TokenType::SIGN_RPAREN)) error("expected ')' to close function call", Position{peek().row, peek().col});
+    if (!check(TokenType::SIGN_RPAREN)) error("expected ')' to close function call");
     expect(TokenType::SIGN_RPAREN), paren_depth_--; // 消耗 ')'
 
     return std::make_unique<AstNodeCall>(start_pos, std::move(obj), std::move(args), std::move(kwargs), paren_pos);
@@ -1103,9 +1090,7 @@ AstNodePtr Parser::finish_index(AstNodePtr obj, const Position start_pos) {
     // a[]：不允许，索引至少需要一个下标
     if (args.empty()) error("expected at least one argument for indexing");
 
-    if (!check(TokenType::SIGN_RBRACKET))
-        error("expected ']' to close index expression",
-              Position{peek().row, peek().col});
+    if (!check(TokenType::SIGN_RBRACKET)) error("expected ']' to close index expression");
 
     expect(TokenType::SIGN_RBRACKET), paren_depth_--; // 消耗 ']'
 
