@@ -96,8 +96,18 @@ TEST_CASE("收集模式 for $ (...)") {
           });
 }
 
-TEST_CASE("槽之间缺分隔符报错") {
-    CHECK_THROWS_AS(parse_program(U"for (i = 0 i < 10; i += 1) body"), SyntaxError);
+TEST_CASE("槽之间缺分隔符报错，位置指向下一槽开头（不是上一槽结尾）") {
+    // "for (i = 0 i < 10; i += 1) body"
+    // f(1)o(2)r(3) (4)((5)i(6) (7)=(8) (9)0(10) (11)i(12) (13)<(14) (15)1(16)0(17);(18)...
+    // 第一槽 "i = 0" 解析完后，缺 ';'/换行直接紧跟第二槽的 'i'（第 12 列），报错应指向这个 'i'
+    try {
+        parse_program(U"for (i = 0 i < 10; i += 1) body");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("separate the expressions in a for header") != std::string::npos);
+        CHECK(msg.find("1:12:") != std::string::npos);
+    }
 }
 
 TEST_CASE("换行不能替代 ';' 来标记空槽：只写两个换行分隔的槽就直接收尾必须报错，"
@@ -111,6 +121,19 @@ TEST_CASE("换行不能替代 ';' 来标记空槽：只写两个换行分隔的�
     // 前面的槽用显式 ';' 标记为空，不代表后面的槽也能只凭换行标记为空——
     // init 用 ';' 正确标空，但 inc 只有换行、没有显式 ';'，同样要报错
     CHECK_THROWS_AS(parse_program(U"for (; c\n) body"), SyntaxError);
+}
+
+TEST_CASE("空槽换行报错的消息说明白要补 ';'，位置指向那个不该出现的 ')'") {
+    // "for (a\nb\n) body" -> 第 1 行 "for (a"，第 2 行 "b"，第 3 行 ") body"
+    // ')' 是第 3 行第 1 个字符
+    try {
+        parse_program(U"for (a\nb\n) body");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("must be marked with ';'") != std::string::npos);
+        CHECK(msg.find("3:1:") != std::string::npos);
+    }
 }
 
 TEST_CASE("换行 + 换行分隔的空槽必须紧跟着显式 ';' 才行：加上分号就恢复合法") {

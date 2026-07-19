@@ -67,8 +67,16 @@ TEST_CASE("语法层允许 except 和 finally 都不写（该约束交语义层�
           });
 }
 
-TEST_CASE("except 子句括号内至少要有一个异常表达式") {
-    CHECK_THROWS_AS(parse_program(U"try a except () b"), SyntaxError);
+TEST_CASE("except 子句括号内至少要有一个异常表达式，位置指向空括号里的 ')'") {
+    // "try a except () b" -> t(1)r(2)y(3) (4)a(5) (6)e(7)x(8)c(9)e(10)p(11)t(12) (13)((14))(15) (16)b(17)
+    try {
+        parse_program(U"try a except () b");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("except requires at least one exception type") != std::string::npos);
+        CHECK(msg.find("1:15:") != std::string::npos);
+    }
 }
 
 TEST_CASE("未闭合括号/缺 body 报错") {

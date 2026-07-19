@@ -153,18 +153,23 @@ TEST_CASE("未闭合的元组/分组抛异常") {
 }
 
 TEST_CASE("报错措辞跟有没有见过逗号走：已经确认是元组才说'元组没闭合'，"
-    "还看不出来是分组表达式还是元组时不能咬定是元组") {
+    "还看不出来是分组表达式还是元组时不能咬定是元组；位置都应该指向 EOF（缺的是收尾括号）") {
     try {
-        parse_program(U"(1, 2"); // 见过逗号，确定是元组
+        parse_program(U"(1, 2"); // 见过逗号，确定是元组；"(1, 2" 共 5 个字符，EOF 在第 6 列
         FAIL("应当抛出异常");
     } catch (const SyntaxError &e) {
-        CHECK(std::string{e.what()}.find("tuple") != std::string::npos);
+        const std::string msg{e.what()};
+        CHECK(msg.find("tuple") != std::string::npos);
+        CHECK(msg.find("1:6:") != std::string::npos);
     }
     try {
-        parse_program(U"(1"); // 没见过逗号，分不清是分组表达式还是元组
+        parse_program(U"(1"); // 没见过逗号，分不清是分组表达式还是元组；"(1" 共 2 个字符，EOF 在第 3 列
         FAIL("应当抛出异常");
     } catch (const SyntaxError &e) {
-        CHECK(std::string{e.what()}.find("tuple") == std::string::npos);
+        const std::string msg{e.what()};
+        CHECK(msg.find("tuple") == std::string::npos);
+        CHECK(msg.find("parentheses") != std::string::npos);
+        CHECK(msg.find("1:3:") != std::string::npos);
     }
 }
 
@@ -202,8 +207,16 @@ TEST_CASE("嵌套列表") {
               ]})"));
 }
 
-TEST_CASE("未闭合的列表抛异常") {
-    CHECK_THROWS_AS(parse_program(U"[1, 2"), SyntaxError);
+TEST_CASE("未闭合的列表抛异常，消息明确说是列表，位置指向 EOF") {
+    // "[1, 2" 共 5 个字符，EOF 在第 6 列
+    try {
+        parse_program(U"[1, 2");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("list literal") != std::string::npos);
+        CHECK(msg.find("1:6:") != std::string::npos);
+    }
 }
 
 }
@@ -250,8 +263,16 @@ TEST_CASE("嵌套字典") {
               ]})"));
 }
 
-TEST_CASE("未闭合的字典抛异常") {
-    CHECK_THROWS_AS(parse_program(U"{'a': 1"), SyntaxError);
+TEST_CASE("未闭合的字典抛异常（走的是通用 expect('}') 报错，不是字典专属措辞），位置指向 EOF") {
+    // "{'a': 1" 共 7 个字符，EOF 在第 8 列
+    try {
+        parse_program(U"{'a': 1");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("'}'") != std::string::npos);
+        CHECK(msg.find("1:8:") != std::string::npos);
+    }
 }
 
 }

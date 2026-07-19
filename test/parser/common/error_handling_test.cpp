@@ -37,7 +37,8 @@ TEST_CASE("报错行列指向出问题的具体位置，不是文件开头") {
     }
 }
 
-TEST_CASE("expect() 报错信息用用户可读的 token 名字，不泄漏内部枚举名") {
+TEST_CASE("expect() 报错信息用用户可读的 token 名字，不泄漏内部枚举名，位置指向实际出现的那个 token") {
+    // "if a) b" -> i(1)f(2) (3)a(4)：expect(LPAREN) 时 peek() 停在 'a'
     try {
         parse_program(U"if a) b"); // 缺左括号：期望 '(' 实际是标识符 a
         FAIL("应当抛出异常");
@@ -47,6 +48,43 @@ TEST_CASE("expect() 报错信息用用户可读的 token 名字，不泄漏内�
         CHECK(msg.find("an identifier") != std::string::npos);
         CHECK(msg.find("SIGN_LPAREN") == std::string::npos);
         CHECK(msg.find("IDENTIFIER") == std::string::npos);
+        CHECK(msg.find("1:4:") != std::string::npos); // 'a' 的位置
+    }
+}
+
+TEST_CASE("遇到 EOF 时区分'括号未闭合'和'单纯缺表达式'两种措辞，不能笼统一句带过") {
+    // "(" -> 未闭合括号内缺表达式，paren_depth_ > 0，提示是括号没收尾
+    try {
+        parse_program(U"(");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("unclosed bracket") != std::string::npos);
+        CHECK(msg.find("1:2:") != std::string::npos); // EOF 紧跟在 '(' 之后
+    }
+    // "1 +" -> 二元运算符消耗完还等着右操作数，paren_depth_ == 0，提示是缺了表达式本身
+    // （注：完全空的输入 "" 本身语法上合法——parse_exprs 的循环条件一见 EOF 就直接不进入循环体，
+    // 根本不会走到 parse_non_op，产出的是空的顶层表达式列表，不是错误）
+    try {
+        parse_program(U"1 +");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("expected an expression") != std::string::npos);
+        CHECK(msg.find("unclosed bracket") == std::string::npos);
+        CHECK(msg.find("1:4:") != std::string::npos); // EOF 紧跟在 "1 +" 之后
+    }
+}
+
+TEST_CASE("遇到不能作为表达式开头的 token（如裸逗号）报错，消息里带上该 token 的原始文本，位置指向它自己") {
+    // "," 本身不能开始一条表达式（不是前缀运算符也不是字面量）
+    try {
+        parse_program(U",");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("unexpected token ','") != std::string::npos);
+        CHECK(msg.find("1:1:") != std::string::npos);
     }
 }
 

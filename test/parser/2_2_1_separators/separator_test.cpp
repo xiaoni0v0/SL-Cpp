@@ -191,8 +191,17 @@ TEST_CASE("空行、连续分号都会被忽略，不产生空表达式") {
           });
 }
 
-TEST_CASE("一条表达式结尾不是换行/分号/EOF/} 时报错（如同一行写了两个不相干的表达式）") {
-    CHECK_THROWS_AS(parse_program(U"a b"), SyntaxError);
+TEST_CASE("一条表达式结尾不是换行/分号/EOF/} 时报错（如同一行写了两个不相干的表达式），"
+    "消息解释清楚缺了什么，位置指向多出来的那个 token") {
+    // "a b" -> a(1) (2)b(3)：报错时 peek() 停在 'b'，位置应指向 'b' 而不是 'a' 或行首
+    try {
+        parse_program(U"a b");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("expected newline or ';' after expression") != std::string::npos);
+        CHECK(msg.find("1:3:") != std::string::npos); // 'b' 的位置
+    }
 }
 
 TEST_CASE("未闭合括号一路合并到 EOF 仍不完整，抛异常（而不是死循环）") {

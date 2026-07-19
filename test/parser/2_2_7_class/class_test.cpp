@@ -78,4 +78,16 @@ TEST_CASE("未闭合基类列表/类体报错") {
     CHECK_THROWS_AS(parse_program(U"class C {"), SyntaxError);
 }
 
+TEST_CASE("基类列表未闭合的消息明确说'base class list'，位置指向多出来的 '{'（不是 EOF）") {
+    // "class C(Base {}" -> c(1)l(2)a(3)s(4)s(5) (6)C(7)((8)B(9)a(10)s(11)e(12) (13){(14)}(15)
+    try {
+        parse_program(U"class C(Base {}");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("close base class list") != std::string::npos);
+        CHECK(msg.find("1:14:") != std::string::npos); // '{'
+    }
+}
+
 }

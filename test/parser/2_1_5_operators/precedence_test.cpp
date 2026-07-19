@@ -306,13 +306,37 @@ TEST_CASE("左结合链式：obj.attr[0](1, 2)?") {
           });
 }
 
-TEST_CASE("a[] 不允许，索引至少要有一个参数") {
-    CHECK_THROWS_AS(parse_program(U"a[]"), SyntaxError);
+TEST_CASE("a[] 不允许，索引至少要有一个参数，消息说明白具体缺什么，位置指向 ']'") {
+    // "a[]" -> a(1)[(2)](3)：还没消耗 ']' 前就先发现 args 为空，位置停在 ']' 自己
+    try {
+        parse_program(U"a[]");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("at least one argument for indexing") != std::string::npos);
+        CHECK(msg.find("1:3:") != std::string::npos);
+    }
 }
 
-TEST_CASE("未闭合的调用/索引抛异常") {
-    CHECK_THROWS_AS(parse_program(U"f(1, 2"), SyntaxError);
-    CHECK_THROWS_AS(parse_program(U"a[0"), SyntaxError);
+TEST_CASE("未闭合的调用/索引抛异常，消息分别点名'function call'/'index expression'，位置指向 EOF") {
+    // "f(1, 2" 共 6 个字符，EOF 在第 7 列
+    try {
+        parse_program(U"f(1, 2");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("function call") != std::string::npos);
+        CHECK(msg.find("1:7:") != std::string::npos);
+    }
+    // "a[0" 共 3 个字符，EOF 在第 4 列
+    try {
+        parse_program(U"a[0");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("index expression") != std::string::npos);
+        CHECK(msg.find("1:4:") != std::string::npos);
+    }
 }
 
 TEST_CASE("属性访问后面必须是标识符") {

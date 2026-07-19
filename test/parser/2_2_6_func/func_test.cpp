@@ -105,6 +105,18 @@ TEST_CASE("缺少括号/未闭合报错") {
     CHECK_THROWS_AS(parse_program(U"func f(a {}"), SyntaxError);
 }
 
+TEST_CASE("形参列表未闭合的消息明确说'parameter list'，位置指向多出来的 '{'（不是 EOF）") {
+    // "func f(a {}" -> f(1)u(2)n(3)c(4) (5)f(6)((7)a(8) (9){(10)}(11)
+    try {
+        parse_program(U"func f(a {}");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("close parameter list") != std::string::npos);
+        CHECK(msg.find("1:10:") != std::string::npos); // '{'
+    }
+}
+
 }
 
 TEST_SUITE("2.2.6 func——捕获列表") {
@@ -137,6 +149,18 @@ TEST_CASE("混合捕获，空捕获列表 []") {
         nlohmann::json{{"kind", "Value"}, {"identifier", "z"}, {"value_expr", int_lit("1")}}
         }));
     CHECK(parse_json(U"func f[]() {}")["captures"] == nlohmann::json::array());
+}
+
+TEST_CASE("捕获列表未闭合的消息明确说'capture list'，位置指向多出来的 '{'（不是 EOF）") {
+    // "func f[x {}" -> f(1)u(2)n(3)c(4) (5)f(6)[(7)x(8) (9){(10)}(11)
+    try {
+        parse_program(U"func f[x {}");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("close capture list") != std::string::npos);
+        CHECK(msg.find("1:10:") != std::string::npos); // '{'
+    }
 }
 
 }

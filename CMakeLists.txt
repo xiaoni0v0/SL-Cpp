@@ -220,6 +220,7 @@ add_executable(SL_Cpp_Parser_Tests
         # 跨章节：位置追踪、报错
         test/parser/common/position_tracking_test.cpp
         test/parser/common/error_handling_test.cpp
+        test/parser/common/combination_test.cpp
 )
 target_compile_options(SL_Cpp_Parser_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
 target_link_libraries(SL_Cpp_Parser_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)

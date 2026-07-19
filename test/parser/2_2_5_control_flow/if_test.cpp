@@ -92,8 +92,17 @@ TEST_CASE("缺少 body 报错") {
 
 TEST_SUITE("2.2.5.1 if——cond 槽禁止裸的普通赋值") {
 
-TEST_CASE("裸 = 直接报错，提示改用双层括号") {
-    CHECK_THROWS_AS(parse_program(U"if (x = 1) y"), SyntaxError);
+TEST_CASE("裸 = 直接报错，提示改用双层括号，位置指向 '=' 自己（不是 'x' 或 '('）") {
+    // "if (x = 1) y" -> i(1)f(2) (3)((4)x(5) (6)=(7) (8)1(9))(10) (11)y(12)
+    try {
+        parse_program(U"if (x = 1) y");
+        FAIL("应当抛出异常");
+    } catch (const SyntaxError &e) {
+        const std::string msg{e.what()};
+        CHECK(msg.find("bare assignment") != std::string::npos);
+        CHECK(msg.find("wrap it in an extra pair of parentheses") != std::string::npos);
+        CHECK(msg.find("1:7:") != std::string::npos); // '='
+    }
 }
 
 TEST_CASE("显式再套一层括号就允许：if ((x = 1)) y") {
