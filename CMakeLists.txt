@@ -108,6 +108,7 @@ target_precompile_headers(SL_Cpp PRIVATE
         <string>
         <utility>
         <vector>
+        <nlohmann/json.hpp>
 )
 
 target_link_libraries(SL_Cpp PRIVATE nlohmann_json::nlohmann_json cxxopts::cxxopts)
@@ -224,6 +225,12 @@ add_executable(SL_Cpp_Parser_Tests
         test/parser/common/error_handling_test.cpp
         test/parser/common/combination_test.cpp
 )
+
+# 预编译头
+target_precompile_headers(SL_Cpp_Parser_Tests PRIVATE
+        <nlohmann/json.hpp>
+)
+
 target_compile_options(SL_Cpp_Parser_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
 target_link_libraries(SL_Cpp_Parser_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
 
