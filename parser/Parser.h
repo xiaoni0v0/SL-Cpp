@@ -59,6 +59,24 @@ class Parser {
     AstNodePtr parse_expr_pratt(int min_bp);
 
     /**
+     * 链式比较（< <= > >= == !=）
+     * @param left         左操作数
+     * @param start_pos    整个表达式开始的位置
+     * @param first_op     第一个运算符的类型
+     * @param first_op_pos 第一个运算符的位置
+     */
+    AstNodePtr parse_chain_compare(AstNodePtr left, Position start_pos,
+                                   AstNodeCompare::OpType first_op, Position first_op_pos);
+
+    /**
+     * 链式 is
+     * @param left         左操作数
+     * @param start_pos    整个表达式开始的位置
+     * @param first_is_pos 第一个 is 的位置
+     */
+    AstNodePtr parse_chain_is(AstNodePtr left, Position start_pos, Position first_is_pos);
+
+    /**
      * 解析一个无运算符的表达式
      * 不依赖左侧值
      * @return 节点
@@ -100,35 +118,24 @@ class Parser {
     // 装饰器表达式 / 函数 / 类
     AstNodePtr parse_decorator();
 
-    // 链式比较（< <= > >= == !=）：left 已解析完毕，first_op 是刚 advance 掉的第一个比较运算符
-    // 对应的 AstNodeCompare::OpType（调用处已经用 token_type_to_compare_op_type 转换过），
-    // first_op_pos 是这个运算符自己的位置（存进 AstNodeCompare::op_positions_）
-    AstNodePtr parse_chain_compare(AstNodePtr left, Position start_pos,
-                                   AstNodeCompare::OpType first_op, Position first_op_pos);
-    // 链式 is：left 已解析完毕，第一个 'is' 已被 advance 掉；is 不可重载，不与上面共用 AstNodeCompare
-    // first_is_pos 是第一个 'is' 自己的位置（存进 AstNodeIs::op_positions_）
-    AstNodePtr parse_chain_is(AstNodePtr left, Position start_pos, Position first_is_pos);
-
     /**
-     * 完成一堆逗号连成的一串的剩余部分，可能空。当前已进入括号。
+     * 完成一堆逗号连成的一串的剩余部分，可能空。不消耗括号、不涉及 paren_depth_。
      * 说白了它的功能就是跳过逗号并控制何时结束，不管每一项怎么解析。
      * @param close      结束括号 token 类型
      * @param parse_item 回调函数，对每一项怎么解析
      * @return           是否真的消耗过至少一个 ','
      */
     bool finish_comma_batch(TokenType close, const std::function<void()> &parse_item);
-    // 完成字典剩余部分。当前已被判为字典、第一项已解析为 first
-    // 不涉及 paren_depth_——'{' 的深度由 parse_brace 整体管理，跟下面几个括号/方括号的
-    // finish_ 函数是不同的机制（详见 parse_brace 的实现注释）
+    // 完成字典剩余部分。当前已被判为字典、第一项已解析为 first。不消耗括号、不涉及 paren_depth_
     AstNodePtr finish_dict(Position start_pos, AstNodePtr first);
-    // '(' 已消耗后调用，解析到并消耗 ')'；paren_depth_ 由本函数自己管理（内部 ++，收尾前 --）
+    // 完成解析形参列表。消耗括号、管理 paren_depth_
     std::vector<AstNodeFunc::OneParam> finish_func_params();
-    // '[' 已消耗后调用，解析到并消耗 ']'；paren_depth_ 由本函数自己管理（内部 ++，收尾前 --）
+    // 完成解析捕获列表。消耗括号、管理 paren_depth_
     std::vector<AstNodeFunc::OneCapture> finish_func_captures();
-    // '(' 已消耗后调用，解析到并消耗 ')'；paren_depth_ 由本函数自己管理；paren_pos 是这个 '(' 自己的位置
-    AstNodePtr finish_call(AstNodePtr callee, Position pos, Position paren_pos);
-    // '[' 已消耗后调用，解析到并消耗 ']'；paren_depth_ 由本函数自己管理；bracket_pos 是这个 '[' 自己的位置
-    AstNodePtr finish_index(AstNodePtr obj, Position pos, Position bracket_pos);
+    // 完成函数调用 f(...)。消耗括号、管理 paren_depth_
+    AstNodePtr finish_call(AstNodePtr obj, Position start_pos);
+    // 完成索引 x[...]。消耗括号、管理 paren_depth_
+    AstNodePtr finish_index(AstNodePtr obj, Position start_pos);
 
 public:
     /**
