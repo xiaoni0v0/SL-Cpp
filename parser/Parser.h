@@ -65,8 +65,8 @@ class Parser {
      */
     AstNodePtr parse_non_op();
 
-    // 解析 if / while / for 中间槽的条件表达式
-    AstNodePtr parse_cond();
+    // 解析 if / for 中间槽 / while 的条件表达式
+    AstNodePtr parse_expr_as_cond();
     // 分组 (expr) 或者元组 (expr1, expr2)
     AstNodePtr parse_paren_or_tuple();
     // 列表 [expr1, expr2]
@@ -118,14 +118,16 @@ class Parser {
      */
     bool finish_comma_batch(TokenType close, const std::function<void()> &parse_item);
     // 完成字典剩余部分。当前已被判为字典、第一项已解析为 first
+    // 不涉及 paren_depth_——'{' 的深度由 parse_brace 整体管理，跟下面几个括号/方括号的
+    // finish_ 函数是不同的机制（详见 parse_brace 的实现注释）
     AstNodePtr finish_dict(Position start_pos, AstNodePtr first);
-    // '(' 已消耗后调用，解析到并消耗 ')'
+    // '(' 已消耗后调用，解析到并消耗 ')'；paren_depth_ 由本函数自己管理（内部 ++，收尾前 --）
     std::vector<AstNodeFunc::OneParam> finish_func_params();
-    // '[' 已消耗后调用，解析到并消耗 ']'
+    // '[' 已消耗后调用，解析到并消耗 ']'；paren_depth_ 由本函数自己管理（内部 ++，收尾前 --）
     std::vector<AstNodeFunc::OneCapture> finish_func_captures();
-    // '(' 已消耗、paren_depth_ 已自增后调用；paren_pos 是这个 '(' 自己的位置
+    // '(' 已消耗后调用，解析到并消耗 ')'；paren_depth_ 由本函数自己管理；paren_pos 是这个 '(' 自己的位置
     AstNodePtr finish_call(AstNodePtr callee, Position pos, Position paren_pos);
-    // '[' 已消耗、paren_depth_ 已自增后调用；bracket_pos 是这个 '[' 自己的位置
+    // '[' 已消耗后调用，解析到并消耗 ']'；paren_depth_ 由本函数自己管理；bracket_pos 是这个 '[' 自己的位置
     AstNodePtr finish_index(AstNodePtr obj, Position pos, Position bracket_pos);
 
 public:
