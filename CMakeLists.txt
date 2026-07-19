@@ -158,6 +158,12 @@ add_executable(SL_Cpp_Lexer_Tests
         test/lexer/common/error_handling_test.cpp
 )
 
+# 预编译头
+target_precompile_headers(SL_Cpp_Lexer_Tests PRIVATE
+        <doctest/doctest.h>
+)
+set_source_files_properties(test/lexer/main_test.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+
 target_compile_options(SL_Cpp_Lexer_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
 target_link_libraries(SL_Cpp_Lexer_Tests PRIVATE doctest::doctest)
 
@@ -229,7 +235,9 @@ add_executable(SL_Cpp_Parser_Tests
 # 预编译头
 target_precompile_headers(SL_Cpp_Parser_Tests PRIVATE
         <nlohmann/json.hpp>
+        <doctest/doctest.h>
 )
+set_source_files_properties(test/parser/main_test.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 
 target_compile_options(SL_Cpp_Parser_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
 target_link_libraries(SL_Cpp_Parser_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
