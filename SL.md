@@ -464,11 +464,11 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
    若有 `: ret_type`，对 `ret_type` 求值；
    若有文档字符串，对其求值。
    装饰器的调用发生在函数对象建立完毕之后，从近到远进行；
-8. 对类定义 `⟦@decorator ...⟧ class identifier(BaseClass1, ...)[ALL_CAPTURE]`
+8. 对类定义 `⟦@decorator ...⟧ class identifier(BaseClass1, ...)[ALL_CAPTURE]doc`
    若有前缀装饰器，先从前到后（离 `class` 越远的越先）对各 `decorator` 求值；
-   若有文档字符串，对其求值；
    再各基类从前到后逐个求值；
    若有捕获，在新建类体自己的局部帧之后、执行类体之前，从前到后处理 `ALL_CAPTURE` 中各项（具体规则见 3.10.4）；
+   若有文档字符串，对其求值；
 9. 对 `except`，各异常类从前到后逐个求值。
 
 ### 3.4 表达式的值
@@ -1063,6 +1063,8 @@ SL 只有 2 种**作用域**：
 `_L` 只包含存储在当前帧里的名字，包括局部变量、形参、值捕获，不包括引用捕获。
 
 帧弹出（函数调用正常返回、异常传播退出、类体执行完毕）时，把它自己的局部字典置为 `None`。
+帧对象本身只要还被某个定义帧（3.10.4）引用持有，就会随之继续存在，只是一个局部字典为 `None` 的空壳；
+这不要求存在引用捕获——每个函数、类建立时都无条件记住自己的定义帧，不管有没有捕获列表。
 
 “确定标识符 `identifier` 操作哪个帧”这个过程称为**作用域确定**，规则见 3.10.3 所述；标识符被捕获时另见 3.10.4。
 
@@ -1543,7 +1545,7 @@ BaseException
 表示这个位置的类型待定，但同一次调用里，多个用到同一个 `TypeVar` 对象的位置，类型必须彼此一致。
 
 `bound`：可选，约束待定的类型本身必须满足 `isinstance(_, bound)`；省略则不做约束。
-`bound` 须满足 `isinstance(bound, type | CompoundType ? )`，否则抛出 `TypeError`。
+`bound` 须满足 `isinstance(bound, type | CompoundType | None)`，否则抛出 `TypeError`。
 
 调用时的一致性检查：按形参从前到后、再到返回值的顺序检查各类型注解，每遇到一个 `TypeVar` 对象：
 
