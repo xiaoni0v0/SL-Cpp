@@ -4,7 +4,7 @@
 
 
 class LiteralFolder {
-    [[maybe_unused]] AstNodeProgram *root_;
+    [[maybe_unused]] AstNodeProgram *const root_;
 
 public:
     explicit LiteralFolder(AstNodeProgram *root);
