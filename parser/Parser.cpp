@@ -786,9 +786,9 @@ AstNodePtr Parser::parse_func(std::vector<AstNodePtr> decorators,
     }
 
     // 可选捕获列表 [captures]
-    std::vector<AstNodeFunc::OneCapture> captures;
+    std::vector<OneCapture> captures;
     if (check(TokenType::SIGN_LBRACKET)) {
-        captures = finish_func_captures();
+        captures = finish_captures();
         skip_newline();
     }
 
@@ -852,6 +852,13 @@ AstNodePtr Parser::parse_class(std::vector<AstNodePtr> decorators,
         skip_newline();
     }
 
+    // 可选捕获列表 [captures]
+    std::vector<OneCapture> captures;
+    if (check(TokenType::SIGN_LBRACKET)) {
+        captures = finish_captures();
+        skip_newline();
+    }
+
     // 可选文档字符串（下一个 token 不是 '{' 则视为 doc）
     AstNodePtr doc;
     if (!check(TokenType::SIGN_LBRACE)) {
@@ -868,7 +875,7 @@ AstNodePtr Parser::parse_class(std::vector<AstNodePtr> decorators,
 
     return std::make_unique<AstNodeClass>(
         start_pos, std::move(decorators), std::move(decorator_positions), std::move(name),
-        std::move(bases), std::move(doc),
+        std::move(bases), std::move(captures), std::move(doc),
         std::make_unique<AstNodeProgram>(body_pos, std::move(body))
         );
 }
@@ -1012,23 +1019,23 @@ std::vector<AstNodeFunc::OneParam> Parser::finish_func_params() {
     return params;
 }
 
-std::vector<AstNodeFunc::OneCapture> Parser::finish_func_captures() {
+std::vector<OneCapture> Parser::finish_captures() {
     // 解析一个捕获
     auto parse_one_capture{
-        [&]() -> AstNodeFunc::OneCapture {
-            AstNodeFunc::OneCapture c{};
+        [&]() -> OneCapture {
+            OneCapture c{};
 
             // &identifier（引用捕获）
             if (check(TokenType::SIGN_AMPERSAND)) {
                 expect(TokenType::SIGN_AMPERSAND); // 消耗 '&'
                 skip_newline();
-                c.capture_type_ = AstNodeFunc::OneCapture::CaptureType::Reference;
+                c.capture_type_ = OneCapture::CaptureType::Reference;
                 c.identifier_ = expect(TokenType::IDENTIFIER).lexeme; // 消耗标识符
                 return c;
             }
 
             // identifier ⟦= expr⟧（值捕获）
-            c.capture_type_ = AstNodeFunc::OneCapture::CaptureType::Value;
+            c.capture_type_ = OneCapture::CaptureType::Value;
             c.identifier_ = expect(TokenType::IDENTIFIER).lexeme; // 消耗标识符
             skip_newline();
             if (check(TokenType::SIGN_ASSIGN)) {
@@ -1043,7 +1050,7 @@ std::vector<AstNodeFunc::OneCapture> Parser::finish_func_captures() {
 
     expect(TokenType::SIGN_LBRACKET), paren_depth_++; // 消耗 '['
 
-    std::vector<AstNodeFunc::OneCapture> captures;
+    std::vector<OneCapture> captures;
     finish_comma_batch(TokenType::SIGN_RBRACKET, [&] { captures.push_back(parse_one_capture()); });
 
     if (!check(TokenType::SIGN_RBRACKET)) error("expected ']' to close capture list");

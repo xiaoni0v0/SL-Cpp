@@ -129,8 +129,8 @@ class Parser {
     AstNodePtr finish_dict(Position start_pos, AstNodePtr first);
     // 完成解析形参列表。消耗括号、管理 paren_depth_
     std::vector<AstNodeFunc::OneParam> finish_func_params();
-    // 完成解析捕获列表。消耗括号、管理 paren_depth_
-    std::vector<AstNodeFunc::OneCapture> finish_func_captures();
+    // 完成解析捕获列表。消耗括号、管理 paren_depth_。func、class 共用
+    std::vector<OneCapture> finish_captures();
     // 完成函数调用 f(...)。消耗括号、管理 paren_depth_
     AstNodePtr finish_call(AstNodePtr obj, Position start_pos);
     // 完成索引 x[...]。消耗括号、管理 paren_depth_

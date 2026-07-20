@@ -1,6 +1,7 @@
 #pragma once
 
 #include "details/ast_node.h"
+#include "details/ast_node_capture.h"
 #include "details/ast_node_class.h"
 #include "details/ast_node_control_flows.h"
 #include "details/ast_node_decorators.h"

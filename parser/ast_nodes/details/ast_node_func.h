@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast_node.h"
+#include "ast_node_capture.h"
 #include "ast_node_multi_exprs.h"
 #include "../../../utils/string_utils.h"
 
@@ -25,14 +26,6 @@ struct AstNodeFunc : AstNode {
         std::u32string identifier_;
         AstNodePtr type_annotation_; // 类型注解，nullptr 表示无类型注解
         AstNodePtr default_value_; // 默认值，nullptr 表示无默认值
-    };
-
-    // 单个捕获项：identifier（值捕获，读当前值） / identifier = expr（值捕获，读 expr） / &identifier（引用捕获）
-    struct OneCapture {
-        enum class CaptureType { Value, Reference } capture_type_;
-
-        std::u32string identifier_;
-        AstNodePtr value_expr_; // 仅 CaptureType::Value 且显式写了 "= expr" 时非空；裸标识符或引用捕获均为 nullptr
     };
 
     // 前缀装饰器
@@ -63,14 +56,6 @@ struct AstNodeFunc : AstNode {
         auto decorators = json::array();
         for (const auto &d : decorators_) decorators.push_back(d->to_json());
 
-        auto captures = json::array();
-        for (const auto &c : captures_)
-            captures.push_back({
-                {"kind", c.capture_type_ == OneCapture::CaptureType::Value ? "Value" : "Reference"},
-                {"identifier", u32_to_utf8(c.identifier_)},
-                {"value_expr", c.value_expr_ ? c.value_expr_->to_json() : json(nullptr)}
-            });
-
         auto params = json::array();
         for (const auto &p : params_)
             params.push_back({
@@ -84,7 +69,7 @@ struct AstNodeFunc : AstNode {
             {"type", "Func"},
             {"decorators", std::move(decorators)},
             {"name", name_ ? json(u32_to_utf8(*name_)) : json(nullptr)},
-            {"captures", std::move(captures)},
+            {"captures", captures_to_json(captures_)},
             {"params", std::move(params)},
             {"return_type", return_type_ ? return_type_->to_json() : json(nullptr)},
             {"doc", doc_ ? doc_->to_json() : json(nullptr)},

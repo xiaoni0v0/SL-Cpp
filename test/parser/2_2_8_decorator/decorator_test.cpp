@@ -33,7 +33,7 @@ TEST_CASE("多个装饰器按书写顺序进 decorators_") {
 TEST_CASE("挂到 class 的 decorators_") {
     CHECK(parse_json(U"@dec class C {}") == nlohmann::json{
           {"type", "Class"}, {"decorators", nlohmann::json::array({ident("dec")})}, {"name", "C"},
-          {"bases", nlohmann::json::array()}, {"doc", nullptr},
+          {"bases", nlohmann::json::array()}, {"captures", nlohmann::json::array()}, {"doc", nullptr},
           {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
           });
 }

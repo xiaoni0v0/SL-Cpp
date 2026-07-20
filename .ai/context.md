@@ -1764,3 +1764,13 @@ SL 层 `except (SyntaxError)` 正常捕获、正常传播的**运行时异常对
 污染。如果只有"存在引用捕获"的函数才记定义帧，没有任何捕获的函数在跨模块调用时就会找错全局帧——所以
 这不是可选的优化，是让"模块"这个概念本身能正确工作的必要前提。这条目前只存在于讨论过程里，SL.md 还
 没有模块/`import` 相关的章节可以挂靠，等那部分设计展开时需要把这条也写进去。
+
+**Parser 侧同步实现**：给 `class` 补上了跟 `func` 一致的 `[ALL_CAPTURE]` 语法。`OneCapture` 这个
+类型原来嵌在 `AstNodeFunc` 里（`AstNodeFunc::OneCapture`），因为现在 func/class 共用，提成了独立文件
+`parser/ast_nodes/details/ast_node_capture.h` 里的顶层 struct（连同一个 `captures_to_json` 小工具
+函数一起提出去，两边 `to_json()` 不用各写一遍），不再挂在某一方名下。`Parser::finish_func_captures()`
+相应改名成 `finish_captures()`（不再是 func 专属）。`parse_class()` 里捕获列表解析插在基类列表和 doc
+之间，跟语法、跟 `AstNodeClass` 构造函数里的字段顺序都对齐。捕获列表内部标识符判重（SL.md 新加的
+"否则抛出 SyntaxError"那条）是 `SyntaxChecker` 的活，这次没有跟着改——`SyntaxChecker` 本身要留给用户
+自己通读一遍再重构，这条判重规则等那时候一起补（跟 `func` 现有的判重逻辑几乎能直接照抄，见
+`SyntaxChecker::check(const AstNodeFunc *)` 里 `seen_names` 那段）。
