@@ -6,7 +6,7 @@
 
 
 class Analyzer {
-    AstNodeProgram *const root_;
+    AstNodeProgram &root_;
     const std::string file_path_;
 
 public:
@@ -15,7 +15,7 @@ public:
      * @param root      AST 的根节点
      * @param file_path 文件路径，默认为 "<unknown>"
      */
-    explicit Analyzer(AstNodeProgram *root, std::string file_path = "<unknown>");
+    explicit Analyzer(AstNodeProgram &root, std::string file_path = "<unknown>");
 
     /**
      * 分析 AST，包括字面量折叠和语法合法性检查

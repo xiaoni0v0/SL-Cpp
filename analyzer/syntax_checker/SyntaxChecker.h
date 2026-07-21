@@ -6,7 +6,7 @@
 
 
 class SyntaxChecker {
-    AstNodeProgram *const root_;
+    AstNodeProgram &root_;
     const std::string file_path_;
 
     struct Context {
@@ -26,21 +26,23 @@ class SyntaxChecker {
         if (name.empty()) error("unexpected null vector", Position{0, 0});
     }
 
-    // 检查节点，dispatch
-    void check(const AstNode *node);
+    // 检查节点，dispatch；要求 node 非空
+    void check(const AstNode &node);
+    // 检查一个可能为空的槽位：空则跳过（对应"这个槽位本来就没有"），非空则 check
+    void check_optional(const AstNodePtr &node);
 
     // 每种节点的
-#define X(nt) void check(const nt *node);
+#define X(nt) void check(const nt &node);
 #include "../../parser/ast_nodes/x_ast_nodes.h"
 #undef X
 
-    // 检查一个节点是否可以作为左值（含解构：元组/列表，元素里最多一个可以带 * 前缀）。要求 node 非空
-    void check_lvalue(const AstNode *node) const;
+    // 检查一个节点是否可以作为左值（含解构：元组/列表，元素里最多一个可以带 * 前缀）
+    void check_lvalue(const AstNode &node) const;
     // check_lvalue 的辅助：检查解构元组/列表的各元素，校验"至多一个 *lv"（2.1.5 第 4 点）
     void check_lvalue_items(const std::vector<AstNodePtr> &items) const;
     // 检查一个节点是否可以作为"简单左值"（标识符/属性访问/元素访问，不含解构），
     // 用于复合赋值这类不支持解构的场合
-    void check_simple_lvalue(const AstNode *node) const;
+    void check_simple_lvalue(const AstNode &node) const;
 
 public:
     /**
@@ -48,7 +50,7 @@ public:
      * @param root      AST 的根节点
      * @param file_path 文件路径，默认为 "<unknown>"
      */
-    explicit SyntaxChecker(AstNodeProgram *root, std::string file_path = "<unknown>");
+    explicit SyntaxChecker(AstNodeProgram &root, std::string file_path = "<unknown>");
 
     /**
      * 语法合法性检查

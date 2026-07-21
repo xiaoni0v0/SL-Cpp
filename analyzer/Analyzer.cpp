@@ -3,7 +3,7 @@
 #include "literal_folder/LiteralFolder.h"
 #include "syntax_checker/SyntaxChecker.h"
 
-Analyzer::Analyzer(AstNodeProgram *const root, std::string file_path)
+Analyzer::Analyzer(AstNodeProgram &root, std::string file_path)
     : root_{root}, file_path_{std::move(file_path)} {
 }
 

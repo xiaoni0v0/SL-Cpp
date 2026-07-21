@@ -70,7 +70,7 @@ int Executor::run() const {
 
     // 3. 分析器（检查 AST）
     try {
-        Analyzer{ast.get(), file_path}.analyze();
+        Analyzer{*ast, file_path}.analyze();
     } catch (SLException &e) {
         std::cerr << e.what() << std::endl;
         return 1;
