@@ -42,6 +42,10 @@ add_executable(SL main.cpp
         utils/file_utils.cpp
         utils/file_utils.h
 
+        # numeric
+        numeric/BigInt.cpp
+        numeric/BigInt.h
+
         # Executor
         executor/Executor.cpp
         executor/Executor.h
@@ -68,6 +72,7 @@ add_executable(SL main.cpp
         parser/ast_nodes/ast_nodes.h
         parser/ast_nodes/x_ast_nodes.h
         parser/ast_nodes/details/ast_node.h
+        parser/ast_nodes/details/ast_node_capture.h
         parser/ast_nodes/details/ast_node_class.h
         parser/ast_nodes/details/ast_node_control_flows.h
         parser/ast_nodes/details/ast_node_decorators.h
@@ -126,6 +131,23 @@ target_link_libraries(SL PRIVATE nlohmann_json::nlohmann_json cxxopts::cxxopts)
 # ============================================================
 
 enable_testing()
+
+add_executable(SL_Cpp_Numeric_Tests
+        # 被测代码
+        numeric/BigInt.cpp
+        numeric/BigInt.h
+
+        # 测试工具
+        test/numeric/main_test.cpp
+
+        # 测试代码
+        test/numeric/big_int_test.cpp
+)
+
+target_compile_options(SL_Cpp_Numeric_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
+target_link_libraries(SL_Cpp_Numeric_Tests PRIVATE doctest::doctest)
+
+add_test(NAME SL_Cpp_Numeric_Tests COMMAND SL_Cpp_Numeric_Tests)
 
 add_executable(SL_Cpp_Lexer_Tests
         # 被测代码
