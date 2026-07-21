@@ -1,6 +1,5 @@
-X(AstNodeCall)
-X(AstNodeIndex)
-X(AstNodeAttr)
+X(AstNodeClass)
+
 X(AstNodeIf)
 X(AstNodeForCond)
 X(AstNodeForIter)
@@ -9,9 +8,11 @@ X(AstNodeContinue)
 X(AstNodeReturn)
 X(AstNodeTry)
 X(AstNodeRaise)
+
 X(AstNodeDecorator)
+
 X(AstNodeFunc)
-X(AstNodeClass)
+
 X(AstNodeLiteralNone)
 X(AstNodeLiteralBool)
 X(AstNodeLiteralGL)
@@ -22,8 +23,10 @@ X(AstNodeLiteralTuple)
 X(AstNodeLiteralList)
 X(AstNodeLiteralDict)
 X(AstNodeLiteralEllipsis)
+
 X(AstNodeProgram)
 X(AstNodeCompound)
+
 X(AstNodeStar)
 X(AstNodeDoubleStar)
 X(AstNodeOpUnary)
@@ -32,6 +35,11 @@ X(AstNodeCompare)
 X(AstNodeIs)
 X(AstNodeAssign)
 X(AstNodeCompoundAssign)
+
+X(AstNodeCall)
+X(AstNodeIndex)
+X(AstNodeAttr)
+
 X(AstNodeIdentifier)
 X(AstNodeDel)
 X(AstNodeGlobal)

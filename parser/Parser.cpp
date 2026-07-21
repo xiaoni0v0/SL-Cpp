@@ -434,12 +434,10 @@ AstNodePtr Parser::parse_non_op() {
 
     // 函数
     case TokenType::KW_FUNC: return parse_func();
-
-    // 装饰器
-    case TokenType::SIGN_AT: return parse_decorator();
-
     // 类
     case TokenType::KW_CLASS: return parse_class();
+    // 装饰器
+    case TokenType::SIGN_AT: return parse_decorator();
 
     // 遇到 EOF：括号内多半是没闭合，否则是缺了表达式
     case TokenType::END_OF_FILE: {
