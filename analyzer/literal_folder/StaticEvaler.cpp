@@ -44,10 +44,6 @@ AstNodePtr StaticEvaler::fold_pos_neg_bitinvert(AstNodeOpUnary &node) {
     return make_float(node.pos_, node.op_ == OpType::Neg ? -v : v);
 }
 
-// ============================================================
-// 二元运算符
-// ============================================================
-
 AstNodePtr StaticEvaler::fold_binary(AstNodeOpBinary &node) {
     using OpType = AstNodeOpBinary::OpType;
     switch (node.op_) {
@@ -69,7 +65,6 @@ AstNodePtr StaticEvaler::fold_binary(AstNodeOpBinary &node) {
     }
 }
 
-// - / // % **（数字分支）—— + 和 * 的数字分支各自在 fold_add/fold_mul 里处理，不在这里
 AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
     using OpType = AstNodeOpBinary::OpType;
     const AstNode &l{*node.left_};
@@ -121,7 +116,6 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
     }
 }
 
-// + ：数值相加，或 str/tuple/list 各自的拼接（SL.md 3.4.2："对于均为字符串、元组、列表，返回拼接"）
 AstNodePtr StaticEvaler::fold_add(AstNodeOpBinary &node) {
     const AstNode &l{*node.left_};
     const AstNode &r{*node.right_};
@@ -158,7 +152,6 @@ AstNodePtr StaticEvaler::fold_add(AstNodeOpBinary &node) {
     return nullptr; // None/bool/... 之间不支持 +
 }
 
-// * ：数值相乘，或 (str/tuple/list, 非负 int) 的重复（两侧顺序不限）
 AstNodePtr StaticEvaler::fold_mul(AstNodeOpBinary &node) {
     const AstNode &l{*node.left_};
     const AstNode &r{*node.right_};
@@ -206,7 +199,6 @@ AstNodePtr StaticEvaler::fold_mul(AstNodeOpBinary &node) {
     return nullptr;
 }
 
-// & | ^ << >>，只对 bool/int 有意义（dict 的 | 合并不参与折叠，见类头注释）
 AstNodePtr StaticEvaler::fold_bitwise(AstNodeOpBinary &node) {
     using OpType = AstNodeOpBinary::OpType;
     const AstNode &l{*node.left_};
@@ -239,14 +231,6 @@ AstNodePtr StaticEvaler::fold_and_or(AstNodeOpBinary &node) {
     return std::move(take_left ? node.left_ : node.right_);
 }
 
-// ============================================================
-// 死分支消除：if / for / while
-// ============================================================
-
-// if/elif/else：cond 折成 False 的 clause 整个丢弃（cond 已确认是纯字面量，没有副作用）；
-// 一旦某个 clause 的 cond 折成 True，它自己连同后面所有 clause/else 全部消失，只留它的 body；
-// 前面全都是 False、后面第一个不能判定的 cond 之前的 clause 可以先丢，重新拼一个更短的 AstNodeIf；
-// 全部 clause 都确定是 False，则整体值是 else_expr_（没有则是 None，SL.md 3.4.5.1）
 AstNodePtr StaticEvaler::fold_if(AstNodeIf &node) {
     size_t i{0};
     while (i < node.clauses_.size() && is_pure_literal(*node.clauses_[i].cond_) && !truthy(*node.clauses_[i].cond_))
@@ -270,10 +254,6 @@ AstNodePtr StaticEvaler::fold_if(AstNodeIf &node) {
     return std::make_unique<AstNodeIf>(node.pos_, std::move(remaining), std::move(node.else_expr_));
 }
 
-// for/while：cond 折成 True 不折——只是确定"不会提前退出"，循环本身跑几轮、值是什么依然没法在
-// 编译期知道；cond 折成 False，循环一次都不会跑，body_/inc_ 的副作用都不会发生，值退化成 SL.md
-// 3.4.5.2/3.4.5.3 规定的默认值（不收集是 int 0，收集是空 list）——但 init_ 无论如何都会无条件先
-// 求值一次（哪怕循环一次都不跑），若非空必须保留这个副作用，用 AstNodeCompound 接在结果前面
 AstNodePtr StaticEvaler::fold_for_cond(AstNodeForCond &node) {
     if (!node.cond_ || !is_pure_literal(*node.cond_) || truthy(*node.cond_)) return nullptr;
 
@@ -288,10 +268,6 @@ AstNodePtr StaticEvaler::fold_for_cond(AstNodeForCond &node) {
     exprs.push_back(std::move(result));
     return std::make_unique<AstNodeCompound>(node.pos_, std::move(exprs));
 }
-
-// ============================================================
-// 比较
-// ============================================================
 
 AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
     using OpType = AstNodeCompare::OpType;
@@ -329,10 +305,6 @@ AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
     return make_bool(node.pos_, true);
 }
 
-// ============================================================
-// 真值 / 是否字面量
-// ============================================================
-
 bool StaticEvaler::truthy(const AstNode &literal) {
     if (dynamic_cast<const AstNodeLiteralNone *>(&literal)) return false;
     if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&literal)}) return b->value_;
@@ -365,10 +337,6 @@ bool StaticEvaler::is_pure_literal(const AstNode &node) {
     return false; // dict、_G/_L、标识符、调用……都不是
 }
 
-// ============================================================
-// 数值提升
-// ============================================================
-
 bool StaticEvaler::is_int_family(const AstNode &node) {
     return dynamic_cast<const AstNodeLiteralBool *>(&node) || dynamic_cast<const AstNodeLiteralInt *>(&node);
 }
@@ -396,10 +364,6 @@ std::optional<long long> StaticEvaler::try_to_ll(const BigInt &value) {
         return std::nullopt; // 装不下 long long（数值太大/太小），不是我们能处理的规模，交给运行时
     }
 }
-
-// ============================================================
-// 构造折叠结果
-// ============================================================
 
 AstNodePtr StaticEvaler::make_bool(const Position pos, const bool value) {
     return std::make_unique<AstNodeLiteralBool>(pos, value);
