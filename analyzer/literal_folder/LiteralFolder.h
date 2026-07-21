@@ -4,17 +4,20 @@
 
 
 /**
- * 遍历整棵 AST，把每一处纯字面量组合的子表达式换成折叠后的字面量节点
- * 只负责处理纯字面量组合的子表达式走到每个可能可折的位置、调 StaticEvaler、换掉，具体怎么折是 StaticEvaler 的事
+ * 遍历 AST，字面量折叠
  */
 class LiteralFolder {
     AstNodeProgram &root_;
 
-    // node 为空表示这个槽位本来就没有，什么都不做
+    /**
+     * 先把 node 子节点递归处理好，再把 node 自己送给 StaticEvaler，如果可折叠则直接替换掉
+     * @param node 可空
+     */
     void visit_and_replace(AstNodePtr &node) const;
 
-    // 按节点类型分派
-    // 要求 node 非空
+    /**
+     * 各种 visit 的入口，按节点类型分派
+     */
     void visit(AstNode &node) const;
 
 #define X(nt) void visit(nt &node) const;
@@ -22,7 +25,14 @@ class LiteralFolder {
 #undef X
 
 public:
+    /**
+     * 构造 LiteralFolder 对象
+     * @param root AST 的根节点
+     */
     explicit LiteralFolder(AstNodeProgram &root);
 
+    /**
+     * 入口
+     */
     void fold() const &&;
 };
