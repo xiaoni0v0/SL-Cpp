@@ -1874,3 +1874,109 @@ Lexer 133 + Parser 285 不受影响。
 
 `.ai/run_test.bat` 验证：`SL_Cpp_Numeric_Tests` 48 个用例、153 个断言全部通过（原 42 个 + 新增 6 个
 边界用例），Lexer 133 + Parser 285 不受影响。
+
+## StaticEvaler/LiteralFolder 骨架 + Analyzer 全面引用化 + StaticEvaler 完整实现
+
+这一整段是同一条主线上的三步，分别记录。
+
+### 第一步：LiteralFolder/StaticEvaler 骨架
+
+按运算符语义家族分组，避免类型×运算符组合爆炸：算术（+ - * / // % **）、位运算（& ^ | << >>）、
+比较（链式 < <= > >= != ==）、逻辑（not/and/or）、is。`LiteralFolder` 负责树的遍历/替换（拥有
+`AstNodePtr` 槽位的所有权），`StaticEvaler` 只负责"给一个节点判断能不能整体折成字面量"，两者职责
+分开。当时留了一个悬而未决的问题：`and`/`or` 的结果可能是"原封不动挪用一个已有子节点"（不一定是
+新构造出来的值），而 `StaticEvaler` 当时的入参是 `const AstNode*`，没有所有权、搬不动子节点，所以
+这两个折叠分支先留空恒返回 `nullptr`。
+
+### 第二步：`Analyzer`/`SyntaxChecker`/`LiteralFolder` 的 `root_` 和分派入参从裸指针改成引用
+
+用户提议：这几个类的 `root_` 成员改成引用，分派函数（`check`/`visit`）内部需要 `dynamic_cast` 试探
+时再取地址转成裸指针，试出来以后传引用往下走。判断可行：分派函数本身必须留一份裸指针做
+`dynamic_cast<T*>`（失败返回 nullptr）——引用版 `dynamic_cast` 失败是抛 `bad_cast`，拿异常当十几种
+类型里挨个试的正常分派流程是反模式；但分派函数的入参签名本身可以是引用（因为调用时已知非空），内部
+自己 `&node` 取指针去试。三个类的 `root_` 从 `T *const` 换成 `T &`——这两者对"能不能被赋值"这件事
+效果一样（`T *const` 本来就不可再赋值），换引用不损失任何能力，纯语义收紧。
+
+改的时候发现 `SyntaxChecker::check` 和 `LiteralFolder::visit_and_replace`（当时叫 `visit_and_replace`）
+对"这个槽位可能是空"的处理方式不统一：`LiteralFolder` 一律靠 `visit_and_replace` 这一层统一挡掉空
+指针；`SyntaxChecker::check(const AstNode*)` 却是自己在分派函数内部 `if (!node) return;`，导致代码
+里到处混着"调用前 `if (x) check(...)`"和"不判直接传、靠 `check` 内部兜底"两种写法。既然改成引用之后
+`check` 不可能再收到空的，就借这次机会加了个 `check_optional(const AstNodePtr&)`（照抄
+`visit_and_replace` 的模式），把所有真正可能为空的槽位统一走这一个函数，顺带把散落各处多余的
+`if (x) check(...)` 判断也删掉了——两个类现在对"槽位可能没东西"这件事处理方式完全一致。
+
+### 第三步：`StaticEvaler` 完整实现
+
+**入参设计（用户明确问过"指针还是引用，替换这一步要不要也搬进 StaticEvaler"）**：跟第二步的结论
+一致，`fold`/`fold_binary` 等入参统一收非 const 引用，内部分派需要裸指针时自己取地址。但"替换到
+`AstNodePtr` 槽位里"这一步**没有**搬进 `StaticEvaler`——那样会让它从"纯函数：给输入返回新值或
+nullptr"变成需要感知"我在改一个被谁拥有的槽位"，职责会混在一起。真正需要的能力只是"把某个已有子节点
+移动出来当结果用"，而这只需要输入是非 const 引用（能对 `node.left_`/`node.right_` 做 `std::move`），
+根本不需要碰 `unique_ptr` 本身的所有权语义；"折完之后塞回槽位"这一步依然完全留在
+`LiteralFolder::visit_and_replace` 里，跟原来一样。
+
+这个设计顺带解决了骨架阶段悬而未决的 and/or 问题：`fold_and_or` 拿到的是 `AstNodeOpBinary&`（可变），
+只要左操作数是字面量、能判出真值，就直接 `std::move(take_left ? node.left_ : node.right_)`
+把没被选中的那侧原地丢弃——不需要给 `AstNode` 加 `clone()`。
+
+**但 `*` 的容器重复分支意外地真的需要"深拷贝"**：`[1,2] * 3` 要产出 3 份独立的 `[1,2]` 内容，
+`unique_ptr` 没法复制、只能移动一次，移动不出"同一份内容用 3 次"。这是设计骨架时没预见到的新问题
+（当时只想到 and/or 需要"搬子节点"，没想到重复也需要"复制子节点"）。加了一个
+`clone_literal(const AstNode&)`，只处理 `is_literal()` 认可的字面量子集（None/bool/int/float/str/
+Ellipsis/tuple/list/dict，容器递归克隆），因为调用方（+ 拼接、* 重复、dict 合并）都已经确认过操作数
+`is_literal`，克隆这个子集总是良定义的，不需要给 `AstNode` 整体加一个通用多态 `clone()`。
+
+**`is_literal` 对容器是递归的，不是只看节点类型**：`AstNodeLiteralTuple`/`List`/`Dict` 这几个节点
+类型名字叫"Literal"，但语法上它们就是元组/列表/字典**显示**语法（`[x, y+1, f()]` 一样是
+`AstNodeLiteralList`），元素可以是任意表达式，不一定是常量。`LiteralFolder.h` 类注释里写的是
+"纯字面量组合的子表达式"——所以 `is_literal` 对容器必须递归检查每个元素（tuple/list 每个 item，
+dict 每个 key、非空 val）都满足 `is_literal`，只看外层节点类型是不够的。反例：`[x, 1] + [2]`，外层
+两个操作数都是 `AstNodeLiteralList` 节点，但左边包含变量 `x`，不该被当成"编译期已知的值"去折。
+副作用：`AstNodeLiteralGL`（`_G`/`_L`）从 `is_literal` 的候选列表里删掉了——骨架阶段的旧列表里
+误把它当成字面量收录了，但 `_G`/`_L` 的值是运行时的实时字典视图（SL.md 3.4.1），不是编译期能确定
+的东西，这是骨架留下的一个小疏漏，完整实现时顺带修掉。
+
+**发现两处 SL.md 没定义、跟用户当时口头描述对不上的语义，找用户确认过要不要正式加进语言**：
+1. 字符串的 `%` 格式化——SL.md 原来 `%` 只对数字定义（取模）。用户确认要加：Python 风格 printf 的
+   一个子集（`%s`/`%d`/`%f`/`%%`，可选 `0` 前缀 + 宽度 + `%f` 的精度），不追求 100% 复刻 Python
+   （不支持 `%(name)s` 具名替换、`%r` 等），写进了 SL.md 3.4.2。
+2. `dict` 的 `|`——SL.md 原来 `|` 只对 int/set 定义。用户确认要加：仿 Python 3.9+ 的 dict 合并语义
+   （重复 key 用右操作数的值，位置留在左操作数原来的位置，右操作数独有的 key 按序追加在末尾），
+   同样写进了 SL.md 3.4.2。
+
+这两处都是"语言设计决策"级别的新增（不是单纯把 StaticEvaler 该实现的东西补全），所以没有自己决定，
+是先问清楚再动手实现 + 补文档。
+
+**`//`/`%` 掺了 float 时的语义是从 SL.md 原文推出来的，不是照抄"都是 int"那条**：SL.md 3.4.2 原文
+只显式写了"`x`、`y` 都是 int 时：`//`、`%` 结果仍是 int"，没有直接写"掺了 float 怎么办"。按上下文
+（先说"对于数字，返回…向下取整商、余数"这个通用规则，再对"都是 int"这个子情形单独澄清"仍是 int"），
+推断掺了 float 的情况走通用规则、结果是 float，同 Python（`7.5 // 2 == 3.0`）。手写了 Python 语义
+一致的向负无穷取整 `%`/`//`（`fmod` 算完如果余数非零且跟除数异号，就把余数加上除数），没有去猜/发明
+新语义。
+
+**float 折叠结果的构造需要先解决"怎么把 double 转成合法的 SL float 字面量文本"**：SL.md 2.1.4
+规定 float 字面量目前不支持科学计数法、且整数/小数部分都不能省略（`1.`、`.1` 都不合法），所以折叠出
+的新字面量必须是形如 `"3.14"`、`"3.0"` 这种恒带小数点的定点文本，不能用 `%g`/科学计数法。`format_double`
+从 0 位小数开始逐步尝试 `%.*f`，选第一个能精确 round-trip（`strtod` 转回来位级相等）的最短精度，
+没有小数点的话补 `.0`。任何折叠结果如果不是有限数（`±inf`/`NaN`——理论上只会出现在极端的
+溢出/`0**负数`这类场景），`make_float` 直接返回 `nullptr`（当前语法写不出这两种值），交给运行时处理，
+不在这里硬编码"抛异常"。
+
+**容器 `*` 的重复次数、`<</>>` 的移位量都要先能转成 `long long`，转不下就不折**：`try_to_ll` 把
+`BigInt` 转 `long long`，失败（数值太大装不下）直接返回 `false`，调用方视为"折不动"、绝不抛异常。
+没有另外加一个"重复次数不能太大"的人为上限——这跟 `BigInt::pow` 对巨大指数不设上限是同一个取舍
+（"内存充足、无限位数"的既有设计哲学），能装进 `long long` 但数值依然大到不现实（比如重复 10^15 次）
+不会被这道检查拦下来，这是故意的，不是遗漏。
+
+**测试**：新增 `SL_Cpp_Analyzer_Tests`（48 个用例、116 个断言），按语义家族拆成
+`arithmetic_test.cpp`/`bitwise_test.cpp`/`container_ops_test.cpp`/`str_format_test.cpp`/
+`compare_is_test.cpp`/`logical_test.cpp`，测试工具复用 `test/parser/test_utils.h` 的
+`parse_program`，新增 `fold_json` 直接跑 `LiteralFolder{*program}.fold()` 后转 JSON 比对（不经过
+`Analyzer`/`Executor`——`Executor.cpp` 里 `to_json()` 转储发生在 `Analyzer::analyze()` 之前，没法
+从那条路径观察折叠结果，这也是一开始手工用 `SL.exe` 跑 smoke test 时"完全没有任何东西被折叠"、一度
+以为实现有 bug 的原因，后来才意识到是转储时机的问题，不是折叠逻辑的问题）。覆盖：SL.md 原文的
+floor div/mod 例子、bool 提升不改变结果类型（`+True` 是 `int` 不是 `bool`）、除零/负数移位/负数重复
+次数不折、str/tuple/list 的拼接与重复（含"重复出来的每一份是独立节点"）、dict 合并的位置/覆盖规则、
+str 格式化的宽度/精度/`%%`/参数数量不匹配、链式比较/跨类型比较、`is` 只对 `None` 折、and/or 不短路
+但能整体挪用非字面量的一侧（如 `True and f()`）。`.ai/run_test.bat` 验证四个测试目标全绿：
+Numeric 48/153、Lexer 133/358、Parser 285/511、Analyzer 48/116（新增）。

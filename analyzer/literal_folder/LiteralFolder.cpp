@@ -10,7 +10,7 @@
 void LiteralFolder::visit_and_replace(AstNodePtr &node) const {
     if (!node) return;
     visit(*node);
-    if (AstNodePtr folded{StaticEvaler::fold(node.get())}) node = std::move(folded);
+    if (AstNodePtr folded{StaticEvaler::fold(*node)}) node = std::move(folded);
 }
 
 void LiteralFolder::visit(AstNode &node) const {
