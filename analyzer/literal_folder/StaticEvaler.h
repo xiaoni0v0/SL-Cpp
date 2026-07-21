@@ -1,36 +1,40 @@
 #pragma once
 
-#include "../../parser/ast_nodes/ast_nodes.h"
 #include "../../numeric/BigInt.h"
+#include "../../parser/ast_nodes/ast_nodes.h"
+
 
 /**
  * 编译期静态求值器
  * 折不动一律返回 nullptr，从不抛异常
  *
- * 折叠范围是刻意收窄过的一张表，不是"能折的都折"：只覆盖真正不依赖 VM 就能算完的运算符/类型组合，
- * 复杂或者本质上要靠 VM（对象模型、hash、格式化协议……）才能算的一律不折，交给运行时：
+ * 折叠范围：
  *
- * 一元（不含 not，not 对一切字面量都折）：
- *   bool/int: + - ~        float: + -        str/tuple/list: 无
+ * 一元：
+ *   bool/int: + - ~
+ *   float: + -
+ *   str/tuple/list: 无
  *
- * 二元（不含 and/or，这两个对一切字面量都折；不含比较，见下）：
- *   同类型：bool/int×bool/int 全套算术+位运算；float×float 数值算术（无位运算）；
- *           str×str、tuple×tuple、list×list 只有 `+`（拼接）
- *   跨类型：数字之间（bool/int/float 任意组合）走数值算术；
- *           数字 × (str/tuple/list) 只有 `*`（非负 int 重复）
+ * 二元：
+ *           bool/int   float   str   tuple   list
+ * bool/int     A         B      D      D      D
+ *  float       B         B      E      E      E
+ *   str        D         E      C      E      E
+ *  tuple       D         E      E      C      E
+ *  list        D         E      E      E      C
  *
- * 比较（==/!= 恒可折——跨类型必不相等；</<=/>/>= 只在"数字之间"或"同一种容器类型之间"才折）：
- *   数字×数字（含跨 bool/int/float）：全部 6 个；str×str、tuple×tuple、list×list：全部 6 个；
- *   其余组合（含数字×容器、容器×容器跨类型）：只有 !=/==
+ * A = { ** * / // % + - << >> & ^ | < <= > >= != == }
+ * B = { ** * / // % + - < <= > >= != == }
+ * C = { + < <= > >= != == }
+ * D = { * != == }
+ * E = { != == }
  *
- * dict 的任何运算（含 `|` 合并）、str 的 `%` 格式化、`is`：一律不折——这几个要么本质上依赖 VM
- * 的对象模型/协议才能算准（dict 合并、`%` 格式化），要么根本没法在编译期安全预判（`is` 的对象同一性），
- * 折叠一个"看起来能算"的近似值风险大于收益，不如老老实实交给运行时。
+ * 除此之外，and/or/not 对于字面量均折叠。
  *
- * if/elif/else、for/while 的 cond：死分支消除。cond 折成字面量 False 的 clause/循环整个消失
- * （for/while 是"一次都不会跑"，值退化成 SL.md 3.4.5.2/3.4.5.3 规定的默认值）；if 的某个 clause
- * 的 cond 折成字面量 True，则连同它自己在内后面的 clause/else 全部消失，只留这个 clause 的 body；
- * for/while 的 cond 折成 True 不折——只是"确定不会提前退出"，循环本身的值仍然没法在编译期知道。
+ * 死分支消除：
+ *   cond 折成的字面量真值为 False 的 clause/循环整个消失，值退化成 SL.md 3.4.5.2/3.4.5.3 规定的默认值）；
+ *   if 的某个 clause 的 cond 折成的字面量真值为 True，则连同它自己在内后面的 clause/else 全部消失，只留这个 clause 的 body；
+ *   for/while 的 cond 折成的字面量真值为 True 的不折。
  *
  * 入参统一用非 const 引用（而不是指针）：调用方（LiteralFolder）保证传进来的节点非空，分派内部
  * 需要裸指针做 dynamic_cast 试探时自己取地址即可；用非 const 是因为 and/or、if/for 的死分支消除都
@@ -38,8 +42,8 @@
  * 能 std::move 走它——除此之外的所有分支都只读，只是顺带能拿这个非 const 权限，不代表它们会去改 node。
  */
 class StaticEvaler {
-    // 尝试把 node 折成一个字面量节点；这里不负责递归，只处理"这一层节点自己能不能折"。
-    // 返回 nullptr 表示折不动（node 不受影响，and/or/if/for 这几个"挪子节点"的分支例外——
+    // 尝试把 node 折成一个字面量节点；不负责递归，返回 nullptr 表示折不动
+    // （node 不受影响，and/or/if/for 这几个"挪子节点"的分支例外——
     // 一旦决定折叠成功，node 自己反正会被调用方整个替换掉，不会再被读取，见 LiteralFolder::visit_and_replace）
     [[nodiscard]] static AstNodePtr fold_unary(const AstNodeOpUnary &node);
     [[nodiscard]] static AstNodePtr fold_not(const AstNodeOpUnary &node);

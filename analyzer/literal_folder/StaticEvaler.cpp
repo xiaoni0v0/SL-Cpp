@@ -7,17 +7,6 @@
 #include <cstdio>
 #include <cstdlib>
 
-AstNodePtr StaticEvaler::fold(AstNode &node) {
-    // 只有这几种节点才可能整体收缩成一个字面量；其余任何节点类型（含已经是字面量、容器字面量、
-    // 标识符、调用……）都原样返回 nullptr，交给调用方保持原样不动
-    if (auto *n{dynamic_cast<AstNodeOpUnary *>(&node)}) return fold_unary(*n);
-    if (auto *n{dynamic_cast<AstNodeOpBinary *>(&node)}) return fold_binary(*n);
-    if (auto *n{dynamic_cast<AstNodeCompare *>(&node)}) return fold_compare(*n);
-    if (auto *n{dynamic_cast<AstNodeIf *>(&node)}) return fold_if(*n);
-    if (auto *n{dynamic_cast<AstNodeForCond *>(&node)}) return fold_for_cond(*n);
-    return nullptr;
-}
-
 // ============================================================
 // 一元运算符
 // ============================================================
@@ -29,10 +18,6 @@ AstNodePtr StaticEvaler::fold_unary(const AstNodeOpUnary &node) {
     case OpType::Pos:
     case OpType::Neg:
     case OpType::BitNot: return fold_pos_neg_bitnot(node);
-    case OpType::Question:
-    case OpType::Exclaim:
-        // x?/x! 是类型运算符（生成复合类型，见 SL.md 3.4.2），不作用于值，不在字面量折叠的范围内
-        return nullptr;
     default: return nullptr;
     }
 }
@@ -83,9 +68,6 @@ AstNodePtr StaticEvaler::fold_binary(AstNodeOpBinary &node) {
     case OpType::RShift: return fold_bitwise(node);
     case OpType::And:
     case OpType::Or: return fold_and_or(node);
-    case OpType::Range:
-        // range 对象不属于参与折叠的字面量类型，不折
-        return nullptr;
     default: return nullptr;
     }
 }
@@ -370,10 +352,12 @@ bool StaticEvaler::is_literal(const AstNode &node) {
     if (dynamic_cast<const AstNodeLiteralFloat *>(&node)) return true;
     if (dynamic_cast<const AstNodeLiteralStr *>(&node)) return true;
     if (dynamic_cast<const AstNodeLiteralEllipsis *>(&node)) return true;
-    if (const auto *t{dynamic_cast<const AstNodeLiteralTuple *>(&node)}) return std::ranges::all_of(
-        t->items_, [](const AstNodePtr &item) { return is_literal(*item); });
-    if (const auto *l{dynamic_cast<const AstNodeLiteralList *>(&node)}) return std::ranges::all_of(
-        l->items_, [](const AstNodePtr &item) { return is_literal(*item); });
+    if (const auto *t{dynamic_cast<const AstNodeLiteralTuple *>(&node)})
+        return std::ranges::all_of(
+            t->items_, [](const AstNodePtr &item) { return is_literal(*item); });
+    if (const auto *l{dynamic_cast<const AstNodeLiteralList *>(&node)})
+        return std::ranges::all_of(
+            l->items_, [](const AstNodePtr &item) { return is_literal(*item); });
     return false; // dict、_G/_L、标识符、调用……都不是
 }
 
@@ -446,14 +430,18 @@ std::string StaticEvaler::format_double(const double value) {
 
 AstNodePtr StaticEvaler::clone_literal(const AstNode &node) {
     if (dynamic_cast<const AstNodeLiteralNone *>(&node)) return std::make_unique<AstNodeLiteralNone>(node.pos_);
-    if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&node)}) return std::make_unique<AstNodeLiteralBool>(
-        node.pos_, b->value_);
-    if (const auto *i{dynamic_cast<const AstNodeLiteralInt *>(&node)}) return std::make_unique<AstNodeLiteralInt>(
-        node.pos_, i->raw_);
-    if (const auto *f{dynamic_cast<const AstNodeLiteralFloat *>(&node)}) return std::make_unique<AstNodeLiteralFloat>(
-        node.pos_, f->raw_);
-    if (const auto *s{dynamic_cast<const AstNodeLiteralStr *>(&node)}) return std::make_unique<AstNodeLiteralStr>(
-        node.pos_, s->value_);
+    if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&node)})
+        return std::make_unique<AstNodeLiteralBool>(
+            node.pos_, b->value_);
+    if (const auto *i{dynamic_cast<const AstNodeLiteralInt *>(&node)})
+        return std::make_unique<AstNodeLiteralInt>(
+            node.pos_, i->raw_);
+    if (const auto *f{dynamic_cast<const AstNodeLiteralFloat *>(&node)})
+        return std::make_unique<AstNodeLiteralFloat>(
+            node.pos_, f->raw_);
+    if (const auto *s{dynamic_cast<const AstNodeLiteralStr *>(&node)})
+        return std::make_unique<AstNodeLiteralStr>(
+            node.pos_, s->value_);
     if (dynamic_cast<const AstNodeLiteralEllipsis *>(&node)) return std::make_unique<AstNodeLiteralEllipsis>(node.pos_);
     // 调用方保证 is_literal(node)，排除以上分支后只剩 tuple/list（dict 不在 is_literal 认可范围内）
     if (const auto *t{dynamic_cast<const AstNodeLiteralTuple *>(&node)}) {
@@ -475,8 +463,9 @@ bool StaticEvaler::literal_equal(const AstNode &a, const AstNode &b) {
         return to_double(a) == to_double(b);
     }
     if (dynamic_cast<const AstNodeLiteralNone *>(&a)) return dynamic_cast<const AstNodeLiteralNone *>(&b) != nullptr;
-    if (dynamic_cast<const AstNodeLiteralEllipsis *>(&a)) return
-        dynamic_cast<const AstNodeLiteralEllipsis *>(&b) != nullptr;
+    if (dynamic_cast<const AstNodeLiteralEllipsis *>(&a))
+        return
+            dynamic_cast<const AstNodeLiteralEllipsis *>(&b) != nullptr;
     if (const auto *sa{dynamic_cast<const AstNodeLiteralStr *>(&a)}) {
         const auto *sb{dynamic_cast<const AstNodeLiteralStr *>(&b)};
         return sb && sa->value_ == sb->value_;
@@ -530,4 +519,14 @@ StaticEvaler::Cmp StaticEvaler::literal_compare(const AstNode &a, const AstNode 
         return lb ? lexicographic(la->items_, lb->items_) : Cmp::Unordered;
     }
     return Cmp::Unordered; // None/dict/Ellipsis 均不支持大小比较
+}
+
+AstNodePtr StaticEvaler::fold(AstNode &node) {
+    // 只有这几种节点才可能整体收缩成一个字面量
+    if (auto *n{dynamic_cast<AstNodeOpUnary *>(&node)}) return fold_unary(*n);
+    if (auto *n{dynamic_cast<AstNodeOpBinary *>(&node)}) return fold_binary(*n);
+    if (auto *n{dynamic_cast<AstNodeCompare *>(&node)}) return fold_compare(*n);
+    if (auto *n{dynamic_cast<AstNodeIf *>(&node)}) return fold_if(*n);
+    if (auto *n{dynamic_cast<AstNodeForCond *>(&node)}) return fold_for_cond(*n);
+    return nullptr;
 }
