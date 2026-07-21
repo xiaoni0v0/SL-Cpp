@@ -45,7 +45,6 @@ void LiteralFolder::visit(AstNodeForCond *node) const {
 }
 
 void LiteralFolder::visit(AstNodeForIter *node) const {
-    // target_ 语法上是左值（标识符/属性/索引/解构），折不动，但递归一遍无妨（不会被误折）
     visit_and_replace(node->target_);
     visit_and_replace(node->iterable_);
     visit_and_replace(node->body_);
@@ -88,7 +87,6 @@ void LiteralFolder::visit(AstNodeFunc *node) const {
     }
     visit_and_replace(node->return_type_);
     visit_and_replace(node->doc_);
-    // 函数体是 AstNodeProgramPtr，不是 AstNodePtr，本身没有"整体折成字面量"这回事，直接递归进去就行
     visit(node->body_.get());
 }
 
@@ -149,8 +147,6 @@ void LiteralFolder::visit(AstNodeOpUnary *node) const {
 }
 
 void LiteralFolder::visit(AstNodeOpBinary *node) const {
-    // and/or 的短路折叠现在还没做（见 StaticEvaler::fold_and/fold_or 的注释），但两个操作数各自
-    // 内部更深处能折的地方，不受这个限制，一样正常递归下去
     visit_and_replace(node->left_);
     visit_and_replace(node->right_);
 }
