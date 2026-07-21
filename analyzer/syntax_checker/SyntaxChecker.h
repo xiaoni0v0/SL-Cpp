@@ -44,6 +44,11 @@ class SyntaxChecker {
     // 用于复合赋值这类不支持解构的场合
     void check_simple_lvalue(const AstNode &node) const;
 
+    // 检查 func/class 的 doc 槽位：必须为空，或者恰好是一个字符串字面量（不允许变量、拼接、重复等
+    // 其他表达式，见 SL.md 3.4.6）——这是一条纯形状检查，不需要知道任何值，因此不依赖折叠结果，
+    // check 可以放心在 fold 之前做
+    void check_doc(const AstNodePtr &doc) const;
+
 public:
     /**
      * 构造 SyntaxChecker 对象

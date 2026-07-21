@@ -224,7 +224,7 @@ void SyntaxChecker::check(const AstNodeFunc &node) {
     }
 
     check_optional(node.return_type_);
-    check_optional(node.doc_);
+    check_doc(node.doc_);
 
     // 进入函数体（新上下文，func 深度 +1，loop 深度归零）
     ctx_.func_depth++;
@@ -241,7 +241,7 @@ void SyntaxChecker::check(const AstNodeClass &node) {
 
     for (const auto &deco : node.decorators_) check(*deco);
     for (const auto &base : node.bases_) check(*base);
-    check_optional(node.doc_);
+    check_doc(node.doc_);
 
     // 类体执行更像顶层脚本：不允许裸 return/break/continue（3.4.7 未提及 return 语义）
     ctx_.func_depth = 0;
@@ -399,6 +399,10 @@ void SyntaxChecker::check(const AstNodeDel &node) {
 void SyntaxChecker::check(const AstNodeGlobal &node) {
     // identifier_ 语法上就是 token，没有形状可校验，只需要检查作用域限制（2.2.4：只能在局部作用域中使用）
     if (ctx_.func_depth == 0) error("global outside function", node.pos_);
+}
+
+void SyntaxChecker::check_doc(const AstNodePtr &doc) const {
+    if (doc && !dynamic_cast<const AstNodeLiteralStr *>(doc.get())) error("doc must be a string literal", doc->pos_);
 }
 
 void SyntaxChecker::check_simple_lvalue(const AstNode &node) const {

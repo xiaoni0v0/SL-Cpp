@@ -2044,3 +2044,51 @@ Numeric 48/153、Lexer 133/358、Parser 285/511、Analyzer 48/116（新增）。
 else/部分折叠/第一个 clause 不能判定这四种情况，以及 for/while 的 False 退化值（含 `init_` 副作用
 保留）、True 不折、cond 缺失或非字面量不折。`.ai/run_test.bat` 验证四个测试目标全绿：
 Numeric 48/153、Lexer 133/358、Parser 285/511、Analyzer 47/111。
+
+## check 与 fold 的顺序：维持 check 在前，理由是一个具体的健全性反例；顺带把 doc 规则改成纯语法检查
+
+用户一度想把 `Analyzer::analyze()` 里 `SyntaxChecker`/`LiteralFolder` 的调用顺序倒过来（先 fold
+再 check），主要动机是刚做完的 if/for 死分支消除——觉得死代码不该被语法检查卡住。
+
+**没有采纳，原因是一个具体反例，不是泛泛的"死代码要不要检查"这种取舍**：`f(True and *args)`。
+`SyntaxChecker::check(AstNodeOpBinary&)` 检查 `and`/`or` 的操作数之前，无条件把 `can_star`/
+`can_double_star` 强制置成 `false`——这个重置只跟"当前正在检查的是 and/or 自己的操作数"这件事有关，
+跟这个 and/or 表达式整体站在树的什么位置无关。check 在 fold 之前时，`*args` 作为 `and` 的右操作数
+永远会在 `can_star=false` 的语境下被检查到，报错，无论 `True` 的值是什么——这是对的，`True and *args`
+本来就是没意义的写法。但如果 fold 先跑：`fold_and_or` 见左操作数 `True` 为字面量、真值为真，`and`
+的语义是"左真取右"，于是把 `*args` 整个原封不动挪出来，直接替掉了 `True and *args` 这一整块，树变成
+`f(*args)`。check 随后只看得到挪动之后的树——`*args` 现在直接站在调用参数的位置，`can_star` 在这个
+位置本来就是 `true`，检查通过，**不报错**。这不是"死代码里的 bug 没被抓到"（`True` 那部分是必定
+执行的活代码），而是**一段本该永远语法非法的写法，纯粹因为死分支消除把受限位置的东西搬到了不受限的
+位置，就悄悄变成合法的了**——`if` 的死分支消除同理（`if(True) *x else y` 类推）。`for`/`while` 那条
+路径反而没这个问题，因为 `init_` 挪进 `AstNodeCompound` 时，`check(AstNodeCompound&)` 自己也会重置
+`can_star=false`，跟原来 `ForCond` 的效果一致。要在 fold-first 顺序下堵住这个洞，得让 `StaticEvaler`
+感知"这个子节点是不是 `*`/`**` 前缀、能不能被搬走"这种语法层面的限制，会把本该纯粹按 AST 形状判断
+"能不能折"的 `StaticEvaler`，跟 `SyntaxChecker` 的语境规则耦合在一起，破坏两者目前干净的职责分离。
+结论：维持 check 在前、fold 在后，不换。
+
+**顺带发现并解决了一个真实存在的别扭之处**：func/class 的 `doc` 槽位有一条规则（SL.md 3.4.6）
+"`doc` 必须是字符串字面量或其编译期可折叠的组合（`"a" + "b"`、`"x" * 3` 等）"——这条规则本质上依赖
+折叠结果，不是纯语法/作用域规则，硬塞进 `SyntaxChecker` 就会出现"先 check 就得在 doc 这一个槽位单独
+先 fold 一次"这种特例，跟"check 全程不碰值、不摸树"的整体设计不符。考虑过三条路：
+1. 把这条规则挪到 `LiteralFolder` 里，紧跟着它本来就有的 `visit_and_replace(node.doc_)` 之后做——
+   不用额外跑一遍折叠，但 `LiteralFolder`/`StaticEvaler` 一直以来"折不动一律返回 nullptr、从不抛
+   异常"这条约定就被破了个例外，且 `LiteralFolder` 得额外收一个 `file_path_` 才能拼出规范的
+   `SyntaxError`；
+2. 在 `SyntaxChecker` 里对 `doc_` 单独调 `StaticEvaler::fold` 做"试探"——被否决：`fold_and_or` 会
+   真的 `std::move` 走子节点，"只是试探"这个动作本身就会实际改动原树，等于在只读的 check 阶段
+   偷偷做了不可逆的变更；
+3. **改语言规范本身**：`doc` 必须恰好是一个字符串字面量，不再允许 `"a"+"b"`/`"x"*3` 这类"编译期可
+   折叠的组合"。
+
+选了第 3 条。理由：Python 的文档字符串本来就只能是单个字符串字面量（连 Python/C 那种"相邻字面量自动
+拼接"都没有，SL.md 2.1.4 也明确说 SL 不支持这个），允许 `"a"+"b"` 反而是比 Python 更宽松的 SL 自创
+扩展；SL 已经有反引号原始字符串覆盖"多行/免转义"这个 `+`/`*` 拼接在文档字符串场景下唯一站得住脚的
+实际需求，禁掉之后losses 很小。换来的是：`doc` 的检查退化成一条纯形状检查（`dynamic_cast` 到
+`AstNodeLiteralStr` 就完了，不需要知道任何值），`SyntaxChecker` 新增 `check_doc(const AstNodePtr&)`
+辅助函数，不依赖折叠结果、不需要碰 `StaticEvaler`；`LiteralFolder`"从不报错"这条约定完整保留；
+check 在 fold 之前这个顺序也完全不用因为 doc 这一个槽位破例。
+
+`.ai/run_test.bat` 验证四个测试目标不受影响：Numeric 48/153、Lexer 133/358、Parser 285/511、
+Analyzer 47/111；手工用 `SL.exe` 验证 `func f() "a" + "b" { 1 }` 现在正确报
+`SyntaxError: doc must be a string literal`，`func f() "a plain doc" { 1 }` 正常通过。
