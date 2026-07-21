@@ -143,10 +143,8 @@ add_executable(SL_Cpp_Numeric_Tests
         # 测试代码
         test/numeric/big_int_test.cpp
 )
-
 target_compile_options(SL_Cpp_Numeric_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
 target_link_libraries(SL_Cpp_Numeric_Tests PRIVATE doctest::doctest)
-
 add_test(NAME SL_Cpp_Numeric_Tests COMMAND SL_Cpp_Numeric_Tests)
 
 add_executable(SL_Cpp_Lexer_Tests
@@ -187,16 +185,12 @@ add_executable(SL_Cpp_Lexer_Tests
         test/lexer/common/position_tracking_test.cpp
         test/lexer/common/error_handling_test.cpp
 )
-
-# 预编译头
 target_precompile_headers(SL_Cpp_Lexer_Tests PRIVATE
         <doctest/doctest.h>
 )
 set_source_files_properties(test/lexer/main_test.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-
 target_compile_options(SL_Cpp_Lexer_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
 target_link_libraries(SL_Cpp_Lexer_Tests PRIVATE doctest::doctest)
-
 add_test(NAME SL_Cpp_Lexer_Tests COMMAND SL_Cpp_Lexer_Tests)
 
 add_executable(SL_Cpp_Parser_Tests
@@ -261,17 +255,13 @@ add_executable(SL_Cpp_Parser_Tests
         test/parser/common/error_handling_test.cpp
         test/parser/common/combination_test.cpp
 )
-
-# 预编译头
 target_precompile_headers(SL_Cpp_Parser_Tests PRIVATE
         <nlohmann/json.hpp>
         <doctest/doctest.h>
 )
 set_source_files_properties(test/parser/main_test.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-
 target_compile_options(SL_Cpp_Parser_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
 target_link_libraries(SL_Cpp_Parser_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
-
 add_test(NAME SL_Cpp_Parser_Tests COMMAND SL_Cpp_Parser_Tests)
 
 add_executable(SL_Cpp_Analyzer_Tests
@@ -314,19 +304,15 @@ add_executable(SL_Cpp_Analyzer_Tests
         test/analyzer/literal_folder/arithmetic_test.cpp
         test/analyzer/literal_folder/bitwise_test.cpp
         test/analyzer/literal_folder/container_ops_test.cpp
-        test/analyzer/literal_folder/str_format_test.cpp
         test/analyzer/literal_folder/compare_is_test.cpp
         test/analyzer/literal_folder/logical_test.cpp
+        test/analyzer/literal_folder/dead_branch_test.cpp
 )
-
-# 预编译头
 target_precompile_headers(SL_Cpp_Analyzer_Tests PRIVATE
         <nlohmann/json.hpp>
         <doctest/doctest.h>
 )
 set_source_files_properties(test/analyzer/main_test.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-
 target_compile_options(SL_Cpp_Analyzer_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
 target_link_libraries(SL_Cpp_Analyzer_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
-
 add_test(NAME SL_Cpp_Analyzer_Tests COMMAND SL_Cpp_Analyzer_Tests)

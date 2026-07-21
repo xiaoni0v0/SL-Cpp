@@ -29,7 +29,6 @@ int Executor::run() const {
 
     // 1. 分词器（源代码 -> token 数组）
     std::vector<Token> tokens;
-
     try {
         tokens = Lexer{utf8_to_u32(file_read_all(file_path), file_path), file_path}.tokenize();
         for (const auto &token : tokens) {
@@ -39,6 +38,7 @@ int Executor::run() const {
             }
             std::cout << std::endl;
         }
+        std::cout << std::endl << std::endl;
     } catch (SLException &e) {
         std::cerr << e.what() << std::endl;
         return 1;
@@ -49,14 +49,12 @@ int Executor::run() const {
         std::cerr << "分词器崩溃了: 未知错误" << std::endl;
         return 1;
     }
-    std::cout << std::endl << std::endl;
 
     // 2. 解析器（token 数组 -> AST）
     AstNodeProgramPtr ast;
-
     try {
         ast = Parser{std::move(tokens), file_path}.parse();
-        std::cout << ast->to_json() << std::endl;
+        std::cout << ast->to_json() << std::endl << std::endl;
     } catch (SLException &e) {
         std::cerr << e.what() << std::endl;
         return 1;
@@ -71,6 +69,7 @@ int Executor::run() const {
     // 3. 分析器（检查 AST）
     try {
         Analyzer{*ast, file_path}.analyze();
+        std::cout << ast->to_json() << std::endl << std::endl;
     } catch (SLException &e) {
         std::cerr << e.what() << std::endl;
         return 1;
