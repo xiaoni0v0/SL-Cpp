@@ -47,12 +47,12 @@ class SyntaxChecker {
     // 检查节点，node 可空
     void check_nullable(const AstNodePtr &node);
 
-    // 检查一个节点是否是左值
-    void check_lvalue(const AstNode &node) const;
+    // 检查一个节点是否是左值；仍会走一遍完整的 check()
+    void check_lvalue(const AstNode &node);
     // check_lvalue 的辅助：检查解构元组/列表的各元素，校验至多一个 *args
-    void check_lvalue_items(const std::vector<AstNodePtr> &items) const;
-    // 检查一个节点是否是“纯左值”（标识符/属性访问/元素访问）
-    void check_lvalue_pure(const AstNode &node) const;
+    void check_lvalue_items(const std::vector<AstNodePtr> &items, Position pos);
+    // 检查一个节点是否是“纯左值”（标识符/属性访问/元素访问）；仍会走一遍完整的 check()
+    void check_lvalue_pure(const AstNode &node);
 
     // 检查 func/class 的 doc 槽位：必须为空或者恰好是一个字符串字面量
     void check_doc(const AstNodePtr &doc) const;

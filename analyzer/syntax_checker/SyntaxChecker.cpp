@@ -1,3 +1,6 @@
+// ReSharper disable CppMemberFunctionMayBeStatic
+// ReSharper disable CppMemberFunctionMayBeConst
+
 #include "SyntaxChecker.h"
 
 #include "../../builtins/classes/exceptions/SyntaxError.h"
@@ -39,6 +42,14 @@ void SyntaxChecker::check(const AstNodeClass &node) {
     require_same_size(node.decorators_, node.decorator_positions_, pos);
     if (node.name_) require_not_null(*node.name_, pos);
     for (const auto &base : node.bases_) check_not_null(base, pos);
+
+    std::unordered_set<std::u32string> names;
+    for (const auto &capture : node.captures_) {
+        // 如果是已经存在
+        if (!names.insert(capture.identifier_).second) error("duplicate name in capture list", pos);
+        check_nullable(capture.value_expr_);
+    }
+
     check_doc(node.doc_);
 
     ctx_.local_scope_depth++;
@@ -175,6 +186,11 @@ void SyntaxChecker::check(const AstNodeFunc &node) {
         }
         check_nullable(capture.value_expr_);
     }
+    // SL.md 2.2.6："以上形参若出现，必须遵循以下顺序：1. 无默认值的形参；2. 有默认值的形参、
+    // 可变长位置形参（这两种之间顺序不限）；3. 可变长关键字形参"——这条顺序规则只管 *args 之前
+    // 的"位置形参"部分；一旦见过 *args，后面的普通形参就是仅关键字形参（3.5："出现在可变长位置
+    // 形参之后的槽位标记为仅关键字"），按名字匹配、不按位置，彼此之间有没有默认值不受这条顺序
+    // 约束（同 Python：func f(*x, y) {} 合法，y 是必须以关键字方式传入的仅关键字形参）
     bool has_seen_star{false}, has_seen_double_star{false}, has_seen_default{false};
     for (const auto &param : node.params_) {
         // 如果是已经存在
@@ -185,9 +201,11 @@ void SyntaxChecker::check(const AstNodeFunc &node) {
 
         switch (param.param_type_) {
             using PT = AstNodeFunc::OneParam::ParamType;
-        case PT::Normal: if (has_seen_star) error("normal parameter after *args", node.pos_);
-            if (param.default_value_) has_seen_default = true;
-            else if (has_seen_default) error("non-default parameter after default parameter", node.pos_);
+        case PT::Normal: if (!has_seen_star) {
+                // 仍在位置形参部分：无默认值的形参必须先于有默认值的形参
+                if (param.default_value_) has_seen_default = true;
+                else if (has_seen_default) error("non-default parameter after default parameter", node.pos_);
+            }
             break;
         case PT::StarArgs: if (has_seen_star) error("duplicate *args", node.pos_);
             has_seen_star = true;
@@ -249,15 +267,23 @@ void SyntaxChecker::check(const AstNodeLiteralList &node) {
 }
 
 void SyntaxChecker::check(const AstNodeLiteralDict &node) {
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    for (const auto &[key, val] : node.items_) {
+    for (const auto &[k, v] : node.items_) {
         ctx_.can_double_star = true;
-        check(*key);
+        check_not_null(k, pos);
         ctx_.can_double_star = false;
-        check_nullable(val);
+
+        // 是 **dict
+        if (dynamic_cast<const AstNodeDoubleStar *>(k.get())) {
+            if (v) error("Bad AstNode: ** dict-spread entry must not have a value", pos);
+        }
+        // 是 k: v
+        else check_not_null(v, pos);
     }
 
     ctx_ = saved;
@@ -367,20 +393,29 @@ void SyntaxChecker::check(const AstNodeIs &node) {
 }
 
 void SyntaxChecker::check(const AstNodeAssign &node) {
-    check_lvalue(*node.target_);
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
-    check(*node.value_);
+
+    require_not_null(node.target_, pos), check_lvalue(*node.target_);
+    check_not_null(node.value_, pos);
+
     ctx_ = saved;
 }
 
 void SyntaxChecker::check(const AstNodeCompoundAssign &node) {
-    check_lvalue_pure(*node.target_);
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
-    check(*node.value_);
+
+    require_not_null(node.target_, pos);
+    check_lvalue_pure(*node.target_);
+    check_not_null(node.value_, pos);
+
     ctx_ = saved;
 }
 
@@ -441,6 +476,9 @@ void SyntaxChecker::check(const AstNodeIdentifier &node) {
 }
 
 void SyntaxChecker::check(const AstNodeDel &node) {
+    check_not_null(node.target_, node.pos_);
+
+    // target 必须是标识符或属性访问
     if (!dynamic_cast<const AstNodeIdentifier *>(node.target_.get()) &&
         !dynamic_cast<const AstNodeAttr *>(node.target_.get()))
         error("del target must be an identifier or attribute access", node.target_->pos_);
@@ -464,42 +502,47 @@ void SyntaxChecker::check_nullable(const AstNodePtr &node) {
     if (node) check(*node);
 }
 
-void SyntaxChecker::check_lvalue(const AstNode &node) const {
+void SyntaxChecker::check_lvalue(const AstNode &node) {
     // a  a[ind]  a.x
-    if (dynamic_cast<const AstNodeIdentifier *>(&node)) return;
-    if (dynamic_cast<const AstNodeIndex *>(&node)) return;
-    if (dynamic_cast<const AstNodeAttr *>(&node)) return;
+    if (dynamic_cast<const AstNodeIdentifier *>(&node) ||
+        dynamic_cast<const AstNodeIndex *>(&node) ||
+        dynamic_cast<const AstNodeAttr *>(&node)) {
+        return check(node);
+    }
 
     // (a, b)  [a, b]
     if (const auto *n{dynamic_cast<const AstNodeLiteralTuple *>(&node)}) {
-        return check_lvalue_items(n->items_);
+        return check_lvalue_items(n->items_, node.pos_);
     }
     if (const auto *n{dynamic_cast<const AstNodeLiteralList *>(&node)}) {
-        return check_lvalue_items(n->items_);
+        return check_lvalue_items(n->items_, node.pos_);
     }
 
     error("lvalue expected before assignment", node.pos_);
 }
 
-void SyntaxChecker::check_lvalue_items(const std::vector<AstNodePtr> &items) const {
+void SyntaxChecker::check_lvalue_items(const std::vector<AstNodePtr> &items, const Position pos) {
     bool has_seen_star{false};
     for (const auto &item : items) {
+        require_not_null(item, pos);
         if (const auto *star{dynamic_cast<const AstNodeStar *>(item.get())}) {
             // 解构时至多一个左值可以带 * 前缀
             if (has_seen_star) error("at most one starred lvalue allowed in destructuring", star->pos_);
             has_seen_star = true;
-            check_lvalue(*star->operand_);
+            require_not_null(star->operand_, pos), check_lvalue(*star->operand_);
         } else {
             check_lvalue(*item);
         }
     }
 }
 
-void SyntaxChecker::check_lvalue_pure(const AstNode &node) const {
+void SyntaxChecker::check_lvalue_pure(const AstNode &node) {
     // a  a[ind]  a.x
-    if (dynamic_cast<const AstNodeIdentifier *>(&node)) return;
-    if (dynamic_cast<const AstNodeIndex *>(&node)) return;
-    if (dynamic_cast<const AstNodeAttr *>(&node)) return;
+    if (dynamic_cast<const AstNodeIdentifier *>(&node) ||
+        dynamic_cast<const AstNodeIndex *>(&node) ||
+        dynamic_cast<const AstNodeAttr *>(&node)) {
+        return check(node);
+    }
 
     error("identifier, attribute access, or index expression expected before op=", node.pos_);
 }

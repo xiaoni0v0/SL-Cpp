@@ -2229,3 +2229,87 @@ SL.md 一贯的干燥技术文风，没有到处加调侃。
 对象是同一套规则，两个功能因此共享同一套说明，没有另开一套概念。
 
 `.ai/run_test.bat` 确认没有回归（纯 SL.md 修订）。
+
+## 用户重构一遍 SyntaxChecker 后揪出的 6 个问题，加上专门的 SyntaxChecker 测试套件
+
+用户自己动手把 `SyntaxChecker` 重构了一遍（`check_optional` 拆成 `check_not_null`/`check_nullable`
+两个更明确的助手，`require_not_null` 加了不少调用点），过程中发现 6 处我之前遗漏/写错的地方。
+逐条记录问题和修法：
+
+1. **`AstNodeClass` 的 `captures_` 完全没被检查**——既没有递归 check 各 `value_expr_`，也没有查重复
+   名字。之前给 `AstNodeFunc` 加捕获/形参重名检查时漏了 class 这一侧（class 只有 captures_，没有
+   params_，逻辑该更简单，结果直接漏掉了）。修法：照抄 func 那套 `unordered_set<u32string>` 查重
+   逻辑，去掉 params_ 相关的部分，单独给 class 的 captures_ 补上。
+
+2. **形参顺序检查的逻辑本身是错的**：原来的代码是"见过 `*args` 之后任何普通形参一律报错
+   `normal parameter after *args`"，但 SL.md 2.2.6 的原文是"1. 无默认值的形参；2. 有默认值的
+   形参、可变长位置形参（这两种之间顺序不限）；3. 可变长关键字形参"——**这条顺序规则只管
+   `*args` 之前的位置形参部分**，`*args` 之后的形参是仅关键字形参（3.5 原文："出现在可变长
+   位置形参之后的槽位标记为仅关键字"），按名字匹配、不按位置，彼此之间有没有默认值完全不受
+   这条顺序约束（同 Python：`def f(*x, y)` 合法，`y` 是必须以关键字方式传入的形参）。反例
+   `func f(*x, y) {}` 之前会被误判为"普通形参跟在 *args 后面"直接报错，但这明明是合法语法。
+   修法：把"无默认值必须先于有默认值"这条检查的适用范围收窄到"还没见过 `*args`"这个阶段，
+   `*args` 之后完全不再检查默认值顺序。
+
+3. **字典字面量的 `**expr` 展开项和 `val` 是否为空这两件事没有互相校验**：`{**d: v}` 这种
+   `key` 是 `**` 展开、`val` 又不是 `nullptr` 的组合，理论上不可能通过 Parser（`{**d: v}` 在
+   Parser 层面就已经是 SyntaxError，见 `test/parser/2_2_2_basic_exprs/compound_dict_test.cpp`），
+   但原来的 `check` 完全没有对这层结构性关系做任何断言——只要 C++ 层真造出这种畸形组合（比如
+   将来 Parser 改出 bug），会被静默放过。修法：`key` 是 `AstNodeDoubleStar` 时要求 `val` 必须是
+   `nullptr`，否则 `error()`；这属于"Parser 结构性保证、只是防御性断言"的一类，跟 `clauses_`
+   非空那条是同一个性质。
+
+4. **`check(AstNodeAssign&)`/`check(AstNodeCompoundAssign&)` 里左值检查在重置 `can_star`/
+   `can_double_star` 上下文之前做**，跟其余所有 `check(...)` 函数"先存/重置上下文、最后再恢复"
+   的统一模式不一致。深入看了一下发现：`check_lvalue`/`check_lvalue_pure` 根本不读取
+   `ctx_.can_star`（它们对解构里的 `*lv` 用的是自己直接 `dynamic_cast<AstNodeStar>` 判断，不走
+   `ctx_.can_star` 那条路），所以这个顺序目前**不影响任何实际行为**，纯粹是风格不统一。按用户
+   要求统一改成"先重置上下文，左值检查和右值检查都放在重置之后"。**顺带在这次深入排查里额外
+   发现一个真的会导致漏检查的 bug**：`check_lvalue`/`check_lvalue_pure` 对 `AstNodeIndex`/
+   `AstNodeAttr` 只做了"是不是这个类型"的形状判断就直接 `return`，完全没有递归进
+   `object_`/`args_`——意味着 `a[break] = 1` 这种赋值目标内部的子表达式，只要外层形状合法
+   （确实是 Index/Attr），内部无论写了什么都不会被检查。修法：形状判断通过后额外调一次完整的
+   `check(node)`（复用 `check(AstNodeIndex&)`/`check(AstNodeAttr&)` 里本来就有的
+   `require_not_null` + 递归逻辑），`check_lvalue`/`check_lvalue_pure`/`check_lvalue_items`
+   都因此改成非 const（因为要调非 const 的 `check(...)`）。
+
+5. **`AstNodeCall` 的 `args_`/`kwargs_` 是两个独立 vector，一旦解析完就丢失了原始书写顺序**，
+   导致 `f(a=1, 1)`（关键字参数后面又跟位置参数）这种理应报错的写法完全没法在 `SyntaxChecker`
+   里检测出来——不是 `SyntaxChecker` 该补的检查漏了，是 `AstNodeCall` 这个结构本身就不足以
+   表达"顺序"这件事。用户提议参照 `AstNodeFunc::OneParam` 的做法：改成一个按书写顺序排列的
+   vector，每项带类型标签（位置/关键字/`*`展开/`**`展开），再交给 `SyntaxChecker` 按顺序校验。
+   **这个我同意，但没有在这轮动手**——这是 AST 节点定义（`ast_node_postfix.h`）+ Parser 的调用
+   参数解析逻辑（`parser/Parser.cpp`）+ 现有 Parser 测试里 Call 相关用例的 JSON 断言，三处一起
+   牵动的改动，比这轮其余几条纯 `SyntaxChecker` 内部的修正大得多，留到用户确认细节后单独一轮做。
+
+6. **`check(AstNodeDel&)` 完全不递归**：只做了"target_ 是不是 Identifier/Attr"的形状判断，
+   连 `require_not_null`/`check_not_null` 都没调用过——如果 `target_` 恰好是 `nullptr`，
+   `error()` 里紧接着的 `node.target_->pos_` 会直接空指针解引用崩掉；即便 `target_` 非空，
+   `del (f()).attr` 这种 `target_` 是 `Attr` 且 `object_` 里嵌了复杂表达式的情况，`object_`
+   里的问题也完全不会被检查到。修法：先 `check_not_null(node.target_, node.pos_)`（顺带完成
+   非空断言 + 递归 check），再做形状判断，两个问题一次解决。
+
+顺带发现一处不相关的 SL.md 陈旧文字：2.2.6/2.2.7 的语法说明里写着"`doc` 为字符串字面量
+（常量折叠后）"，跟这次会话更早改定的"`doc` 必须恰好是字符串字面量、不允许拼接折叠"这条规则
+（3.4.6）自相矛盾——是当时改 3.4.6 时漏改了这两处引用同一条规则的地方，顺手一并修掉。
+
+**新增了完整的 `SyntaxChecker` 测试套件**（此前完全没有专门测试，只在 `SL` 主程序里被间接跑到，
+这也是这些问题能潜伏这么久没被发现的原因之一）：`test/syntax_checker/`，`test_utils.h` 提供
+`check_program(source)`/`check_throws_with(source, 子串)` 走真实解析，`check_ast(program)`/
+`check_throws_with(program, 子串)` 直接对手工搭出来的 `AstNodeProgram` 跑（配防御性断言用，
+这类畸形树没法通过解析任何源码构造出来）。五个测试文件：
+- `scope_test.cpp`：`loop_depth`（break/continue）、`local_scope_depth`（return/global）在
+  嵌套 for/while/func/class 各种组合下的传播，含"函数体/类体会把 loop_depth 归零"这条容易漏测
+  的规则；
+- `func_class_test.cpp`：捕获/形参查重（含这次修的 class 捕获查重）、形参顺序规则（含这次修的
+  `*args` 之后仅关键字形参的 bug）、doc 槽位；
+- `lvalue_test.cpp`：各种合法/非法赋值目标、解构"至多一个 `*`"、复合赋值只认简单左值、这次修的
+  "左值内部子表达式仍需完整 check()"（`a[break] = 1` 现在能正确报错）；
+- `dict_call_test.cpp`：字典 `**`/`k:v` 各种组合、调用参数里 `*`/`**` 展开顺序、Index/Attr 子
+  表达式递归检查（含左值和普通表达式两种位置）；
+- `defensive_test.cpp`：手工搭建畸形 AST，直接验证那些"只有 Parser 出 bug 才会触发"的防御性
+  断言真的会正确报错而不是静默放过或崩溃（`clauses_` 空、`Compare`/`Is` 数量不对、字典
+  `**`/`val` 不一致、`name_` 空字符串、`decorators_`/`decorator_positions_` 数量不对）。
+
+`.ai/run_test.bat` 验证五个测试目标全绿：Numeric 48/153、Lexer 133/358、Parser 285/511、
+Analyzer 47/111、SyntaxChecker 45/102（新增）。
