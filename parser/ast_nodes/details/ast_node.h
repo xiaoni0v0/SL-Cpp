@@ -1,5 +1,6 @@
 #pragma once
 
+#include <compare>
 #include <memory>
 #include <nlohmann/json.hpp>
 
@@ -9,6 +10,7 @@ using json = nlohmann::ordered_json;
 struct Position {
     int row;
     int col;
+    std::strong_ordering operator<=>(const Position &) const = default;
 };
 
 // AST 节点的基类

@@ -34,6 +34,7 @@ void SyntaxChecker::check(const AstNodeClass &node) {
     ctx_.can_double_star = false;
 
     for (const auto &deco : node.decorators_) check(*deco);
+    require_same_size(node.decorators_, node.decorator_positions_, node.pos_);
     for (const auto &base : node.bases_) check(*base);
     check_doc(node.doc_);
 
@@ -51,7 +52,7 @@ void SyntaxChecker::check(const AstNodeIf &node) {
 
     // clauses_ 至少一条：语法上 if 必须有 if (cond) expr 这个基础子句，Parser 结构性保证，这里只是
     // 防御性地断言一下（万一 Parser 出 bug），不是真的有哪种源码能让这个为空
-    require_not_null(node.clauses_, node.pos_);
+    require_not_null(node.clauses_, 1, node.pos_);
     for (const auto &clause : node.clauses_) {
         check(*clause.cond_);
         check(*clause.body_);
@@ -141,6 +142,8 @@ void SyntaxChecker::check(const AstNodeFunc &node) {
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
+    // decorators_/decorator_positions_ 一一对应，Parser 结构性保证，防御性断言一下
+    require_same_size(node.decorators_, node.decorator_positions_, node.pos_);
     for (const auto &deco : node.decorators_) check(*deco);
 
     // 捕获列表、形参列表内部及两者之间标识符均不可重复（2.2.6）
@@ -296,6 +299,13 @@ void SyntaxChecker::check(const AstNodeCompare &node) {
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
+
+    // operands_.size() == ops_.size() + 1 且 >= 2，ops_/op_positions_ 一一对应
+    // （ast_node_operators.h 里的注释），Parser 结构性保证，防御性断言一下
+    require_not_null(node.operands_, 2, node.pos_);
+    if (node.operands_.size() != node.ops_.size() + 1) error("Bad AstNode: mismatched operands/ops count", node.pos_);
+    require_same_size(node.ops_, node.op_positions_, node.pos_);
+
     for (const auto &operand : node.operands_) check(*operand);
     ctx_ = saved;
 }
@@ -304,6 +314,13 @@ void SyntaxChecker::check(const AstNodeIs &node) {
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
+
+    // operands_.size() >= 2，op_positions_.size() == operands_.size() - 1
+    // （ast_node_operators.h 里的注释），Parser 结构性保证，防御性断言一下
+    require_not_null(node.operands_, 2, node.pos_);
+    if (node.op_positions_.size() != node.operands_.size() - 1) error(
+        "Bad AstNode: mismatched operands/op_positions count", node.pos_);
+
     for (const auto &operand : node.operands_) check(*operand);
     ctx_ = saved;
 }

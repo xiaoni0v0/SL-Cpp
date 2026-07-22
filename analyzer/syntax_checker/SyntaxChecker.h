@@ -22,10 +22,16 @@ class SyntaxChecker {
     void require_not_null(const AstNodePtr &node, Position pos) const;
     // 名字不能是 ""
     void require_not_null(const std::u32string &name, Position pos) const;
-    // vector 不能是空的
+    // vector 元素个数不能少于 min_size
     template <typename T>
-    void require_not_null(const std::vector<T> &vec, const Position pos) const {
-        if (vec.empty()) error("Bad AstNode: unexpected empty vector", pos);
+    void require_not_null(const std::vector<T> &vec, const size_t min_size, const Position pos) const {
+        if (vec.size() < min_size) error("Bad AstNode: too few elements", pos);
+    }
+
+    // 两个 vector 长度必须相等
+    template <typename T, typename U>
+    void require_same_size(const std::vector<T> &a, const std::vector<U> &b, const Position pos) const {
+        if (a.size() != b.size()) error("Bad AstNode: mismatched array sizes", pos);
     }
 
     // 检查节点，dispatch；要求 node 非空
