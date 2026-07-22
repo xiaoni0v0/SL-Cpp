@@ -412,8 +412,7 @@ void SyntaxChecker::check(const AstNodeCompoundAssign &node) {
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    require_not_null(node.target_, pos);
-    check_lvalue_pure(*node.target_);
+    require_not_null(node.target_, pos), check_lvalue_pure(*node.target_);
     check_not_null(node.value_, pos);
 
     ctx_ = saved;
@@ -476,12 +475,18 @@ void SyntaxChecker::check(const AstNodeIdentifier &node) {
 }
 
 void SyntaxChecker::check(const AstNodeDel &node) {
+    const Context saved{ctx_};
+    ctx_.can_star = false;
+    ctx_.can_double_star = false;
+
     check_not_null(node.target_, node.pos_);
 
     // target 必须是标识符或属性访问
     if (!dynamic_cast<const AstNodeIdentifier *>(node.target_.get()) &&
         !dynamic_cast<const AstNodeAttr *>(node.target_.get()))
         error("del target must be an identifier or attribute access", node.target_->pos_);
+
+    ctx_ = saved;
 }
 
 void SyntaxChecker::check(const AstNodeGlobal &node) {
@@ -551,7 +556,7 @@ void SyntaxChecker::check_doc(const AstNodePtr &doc) const {
     if (doc && !dynamic_cast<const AstNodeLiteralStr *>(doc.get())) error("doc must be a string literal", doc->pos_);
 }
 
-SyntaxChecker::SyntaxChecker(AstNodeProgram &root, std::string file_path)
+SyntaxChecker::SyntaxChecker(const AstNodeProgram &root, std::string file_path)
     : root_{root}, file_path_{std::move(file_path)} {
 }
 

@@ -10,8 +10,8 @@
 
 int main(const int argc, char *argv[]) {
 #ifdef _WIN32
-    SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
+    SetConsoleOutputCP(CP_UTF8);
 #endif
 
     // 没有输入文件

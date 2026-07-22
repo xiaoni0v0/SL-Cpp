@@ -6,7 +6,7 @@
 
 
 class SyntaxChecker {
-    AstNodeProgram &root_;
+    const AstNodeProgram &root_;
     const std::string file_path_;
 
     struct Context {
@@ -22,6 +22,7 @@ class SyntaxChecker {
     void require_not_null(const AstNodePtr &node, Position pos) const;
     // 名字不能是 ""
     void require_not_null(const std::u32string &name, Position pos) const;
+
     // vector 元素个数不能少于 min_size
     template <typename T>
     void require_not_null(const std::vector<T> &vec, const size_t min_size, const Position pos) const {
@@ -63,7 +64,7 @@ public:
      * @param root      AST 的根节点
      * @param file_path 文件路径，默认为 "<unknown>"
      */
-    explicit SyntaxChecker(AstNodeProgram &root, std::string file_path = "<unknown>");
+    explicit SyntaxChecker(const AstNodeProgram &root, std::string file_path = "<unknown>");
 
     /**
      * 语法合法性检查
