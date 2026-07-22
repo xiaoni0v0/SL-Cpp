@@ -10,16 +10,16 @@ void SyntaxChecker::error(const std::string &msg, const Position pos) const {
     throw SyntaxError{file_path_, pos.row, pos.col, msg};
 }
 
-void SyntaxChecker::require_not_null(const AstNodePtr &node) const {
-    if (!node) error("unexpected null node", Position{0, 0});
+void SyntaxChecker::require_not_null(const AstNodePtr &node, const Position pos) const {
+    if (!node) error("Bad AstNode: unexpected null node", pos);
 }
 
-void SyntaxChecker::require_not_null(const std::u32string &name) const {
-    if (name.empty()) error("unexpected null name", Position{0, 0});
+void SyntaxChecker::require_not_null(const std::u32string &name, const Position pos) const {
+    if (name.empty()) error("Bad AstNode: unexpected empty name", pos);
 }
 
 void SyntaxChecker::check(const AstNode &node) {
-    const AstNode *const p{&node};
+    const AstNode *const p{&node}; // 变成指针再 dynamic_cast
 
 #define X(nt) if (const auto *n{dynamic_cast<const nt *>(p)}) { return check(*n); }
 #include "../../parser/ast_nodes/x_ast_nodes.h"
@@ -28,65 +28,21 @@ void SyntaxChecker::check(const AstNode &node) {
     assert(!"Unknown node type");
 }
 
-void SyntaxChecker::check_optional(const AstNodePtr &node) {
-    if (node) check(*node);
-}
-
-void SyntaxChecker::check(const AstNodeCall &node) {
-    const Context saved = ctx_;
-
-    // object_
-    ctx_.can_star = false;
-    ctx_.can_double_star = false;
-    check(*node.object_);
-
-    // 参数们
-    bool seen_double_star = false; // ** 之后不能再出现其他参数
-    ctx_.can_star = true;
-    ctx_.can_double_star = true;
-    for (const auto &arg : node.args_) {
-        if (dynamic_cast<const AstNodeDoubleStar *>(arg.get())) seen_double_star = true;
-        else if (seen_double_star) error("argument after ** spread", arg->pos_);
-        check(*arg);
-    }
-
-    ctx_.can_star = false;
-    ctx_.can_double_star = false;
-    for (const auto &val : node.kwargs_ | std::views::values) check(*val);
-
-    ctx_ = saved;
-}
-
-void SyntaxChecker::check(const AstNodeIndex &node) {
+void SyntaxChecker::check(const AstNodeClass &node) {
     const Context saved = ctx_;
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    // object_
-    require_not_null(node.object_);
-    check(*node.object_);
+    for (const auto &deco : node.decorators_) check(*deco);
+    for (const auto &base : node.bases_) check(*base);
+    check_doc(node.doc_);
 
-    // args_
-    ctx_.can_star = true;
-    for (const auto &a : node.args_) {
-        require_not_null(a);
-        check(*a);
-    }
-
-    ctx_ = saved;
-}
-
-void SyntaxChecker::check(const AstNodeAttr &node) {
-    const Context saved = ctx_;
-    ctx_.can_star = false;
-    ctx_.can_double_star = false;
-
-    // object_
-    require_not_null(node.object_);
-    check(*node.object_);
-
-    // attr_
-    require_not_null(node.attr_);
+    // 类体也是一个局部作用域（SL.md 2.2.4/3.4.4 明确把类体和函数体并列），global 在类体里合法；
+    // return 也合法，提前结束类体的构建（3.4.5.6/3.4.7）；break/continue 仍然要求真的在循环里，
+    // 类体本身不算，loop 深度照常归零
+    ctx_.local_scope_depth++;
+    ctx_.loop_depth = 0;
+    check(*node.body_);
 
     ctx_ = saved;
 }
@@ -235,25 +191,6 @@ void SyntaxChecker::check(const AstNodeFunc &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeClass &node) {
-    const Context saved = ctx_;
-    ctx_.can_star = false;
-    ctx_.can_double_star = false;
-
-    for (const auto &deco : node.decorators_) check(*deco);
-    for (const auto &base : node.bases_) check(*base);
-    check_doc(node.doc_);
-
-    // 类体也是一个局部作用域（SL.md 2.2.4/3.4.4 明确把类体和函数体并列），global 在类体里合法；
-    // return 也合法，提前结束类体的构建（3.4.5.6/3.4.7）；break/continue 仍然要求真的在循环里，
-    // 类体本身不算，loop 深度照常归零
-    ctx_.local_scope_depth++;
-    ctx_.loop_depth = 0;
-    check(*node.body_);
-
-    ctx_ = saved;
-}
-
 void SyntaxChecker::check(const AstNodeLiteralNone &) {
 }
 
@@ -381,11 +318,70 @@ void SyntaxChecker::check(const AstNodeAssign &node) {
 }
 
 void SyntaxChecker::check(const AstNodeCompoundAssign &node) {
-    check_simple_lvalue(*node.target_);
+    check_lvalue_pure(*node.target_);
     const Context saved = ctx_;
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     check(*node.value_);
+    ctx_ = saved;
+}
+
+void SyntaxChecker::check(const AstNodeCall &node) {
+    const Context saved = ctx_;
+
+    // object_
+    ctx_.can_star = false;
+    ctx_.can_double_star = false;
+    check(*node.object_);
+
+    // 参数们
+    bool seen_double_star = false; // ** 之后不能再出现其他参数
+    ctx_.can_star = true;
+    ctx_.can_double_star = true;
+    for (const auto &arg : node.args_) {
+        if (dynamic_cast<const AstNodeDoubleStar *>(arg.get())) seen_double_star = true;
+        else if (seen_double_star) error("argument after ** spread", arg->pos_);
+        check(*arg);
+    }
+
+    ctx_.can_star = false;
+    ctx_.can_double_star = false;
+    for (const auto &val : node.kwargs_ | std::views::values) check(*val);
+
+    ctx_ = saved;
+}
+
+void SyntaxChecker::check(const AstNodeIndex &node) {
+    const Context saved = ctx_;
+    ctx_.can_star = false;
+    ctx_.can_double_star = false;
+
+    // object_
+    require_not_null(node.object_);
+    check(*node.object_);
+
+    // args_
+    ctx_.can_star = true;
+    for (const auto &a : node.args_) {
+        require_not_null(a);
+        check(*a);
+    }
+
+    ctx_ = saved;
+}
+
+void SyntaxChecker::check(const AstNodeAttr &node) {
+    const Context saved = ctx_;
+    ctx_.can_star = false;
+    ctx_.can_double_star = false;
+
+    // object_
+    require_not_null(node.object_);
+    check(*node.object_);
+
+    // attr_
+    require_not_null(node.attr_);
+
     ctx_ = saved;
 }
 
@@ -405,17 +401,8 @@ void SyntaxChecker::check(const AstNodeGlobal &node) {
     if (ctx_.local_scope_depth == 0) error("global outside function/class body", node.pos_);
 }
 
-void SyntaxChecker::check_doc(const AstNodePtr &doc) const {
-    if (doc && !dynamic_cast<const AstNodeLiteralStr *>(doc.get())) error("doc must be a string literal", doc->pos_);
-}
-
-void SyntaxChecker::check_simple_lvalue(const AstNode &node) const {
-    // a  a[ind]  a.x（不含解构，用于复合赋值）
-    if (dynamic_cast<const AstNodeIdentifier *>(&node)) return;
-    if (dynamic_cast<const AstNodeIndex *>(&node)) return;
-    if (dynamic_cast<const AstNodeAttr *>(&node)) return;
-
-    error("identifier, attribute access, or index expression expected before op=", node.pos_);
+void SyntaxChecker::check_optional(const AstNodePtr &node) {
+    if (node) check(*node);
 }
 
 void SyntaxChecker::check_lvalue(const AstNode &node) const {
@@ -426,12 +413,10 @@ void SyntaxChecker::check_lvalue(const AstNode &node) const {
 
     // (a, b)  [a, b]
     if (const auto *n{dynamic_cast<const AstNodeLiteralTuple *>(&node)}) {
-        check_lvalue_items(n->items_);
-        return;
+        return check_lvalue_items(n->items_);
     }
     if (const auto *n{dynamic_cast<const AstNodeLiteralList *>(&node)}) {
-        check_lvalue_items(n->items_);
-        return;
+        return check_lvalue_items(n->items_);
     }
 
     error("lvalue expected before assignment", node.pos_);
@@ -441,7 +426,7 @@ void SyntaxChecker::check_lvalue_items(const std::vector<AstNodePtr> &items) con
     bool seen_star = false;
     for (const auto &item : items) {
         if (const auto *star{dynamic_cast<const AstNodeStar *>(item.get())}) {
-            // 2.1.5 第 4 点：解构时至多一个左值可以带 * 前缀
+            // 解构时至多一个左值可以带 * 前缀
             if (seen_star) error("at most one starred lvalue allowed in destructuring", star->pos_);
             seen_star = true;
             check_lvalue(*star->operand_);
@@ -449,6 +434,19 @@ void SyntaxChecker::check_lvalue_items(const std::vector<AstNodePtr> &items) con
             check_lvalue(*item);
         }
     }
+}
+
+void SyntaxChecker::check_lvalue_pure(const AstNode &node) const {
+    // a  a[ind]  a.x（不含解构，用于复合赋值）
+    if (dynamic_cast<const AstNodeIdentifier *>(&node)) return;
+    if (dynamic_cast<const AstNodeIndex *>(&node)) return;
+    if (dynamic_cast<const AstNodeAttr *>(&node)) return;
+
+    error("identifier, attribute access, or index expression expected before op=", node.pos_);
+}
+
+void SyntaxChecker::check_doc(const AstNodePtr &doc) const {
+    if (doc && !dynamic_cast<const AstNodeLiteralStr *>(doc.get())) error("doc must be a string literal", doc->pos_);
 }
 
 SyntaxChecker::SyntaxChecker(AstNodeProgram &root, std::string file_path)
