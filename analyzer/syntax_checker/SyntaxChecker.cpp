@@ -29,57 +29,69 @@ void SyntaxChecker::check(const AstNode &node) {
 }
 
 void SyntaxChecker::check(const AstNodeClass &node) {
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    for (const auto &deco : node.decorators_) check(*deco);
-    require_same_size(node.decorators_, node.decorator_positions_, node.pos_);
-    if (node.name_) require_not_null(*node.name_, node.pos_);
-    for (const auto &base : node.bases_) check(*base);
+    for (const auto &deco : node.decorators_) check_not_null(deco, pos);
+    require_same_size(node.decorators_, node.decorator_positions_, pos);
+    if (node.name_) require_not_null(*node.name_, pos);
+    for (const auto &base : node.bases_) check_not_null(base, pos);
     check_doc(node.doc_);
+
     ctx_.local_scope_depth++;
     ctx_.loop_depth = 0;
-    check(*node.body_);
+    check_not_null(node.body_, pos);
 
     ctx_ = saved;
 }
 
 void SyntaxChecker::check(const AstNodeIf &node) {
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    require_not_null(node.clauses_, 1, node.pos_);
-    for (const auto &clause : node.clauses_) check(*clause.cond_), check(*clause.body_);
-    check_optional(node.else_expr_);
+    require_not_null(node.clauses_, 1, pos);
+    for (const auto &clause : node.clauses_) {
+        check_not_null(clause.cond_, pos);
+        check_not_null(clause.body_, pos);
+    }
+    check_nullable(node.else_expr_);
 
     ctx_ = saved;
 }
 
 void SyntaxChecker::check(const AstNodeForCond &node) {
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    check_optional(node.init_);
-    check_optional(node.cond_);
-    check_optional(node.inc_);
+    check_nullable(node.init_);
+    check_nullable(node.cond_);
+    check_nullable(node.inc_);
     ctx_.loop_depth++;
-    check(*node.body_);
+    check_not_null(node.body_, pos);
 
     ctx_ = saved;
 }
 
 void SyntaxChecker::check(const AstNodeForIter &node) {
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    check_lvalue(*node.target_);
-    check(*node.iterable_);
+    require_not_null(node.target_, pos), check_lvalue(*node.target_);
+    check_not_null(node.iterable_, pos);
     ctx_.loop_depth++;
-    check(*node.body_);
+    require_not_null(node.body_, node.pos_), check(*node.body_);
 
     ctx_ = saved;
 }
@@ -97,25 +109,28 @@ void SyntaxChecker::check(const AstNodeReturn &node) {
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    check_optional(node.value_);
+    check_nullable(node.value_);
 
     ctx_ = saved;
 }
 
 void SyntaxChecker::check(const AstNodeTry &node) {
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    check(*node.try_expr_);
+    check_not_null(node.try_expr_, pos);
+    // except 和 finally 不能同时不存在
     if (node.except_clauses_.empty() && !node.finally_expr_) {
         error("try must have at least one except or finally", node.pos_);
     }
     for (const auto &clause : node.except_clauses_) {
-        for (const auto &exc : clause.exceptions_) check(*exc);
-        check(*clause.body_);
+        for (const auto &exc : clause.exceptions_) check_not_null(exc, pos);
+        check_not_null(clause.body_, pos);
     }
-    check_optional(node.finally_expr_);
+    check_nullable(node.finally_expr_);
 
     ctx_ = saved;
 }
@@ -125,24 +140,25 @@ void SyntaxChecker::check(const AstNodeRaise &node) {
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    check(*node.value_);
+    check_not_null(node.value_, node.pos_);
 
     ctx_ = saved;
 }
 
 void SyntaxChecker::check(const AstNodeDecorator &node) {
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    check(*node.decorator_);
-    check(*node.target_);
+    check_not_null(node.decorator_, pos);
+    check_not_null(node.target_, pos);
 
     ctx_ = saved;
 }
 
 void SyntaxChecker::check(const AstNodeFunc &node) {
-
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -157,7 +173,7 @@ void SyntaxChecker::check(const AstNodeFunc &node) {
         if (!names.insert(capture.identifier_).second) {
             error("duplicate name in capture/parameter list", node.pos_);
         }
-        check_optional(capture.value_expr_);
+        check_nullable(capture.value_expr_);
     }
     bool has_seen_star{false}, has_seen_double_star{false}, has_seen_default{false};
     for (const auto &param : node.params_) {
@@ -180,11 +196,11 @@ void SyntaxChecker::check(const AstNodeFunc &node) {
             break;
         }
 
-        check_optional(param.type_annotation_);
-        check_optional(param.default_value_);
+        check_nullable(param.type_annotation_);
+        check_nullable(param.default_value_);
     }
 
-    check_optional(node.return_type_);
+    check_nullable(node.return_type_);
     check_doc(node.doc_);
 
     ctx_.local_scope_depth++;
@@ -217,7 +233,7 @@ void SyntaxChecker::check(const AstNodeLiteralTuple &node) {
     ctx_.can_star = true;
     ctx_.can_double_star = false;
 
-    for (const auto &item : node.items_) check(*item);
+    for (const auto &item : node.items_) check_not_null(item, node.pos_);
 
     ctx_ = saved;
 }
@@ -227,7 +243,7 @@ void SyntaxChecker::check(const AstNodeLiteralList &node) {
     ctx_.can_star = true;
     ctx_.can_double_star = false;
 
-    for (const auto &item : node.items_) check(*item);
+    for (const auto &item : node.items_) check_not_null(item, node.pos_);
 
     ctx_ = saved;
 }
@@ -241,7 +257,7 @@ void SyntaxChecker::check(const AstNodeLiteralDict &node) {
         ctx_.can_double_star = true;
         check(*key);
         ctx_.can_double_star = false;
-        check_optional(val);
+        check_nullable(val);
     }
 
     ctx_ = saved;
@@ -255,7 +271,7 @@ void SyntaxChecker::check(const AstNodeProgram &node) {
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    for (const auto &e : node.exprs_) check(*e);
+    for (const auto &e : node.exprs_) check_not_null(e, node.pos_);
 
     ctx_ = saved;
 }
@@ -264,30 +280,36 @@ void SyntaxChecker::check(const AstNodeCompound &node) {
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
-    for (const auto &e : node.exprs_) check(*e);
+
+    for (const auto &e : node.exprs_) check_not_null(e, node.pos_);
+
     ctx_ = saved;
 }
 
 void SyntaxChecker::check(const AstNodeStar &node) {
-    if (!ctx_.can_star) error("* can only appear in tuple, list, or function call arguments", node.pos_);
+    const Position pos{node.pos_};
+
+    if (!ctx_.can_star) error("* can only appear in tuple, list, or function call arguments", pos);
 
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    check(*node.operand_);
+    check_not_null(node.operand_, pos);
 
     ctx_ = saved;
 }
 
 void SyntaxChecker::check(const AstNodeDoubleStar &node) {
-    if (!ctx_.can_double_star) error("** can only appear in dict literal or function call arguments", node.pos_);
+    const Position pos{node.pos_};
+
+    if (!ctx_.can_double_star) error("** can only appear in dict literal or function call arguments", pos);
 
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    check(*node.operand_);
+    check_not_null(node.operand_, pos);
 
     ctx_ = saved;
 }
@@ -297,43 +319,49 @@ void SyntaxChecker::check(const AstNodeOpUnary &node) {
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    check(*node.operand_);
+    check_not_null(node.operand_, node.pos_);
 
     ctx_ = saved;
 }
 
 void SyntaxChecker::check(const AstNodeOpBinary &node) {
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    check(*node.left_);
-    check(*node.right_);
+    check_not_null(node.left_, pos);
+    check_not_null(node.right_, pos);
 
     ctx_ = saved;
 }
 
 void SyntaxChecker::check(const AstNodeCompare &node) {
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    if (node.operands_.size() != node.ops_.size() + 1) error("Bad AstNode: mismatched count", node.pos_);
-    require_not_null(node.operands_, 2, node.pos_);
-    require_same_size(node.ops_, node.op_positions_, node.pos_);
-    for (const auto &operand : node.operands_) check(*operand);
+    if (node.operands_.size() != node.ops_.size() + 1) error("Bad AstNode: mismatched count", pos);
+    require_not_null(node.operands_, 2, pos);
+    require_same_size(node.ops_, node.op_positions_, pos);
+    for (const auto &operand : node.operands_) check_not_null(operand, pos);
 
     ctx_ = saved;
 }
 
 void SyntaxChecker::check(const AstNodeIs &node) {
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
     require_not_null(node.operands_, 2, node.pos_);
-    if (node.operands_.size() != node.op_positions_.size() + 1) error("Bad AstNode: mismatched count", node.pos_);
-    for (const auto &operand : node.operands_) check(*operand);
+    if (node.operands_.size() != node.op_positions_.size() + 1) error("Bad AstNode: mismatched count", pos);
+    for (const auto &operand : node.operands_) check_not_null(operand, pos);
 
     ctx_ = saved;
 }
@@ -381,24 +409,29 @@ void SyntaxChecker::check(const AstNodeCall &node) {
 }
 
 void SyntaxChecker::check(const AstNodeIndex &node) {
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    require_not_null(node.object_, node.pos_), check(*node.object_);
+    check_not_null(node.object_, pos);
+
     ctx_.can_star = true;
-    for (const auto &a : node.args_) require_not_null(a, node.pos_), check(*a);
+    for (const auto &a : node.args_) check_not_null(a, pos);
 
     ctx_ = saved;
 }
 
 void SyntaxChecker::check(const AstNodeAttr &node) {
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    require_not_null(node.object_, node.pos_), check(*node.object_);
-    require_not_null(node.attr_, node.pos_);
+    check_not_null(node.object_, pos);
+    require_not_null(node.attr_, pos);
 
     ctx_ = saved;
 }
@@ -417,7 +450,17 @@ void SyntaxChecker::check(const AstNodeGlobal &node) {
     if (ctx_.local_scope_depth == 0) error("global outside function/class body", node.pos_);
 }
 
-void SyntaxChecker::check_optional(const AstNodePtr &node) {
+void SyntaxChecker::check_not_null(const AstNodePtr &node, const Position pos) {
+    if (!node) error("Bad AstNode: unexpected null node", pos);
+    check(*node);
+}
+
+void SyntaxChecker::check_not_null(const AstNodeProgramPtr &node, const Position pos) {
+    if (!node) error("Bad AstNode: unexpected null node", pos);
+    check(*node);
+}
+
+void SyntaxChecker::check_nullable(const AstNodePtr &node) {
     if (node) check(*node);
 }
 
@@ -453,7 +496,7 @@ void SyntaxChecker::check_lvalue_items(const std::vector<AstNodePtr> &items) con
 }
 
 void SyntaxChecker::check_lvalue_pure(const AstNode &node) const {
-    // a  a[ind]  a.x（不含解构，用于复合赋值）
+    // a  a[ind]  a.x
     if (dynamic_cast<const AstNodeIdentifier *>(&node)) return;
     if (dynamic_cast<const AstNodeIndex *>(&node)) return;
     if (dynamic_cast<const AstNodeAttr *>(&node)) return;

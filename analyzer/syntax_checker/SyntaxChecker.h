@@ -34,15 +34,18 @@ class SyntaxChecker {
         if (a.size() != b.size()) error("Bad AstNode: mismatched array sizes", pos);
     }
 
-    // 检查节点，dispatch；要求 node 非空
+    // 检查节点，dispatch
     void check(const AstNode &node);
 
 #define X(nt) void check(const nt &node);
 #include "../../parser/ast_nodes/x_ast_nodes.h"
 #undef X
 
-    // 检查节点，dispatch：node 可空
-    void check_optional(const AstNodePtr &node);
+    // 检查节点，node 不可空
+    void check_not_null(const AstNodePtr &node, Position pos);
+    void check_not_null(const AstNodeProgramPtr &node, Position pos);
+    // 检查节点，node 可空
+    void check_nullable(const AstNodePtr &node);
 
     // 检查一个节点是否是左值
     void check_lvalue(const AstNode &node) const;
