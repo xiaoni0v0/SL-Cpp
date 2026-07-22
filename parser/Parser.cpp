@@ -479,19 +479,19 @@ AstNodePtr Parser::parse_paren_or_tuple() {
     expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
 
     std::vector<AstNodePtr> items;
-    const bool saw_comma{
+    const bool has_seen_comma{
         finish_comma_batch(TokenType::SIGN_RPAREN, [&] { items.push_back(parse_expr()); })
     };
 
     if (!check(TokenType::SIGN_RPAREN)) {
-        error(saw_comma
+        error(has_seen_comma
                   ? "expected ')' to close tuple"
                   : "expected ')' to close the parentheses");
     }
     expect(TokenType::SIGN_RPAREN), paren_depth_--; // 消耗 ')'
 
     // 恰好一项且没见过 ','：(expr) 是分组，不是元组，直接返回内部表达式本身
-    if (items.size() == 1 && !saw_comma) return std::move(items[0]);
+    if (items.size() == 1 && !has_seen_comma) return std::move(items[0]);
 
     return std::make_unique<AstNodeLiteralTuple>(start_pos, std::move(items));
 }
@@ -912,12 +912,12 @@ AstNodePtr Parser::parse_decorator() {
 
 bool Parser::finish_comma_batch(const TokenType close, const std::function<void()> &parse_item) {
     skip_newline();
-    bool saw_comma{false};
+    bool has_seen_comma{false};
     if (!check(close)) {
         parse_item(); // 委托给回调函数
         skip_newline();
         while (check(TokenType::SIGN_COMMA)) {
-            saw_comma = true;
+            has_seen_comma = true;
             expect(TokenType::SIGN_COMMA); // 消耗 ','
             skip_newline();
             if (check(close)) break; // 尾逗号
@@ -925,7 +925,7 @@ bool Parser::finish_comma_batch(const TokenType close, const std::function<void(
             skip_newline();
         }
     }
-    return saw_comma;
+    return has_seen_comma;
 }
 
 AstNodePtr Parser::finish_dict(const Position start_pos, AstNodePtr first) {
@@ -1068,7 +1068,7 @@ AstNodePtr Parser::finish_call(AstNodePtr obj, const Position start_pos) {
         // 关键字参数的判定：当前是 IDENTIFIER，且跳过其后可能的换行紧跟 '='
         if (check(TokenType::IDENTIFIER) && check_over_newline(TokenType::SIGN_ASSIGN, pos_ + 1)) {
             // 关键字参数 name = value
-            std::u32string name = expect(TokenType::IDENTIFIER).lexeme; // 消耗标识符
+            std::u32string name{expect(TokenType::IDENTIFIER).lexeme}; // 消耗标识符
             skip_newline();
             expect(TokenType::SIGN_ASSIGN); // 消耗 '='
             skip_newline();

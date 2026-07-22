@@ -29,7 +29,7 @@ void SyntaxChecker::check(const AstNode &node) {
 }
 
 void SyntaxChecker::check(const AstNodeClass &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
@@ -37,9 +37,6 @@ void SyntaxChecker::check(const AstNodeClass &node) {
     for (const auto &base : node.bases_) check(*base);
     check_doc(node.doc_);
 
-    // 类体也是一个局部作用域（SL.md 2.2.4/3.4.4 明确把类体和函数体并列），global 在类体里合法；
-    // return 也合法，提前结束类体的构建（3.4.5.6/3.4.7）；break/continue 仍然要求真的在循环里，
-    // 类体本身不算，loop 深度照常归零
     ctx_.local_scope_depth++;
     ctx_.loop_depth = 0;
     check(*node.body_);
@@ -48,12 +45,13 @@ void SyntaxChecker::check(const AstNodeClass &node) {
 }
 
 void SyntaxChecker::check(const AstNodeIf &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    // clauses_
-    require_not_null(node.clauses_);
+    // clauses_ 至少一条：语法上 if 必须有 if (cond) expr 这个基础子句，Parser 结构性保证，这里只是
+    // 防御性地断言一下（万一 Parser 出 bug），不是真的有哪种源码能让这个为空
+    require_not_null(node.clauses_, node.pos_);
     for (const auto &clause : node.clauses_) {
         check(*clause.cond_);
         check(*clause.body_);
@@ -63,7 +61,7 @@ void SyntaxChecker::check(const AstNodeIf &node) {
 }
 
 void SyntaxChecker::check(const AstNodeForCond &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     check_optional(node.init_);
@@ -75,7 +73,7 @@ void SyntaxChecker::check(const AstNodeForCond &node) {
 }
 
 void SyntaxChecker::check(const AstNodeForIter &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     check_lvalue(*node.target_);
@@ -96,7 +94,7 @@ void SyntaxChecker::check(const AstNodeContinue &node) {
 void SyntaxChecker::check(const AstNodeReturn &node) {
     // return 现在处处合法：离它最近的 Program 就是它的作用对象（SL.md 3.4.1/3.4.5.6），哪怕是文件
     // 顶层，最近的 Program 也就是文件自身，不需要判断上下文
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     check_optional(node.value_);
@@ -104,7 +102,7 @@ void SyntaxChecker::check(const AstNodeReturn &node) {
 }
 
 void SyntaxChecker::check(const AstNodeTry &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     if (node.except_clauses_.empty() && !node.finally_expr_)
@@ -120,7 +118,7 @@ void SyntaxChecker::check(const AstNodeTry &node) {
 }
 
 void SyntaxChecker::check(const AstNodeRaise &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     check(*node.value_);
@@ -128,7 +126,7 @@ void SyntaxChecker::check(const AstNodeRaise &node) {
 }
 
 void SyntaxChecker::check(const AstNodeDecorator &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     check(*node.decorator_);
@@ -139,40 +137,42 @@ void SyntaxChecker::check(const AstNodeDecorator &node) {
 void SyntaxChecker::check(const AstNodeFunc &node) {
     using PT = AstNodeFunc::OneParam::ParamType;
 
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
     for (const auto &deco : node.decorators_) check(*deco);
 
     // 捕获列表、形参列表内部及两者之间标识符均不可重复（2.2.6）
-    std::unordered_set<std::u32string> seen_names;
+    std::unordered_set<std::u32string> has_seen_names;
 
     for (const auto &capture : node.captures_) {
-        if (!seen_names.insert(capture.identifier_).second)
+        if (!has_seen_names.insert(capture.identifier_).second)
             error("duplicate name in capture/parameter list",
                   node.pos_);
         check_optional(capture.value_expr_);
     }
 
     // 形参顺序与重复检查
-    bool seen_star_args = false;
-    bool seen_double_star = false;
-    bool seen_default = false;
+    bool has_seen_star_args{false};
+    bool has_seen_double_star{false};
+    bool has_seen_default{false};
 
     for (const auto &param : node.params_) {
-        if (!seen_names.insert(param.identifier_).second) error("duplicate name in capture/parameter list", node.pos_);
-        if (seen_double_star) error("parameter after **kwargs", node.pos_);
+        if (!has_seen_names.insert(param.identifier_).second)
+            error("duplicate name in capture/parameter list",
+                  node.pos_);
+        if (has_seen_double_star) error("parameter after **kwargs", node.pos_);
 
         switch (param.param_type_) {
-        case PT::Normal: if (seen_star_args) error("normal parameter after *args", node.pos_);
-            if (param.default_value_) seen_default = true;
-            else if (seen_default) error("non-default parameter after default parameter", node.pos_);
+        case PT::Normal: if (has_seen_star_args) error("normal parameter after *args", node.pos_);
+            if (param.default_value_) has_seen_default = true;
+            else if (has_seen_default) error("non-default parameter after default parameter", node.pos_);
             break;
-        case PT::StarArgs: if (seen_star_args) error("duplicate *args", node.pos_);
-            seen_star_args = true;
+        case PT::StarArgs: if (has_seen_star_args) error("duplicate *args", node.pos_);
+            has_seen_star_args = true;
             break;
-        case PT::DoubleStarKwargs: seen_double_star = true;
+        case PT::DoubleStarKwargs: has_seen_double_star = true;
             break;
         }
 
@@ -210,7 +210,7 @@ void SyntaxChecker::check(const AstNodeLiteralStr &) {
 }
 
 void SyntaxChecker::check(const AstNodeLiteralTuple &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = true;
     ctx_.can_double_star = false;
     for (const auto &item : node.items_) check(*item);
@@ -218,7 +218,7 @@ void SyntaxChecker::check(const AstNodeLiteralTuple &node) {
 }
 
 void SyntaxChecker::check(const AstNodeLiteralList &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = true;
     ctx_.can_double_star = false;
     for (const auto &item : node.items_) check(*item);
@@ -226,7 +226,7 @@ void SyntaxChecker::check(const AstNodeLiteralList &node) {
 }
 
 void SyntaxChecker::check(const AstNodeLiteralDict &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     for (const auto &[key, val] : node.items_) {
@@ -242,7 +242,7 @@ void SyntaxChecker::check(const AstNodeLiteralEllipsis &) {
 }
 
 void SyntaxChecker::check(const AstNodeProgram &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     for (const auto &e : node.exprs_) check(*e);
@@ -250,7 +250,7 @@ void SyntaxChecker::check(const AstNodeProgram &node) {
 }
 
 void SyntaxChecker::check(const AstNodeCompound &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     for (const auto &e : node.exprs_) check(*e);
@@ -259,7 +259,7 @@ void SyntaxChecker::check(const AstNodeCompound &node) {
 
 void SyntaxChecker::check(const AstNodeStar &node) {
     if (!ctx_.can_star) error("* can only appear in tuple, list, or function call arguments", node.pos_);
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     check(*node.operand_);
@@ -268,7 +268,7 @@ void SyntaxChecker::check(const AstNodeStar &node) {
 
 void SyntaxChecker::check(const AstNodeDoubleStar &node) {
     if (!ctx_.can_double_star) error("** can only appear in dict literal or function call arguments", node.pos_);
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     check(*node.operand_);
@@ -276,7 +276,7 @@ void SyntaxChecker::check(const AstNodeDoubleStar &node) {
 }
 
 void SyntaxChecker::check(const AstNodeOpUnary &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     check(*node.operand_);
@@ -284,7 +284,7 @@ void SyntaxChecker::check(const AstNodeOpUnary &node) {
 }
 
 void SyntaxChecker::check(const AstNodeOpBinary &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     check(*node.left_);
@@ -293,7 +293,7 @@ void SyntaxChecker::check(const AstNodeOpBinary &node) {
 }
 
 void SyntaxChecker::check(const AstNodeCompare &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     for (const auto &operand : node.operands_) check(*operand);
@@ -301,7 +301,7 @@ void SyntaxChecker::check(const AstNodeCompare &node) {
 }
 
 void SyntaxChecker::check(const AstNodeIs &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     for (const auto &operand : node.operands_) check(*operand);
@@ -310,7 +310,7 @@ void SyntaxChecker::check(const AstNodeIs &node) {
 
 void SyntaxChecker::check(const AstNodeAssign &node) {
     check_lvalue(*node.target_);
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     check(*node.value_);
@@ -319,7 +319,7 @@ void SyntaxChecker::check(const AstNodeAssign &node) {
 
 void SyntaxChecker::check(const AstNodeCompoundAssign &node) {
     check_lvalue_pure(*node.target_);
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     check(*node.value_);
@@ -327,7 +327,7 @@ void SyntaxChecker::check(const AstNodeCompoundAssign &node) {
 }
 
 void SyntaxChecker::check(const AstNodeCall &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
 
     // object_
     ctx_.can_star = false;
@@ -335,12 +335,12 @@ void SyntaxChecker::check(const AstNodeCall &node) {
     check(*node.object_);
 
     // 参数们
-    bool seen_double_star = false; // ** 之后不能再出现其他参数
+    bool has_seen_double_star{false}; // ** 之后不能再出现其他参数
     ctx_.can_star = true;
     ctx_.can_double_star = true;
     for (const auto &arg : node.args_) {
-        if (dynamic_cast<const AstNodeDoubleStar *>(arg.get())) seen_double_star = true;
-        else if (seen_double_star) error("argument after ** spread", arg->pos_);
+        if (dynamic_cast<const AstNodeDoubleStar *>(arg.get())) has_seen_double_star = true;
+        else if (has_seen_double_star) error("argument after ** spread", arg->pos_);
         check(*arg);
     }
 
@@ -352,18 +352,19 @@ void SyntaxChecker::check(const AstNodeCall &node) {
 }
 
 void SyntaxChecker::check(const AstNodeIndex &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    // object_
-    require_not_null(node.object_);
+    // object_：语法上 x[...] 的 x 永远是解析出来的前一个表达式，Parser 结构性保证非空，
+    // 这里只是防御性地断言一下（万一 Parser 出 bug）
+    require_not_null(node.object_, node.pos_);
     check(*node.object_);
 
-    // args_
+    // args_：同理，每个下标参数都是 Parser 循环里实际解析出来的表达式，结构性保证非空
     ctx_.can_star = true;
     for (const auto &a : node.args_) {
-        require_not_null(a);
+        require_not_null(a, node.pos_);
         check(*a);
     }
 
@@ -371,16 +372,17 @@ void SyntaxChecker::check(const AstNodeIndex &node) {
 }
 
 void SyntaxChecker::check(const AstNodeAttr &node) {
-    const Context saved = ctx_;
+    const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    // object_
-    require_not_null(node.object_);
+    // object_：同 AstNodeIndex，Parser 结构性保证非空
+    require_not_null(node.object_, node.pos_);
     check(*node.object_);
 
-    // attr_
-    require_not_null(node.attr_);
+    // attr_：语法上是 '.' 后面必须紧跟的一个 IDENTIFIER token，Lexer 的标识符正则要求至少 1 个字符，
+    // Parser 用 expect(IDENTIFIER) 拿到的 text 结构性保证非空
+    require_not_null(node.attr_, node.pos_);
 
     ctx_ = saved;
 }
@@ -423,12 +425,12 @@ void SyntaxChecker::check_lvalue(const AstNode &node) const {
 }
 
 void SyntaxChecker::check_lvalue_items(const std::vector<AstNodePtr> &items) const {
-    bool seen_star = false;
+    bool has_seen_star{false};
     for (const auto &item : items) {
         if (const auto *star{dynamic_cast<const AstNodeStar *>(item.get())}) {
             // 解构时至多一个左值可以带 * 前缀
-            if (seen_star) error("at most one starred lvalue allowed in destructuring", star->pos_);
-            seen_star = true;
+            if (has_seen_star) error("at most one starred lvalue allowed in destructuring", star->pos_);
+            has_seen_star = true;
             check_lvalue(*star->operand_);
         } else {
             check_lvalue(*item);
