@@ -10,7 +10,10 @@ class SyntaxChecker {
     const std::string file_path_;
 
     struct Context {
-        int func_depth{0};
+        // 是否身处 func 体或 class 体的局部作用域内（SL.md 2.2.4/3.4.4："只能在局部作用域（函数体或
+        // 类体）中使用"）——只用来判断 global 合不合法。return 现在处处合法（离它最近的 Program 就是
+        // 它的作用对象，哪怕在文件顶层，见 3.4.1/3.4.5.6），不需要靠这个判断，所以没有 return 专用的计数
+        int local_scope_depth{0};
         int loop_depth{0}; // for、while 共用（break/continue 是否合法）
         bool can_star{false};
         bool can_double_star{false};

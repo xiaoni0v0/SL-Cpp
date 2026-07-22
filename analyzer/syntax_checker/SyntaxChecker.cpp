@@ -138,7 +138,8 @@ void SyntaxChecker::check(const AstNodeContinue &node) {
 }
 
 void SyntaxChecker::check(const AstNodeReturn &node) {
-    if (ctx_.func_depth == 0) error("return outside function", node.pos_);
+    // return 现在处处合法：离它最近的 Program 就是它的作用对象（SL.md 3.4.1/3.4.5.6），哪怕是文件
+    // 顶层，最近的 Program 也就是文件自身，不需要判断上下文
     const Context saved = ctx_;
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -226,8 +227,8 @@ void SyntaxChecker::check(const AstNodeFunc &node) {
     check_optional(node.return_type_);
     check_doc(node.doc_);
 
-    // 进入函数体（新上下文，func 深度 +1，loop 深度归零）
-    ctx_.func_depth++;
+    // 进入函数体（新的局部作用域，loop 深度归零——函数体自己不算在循环里）
+    ctx_.local_scope_depth++;
     ctx_.loop_depth = 0;
     check(*node.body_);
 
@@ -243,8 +244,10 @@ void SyntaxChecker::check(const AstNodeClass &node) {
     for (const auto &base : node.bases_) check(*base);
     check_doc(node.doc_);
 
-    // 类体执行更像顶层脚本：不允许裸 return/break/continue（3.4.7 未提及 return 语义）
-    ctx_.func_depth = 0;
+    // 类体也是一个局部作用域（SL.md 2.2.4/3.4.4 明确把类体和函数体并列），global 在类体里合法；
+    // return 也合法，提前结束类体的构建（3.4.5.6/3.4.7）；break/continue 仍然要求真的在循环里，
+    // 类体本身不算，loop 深度照常归零
+    ctx_.local_scope_depth++;
     ctx_.loop_depth = 0;
     check(*node.body_);
 
@@ -397,8 +400,9 @@ void SyntaxChecker::check(const AstNodeDel &node) {
 }
 
 void SyntaxChecker::check(const AstNodeGlobal &node) {
-    // identifier_ 语法上就是 token，没有形状可校验，只需要检查作用域限制（2.2.4：只能在局部作用域中使用）
-    if (ctx_.func_depth == 0) error("global outside function", node.pos_);
+    // identifier_ 语法上就是 token，没有形状可校验，只需要检查作用域限制
+    // （SL.md 2.2.4/3.4.4：只能在局部作用域——函数体或类体——中使用）
+    if (ctx_.local_scope_depth == 0) error("global outside function/class body", node.pos_);
 }
 
 void SyntaxChecker::check_doc(const AstNodePtr &doc) const {
