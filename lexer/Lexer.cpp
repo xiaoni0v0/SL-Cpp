@@ -305,7 +305,7 @@ Token Lexer::read_symbol() {
     case U'.': {
         // 贪婪匹配：尽可能多吃连续的点，最多 3 个
         // 别忘了此时已经消耗了第一个点
-        size_t dot_count{1};
+        int dot_count{1};
         while (dot_count < 3 && peek() == U'.') {
             advance();
             dot_count++;

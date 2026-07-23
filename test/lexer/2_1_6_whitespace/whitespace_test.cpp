@@ -1,4 +1,4 @@
-// SL.md 2.1.6 空白字符：注释、空格、制表符都算空白；换行本身是有意义的 token（表达式分隔符的一部分）
+﻿// SL.md 2.1.6 空白字符：注释、空格、制表符都算空白；换行本身是有意义的 token（表达式分隔符的一部分）
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
@@ -53,6 +53,16 @@ TEST_CASE("空文件只产生 EOF") {
 TEST_CASE("只有空白的文件等价于空文件") {
     CHECK(lex_dump(U"   \t\t  ") == "");
     CHECK(lex_dump(U"\n\n\n") == "");
+}
+
+TEST_CASE("回车符 \r 也被当作空白跳过（spec 2.1.6 明确列为空白字符）") {
+    CHECK(lex_dump(U"1\r2") == "LITERAL_INT(1) LITERAL_INT(2)");
+    CHECK(lex_dump(U"1\r\r2") == "LITERAL_INT(1) LITERAL_INT(2)");
+    CHECK(lex_dump(U"1 \r\t 2") == "LITERAL_INT(1) LITERAL_INT(2)");
+}
+
+TEST_CASE("CRLF 行尾：\r 被跳过，\n 正常产出 NEWLINE") {
+    CHECK(lex_dump(U"1\r\n2") == "LITERAL_INT(1) NEWLINE LITERAL_INT(2)");
 }
 
 }

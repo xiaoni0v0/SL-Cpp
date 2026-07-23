@@ -1,4 +1,4 @@
-// SL.md 2.1.4 字面量——str（"..." 和 '...'）：支持转义，不支持多行
+﻿// SL.md 2.1.4 字面量——str（"..." 和 '...'）：支持转义，不支持多行
 #include "../test_utils.h"
 #include "../../../builtins/classes/exceptions/SyntaxError.h"
 
@@ -37,7 +37,7 @@ TEST_CASE("全部 11 种转义逐个验证，转成对应的实际字符") {
         {U"'\\a'", U'\a'}, {U"'\\b'", U'\b'}, {U"'\\f'", U'\f'},
         {U"'\\n'", U'\n'}, {U"'\\r'", U'\r'}, {U"'\\t'", U'\t'},
         {U"'\\v'", U'\v'}, {U"'\\0'", U'\0'}, {U"'\\\\'", U'\\'},
-        {U"'\\''", U'\''}, {U"'\\\"'", U'"'},
+        {U"'\\''", U'\''}, {U"'\\\"'", U'\"'},
     };
     for (const auto &[src, expected] : cases) {
         const auto tokens{lex(src)};
@@ -105,6 +105,19 @@ TEST_CASE("反斜杠后紧跟换行也报错（不允许用反斜杠续行），
 TEST_CASE("字符串前后可以正常和其他 token 组合") {
     CHECK(lex_dump(U"f(\"x\")") == "IDENTIFIER(f) SIGN_LPAREN LITERAL_STR(x) SIGN_RPAREN");
     CHECK(lex_dump(U"\"a\" + \"b\"") == "LITERAL_STR(a) SIGN_PLUS LITERAL_STR(b)");
+}
+
+TEST_CASE("\r 在普通字符串内是普通字符（字面回车，不是转义序列，不是行终止符）") {
+    const auto tokens{lex(U"\"a\rb\"")};
+    REQUIRE(tokens.size() == 2);
+    CHECK(tokens[0].lexeme == U"a\rb");
+}
+
+TEST_CASE("\r 可以通过转义序列 \\r 写入字符串（已包含在 11 种转义中，此处确认可混合使用）") {
+    const auto tokens{lex(U"'a\\rb'")};
+    REQUIRE(tokens.size() == 2);
+    CHECK(tokens[0].lexeme.size() == 3);
+    CHECK(tokens[0].lexeme[1] == U'\r');
 }
 
 }

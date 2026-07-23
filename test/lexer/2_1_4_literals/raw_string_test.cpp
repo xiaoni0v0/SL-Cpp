@@ -1,4 +1,4 @@
-// SL.md 2.1.4 字面量——反引号原始字符串：不处理任何转义，原样天然支持多行
+﻿// SL.md 2.1.4 字面量——反引号原始字符串：不处理任何转义，原样天然支持多行
 #include "../test_utils.h"
 #include "../../../builtins/classes/exceptions/SyntaxError.h"
 
@@ -52,6 +52,12 @@ TEST_CASE("未闭合的原始字符串（到 EOF 都没有反引号）报 Syntax
 
 TEST_CASE("原始字符串可以和普通字符串混用在同一段源码里") {
     CHECK(lex_dump(U"`raw` + \"normal\"") == "LITERAL_STR(raw) SIGN_PLUS LITERAL_STR(normal)");
+}
+
+TEST_CASE("\r 在原始字符串中原样保留，不处理为空白也不转义") {
+    const auto tokens{lex(U"`a\rb`")};
+    REQUIRE(tokens.size() == 2);
+    CHECK(tokens[0].lexeme == U"a\rb");
 }
 
 }
