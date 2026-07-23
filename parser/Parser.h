@@ -128,8 +128,8 @@ class Parser {
     // 完成字典剩余部分。当前已被判为字典、第一项已解析为 first。不消耗括号、不涉及 paren_depth_
     AstNodePtr finish_dict(Position start_pos, AstNodePtr first);
     // 完成解析形参列表。消耗括号、管理 paren_depth_
-    std::vector<AstNodeFunc::OneParam> finish_func_params();
-    // 完成解析捕获列表。消耗括号、管理 paren_depth_。func、class 共用
+    AstNodeFunc::AllParams finish_func_params();
+    // 完成解析捕获列表。消耗括号、管理 paren_depth_
     std::vector<OneCapture> finish_captures();
     // 完成函数调用 f(...)。消耗括号、管理 paren_depth_
     AstNodePtr finish_call(AstNodePtr obj, Position start_pos);

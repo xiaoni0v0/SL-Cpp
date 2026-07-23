@@ -2313,3 +2313,109 @@ SL.md 一贯的干燥技术文风，没有到处加调侃。
 
 `.ai/run_test.bat` 验证五个测试目标全绿：Numeric 48/153、Lexer 133/358、Parser 285/511、
 Analyzer 47/111、SyntaxChecker 45/102（新增）。
+
+## 上面第 4、6 条的后续收尾 + `=`/`op=` 左值范围在 SL.md 里补齐定义
+
+上面"用户重构一遍 SyntaxChecker 后揪出的 6 个问题"那节里，第 4、6 条当时只是给了修法，没记后续
+讨论的结论；这里补上：
+
+- **第 6 条（`check(AstNodeDel&)` 不递归）**：修法本身没变（先 `check_not_null(node.target_,
+  node.pos_)` 再做形状判断），但按用户要求，整个函数额外包了一层"先存/重置 `ctx_`、最后再恢复"
+  的标准写法，跟其余所有 `check(...)` 函数保持一致——单纯风格统一，不影响行为。
+- **第 4 条（`=`/`op=` 左边能放的东西范围是否一致）**：讨论延伸出一个新问题——既然已经允许
+  `(a, b) = (1, 2)`（解构赋值），那 `(a, b) += (1, 2)` 该不该也允许？结论是**不允许**，理由：
+  解构目标没有单一的"旧值"可读，而 `op=` 的语义（3.4.2）依赖"先读旧值、算出新值、再写回"，两者
+  矛盾；即便硬要定义"读成元组再做 `+`"，元组的 `+` 是拼接不是逐元素相加，算出来的结果再拿去解构
+  几乎必然对不上元素个数，是个纯粹的坑。也符合 Python 的先例（`a, b += 1, 2` 在 Python 里就是
+  `SyntaxError`）。
+  由此在 SL.md 2.1.5 的运算符表里正式把"左值"拆成了两个概念：**纯左值**（标识符 /
+  `target.attr` / `target[index, ...]`）和**左值**（纯左值 ∪ 由纯左值组成的元组/列表解构，
+  至多一个纯左值可带 `*` 前缀）。`=` 左边接受左值，`op=` 左边只接受纯左值。"纯左值"这个词此前
+  在 SL.md 里完全没定义过（`SyntaxChecker.h` 里 `check_lvalue_pure` 的注释倒是已经在用这个词了，
+  代码比文档先行一步），这次一并把定义补齐，3.3 节复合赋值的求值顺序描述也改成显式点名"纯左值"。
+
+## 形参列表 / 调用实参重新设计：解决 item 2、item 5（`OneParam`/`AstNodeCall` 结构性缺陷）
+
+上面第 6 个问题清单里的 item 2（函数参数顺序逻辑错误）和 item 5（`AstNodeCall` 的
+`args_`/`kwargs_` 丢失书写顺序）当时都只是临时应付或干脆没动，用户明确说"准备要大改"。这次借着
+讨论"要不要引入裸 `*`/`/`"的机会把两处都推翻重做了。
+
+**裸 `*`/`/` 讨论的结论：都不加。** 参考 Python 的 `ast.arguments`（`posonlyargs`/`args`/
+`vararg`/`kwonlyargs`/`kw_defaults`/`kwarg`/`defaults` 分组存储）来对比 SL 现状，SL 目前形参
+只有 `a`/`*b`/`**c` 三种形状（`a` 独有 `: type`/`= expr`），用户的原话："`/` 在 SL 里没有存在的
+意义，裸 `*` 不加新语法，直接用 `*_` 代替"——`*_` 已经能起到"强制后面的形参必须仅关键字传参"的
+效果（虽然还是得接受一个永远不用的位置形参收集元组，但语义上跟 Python 的裸 `*` 等价），没必要
+为了省这一点再引入新语法。**这条决定不动语法本身，只动"形参列表允许的顺序在标准里怎么写、
+AstNode 里怎么存、Parser 怎么解析、SyntaxChecker 怎么检查"这四处。**
+
+**核心设计思路：把"非法状态在数据形状层面就不可表达"，而不是在 SyntaxChecker 里用状态机扫描去
+挡。** item 2 那个 bug（`func f(*x, y) {}` 应该合法却报错）的根源就是原来 `OneParam` 是一个打了
+`ParamType` tag 的扁平 `vector`，`*args` 前后两个语义完全不同的区域（受"无默认值排前面"约束 vs
+不受约束）混在同一个 vector 里，靠一个 `has_seen_star` 布尔标志位在扫描时人工区分——这类状态机
+代码正是最容易漏掉边界情况的地方（事实也确实漏了一次）。改法：
+
+- `AstNodeFunc::OneParam` 去掉 `param_type_`/`ParamType`，只保留 `identifier_`/
+  `type_annotation_`/`default_value_`（`*args`/`**kwargs` 各自只是裸标识符，不需要这个结构）；
+- `AstNodeFunc` 新增 4 个字段对应形参列表的 4 段：`params_`（`*args` 前）、
+  `var_args_name_`（`optional<u32string>`）、`kw_only_params_`（`*args` 后、`**kwargs` 前，
+  仅关键字形参，形状跟 `params_` 一样支持类型注解/默认值）、`var_kwargs_name_`；
+- **`Parser::finish_func_params`** 按这 4 段的顺序解析（`ast_node_func.h`/`Parser.h`/
+  `Parser.cpp`），"至多一个 `*args`""`**kwargs` 必须是最后一项"这两条现在是解析到不该出现的
+  token 时的自然语法错误（直接 `error(...)`），不再是 SyntaxChecker 的状态机检查；
+- **`SyntaxChecker::check(AstNodeFunc&)`** 大幅简化：查重覆盖
+  `captures_ ∪ params_ ∪ {var_args_name_} ∪ kw_only_params_ ∪ {var_kwargs_name_}`；
+  "无默认值形参必须排在有默认值形参前面"只需要对 `params_` 这一个 vector 线性扫一遍，不再需要
+  `has_seen_star` 跨区域标志位；`kw_only_params_` 不做任何顺序检查（结构上已经保证在正确的
+  区域）。
+
+**`AstNodeCall` 同一个思路，但拆法不同**：调用实参没有形参那种"由一个显式 token（`*args`）
+标记的区域边界"，位置组/关键字组是按每一项自己的形状（`identifier=value` 还是别的）判定的，且
+3.3 节 453 行"从前到后逐个求参数的值"要求严格按书写顺序求值——这意味着不管怎么设计，AST 都必须
+完整保留原始书写顺序。改法：拆成 `positional_args_`（`vector<AstNodePtr>`，位置实参 + `*expr`
+展开，复用已有的 `AstNodeStar` 包裹节点，不新增 tag）和 `keyword_args_`
+（`vector<OneKwArg>`，`OneKwArg` 是 `{Kind::Keyword/DoubleStar; keyword_; value_}`）两个字段，
+各自内部保持书写顺序。
+
+`finish_call` 改成两阶段解析：一旦某一项归类进关键字组（`identifier=value` 或 `**expr`），后面
+再出现位置实参（含 `*expr`）就直接在 Parser 里报 `"positional argument cannot appear after
+keyword argument"`——这是跟形参那边讨论后达成一致的选择（原来的实现里 `finish_call` 注释明确
+写着"参数顺序合法性由语义层校验"，即刻意让 Parser 保持"傻"，这次讨论后决定改成跟形参一致的
+"Parser 阶段式解析直接保证"，不再需要 SyntaxChecker 检查这条顺序）。**一个容易踩的坑**：判断
+一项是不是 `**expr` 展开不能只看开头是不是字面的 `**` token——分组括号是透明的（`f((**d))` ≡
+`f(**d)`，`test/parser/2_2_2_basic_exprs/compound_dict_test.cpp` 里就有这条回归用例），必须
+先 `parse_expr()` 解析完，再 `dynamic_cast<AstNodeDoubleStar*>` 看解析结果的实际类型，不能用
+"先 peek token 决定分支、再解析"的写法（第一版实现就是这么栽的，被已有测试当场抓住）。
+
+`SyntaxChecker::check(AstNodeCall&)` 因此也不再需要检查顺序（结构上已保证），只需要对
+`positional_args_`/`keyword_args_` 分别设置正确的 `can_star`/`can_double_star` 上下文再递归；
+`keyword_args_` 里 `Kind::DoubleStar` 的那一项才允许 `can_double_star`，普通 `Kind::Keyword`
+的 `value_` 跟其他任何"纯粹是个值"的位置一样，不允许 `*`/`**` 前缀。
+
+`var_args_pos_`（曾经打算给 `*args` 单独存一个位置字段方便报错）最后没加——现有代码里连普通
+形参、capture 都没有单独的位置字段，报错全靠整个函数节点的 `node.pos_` 兜底，单独给 `*args`
+加位置纯属跟这条既有惯例不一致的多余设计。
+
+item 2、item 5 都在这轮里彻底解决了；测试同步更新（`test/parser/2_2_6_func/func_test.cpp`、
+`test/parser/2_1_5_operators/precedence_test.cpp`、`test/parser/common/combination_test.cpp`、
+`test/syntax_checker/func_class_test.cpp`、`test/syntax_checker/dict_call_test.cpp`、
+`test/syntax_checker/defensive_test.cpp`），`.ai/run_test.bat` 全绿：Parser 291/531、
+Analyzer 47/111、SyntaxChecker 44/103。
+
+**后续小整理**：上面 `AstNodeFunc` 拆完之后，`params_`/`var_args_name_`/`kw_only_params_`/
+`var_kwargs_name_` 是摊平的 4 个平级成员，但这 4 个概念本来就是同一个语法单位（`ALL_PARAM`），
+摊平在类成员里显得关系不明显。改成嵌套的 `AstNodeFunc::AllParams` 结构体（字段改名
+`positional_`/`kw_only_`，避免包一层之后 `params_.params_` 这种叠字），`AstNodeFunc` 只留一个
+`params_` 字段。顺带把 `Parser::FuncParams` 这个临时结构体删掉了——它跟 `AllParams` 长得一模一样
+纯属重复定义，现在 `finish_func_params()` 直接返回 `AstNodeFunc::AllParams`，`parse_func` 里
+也不用再拆 3 个字段分别 `std::move` 进构造函数，整体传一个 `AllParams` 就行。`to_json()` 输出的
+JSON 形状完全没变（`params`/`var_args`/`kw_only_params`/`var_kwargs` 这几个 key 不受影响），
+所以这次测试文件一处没动。后续如果要给执行器写实参/形参匹配逻辑（3.5 节），`node.params_` 现在
+就是一个可以整体传递的值，不用再拼 4 个散落的字段。
+
+用户随后追问：`to_json()` 里形参相关字段还是摊平的（`params`/`var_args`/`kw_only_params`/
+`var_kwargs` 四个顶层 key），没跟着 C++ 结构一起收口。确实是漏改了，补上：`to_json()` 里这 4 个
+字段现在嵌套成一个 `params` 对象（`{positional, var_args, kw_only, var_kwargs}`），新增
+`all_params_to_json(const AllParams&)` 静态方法产出这个子对象。牵动
+`test/parser/2_2_6_func/func_test.cpp`（新增 `all_params(...)` 测试辅助函数）、
+`test/parser/2_2_8_decorator/decorator_test.cpp`、`test/parser/common/combination_test.cpp`
+里对应的 json 断言路径（`["params"]["positional"]` 而不是 `["params"]` 直接是数组）。

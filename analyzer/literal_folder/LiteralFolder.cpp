@@ -83,7 +83,11 @@ void LiteralFolder::visit(AstNodeDecorator &node) const {
 void LiteralFolder::visit(AstNodeFunc &node) const {
     for (auto &deco : node.decorators_) visit_and_replace(deco);
     for (auto &capture : node.captures_) visit_and_replace(capture.value_expr_);
-    for (auto &param : node.params_) {
+    for (auto &param : node.params_.positional_) {
+        visit_and_replace(param.type_annotation_);
+        visit_and_replace(param.default_value_);
+    }
+    for (auto &param : node.params_.kw_only_) {
         visit_and_replace(param.type_annotation_);
         visit_and_replace(param.default_value_);
     }
@@ -173,8 +177,8 @@ void LiteralFolder::visit(AstNodeCompoundAssign &node) const {
 
 void LiteralFolder::visit(AstNodeCall &node) const {
     visit_and_replace(node.object_);
-    for (auto &arg : node.args_) visit_and_replace(arg);
-    for (auto &val : node.kwargs_ | std::views::values) visit_and_replace(val);
+    for (auto &arg : node.positional_args_) visit_and_replace(arg);
+    for (auto &kw : node.keyword_args_) visit_and_replace(kw.value_);
 }
 
 void LiteralFolder::visit(AstNodeIndex &node) const {

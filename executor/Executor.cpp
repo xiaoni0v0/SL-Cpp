@@ -54,7 +54,7 @@ int Executor::run() const {
     AstNodeProgramPtr ast;
     try {
         ast = Parser{std::move(tokens), file_path}.parse();
-        std::cout << ast->to_json() << std::endl << std::endl;
+        std::cout << ast->to_json().dump(2) << std::endl << std::endl;
     } catch (SLException &e) {
         std::cerr << e.what() << std::endl;
         return 1;
@@ -69,7 +69,7 @@ int Executor::run() const {
     // 3. 分析器（检查 AST）
     try {
         Analyzer{*ast, file_path}.analyze();
-        std::cout << ast->to_json() << std::endl << std::endl;
+        std::cout << ast->to_json().dump(2) << std::endl << std::endl;
     } catch (SLException &e) {
         std::cerr << e.what() << std::endl;
         return 1;

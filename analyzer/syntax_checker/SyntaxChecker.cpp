@@ -6,7 +6,6 @@
 #include "../../builtins/classes/exceptions/SyntaxError.h"
 
 #include <cassert>
-#include <ranges>
 #include <unordered_set>
 
 void SyntaxChecker::error(const std::string &msg, const Position pos) const {
@@ -179,44 +178,37 @@ void SyntaxChecker::check(const AstNodeFunc &node) {
     if (node.name_) require_not_null(*node.name_, node.pos_);
 
     std::unordered_set<std::u32string> names;
-    for (const auto &capture : node.captures_) {
-        // 如果是已经存在
-        if (!names.insert(capture.identifier_).second) {
-            error("duplicate name in capture/parameter list", node.pos_);
+    auto check_name{
+        [&](const std::u32string &name) {
+            // 如果是已经存在
+            if (!names.insert(name).second) error("duplicate name in capture/parameter list", node.pos_);
         }
+    };
+
+    for (const auto &capture : node.captures_) {
+        check_name(capture.identifier_);
         check_nullable(capture.value_expr_);
     }
-    // SL.md 2.2.6："以上形参若出现，必须遵循以下顺序：1. 无默认值的形参；2. 有默认值的形参、
-    // 可变长位置形参（这两种之间顺序不限）；3. 可变长关键字形参"——这条顺序规则只管 *args 之前
-    // 的"位置形参"部分；一旦见过 *args，后面的普通形参就是仅关键字形参（3.5："出现在可变长位置
-    // 形参之后的槽位标记为仅关键字"），按名字匹配、不按位置，彼此之间有没有默认值不受这条顺序
-    // 约束（同 Python：func f(*x, y) {} 合法，y 是必须以关键字方式传入的仅关键字形参）
-    bool has_seen_star{false}, has_seen_double_star{false}, has_seen_default{false};
-    for (const auto &param : node.params_) {
-        // 如果是已经存在
-        if (!names.insert(param.identifier_).second) {
-            error("duplicate name in capture/parameter list", node.pos_);
-        }
-        if (has_seen_double_star) error("parameter after **kwargs", node.pos_);
 
-        switch (param.param_type_) {
-            using PT = AstNodeFunc::OneParam::ParamType;
-        case PT::Normal: if (!has_seen_star) {
-                // 仍在位置形参部分：无默认值的形参必须先于有默认值的形参
-                if (param.default_value_) has_seen_default = true;
-                else if (has_seen_default) error("non-default parameter after default parameter", node.pos_);
-            }
-            break;
-        case PT::StarArgs: if (has_seen_star) error("duplicate *args", node.pos_);
-            has_seen_star = true;
-            break;
-        case PT::DoubleStarKwargs: has_seen_double_star = true;
-            break;
-        }
-
+    // SL.md 2.2.6：*args 之前的形参，无默认值的必须排在有默认值的之前；positional_/kw_only_
+    // 现在分属两个字段，*args 之后的仅关键字形参（按名字匹配、不按位置）天然不受这条顺序约束
+    // （同 Python：func f(*x, y) {} 合法，y 是必须以关键字方式传入的仅关键字形参），不需要再靠
+    // 状态机标志位去区分——"至多一个 *args""**kwargs 必须最后"也已经在 Parser 阶段式解析时保证
+    bool has_seen_default{false};
+    for (const auto &param : node.params_.positional_) {
+        check_name(param.identifier_);
+        if (param.default_value_) has_seen_default = true;
+        else if (has_seen_default) error("non-default parameter after default parameter", node.pos_);
         check_nullable(param.type_annotation_);
         check_nullable(param.default_value_);
     }
+    if (node.params_.var_args_name_) check_name(*node.params_.var_args_name_);
+    for (const auto &param : node.params_.kw_only_) {
+        check_name(param.identifier_);
+        check_nullable(param.type_annotation_);
+        check_nullable(param.default_value_);
+    }
+    if (node.params_.var_kwargs_name_) check_name(*node.params_.var_kwargs_name_);
 
     check_nullable(node.return_type_);
     check_doc(node.doc_);
@@ -425,19 +417,18 @@ void SyntaxChecker::check(const AstNodeCall &node) {
     ctx_.can_double_star = false;
     check(*node.object_);
 
-    bool has_seen_double_star{false};
-    // 位置组
+    // 位置组：位置实参、*expr 展开。"位置组不能出现在关键字组之后"（SL.md 3.5）已经由 Parser
+    // 阶段式解析保证——positional_args_/keyword_args_ 分属两个字段，这里不需要再检查顺序
     ctx_.can_star = true;
-    ctx_.can_double_star = true;
-    for (const auto &arg : node.args_) {
-        if (dynamic_cast<const AstNodeDoubleStar *>(arg.get())) has_seen_double_star = true;
-        else if (has_seen_double_star) error("argument after ** spread", arg->pos_);
-        check(*arg);
-    }
-    // 关键字组
-    ctx_.can_star = false;
     ctx_.can_double_star = false;
-    for (const auto &val : node.kwargs_ | std::views::values) check(*val);
+    for (const auto &arg : node.positional_args_) check(*arg);
+
+    // 关键字组：关键字实参（普通值，不允许 */** 前缀）、**expr 展开
+    for (const auto &kw : node.keyword_args_) {
+        ctx_.can_star = false;
+        ctx_.can_double_star = kw.kind_ == AstNodeCall::OneKwArg::Kind::DoubleStar;
+        check(*kw.value_);
+    }
 
     ctx_ = saved;
 }

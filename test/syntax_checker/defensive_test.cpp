@@ -72,7 +72,7 @@ TEST_CASE("AstNodeLiteralDict：key 是 ** 展开，但 val 不是空指针（�
 TEST_CASE("AstNodeFunc/AstNodeClass：name_ 是空字符串（应该要么 nullopt 要么有内容）") {
     AstNodeProgramPtr func_program{wrap(std::make_unique<AstNodeFunc>(
         Position{0, 0}, std::vector<AstNodePtr>{}, std::vector<Position>{}, std::optional<std::u32string>{U""},
-        std::vector<OneCapture>{}, std::vector<AstNodeFunc::OneParam>{}, nullptr, nullptr,
+        std::vector<OneCapture>{}, AstNodeFunc::AllParams{}, nullptr, nullptr,
         std::make_unique<AstNodeProgram>(Position{0, 0}, std::vector<AstNodePtr>{})))};
     check_throws_with(*func_program, "unexpected empty name");
 
@@ -88,7 +88,7 @@ TEST_CASE("AstNodeFunc/AstNodeClass：decorators_ 和 decorator_positions_ 数�
     decorators.push_back(int_lit());
     AstNodeProgramPtr func_program{wrap(std::make_unique<AstNodeFunc>(
         Position{0, 0}, std::move(decorators), std::vector<Position>{}, std::nullopt,
-        std::vector<OneCapture>{}, std::vector<AstNodeFunc::OneParam>{}, nullptr, nullptr,
+        std::vector<OneCapture>{}, AstNodeFunc::AllParams{}, nullptr, nullptr,
         std::make_unique<AstNodeProgram>(Position{0, 0}, std::vector<AstNodePtr>{})))};
     check_throws_with(*func_program, "mismatched array sizes");
 }

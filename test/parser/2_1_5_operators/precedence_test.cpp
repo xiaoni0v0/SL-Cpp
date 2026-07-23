@@ -229,17 +229,29 @@ TEST_CASE("调用带位置参数和关键字参数") {
           });
 }
 
-TEST_CASE("*expr / **expr 展开可以出现在调用的位置实参里") {
+TEST_CASE("*expr 展开出现在位置组（args），**expr 展开出现在关键字组（kwargs）") {
     CHECK(parse_json(U"f(*args, **kwargs)") == nlohmann::json{
           {"type", "Call"}, {"object", {{"type", "Identifier"}, {"identifier", "f"}}},
           {
           "args", nlohmann::json::array({
-              {{"type", "Star"}, {"operand", {{"type", "Identifier"}, {"identifier", "args"}}}},
-              {{"type", "DoubleStar"}, {"operand", {{"type", "Identifier"}, {"identifier", "kwargs"}}}}
+              {{"type", "Star"}, {"operand", {{"type", "Identifier"}, {"identifier", "args"}}}}
               })
           },
-          {"kwargs", nlohmann::json::array()}
+          {
+          "kwargs", nlohmann::json::array({
+              {
+              {"key", nullptr},
+              {"value", {{"type", "DoubleStar"}, {"operand", {{"type", "Identifier"}, {"identifier", "kwargs"}}}}}
+              }
+              })
+          }
           });
+}
+
+TEST_CASE("位置实参不能出现在关键字实参之后，Parser 直接报语法错误") {
+    check_parse_throws_with(U"f(a=1, 1)", "positional argument cannot appear after keyword argument");
+    check_parse_throws_with(U"f(**a, 1)", "positional argument cannot appear after keyword argument");
+    check_parse_throws_with(U"f(a=1, *b)", "positional argument cannot appear after keyword argument");
 }
 
 TEST_CASE("*/** 展开的操作数按单目运算符一档（140）解析（SL.md 3.6 的结合力规则）") {

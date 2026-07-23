@@ -1,4 +1,4 @@
-// SyntaxChecker：字典字面量的 **/k:v 检查，调用参数里 */** 的展开顺序、can_star 上下文传递。
+// SyntaxChecker：字典字面量的 **/k:v 检查，调用参数里 can_star/can_double_star 上下文传递。
 #include "test_utils.h"
 
 #include <doctest/doctest.h>
@@ -31,16 +31,21 @@ TEST_CASE("普通位置参数、关键字参数、*/** 展开都合法") {
     CHECK_NOTHROW(check_program(U"f(1, *a, **b)"));
 }
 
-TEST_CASE("** 展开之后不能再有别的位置参数") {
-    check_throws_with(U"f(**a, 1)", "argument after ** spread");
-    check_throws_with(U"f(*a, **b, c)", "argument after ** spread");
-}
+// "位置组不能出现在关键字组之后"现在由 Parser 阶段式解析直接保证（是语法错误，不是语义层检查），
+// 测试见 test/parser/2_1_5_operators/precedence_test.cpp。
 
 TEST_CASE("调用的 object_/各参数子表达式都会被递归检查") {
     check_throws_with(U"(break)()", "break outside loop");
     check_throws_with(U"f(break)", "break outside loop");
     check_throws_with(U"f(a=break)", "break outside loop");
     check_throws_with(U"f(*break)", "break outside loop");
+    check_throws_with(U"f(**break)", "break outside loop");
+}
+
+TEST_CASE("关键字实参的值本身不能再带 */** 前缀（跟普通表达式位置一致，*/** 只能出现在"
+    "位置组/关键字组自己的展开语法上，不能是某个关键字的值）") {
+    check_throws_with(U"f(a=*b)", "* can only appear in tuple, list, or function call arguments");
+    check_throws_with(U"f(a=**b)", "** can only appear in dict literal or function call arguments");
 }
 
 TEST_CASE("index/attr 的子表达式在普通表达式位置上本来就会被递归检查（不只是当左值时）") {

@@ -31,6 +31,8 @@ TEST_CASE("class 捕获列表不重名则正常通过，且 value_expr_ 会被�
 }
 
 TEST_SUITE("SyntaxChecker 形参顺序（SL.md 2.2.6）") {
+// "至多一个 *args""**kwargs 必须最后"现在是 Parser 阶段式解析直接保证的语法错误，
+// 测试挪到了 test/parser/2_2_6_func/func_test.cpp，这里只测仍然是语义层职责的部分。
 
 TEST_CASE("*args 之后的普通形参是仅关键字形参，有没有默认值、彼此顺序都不受限制") {
     CHECK_NOTHROW(check_program(U"func f(*x, y) {}"));
@@ -44,18 +46,15 @@ TEST_CASE("*args 之前的位置形参部分，无默认值的形参仍然必须
     check_throws_with(U"func f(x = 1, y) {}", "non-default parameter after default parameter");
 }
 
-TEST_CASE("**kwargs 之后不能再有任何形参") {
-    check_throws_with(U"func f(**kw, x) {}", "parameter after **kwargs");
-    check_throws_with(U"func f(**kw, *y) {}", "parameter after **kwargs");
-    check_throws_with(U"func f(**kw, **kw2) {}", "parameter after **kwargs");
-}
-
-TEST_CASE("*args 至多一个") {
-    check_throws_with(U"func f(*x, *y) {}", "duplicate *args");
-}
-
 TEST_CASE("正常的完整顺序：无默认值、有默认值/*args（可交错）、**kwargs") {
     CHECK_NOTHROW(check_program(U"func f(a, b = 1, *c, d, e = 2, **f) {}"));
+}
+
+TEST_CASE("重名检查覆盖 *args/**kwargs 自己的名字，不只是 params 里的普通形参") {
+    check_throws_with(U"func f(x, *x) {}", "duplicate name in capture/parameter list");
+    check_throws_with(U"func f(x, **x) {}", "duplicate name in capture/parameter list");
+    check_throws_with(U"func f(*x, x) {}", "duplicate name in capture/parameter list");
+    check_throws_with(U"func f(*x, **x) {}", "duplicate name in capture/parameter list");
 }
 
 }

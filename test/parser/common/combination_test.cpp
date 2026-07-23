@@ -49,9 +49,9 @@ TEST_CASE("装饰器+类+基类+装饰方法+捕获+**kwargs+for$+索引赋值+�
     CHECK(func_node["captures"] == nlohmann::json::array({
         nlohmann::json{{"kind", "Value"}, {"identifier", "state"}, {"value_expr", nullptr}}
         }));
-    REQUIRE(func_node["params"].size() == 3);
-    CHECK(func_node["params"][0]["identifier"] == "self");
-    CHECK(func_node["params"][2]["param_type"] == "DoubleStarKwargs");
+    REQUIRE(func_node["params"]["positional"].size() == 2);
+    CHECK(func_node["params"]["positional"][0]["identifier"] == "self");
+    CHECK(func_node["params"]["var_kwargs"] == "opts");
 
     const auto &func_body{func_node["body"]["exprs"]};
     REQUIRE(func_body.size() == 3);
@@ -177,11 +177,11 @@ TEST_CASE("形参默认值本身是一个匿名函数（func 是普通表达式�
     CHECK_NOTHROW(parse_program(source));
 
     const auto j = parse_json(source);
-    const auto &default_value{j["params"][1]["default_value"]};
+    const auto &default_value{j["params"]["positional"][1]["default_value"]};
     CHECK(default_value["type"] == "Func");
     CHECK(default_value["name"] == nullptr);
-    REQUIRE(default_value["params"].size() == 1);
-    CHECK(default_value["params"][0]["identifier"] == "y");
+    REQUIRE(default_value["params"]["positional"].size() == 1);
+    CHECK(default_value["params"]["positional"][0]["identifier"] == "y");
 }
 
 TEST_CASE("if-else 作为普通表达式直接用作调用实参（一切皆表达式，不是只能当语句用）") {

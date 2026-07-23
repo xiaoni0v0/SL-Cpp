@@ -355,11 +355,16 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 
 捕获列表、形参列表内部及两者之间的标识符均不可重复，否则抛出 `SyntaxError`。
 
-以上形参若出现，必须遵循以下顺序，否则会抛出 `SyntaxError`：
+`ALL_PARAM` 依次由最多 4 段组成，每段均可省略，否则会抛出 `SyntaxError`：
 
-1. 无默认值的形参；
-2. 有默认值的形参、可变长位置形参（这两种之间顺序不限）；
-3. 可变长关键字形参。
+1. 位置参数：
+   0 个或多个 `identifier ⟦: type⟧ ⟦= expr⟧`，其中无默认值的形参必须都排在有默认值的形参之前；
+2. 可变长位置参数：
+   至多一个 `*identifier`；
+3. 仅关键字参数：
+   0 个或多个 `identifier ⟦: type⟧ ⟦= expr⟧`；
+4. 可变长关键字参数：
+   至多一个 `**identifier`。
 
 #### 2.2.7 类表达式
 
@@ -850,8 +855,10 @@ class MyClass {
 
 调用 `x(arg, kwarg=v, ...)` 时，在 `type(x)` 的 MRO 上查找 `__op_call__` 并调用；否则抛出 `TypeError`。
 
-调用中的实参分两组：位置组（位置实参、`*expr` 展开）在前，关键字组（关键字实参、`**expr` 展开）在后；
-组内顺序不限，但位置组不能出现在关键字组之后，否则抛出 `SyntaxError`。
+调用中的实参分两组，组内顺序不限，两组顺序如下，否则抛出 `SyntaxError`：
+
+1. 位置组（位置实参、`*expr` 展开）；
+2. 关键字组（关键字实参、`**expr` 展开）；
 
 对于函数对象的调用，应当给所有形参赋值，或是用传参，或是用默认值。捕获列表中的标识符不是形参，不参与该匹配过程。
 
@@ -1021,12 +1028,12 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 
 迭代器协议规定对象如何参与 `for (i : obj)` 及 `*obj` 展开迭代。
 
-`for [$] (i : obj) expr` 等价于
+`for ⟦$⟧ (i : obj) expr` 等价于
 
 ```
 {
     iterator = obj.__iter__()
-    while [$] (True) {
+    while ⟦$⟧ (True) {
         i = iterator.__next__()
         if (i is StopIteration) break
         expr

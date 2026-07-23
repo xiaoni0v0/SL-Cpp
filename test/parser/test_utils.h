@@ -4,7 +4,9 @@
 
 #include "../../lexer/Lexer.h"
 #include "../../parser/Parser.h"
+#include "../../builtins/classes/exceptions/SyntaxError.h"
 
+#include <doctest/doctest.h>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
@@ -39,4 +41,19 @@ inline nlohmann::json parse_json(const std::u32string &source) {
 // 同上，但保留 Program 这一层（需要检查多条顶层表达式的场景使用）。
 inline nlohmann::json parse_program_json(const std::u32string &source) {
     return nlohmann::json(parse_program(source)->to_json());
+}
+
+// 解析整份源码（只到 Parser 这一步，不跑 SyntaxChecker），要求抛出的 SyntaxError 消息里包含指定
+// 子串（用于区分"确实是这条规则报的错"，不是恰好被别的规则先一步拦下来）。跟
+// test/syntax_checker/test_utils.h 里同名但语义不同的 check_throws_with（那个还会跑 SyntaxChecker）
+// 故意区分开名字，避免两边都被包含时产生重定义。
+inline void check_parse_throws_with(const std::u32string &source, const std::string &message_substring) {
+    try {
+        parse_program(source);
+        FAIL("expected SyntaxError containing: " << message_substring);
+    } catch (const SyntaxError &e) {
+        const std::string what{e.what()};
+        CHECK_MESSAGE(what.find(message_substring) != std::string::npos,
+                      "expected message to contain \"" << message_substring << "\", got: " << what);
+    }
 }

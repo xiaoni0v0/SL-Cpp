@@ -18,7 +18,13 @@ TEST_SUITE("2.2.8 装饰器——紧邻 func/class") {
 TEST_CASE("单个装饰器挂到 func 的 decorators_") {
     CHECK(parse_json(U"@dec func f() {}") == nlohmann::json{
           {"type", "Func"}, {"decorators", nlohmann::json::array({ident("dec")})}, {"name", "f"},
-          {"captures", nlohmann::json::array()}, {"params", nlohmann::json::array()},
+          {"captures", nlohmann::json::array()},
+          {
+          "params", {
+          {"positional", nlohmann::json::array()}, {"var_args", nullptr},
+          {"kw_only", nlohmann::json::array()}, {"var_kwargs", nullptr}
+          }
+          },
           {"return_type", nullptr}, {"doc", nullptr},
           {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
           });
