@@ -16,7 +16,7 @@ TEST_CASE("SyntaxError 是 SLException 的子类，也是 std::exception 的子�
 
 TEST_CASE("异常消息里带有文件名、行号、列号") {
     try {
-        Lexer{U"1\nlocal", "my_file.sl"}.tokenize();
+        const auto tokens{Lexer{U"1\nlocal", "my_file.sl"}.tokenize()};
         FAIL("应当抛出异常");
     } catch (const SyntaxError &e) {
         const std::string msg{e.what()};

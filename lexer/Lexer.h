@@ -28,21 +28,21 @@ class Lexer {
     void skip_spaces();
 
     // 读 \n
-    Token read_newline();
+    [[nodiscard]] Token read_newline();
     // 读单行注释
     void read_comment_line();
     // 读多行注释
     void read_comment_block();
     // 读字符串字面量。quote 为 ' 或者 "
-    Token read_string(char32_t quote);
+    [[nodiscard]] Token read_string(char32_t quote);
     // 读反引号原始字符串字面量：不处理转义，天然支持多行
-    Token read_raw_string();
+    [[nodiscard]] Token read_raw_string();
     // 读数字字面量
-    Token read_number();
+    [[nodiscard]] Token read_number();
     // 读标识符、关键字、保留字
-    Token read_identifier_keyword_reservedword();
+    [[nodiscard]] Token read_identifier_keyword_reservedword();
     // 读符号
-    Token read_symbol();
+    [[nodiscard]] Token read_symbol();
 
 public:
     /**
@@ -56,19 +56,19 @@ public:
      * 对源代码词法分析，只能调用一次（右值限定）
      * @return token 序列
      */
-    std::vector<Token> tokenize() &&;
+    [[nodiscard]] std::vector<Token> tokenize() &&;
 
     /**
      * TokenType::SIGN_LPAREN -> "SIGN_LPAREN"
      * @param type token 类型
      * @return     token 类型的字符串表示
      */
-    static std::string get_typename_by_tokentype(TokenType type);
+    [[nodiscard]] static std::string get_typename_by_tokentype(TokenType type);
 
     /**
      * TokenType::SIGN_LPAREN -> "("
      * @param type token 类型
      * @return     token 类型的用户可读名称
      */
-    static std::string get_displayname_by_tokentype(TokenType type);
+    [[nodiscard]] static std::string get_displayname_by_tokentype(TokenType type);
 };

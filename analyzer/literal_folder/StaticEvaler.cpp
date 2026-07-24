@@ -231,9 +231,9 @@ AstNodePtr StaticEvaler::fold_and_or(AstNodeOpBinary &node) {
 
 AstNodePtr StaticEvaler::fold_if(AstNodeIf &node) {
     size_t i{0};
-    while (i < node.clauses_.size() && is_pure_literal(*node.clauses_[i].cond_) && !truthy(*node.clauses_[i].cond_))
-        ++
-            i;
+    while (i < node.clauses_.size() && is_pure_literal(*node.clauses_[i].cond_) && !truthy(*node.clauses_[i].cond_)) {
+        ++i;
+    }
 
     if (i < node.clauses_.size() && is_pure_literal(*node.clauses_[i].cond_)) {
         // 循环只有在"非字面量"或者"字面量为 True"时才会停在这个位置，能到这里说明是后者

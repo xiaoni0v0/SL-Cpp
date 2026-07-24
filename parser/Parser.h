@@ -41,21 +41,21 @@ class Parser {
      * 不消耗 EOF 或 '}'
      * @return 节点数组
      */
-    std::vector<AstNodePtr> parse_exprs();
+    [[nodiscard]] std::vector<AstNodePtr> parse_exprs();
 
     /**
      * 解析一个表达式
      * 其实就是无前缀的 Pratt 解析
      * @return 节点
      */
-    AstNodePtr parse_expr();
+    [[nodiscard]] AstNodePtr parse_expr();
 
     /**
      * Pratt 解析
      * @param min_bp 最小绑定力
      * @return
      */
-    AstNodePtr parse_expr_pratt(int min_bp);
+    [[nodiscard]] AstNodePtr parse_expr_pratt(int min_bp);
 
     /**
      * 链式比较（< <= > >= == !=）
@@ -64,8 +64,8 @@ class Parser {
      * @param first_op     第一个运算符的类型
      * @param first_op_pos 第一个运算符的位置
      */
-    AstNodePtr parse_chain_compare(AstNodePtr left, Position start_pos,
-                                   AstNodeCompare::OpType first_op, Position first_op_pos);
+    [[nodiscard]] AstNodePtr parse_chain_compare(AstNodePtr left, Position start_pos,
+                                                 AstNodeCompare::OpType first_op, Position first_op_pos);
 
     /**
      * 链式 is
@@ -73,49 +73,49 @@ class Parser {
      * @param start_pos    整个表达式开始的位置
      * @param first_is_pos 第一个 is 的位置
      */
-    AstNodePtr parse_chain_is(AstNodePtr left, Position start_pos, Position first_is_pos);
+    [[nodiscard]] AstNodePtr parse_chain_is(AstNodePtr left, Position start_pos, Position first_is_pos);
 
     /**
      * 解析一个无运算符的表达式
      * 不依赖左侧值
      * @return 节点
      */
-    AstNodePtr parse_non_op();
+    [[nodiscard]] AstNodePtr parse_non_op();
 
     // 解析 if / for 中间槽 / while 的条件表达式
-    AstNodePtr parse_expr_as_cond();
+    [[nodiscard]] AstNodePtr parse_expr_as_cond();
     // 分组 (expr) 或者元组 (expr1, expr2)
-    AstNodePtr parse_paren_or_tuple();
+    [[nodiscard]] AstNodePtr parse_paren_or_tuple();
     // 列表 [expr1, expr2]
-    AstNodePtr parse_list();
+    [[nodiscard]] AstNodePtr parse_list();
     // 字典 {k1: v1, ...} 或复合表达式
-    AstNodePtr parse_brace();
+    [[nodiscard]] AstNodePtr parse_brace();
     // del
-    AstNodePtr parse_del();
+    [[nodiscard]] AstNodePtr parse_del();
     // global
-    AstNodePtr parse_global();
+    [[nodiscard]] AstNodePtr parse_global();
     // if-elif-else
-    AstNodePtr parse_if();
+    [[nodiscard]] AstNodePtr parse_if();
     // for
-    AstNodePtr parse_for();
+    [[nodiscard]] AstNodePtr parse_for();
     // while
-    AstNodePtr parse_while();
+    [[nodiscard]] AstNodePtr parse_while();
     // return
-    AstNodePtr parse_return();
+    [[nodiscard]] AstNodePtr parse_return();
     // try-except-finally
-    AstNodePtr parse_try();
+    [[nodiscard]] AstNodePtr parse_try();
     // raise
-    AstNodePtr parse_raise();
+    [[nodiscard]] AstNodePtr parse_raise();
     // 函数
-    AstNodePtr parse_func(std::vector<AstNodePtr> decorators = {},
-                          std::vector<Position> decorator_positions = {},
-                          Position deco_pos = {});
+    [[nodiscard]] AstNodePtr parse_func(std::vector<AstNodePtr> decorators = {},
+                                        std::vector<Position> decorator_positions = {},
+                                        Position deco_pos = {});
     // 类
-    AstNodePtr parse_class(std::vector<AstNodePtr> decorators = {},
-                           std::vector<Position> decorator_positions = {},
-                           Position deco_pos = {});
+    [[nodiscard]] AstNodePtr parse_class(std::vector<AstNodePtr> decorators = {},
+                                         std::vector<Position> decorator_positions = {},
+                                         Position deco_pos = {});
     // 装饰器表达式 / 函数 / 类
-    AstNodePtr parse_decorator();
+    [[nodiscard]] AstNodePtr parse_decorator();
 
     /**
      * 完成一堆逗号连成的一串的剩余部分，可能空。不消耗括号、不涉及 paren_depth_。
@@ -126,15 +126,15 @@ class Parser {
      */
     bool finish_comma_batch(TokenType close, const std::function<void()> &parse_item);
     // 完成字典剩余部分。当前已被判为字典、第一项已解析为 first。不消耗括号、不涉及 paren_depth_
-    AstNodePtr finish_dict(Position start_pos, AstNodePtr first);
+    [[nodiscard]] AstNodePtr finish_dict(Position start_pos, AstNodePtr first);
     // 完成解析形参列表。消耗括号、管理 paren_depth_
-    AstNodeFunc::AllParams finish_func_params();
+    [[nodiscard]] AstNodeFunc::AllParams finish_func_params();
     // 完成解析捕获列表。消耗括号、管理 paren_depth_
-    std::vector<OneCapture> finish_captures();
+    [[nodiscard]] std::vector<OneCapture> finish_captures();
     // 完成函数调用 f(...)。消耗括号、管理 paren_depth_
-    AstNodePtr finish_call(AstNodePtr obj, Position start_pos);
+    [[nodiscard]] AstNodePtr finish_call(AstNodePtr obj, Position start_pos);
     // 完成索引 x[...]。消耗括号、管理 paren_depth_
-    AstNodePtr finish_index(AstNodePtr obj, Position start_pos);
+    [[nodiscard]] AstNodePtr finish_index(AstNodePtr obj, Position start_pos);
 
 public:
     /**
@@ -148,5 +148,5 @@ public:
      * 将 tokens 解析成 AST，只能调用一次（右值限定）
      * @return 解析后的 AST 的根节点
      */
-    AstNodeProgramPtr parse() &&;
+    [[nodiscard]] AstNodeProgramPtr parse() &&;
 };

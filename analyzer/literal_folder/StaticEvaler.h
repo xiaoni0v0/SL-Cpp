@@ -38,7 +38,7 @@
  *   if 的某个 clause 的 cond 折成的字面量真值为 True，则连同它自己在内后面的 clause/else 全部消失，只留这个 clause 的 body；
  *   for/while 的 cond 折成的字面量真值为 True 的不折。
  */
-class StaticEvaler {
+class StaticEvaler final {
     // @formatter:off
     // 一级入口
     [[nodiscard]] static AstNodePtr fold_unary(AstNodeOpUnary &node);    // 一元
@@ -59,10 +59,12 @@ class StaticEvaler {
     // 真值判断，要求 node 已经是字面量节点
     [[nodiscard]] static bool truthy(const AstNode &literal);
 
-    // node 是不是一个纯字面量：
-    //   None/bool/int/float/str/Ellipsis 天然是；
-    //   tuple/list 要求每个元素递归满足；
-    //   dict、_G/_L 恒不是。
+    /**
+     * node 是不是一个纯字面量：
+     *   None/bool/int/float/str/Ellipsis 天然是；
+     *   tuple/list 要求每个元素递归满足；
+     *   dict、_G/_L 恒不是。
+     */
     [[nodiscard]] static bool is_pure_literal(const AstNode &node);
 
     // 数值提升相关
@@ -95,6 +97,14 @@ class StaticEvaler {
     [[nodiscard]] static CmpResult literal_compare(const AstNode &a, const AstNode &b);
 
 public:
+    // 纯工具类，静态、无状态，直接禁止实例化
+    StaticEvaler() = delete;
+    ~StaticEvaler() = delete;
+    StaticEvaler(const StaticEvaler &) = delete;
+    StaticEvaler(StaticEvaler &&) = delete;
+    StaticEvaler &operator=(const StaticEvaler &) = delete;
+    StaticEvaler &operator=(StaticEvaler &&) = delete;
+
     // 尝试把 node 折成一个字面量节点；不负责递归，返回 nullptr 表示折不动
     [[nodiscard]] static AstNodePtr fold(AstNode &node);
 };
