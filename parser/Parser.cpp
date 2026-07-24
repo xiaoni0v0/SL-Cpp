@@ -159,7 +159,7 @@ bool Parser::check_over_newline(const TokenType type, const std::optional<size_t
     return false;
 }
 
-void Parser::check_expr_terminator() const {
+void Parser::check_terminator() const {
     switch (peek().type) {
     case TokenType::NEWLINE:
     case TokenType::SIGN_SEMICOLON:
@@ -203,7 +203,7 @@ std::vector<AstNodePtr> Parser::parse_exprs() {
     // 不是 EOF 也不是 }
     while (!check(TokenType::END_OF_FILE) && !check(TokenType::SIGN_RBRACE)) {
         exprs.push_back(parse_expr());
-        check_expr_terminator();
+        check_terminator();
         // 消耗剩余终止符
         skip_terminator();
     }
@@ -557,7 +557,7 @@ AstNodePtr Parser::parse_brace() {
 
     // 否则一定是复合表达式
     // 它没走 parse_exprs 的循环体，这里手动过一遍同一道终止符检查，防止 first 和后续表达式之间没有分隔符
-    check_expr_terminator();
+    check_terminator();
     std::vector<AstNodePtr> exprs;
     exprs.push_back(std::move(first));
 
@@ -807,6 +807,7 @@ AstNodePtr Parser::parse_func(std::vector<AstNodePtr> decorators,
     // 形参列表
     AstNodeFunc::AllParams params{finish_func_params()};
     skip_newline();
+
     // 可选返回类型 : type
     AstNodePtr return_type;
     if (check(TokenType::SIGN_COLON)) {
@@ -916,7 +917,7 @@ AstNodePtr Parser::parse_decorator() {
                    : parse_class(std::move(decorators), std::move(decorator_positions), deco_pos);
     }
 
-    // 通用形式（2.2.8）：@d1 @d2 ... expr ≡ d1(d2(...(expr)))，从最贴近 expr 的装饰器开始向外包裹
+    // 通用形式：@d1 @d2 ... expr ≡ d1(d2(...(expr)))
     AstNodePtr target{parse_expr()};
     for (auto &&[expr, pos] : std::views::zip(decorators, decorator_positions) | std::views::reverse) {
         target = std::make_unique<AstNodeDecorator>(pos, std::move(expr), std::move(target));
@@ -1002,11 +1003,9 @@ AstNodeFunc::AllParams Parser::finish_func_params() {
 
     expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
 
-    // 形参列表按 SL.md 2.2.6 依次由 4 段组成：普通形参* -> 可选 *identifier -> 普通形参*
-    // （此时是仅关键字形参）-> 可选 **identifier。"至多一个 *args""**kwargs 必须是最后一项"
-    // 由这里的阶段顺序直接保证（往前一段的标志位一旦置位就不会再清除），不再是语义层的状态机检查
     AstNodeFunc::AllParams result;
     finish_comma_batch(TokenType::SIGN_RPAREN, [&] {
+        // 当前是 **kwargs -> 要求是前边不能有 **kwargs
         if (check(TokenType::SIGN_DOUBLESTAR)) {
             if (result.var_kwargs_name_) error("at most one **kwargs parameter is allowed");
             expect(TokenType::SIGN_DOUBLESTAR); // 消耗 '**'
@@ -1014,8 +1013,11 @@ AstNodeFunc::AllParams Parser::finish_func_params() {
             result.var_kwargs_name_ = expect(TokenType::IDENTIFIER).lexeme; // 消耗标识符
             return;
         }
+
+        // 当前不是 **kwargs -> 要求是前边不能有 **kwargs
         if (result.var_kwargs_name_) error("no parameter is allowed after **kwargs");
 
+        // 当前是 *args -> 要求是前边不能有 *args
         if (check(TokenType::SIGN_STAR)) {
             if (result.var_args_name_) error("at most one *args parameter is allowed");
             expect(TokenType::SIGN_STAR); // 消耗 '*'
@@ -1024,6 +1026,7 @@ AstNodeFunc::AllParams Parser::finish_func_params() {
             return;
         }
 
+        // 前边无 *args、无 **kwargs，当前是普通形参 -> 判断看看到底是位置形参还是
         (result.var_args_name_ ? result.kw_only_ : result.positional_).push_back(parse_one_normal_param());
     });
 
@@ -1078,16 +1081,16 @@ AstNodePtr Parser::finish_call(AstNodePtr obj, const Position start_pos) {
     const Position paren_pos{peek().row, peek().col};
     expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
 
+    // 实参
     std::vector<AstNodePtr> positional_args;
     std::vector<AstNodeCall::OneKwArg> keyword_args;
 
-    // 实参分位置组（位置实参、*expr 展开）、关键字组（关键字实参、**expr 展开）两阶段，位置组必须
-    // 在关键字组之前（SL.md 3.5）；一旦见过关键字组的成员就不能再回到位置组，否则直接报语法错误
-    bool in_keyword_group{false};
+    // 传参分：位置组（位置传参、*expr 展开）、关键字组（关键字传参、**expr 展开）两阶段
+    enum class ArgsGroup { Positional, Keyword } group{ArgsGroup::Positional};
     finish_comma_batch(TokenType::SIGN_RPAREN, [&] {
-        // 关键字参数的判定：当前是 IDENTIFIER，且跳过其后可能的换行紧跟 '='
+        // 关键字传参的判定：当前是 IDENTIFIER，且跳过其后可能的换行紧跟 '='
         if (check(TokenType::IDENTIFIER) && check_over_newline(TokenType::SIGN_ASSIGN, pos_ + 1)) {
-            in_keyword_group = true;
+            group = ArgsGroup::Keyword;
             std::u32string name{expect(TokenType::IDENTIFIER).lexeme}; // 消耗标识符
             skip_newline();
             expect(TokenType::SIGN_ASSIGN); // 消耗 '='
@@ -1095,16 +1098,17 @@ AstNodePtr Parser::finish_call(AstNodePtr obj, const Position start_pos) {
             keyword_args.push_back({AstNodeCall::OneKwArg::Kind::Keyword, std::move(name), parse_expr()});
             return;
         }
-        // 不是关键字参数：解析出表达式，再按它解析完的实际类型判断属于位置组（**expr 展开）还是
-        // 关键字组——不能只看开头是不是字面的 '**'，分组括号是透明的，(**d) 解析完也是 AstNodeDoubleStar
+
+        // 不是关键字传参
         AstNodePtr value{parse_expr()};
+        // **expr
         if (dynamic_cast<AstNodeDoubleStar *>(value.get())) {
-            in_keyword_group = true;
+            group = ArgsGroup::Keyword;
             keyword_args.push_back({AstNodeCall::OneKwArg::Kind::DoubleStar, U"", std::move(value)});
             return;
         }
-        // 位置参数，含 *expr 展开
-        if (in_keyword_group) error("positional argument cannot appear after keyword argument");
+        // 位置参数 / *expr
+        if (group == ArgsGroup::Keyword) error("positional argument cannot appear after keyword argument");
         positional_args.push_back(std::move(value));
     });
 

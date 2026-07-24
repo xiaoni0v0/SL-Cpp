@@ -24,7 +24,7 @@ class Parser {
     // 检查从 start（缺省为当前位置 pos_）开始，跳过 NEWLINE 之后的第一个 token 是否为 type
     [[nodiscard]] bool check_over_newline(TokenType type, std::optional<size_t> start = std::nullopt) const;
     // 检查当前位置是不是一条表达式合法的终止符（换行、';'、EOF、'}'），不是则抛语法错误
-    void check_expr_terminator() const;
+    void check_terminator() const;
     // 消耗对应类型 token，否则抛出异常
     const Token &expect(TokenType expected_type);
     // 无条件跳过 NEWLINE

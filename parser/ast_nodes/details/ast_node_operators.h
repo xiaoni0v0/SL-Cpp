@@ -10,7 +10,7 @@
 // 运算符
 // ============================================================
 
-// *expr（解包目标 / 实参展开，具体含义由语义层确定）
+// *expr（解包目标 / 实参展开，不包括可变长位置形参）
 struct AstNodeStar : AstNode {
     AstNodePtr operand_;
 
@@ -24,7 +24,7 @@ struct AstNodeStar : AstNode {
     }
 };
 
-// **expr（字典展开，具体含义由语义层确定）
+// **expr（字典展开，不包括可变长关键字形参）
 struct AstNodeDoubleStar : AstNode {
     AstNodePtr operand_;
 
