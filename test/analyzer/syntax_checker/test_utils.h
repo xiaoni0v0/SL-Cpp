@@ -2,9 +2,9 @@
 
 // 测试专用工具：解析一份源码并跑一遍 SyntaxChecker。
 
-#include "../../analyzer/syntax_checker/SyntaxChecker.h"
-#include "../../builtins/classes/exceptions/SyntaxError.h"
-#include "../parser/test_utils.h"
+#include "../../../analyzer/syntax_checker/SyntaxChecker.h"
+#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../parser/test_utils.h"
 
 #include <doctest/doctest.h>
 

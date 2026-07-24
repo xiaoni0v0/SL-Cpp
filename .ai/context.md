@@ -2456,3 +2456,29 @@ JSON 形状完全没变（`params`/`var_args`/`kw_only_params`/`var_kwargs` 这�
 `Parser.cpp` 里 `finish_func_params`/`finish_call`/`finish_captures` 也按要求加了注释，说明各自
 在 Parser 层保证了什么、留给语义层检查什么——这样以后再有类似"到底该 Parser 查还是 SyntaxChecker
 查"的疑问，直接看这几个函数的注释就有答案，不用重新推一遍。
+
+## CMake 测试目标合并：`SL_Cpp_SyntaxChecker_Tests` 并入 `SL_Cpp_Analyzer_Tests`
+
+按用户要求把两个测试可执行文件合成一个，统一叫 `SL_Cpp_Analyzer_Tests`，内部不再拆分（两边测试
+文件各自的 `TEST_SUITE` 名字、`test/analyzer/`/`test/syntax_checker/` 目录结构已经足够区分归属，
+没必要再包一层）。改动：`CMakeLists.txt` 里 `SL_Cpp_Analyzer_Tests` 这个 target 吸收了
+`analyzer/syntax_checker/SyntaxChecker.cpp/.h`、`test/syntax_checker/test_utils.h`、五个
+`test/syntax_checker/*.cpp`；`SL_Cpp_SyntaxChecker_Tests` 整个 `add_executable`/`add_test` 删掉。
+两边各自都有一份内容完全相同的 `main_test.cpp`（纯 doctest main），只留了
+`test/analyzer/main_test.cpp` 一份——两个 `main()` 没法共存在同一个可执行文件里，
+`test/syntax_checker/main_test.cpp` 因此被删除（合并后没人引用）。`ctest` 的测试编号（1~5 变
+1~4）是每次运行时按当前 `add_test` 列表重新算的，不需要手动处理。合并后
+`SL_Cpp_Analyzer_Tests` 96 个用例 / 220 个断言（= 合并前 Analyzer 47/111 + SyntaxChecker
+49/109），数字对得上，全绿。
+
+**后续**：用户指出 CMake target 合并了，`test/` 目录结构也该跟着改——不能 target 叫
+`SL_Cpp_Analyzer_Tests` 但测试文件还摊在 `test/syntax_checker/` 这个独立顶层目录里。选择跟源码
+目录结构（`analyzer/{literal_folder,syntax_checker}/`）对称的方案：整个 `test/syntax_checker/`
+原样搬进 `test/analyzer/syntax_checker/`（不摊平、不跟 `test/analyzer/test_utils.h` 合并——两边
+的测试工具函数本来就不是一回事，`check_program`/`check_throws_with` vs `fold_json`，
+分开更清楚）。只需要改 `test/analyzer/syntax_checker/test_utils.h` 内部的相对路径（深了一层，
+`../../` 都变成 `../../../`，原来 `../parser/test_utils.h` 变成 `../../parser/test_utils.h`），
+5 个测试 `.cpp` 文件本身只 `#include "test_utils.h"`，随文件夹一起搬不用动。`CMakeLists.txt`
+里的路径、以及 3 处引用了旧路径的注释（`CMakeLists.txt`、`test/parser/2_2_6_func/func_test.cpp`、
+`test/parser/test_utils.h`）都同步改了。`.ai/run_test.bat` 验证：CMake 自动重新 configure，
+全绿，用例数不变。

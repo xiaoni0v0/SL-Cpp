@@ -3,7 +3,7 @@
 // 装饰器紧邻 func 的情况放在 2_2_8_decorator/decorator_test.cpp 测，这里只测 func 自身。
 // 形参在 json 里嵌套成一个 "params" 对象，依次由 4 段组成：positional（*args 之前）/ var_args /
 // kw_only（*args 之后）/ var_kwargs，见 SL.md 2.2.6。"无默认值形参必须排在有默认值形参前面"是
-// 语义层校验（见 test/syntax_checker），这里只测语法形状本身，以及"至多一个 *args""**kwargs 必须
+// 语义层校验（见 test/analyzer/syntax_checker），这里只测语法形状本身，以及"至多一个 *args""**kwargs 必须
 // 最后"这两条现在由 Parser 直接保证的规则。
 #include "../test_utils.h"
 #include "../../../builtins/classes/exceptions/SyntaxError.h"

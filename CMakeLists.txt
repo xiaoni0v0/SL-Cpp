@@ -294,19 +294,29 @@ add_executable(SL_Cpp_Analyzer_Tests
         analyzer/literal_folder/LiteralFolder.h
         analyzer/literal_folder/StaticEvaler.cpp
         analyzer/literal_folder/StaticEvaler.h
+        analyzer/syntax_checker/SyntaxChecker.cpp
+        analyzer/syntax_checker/SyntaxChecker.h
 
         # 测试工具（复用 Parser 测试的 parse_program/parse_json 等）
         test/parser/test_utils.h
         test/analyzer/test_utils.h
+        test/analyzer/syntax_checker/test_utils.h
         test/analyzer/main_test.cpp
 
-        # 测试代码
+        # 测试代码：literal_folder
         test/analyzer/literal_folder/arithmetic_test.cpp
         test/analyzer/literal_folder/bitwise_test.cpp
         test/analyzer/literal_folder/container_ops_test.cpp
         test/analyzer/literal_folder/compare_is_test.cpp
         test/analyzer/literal_folder/logical_test.cpp
         test/analyzer/literal_folder/dead_branch_test.cpp
+
+        # 测试代码：syntax_checker
+        test/analyzer/syntax_checker/scope_test.cpp
+        test/analyzer/syntax_checker/func_class_test.cpp
+        test/analyzer/syntax_checker/lvalue_test.cpp
+        test/analyzer/syntax_checker/dict_call_test.cpp
+        test/analyzer/syntax_checker/defensive_test.cpp
 )
 target_precompile_headers(SL_Cpp_Analyzer_Tests PRIVATE
         <nlohmann/json.hpp>
@@ -316,51 +326,3 @@ set_source_files_properties(test/analyzer/main_test.cpp PROPERTIES SKIP_PRECOMPI
 target_compile_options(SL_Cpp_Analyzer_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
 target_link_libraries(SL_Cpp_Analyzer_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
 add_test(NAME SL_Cpp_Analyzer_Tests COMMAND SL_Cpp_Analyzer_Tests)
-
-add_executable(SL_Cpp_SyntaxChecker_Tests
-        # 被测代码
-        lexer/Lexer.cpp
-        lexer/Lexer.h
-        lexer/token.h
-        lexer/x_token_type.h
-        lexer/x_keyword.h
-        lexer/x_reservedword.h
-        utils/string_utils.cpp
-        utils/string_utils.h
-        parser/Parser.cpp
-        parser/Parser.h
-        parser/ast_nodes/ast_nodes.h
-        parser/ast_nodes/x_ast_nodes.h
-        parser/ast_nodes/details/ast_node.h
-        parser/ast_nodes/details/ast_node_class.h
-        parser/ast_nodes/details/ast_node_control_flows.h
-        parser/ast_nodes/details/ast_node_decorators.h
-        parser/ast_nodes/details/ast_node_func.h
-        parser/ast_nodes/details/ast_node_literals.h
-        parser/ast_nodes/details/ast_node_multi_exprs.h
-        parser/ast_nodes/details/ast_node_operators.h
-        parser/ast_nodes/details/ast_node_postfix.h
-        parser/ast_nodes/details/ast_node_var.h
-        analyzer/syntax_checker/SyntaxChecker.cpp
-        analyzer/syntax_checker/SyntaxChecker.h
-
-        # 测试工具（复用 Parser 测试的 parse_program 等）
-        test/parser/test_utils.h
-        test/syntax_checker/test_utils.h
-        test/syntax_checker/main_test.cpp
-
-        # 测试代码
-        test/syntax_checker/scope_test.cpp
-        test/syntax_checker/func_class_test.cpp
-        test/syntax_checker/lvalue_test.cpp
-        test/syntax_checker/dict_call_test.cpp
-        test/syntax_checker/defensive_test.cpp
-)
-target_precompile_headers(SL_Cpp_SyntaxChecker_Tests PRIVATE
-        <nlohmann/json.hpp>
-        <doctest/doctest.h>
-)
-set_source_files_properties(test/syntax_checker/main_test.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-target_compile_options(SL_Cpp_SyntaxChecker_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
-target_link_libraries(SL_Cpp_SyntaxChecker_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
-add_test(NAME SL_Cpp_SyntaxChecker_Tests COMMAND SL_Cpp_SyntaxChecker_Tests)
