@@ -1002,6 +1002,10 @@ AstNodeFunc::AllParams Parser::finish_func_params() {
 
     expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
 
+    // 这里只保证至多一个 *args、至多一个 **kwargs 且必须是最后一项
+    // 留给语义层检查的：
+    // 1. 捕获列表/形参列表内部及两者之间的标识符查重（含 var_args_name_/var_kwargs_name_ 自己）；
+    // 2. positional_ 段内"无默认值形参必须排在有默认值形参之前"（kw_only_ 段不受此约束）；
     AstNodeFunc::AllParams result;
     finish_comma_batch(TokenType::SIGN_RPAREN, [&] {
         // 当前是 **kwargs -> 要求是前边不能有 **kwargs
@@ -1073,6 +1077,7 @@ std::vector<OneCapture> Parser::finish_captures() {
     if (!check(TokenType::SIGN_RBRACKET)) error("expected ']' to close capture list");
     expect(TokenType::SIGN_RBRACKET), paren_depth_--; // 消耗 ']'
 
+    // 留给语义层检查的：捕获列表的标识符查重
     return captures;
 }
 

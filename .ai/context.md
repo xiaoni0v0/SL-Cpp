@@ -2419,3 +2419,40 @@ JSON 形状完全没变（`params`/`var_args`/`kw_only_params`/`var_kwargs` 这�
 `test/parser/2_2_6_func/func_test.cpp`（新增 `all_params(...)` 测试辅助函数）、
 `test/parser/2_2_8_decorator/decorator_test.cpp`、`test/parser/common/combination_test.cpp`
 里对应的 json 断言路径（`["params"]["positional"]` 而不是 `["params"]` 直接是数组）。
+
+## SyntaxChecker 全字段审计：先判空再解引用 + 每个字段都要检查
+
+用户要求做两件事：1. 在 `Parser.cpp` 的 `finish_func_params`/`finish_call`/`finish_captures` 里
+明确写注释，说清楚这几个函数各自保证了什么、把什么留给语义层（SyntaxChecker）；2. 把
+`SyntaxChecker.cpp` 里**每一个**节点类型的**每一个**字段过一遍，确认：(a) 每个 `AstNodePtr` 字段
+都是先判空（`check_not_null`/`check_nullable`/`require_not_null`）再解引用，明确假设"外部可能
+直接篡改了 AST"、Parser 自己的保证不能作为唯一防线；(b) 纯 `Position` 字段不用检查，但凡是
+"跟着一个正文数组配对的位置数组"（比如 `decorator_positions_` 配 `decorators_`）都要用
+`require_same_size` 查一遍长度。
+
+**结论**：null-check-before-deref 的顺序本身通读一遍下来是对的（`check_lvalue_items` 里
+`dynamic_cast` 前有 `require_not_null`、`AstNodeDel` 里 `error()` 消息取 `pos_` 前 `target_`
+已经被 `check_not_null` 确认过等等），没找到真正的"先解引用再判空"的顺序错误。但"每个字段都要
+检查"这条揪出了 5 处此前遗漏的字段：
+
+1. `AstNodeClass` 的 `captures_`：只查了重名，没查 `capture.identifier_` 本身是不是空字符串——
+   跟 `AstNodeFunc` 那边（已经在查）不一致，明明两者共用同一套捕获列表语义；
+2. `AstNodeFunc` 的 `var_args_name_`/`var_kwargs_name_`：这两个是 `optional<u32string>`，跟
+   `name_` 结构完全一样（要么 `nullopt` 要么非空），但只查了重名（`ensure_unique`），没查空
+   字符串这条（`name_` 有查）；
+3. `AstNodeIndex::args_`：`a[]` 语法上不允许（Parser 的 `finish_index` 已经
+   `if (args.empty()) error(...)`），但 SyntaxChecker 这边从来没有对应的防御性 `require_not_null`
+   （跟 `AstNodeIf::clauses_`/`AstNodeCompare::operands_` 这些"Parser 保证最小个数"的既有模式
+   不一致）；
+4. `AstNodeGlobal::identifier_`：完全没有检查过是不是空字符串——`AstNodeIdentifier` 那边同名字段
+   有查，`AstNodeGlobal` 这边彻底漏掉了；
+5. `AstNodeTry` 每个 `except` 子句的 `exceptions_`：SL.md 2.2.5.7"每个 except 内 Exception 有
+   1 个或多个"，Parser 的 `parse_excs_and_body` 已经 `if (excs.empty()) error(...)`，但
+   SyntaxChecker 从来没有对应的防御性 `require_not_null`。
+
+5 处都补上了对应检查，`test/syntax_checker/defensive_test.cpp` 各加一个手工搭畸形 AST 的测试
+用例验证。`.ai/run_test.bat` 全绿：SyntaxChecker 49/109（新增 5 个 test case / 6 个 assertion）。
+
+`Parser.cpp` 里 `finish_func_params`/`finish_call`/`finish_captures` 也按要求加了注释，说明各自
+在 Parser 层保证了什么、留给语义层检查什么——这样以后再有类似"到底该 Parser 查还是 SyntaxChecker
+查"的疑问，直接看这几个函数的注释就有答案，不用重新推一遍。

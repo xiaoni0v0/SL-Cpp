@@ -41,6 +41,7 @@ void SyntaxChecker::check(const AstNodeClass &node) {
 
     std::unordered_set<std::u32string> names;
     for (const auto &capture : node.captures_) {
+        require_not_null(capture.identifier_, pos);
         // 如果是已经存在
         if (!names.insert(capture.identifier_).second) error("duplicate name in capture list", pos);
         check_nullable(capture.value_expr_);
@@ -134,6 +135,7 @@ void SyntaxChecker::check(const AstNodeTry &node) {
         error("try must have at least one except or finally", node.pos_);
     }
     for (const auto &clause : node.except_clauses_) {
+        require_not_null(clause.exceptions_, 1, pos);
         for (const auto &exc : clause.exceptions_) check_not_null(exc, pos);
         check_not_null(clause.body_, pos);
     }
@@ -202,13 +204,17 @@ void SyntaxChecker::check(const AstNodeFunc &node) {
         check_nullable(param.type_annotation_);
         check_nullable(param.default_value_);
     }
-    if (node.params_.var_args_name_) ensure_unique(*node.params_.var_args_name_);
+    if (node.params_.var_args_name_) {
+        require_not_null(*node.params_.var_args_name_, pos), ensure_unique(*node.params_.var_args_name_);
+    }
     for (const auto &param : node.params_.kw_only_) {
         require_not_null(param.identifier_, pos), ensure_unique(param.identifier_);
         check_nullable(param.type_annotation_);
         check_nullable(param.default_value_);
     }
-    if (node.params_.var_kwargs_name_) ensure_unique(*node.params_.var_kwargs_name_);
+    if (node.params_.var_kwargs_name_) {
+        require_not_null(*node.params_.var_kwargs_name_, pos), ensure_unique(*node.params_.var_kwargs_name_);
+    }
 
     check_nullable(node.return_type_);
     check_doc(node.doc_);
@@ -445,6 +451,7 @@ void SyntaxChecker::check(const AstNodeIndex &node) {
 
     check_not_null(node.object_, pos);
 
+    require_not_null(node.args_, 1, pos);
     ctx_.can_star = true;
     for (const auto &a : node.args_) check_not_null(a, pos);
 
@@ -484,6 +491,7 @@ void SyntaxChecker::check(const AstNodeDel &node) {
 }
 
 void SyntaxChecker::check(const AstNodeGlobal &node) {
+    require_not_null(node.identifier_, node.pos_);
     if (ctx_.local_scope_depth == 0) error("global outside function/class body", node.pos_);
 }
 

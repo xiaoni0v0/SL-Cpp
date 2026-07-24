@@ -93,4 +93,53 @@ TEST_CASE("AstNodeFunc/AstNodeClass：decorators_ 和 decorator_positions_ 数�
     check_throws_with(*func_program, "mismatched array sizes");
 }
 
+TEST_CASE("AstNodeClass：captures_ 里某一项 identifier_ 是空字符串") {
+    std::vector<OneCapture> captures;
+    captures.push_back({OneCapture::CaptureType::Value, U"", nullptr});
+    AstNodeProgramPtr program{wrap(std::make_unique<AstNodeClass>(
+        Position{0, 0}, std::vector<AstNodePtr>{}, std::vector<Position>{}, std::nullopt,
+        std::vector<AstNodePtr>{}, std::move(captures), nullptr,
+        std::make_unique<AstNodeProgram>(Position{0, 0}, std::vector<AstNodePtr>{})))};
+    check_throws_with(*program, "unexpected empty name");
+}
+
+TEST_CASE("AstNodeFunc：var_args_name_/var_kwargs_name_ 是空字符串（应该要么 nullopt 要么有内容）") {
+    AstNodeFunc::AllParams params1;
+    params1.var_args_name_ = U"";
+    AstNodeProgramPtr program1{wrap(std::make_unique<AstNodeFunc>(
+        Position{0, 0}, std::vector<AstNodePtr>{}, std::vector<Position>{}, std::nullopt,
+        std::vector<OneCapture>{}, std::move(params1), nullptr, nullptr,
+        std::make_unique<AstNodeProgram>(Position{0, 0}, std::vector<AstNodePtr>{})))};
+    check_throws_with(*program1, "unexpected empty name");
+
+    AstNodeFunc::AllParams params2;
+    params2.var_kwargs_name_ = U"";
+    AstNodeProgramPtr program2{wrap(std::make_unique<AstNodeFunc>(
+        Position{0, 0}, std::vector<AstNodePtr>{}, std::vector<Position>{}, std::nullopt,
+        std::vector<OneCapture>{}, std::move(params2), nullptr, nullptr,
+        std::make_unique<AstNodeProgram>(Position{0, 0}, std::vector<AstNodePtr>{})))};
+    check_throws_with(*program2, "unexpected empty name");
+}
+
+TEST_CASE("AstNodeIndex：args_ 为空（a[] 语法上不允许，Parser 已经保证，这里是防御性断言）") {
+    AstNodeProgramPtr program{wrap(std::make_unique<AstNodeIndex>(
+        Position{0, 0}, std::make_unique<AstNodeIdentifier>(Position{0, 0}, U"a"),
+        std::vector<AstNodePtr>{}, Position{0, 0}))};
+    check_throws_with(*program, "too few elements");
+}
+
+TEST_CASE("AstNodeGlobal：identifier_ 是空字符串") {
+    AstNodeProgramPtr program{wrap(std::make_unique<AstNodeGlobal>(Position{0, 0}, U""))};
+    check_throws_with(*program, "unexpected empty name");
+}
+
+TEST_CASE("AstNodeTry：某个 except 子句的 exceptions_ 为空（裸 except 语法上不允许，"
+    "Parser 已经保证，这里是防御性断言）") {
+    std::vector<AstNodeTry::AstNodeExceptAndExpr> except_clauses;
+    except_clauses.emplace_back(std::vector<AstNodePtr>{}, int_lit());
+    AstNodeProgramPtr program{wrap(std::make_unique<AstNodeTry>(
+        Position{0, 0}, int_lit(), std::move(except_clauses), nullptr))};
+    check_throws_with(*program, "too few elements");
+}
+
 }
