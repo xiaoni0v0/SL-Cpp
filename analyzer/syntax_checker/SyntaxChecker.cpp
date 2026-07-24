@@ -1,6 +1,3 @@
-// ReSharper disable CppMemberFunctionMayBeStatic
-// ReSharper disable CppMemberFunctionMayBeConst
-
 #include "SyntaxChecker.h"
 
 #include "../../builtins/classes/exceptions/SyntaxError.h"

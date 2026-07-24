@@ -1,5 +1,3 @@
-// ReSharper disable CppParameterMayBeConstPtrOrRef
-
 #include "StaticEvaler.h"
 
 #include "../../utils/string_utils.h"

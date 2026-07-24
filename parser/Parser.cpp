@@ -17,7 +17,6 @@ static std::optional<AstNodeOpUnary::OpType> token_type_to_unary_op_type(const T
     case TokenType::SIGN_PLUS:     return AstNodeOpUnary::OpType::Pos;
     case TokenType::SIGN_MINUS:    return AstNodeOpUnary::OpType::Neg;
     case TokenType::SIGN_TILDE:    return AstNodeOpUnary::OpType::BitNot;
-    // ReSharper disable once CppDFAUnreachableCode
     case TokenType::KW_NOT:        return AstNodeOpUnary::OpType::Not;
     case TokenType::SIGN_QUESTION: return AstNodeOpUnary::OpType::Question;
     case TokenType::SIGN_EXCLAIM:  return AstNodeOpUnary::OpType::Exclaim;

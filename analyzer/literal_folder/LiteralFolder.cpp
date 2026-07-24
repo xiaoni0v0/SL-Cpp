@@ -1,5 +1,3 @@
-// ReSharper disable CppMemberFunctionMayBeStatic
-
 #include "LiteralFolder.h"
 
 #include "StaticEvaler.h"
