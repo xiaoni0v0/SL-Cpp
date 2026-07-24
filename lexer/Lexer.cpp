@@ -372,10 +372,8 @@ std::string Lexer::get_typename_by_tokentype(const TokenType type) {
 #undef X
     };
 
-    const size_t
-        ind{static_cast<size_t>(type)},
-        len{std::size(TOKEN_TYPE_MAPPING)};
-    if (ind >= len) return "<unknown token type>";
+    const size_t ind{static_cast<size_t>(type)};
+    if (ind >= std::size(TOKEN_TYPE_MAPPING)) return "<unknown token type>";
     return TOKEN_TYPE_MAPPING[ind];
 }
 
