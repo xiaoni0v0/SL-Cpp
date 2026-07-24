@@ -166,46 +166,49 @@ void SyntaxChecker::check(const AstNodeDecorator &node) {
 }
 
 void SyntaxChecker::check(const AstNodeFunc &node) {
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    for (const auto &deco : node.decorators_) check(*deco);
-    require_same_size(node.decorators_, node.decorator_positions_, node.pos_);
-    if (node.name_) require_not_null(*node.name_, node.pos_);
+    for (const auto &deco : node.decorators_) check_not_null(deco, pos);
+    require_same_size(node.decorators_, node.decorator_positions_, pos);
+    if (node.name_) require_not_null(*node.name_, pos);
 
     std::unordered_set<std::u32string> names;
-    auto check_name{
+
+    // 排重函数
+    auto ensure_unique{
         [&](const std::u32string &name) {
             // 如果是已经存在
-            if (!names.insert(name).second) error("duplicate name in capture/parameter list", node.pos_);
+            if (!names.insert(name).second) error("duplicate name in capture/parameter list", pos);
         }
     };
 
+    // 捕获
     for (const auto &capture : node.captures_) {
-        check_name(capture.identifier_);
+        require_not_null(capture.identifier_, pos), ensure_unique(capture.identifier_);
         check_nullable(capture.value_expr_);
     }
 
-    // SL.md 2.2.6：*args 之前的形参，无默认值的必须排在有默认值的之前；positional_/kw_only_
-    // 现在分属两个字段，*args 之后的仅关键字形参（按名字匹配、不按位置）天然不受这条顺序约束
-    // （同 Python：func f(*x, y) {} 合法，y 是必须以关键字方式传入的仅关键字形参），不需要再靠
-    // 状态机标志位去区分——"至多一个 *args""**kwargs 必须最后"也已经在 Parser 阶段式解析时保证
+    // 形参
     bool has_seen_default{false};
     for (const auto &param : node.params_.positional_) {
-        check_name(param.identifier_);
+        require_not_null(param.identifier_, pos), ensure_unique(param.identifier_);
         if (param.default_value_) has_seen_default = true;
-        else if (has_seen_default) error("non-default parameter after default parameter", node.pos_);
+        else // 如果当前这个没有默认值，且前边的某个有默认值
+            if (has_seen_default) error("non-default parameter after default parameter", pos);
         check_nullable(param.type_annotation_);
         check_nullable(param.default_value_);
     }
-    if (node.params_.var_args_name_) check_name(*node.params_.var_args_name_);
+    if (node.params_.var_args_name_) ensure_unique(*node.params_.var_args_name_);
     for (const auto &param : node.params_.kw_only_) {
-        check_name(param.identifier_);
+        require_not_null(param.identifier_, pos), ensure_unique(param.identifier_);
         check_nullable(param.type_annotation_);
         check_nullable(param.default_value_);
     }
-    if (node.params_.var_kwargs_name_) check_name(*node.params_.var_kwargs_name_);
+    if (node.params_.var_kwargs_name_) ensure_unique(*node.params_.var_kwargs_name_);
 
     check_nullable(node.return_type_);
     check_doc(node.doc_);
@@ -408,23 +411,26 @@ void SyntaxChecker::check(const AstNodeCompoundAssign &node) {
 }
 
 void SyntaxChecker::check(const AstNodeCall &node) {
+    const Position pos{node.pos_};
+
     const Context saved{ctx_};
 
     ctx_.can_star = false;
     ctx_.can_double_star = false;
-    check(*node.object_);
+    check_not_null(node.object_, pos);
 
-    // 位置组：位置实参、*expr 展开。"位置组不能出现在关键字组之后"（SL.md 3.5）已经由 Parser
-    // 阶段式解析保证——positional_args_/keyword_args_ 分属两个字段，这里不需要再检查顺序
+    // 位置组：位置传参、*expr
     ctx_.can_star = true;
     ctx_.can_double_star = false;
-    for (const auto &arg : node.positional_args_) check(*arg);
+    for (const auto &arg : node.positional_args_) check_not_null(arg, pos);
 
-    // 关键字组：关键字实参（普通值，不允许 */** 前缀）、**expr 展开
+    // 关键字组：关键字实参、**expr
     for (const auto &kw : node.keyword_args_) {
+        if (kw.kind_ == AstNodeCall::OneKwArg::Kind::Keyword) require_not_null(kw.keyword_, pos);
+
         ctx_.can_star = false;
         ctx_.can_double_star = kw.kind_ == AstNodeCall::OneKwArg::Kind::DoubleStar;
-        check(*kw.value_);
+        check_not_null(kw.value_, pos);
     }
 
     ctx_ = saved;
