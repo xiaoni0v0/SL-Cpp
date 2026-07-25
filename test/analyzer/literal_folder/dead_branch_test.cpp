@@ -30,10 +30,12 @@ TEST_SUITE("StaticEvaler 死分支消除") {
             fold_json(U"if (False) 1 elif (x) 2 else 3") ==
             nlohmann::json{
                 {"type", "If"},
-                {"clauses", nlohmann::json::array(
-                                {nlohmann::json{{"cond", ident("x")}, {"body", int_lit("2")}}}
-                            )},
-                {"else_expr", int_lit("3")}}
+                {"clauses",
+                 nlohmann::json::array(
+                     {nlohmann::json{{"cond", ident("x")}, {"body", int_lit("2")}}}
+                 )},
+                {"else_expr", int_lit("3")}
+            }
         );
     }
 
@@ -42,10 +44,12 @@ TEST_SUITE("StaticEvaler 死分支消除") {
             fold_json(U"if (x) 1 else 2") ==
             nlohmann::json{
                 {"type", "If"},
-                {"clauses", nlohmann::json::array(
-                                {nlohmann::json{{"cond", ident("x")}, {"body", int_lit("1")}}}
-                            )},
-                {"else_expr", int_lit("2")}}
+                {"clauses",
+                 nlohmann::json::array(
+                     {nlohmann::json{{"cond", ident("x")}, {"body", int_lit("1")}}}
+                 )},
+                {"else_expr", int_lit("2")}
+            }
         );
     }
 
@@ -62,44 +66,53 @@ TEST_SUITE("StaticEvaler 死分支消除") {
     TEST_CASE("for 的 cond 是 False：init 无论如何都会先无条件求值一次，副作用必须保留") {
         CHECK(
             fold_json(U"for (x = 1; False; x = 2) body") ==
-            nlohmann::json{{"type", "Compound"},
-                           {"exprs", nlohmann::json::array(
-                                         {nlohmann::json{{"type", "Assign"},
-                                                         {"target", ident("x")},
-                                                         {"value", int_lit("1")}},
-                                          int_lit("0")}
-                                     )}}
+            nlohmann::json{
+                {"type", "Compound"},
+                {"exprs",
+                 nlohmann::json::array(
+                     {nlohmann::json{
+                          {"type", "Assign"}, {"target", ident("x")}, {"value", int_lit("1")}
+                      },
+                      int_lit("0")}
+                 )}
+            }
         );
         CHECK(fold_json(U"for (; False; x = 2) body") == int_lit("0")); // 没有 init，不用管副作用
     }
 
     TEST_CASE("cond 折成 True 不折——只确定不会提前退出，循环本身的值仍然没法在编译期知道") {
         CHECK(
-            fold_json(U"while (True) 1") == nlohmann::json{{"type", "ForCond"},
-                                                           {"collect", false},
-                                                           {"init", nullptr},
-                                                           {"cond", bool_lit(true)},
-                                                           {"inc", nullptr},
-                                                           {"body", int_lit("1")}}
+            fold_json(U"while (True) 1") == nlohmann::json{
+                                                {"type", "ForCond"},
+                                                {"collect", false},
+                                                {"init", nullptr},
+                                                {"cond", bool_lit(true)},
+                                                {"inc", nullptr},
+                                                {"body", int_lit("1")}
+                                            }
         );
     }
 
     TEST_CASE("cond 不是字面量，或者压根没有 cond（视为无限循环），都不折") {
         CHECK(
-            fold_json(U"while (x) 1") == nlohmann::json{{"type", "ForCond"},
-                                                        {"collect", false},
-                                                        {"init", nullptr},
-                                                        {"cond", ident("x")},
-                                                        {"inc", nullptr},
-                                                        {"body", int_lit("1")}}
+            fold_json(U"while (x) 1") == nlohmann::json{
+                                             {"type", "ForCond"},
+                                             {"collect", false},
+                                             {"init", nullptr},
+                                             {"cond", ident("x")},
+                                             {"inc", nullptr},
+                                             {"body", int_lit("1")}
+                                         }
         );
         CHECK(
-            fold_json(U"for (;;) 1") == nlohmann::json{{"type", "ForCond"},
-                                                       {"collect", false},
-                                                       {"init", nullptr},
-                                                       {"cond", nullptr},
-                                                       {"inc", nullptr},
-                                                       {"body", int_lit("1")}}
+            fold_json(U"for (;;) 1") == nlohmann::json{
+                                            {"type", "ForCond"},
+                                            {"collect", false},
+                                            {"init", nullptr},
+                                            {"cond", nullptr},
+                                            {"inc", nullptr},
+                                            {"body", int_lit("1")}
+                                        }
         );
     }
 }

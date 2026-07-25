@@ -18,18 +18,20 @@ TEST_SUITE("2.2.8 装饰器——紧邻 func/class") {
     TEST_CASE("单个装饰器挂到 func 的 decorators_") {
         CHECK(
             parse_json(U"@dec func f() {}") ==
-            nlohmann::json{{"type", "Func"},
-                           {"decorators", nlohmann::json::array({ident("dec")})},
-                           {"name", "f"},
-                           {"captures", nlohmann::json::array()},
-                           {"params",
-                            {{"positional", nlohmann::json::array()},
-                             {"var_args", nullptr},
-                             {"kw_only", nlohmann::json::array()},
-                             {"var_kwargs", nullptr}}},
-                           {"return_type", nullptr},
-                           {"doc", nullptr},
-                           {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}}
+            nlohmann::json{
+                {"type", "Func"},
+                {"decorators", nlohmann::json::array({ident("dec")})},
+                {"name", "f"},
+                {"captures", nlohmann::json::array()},
+                {"params",
+                 {{"positional", nlohmann::json::array()},
+                  {"var_args", nullptr},
+                  {"kw_only", nlohmann::json::array()},
+                  {"var_kwargs", nullptr}}},
+                {"return_type", nullptr},
+                {"doc", nullptr},
+                {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
+            }
         );
     }
 
@@ -43,29 +45,31 @@ TEST_SUITE("2.2.8 装饰器——紧邻 func/class") {
     TEST_CASE("挂到 class 的 decorators_") {
         CHECK(
             parse_json(U"@dec class C {}") ==
-            nlohmann::json{{"type", "Class"},
-                           {"decorators", nlohmann::json::array({ident("dec")})},
-                           {"name", "C"},
-                           {"bases", nlohmann::json::array()},
-                           {"captures", nlohmann::json::array()},
-                           {"doc", nullptr},
-                           {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}}
+            nlohmann::json{
+                {"type", "Class"},
+                {"decorators", nlohmann::json::array({ident("dec")})},
+                {"name", "C"},
+                {"bases", nlohmann::json::array()},
+                {"captures", nlohmann::json::array()},
+                {"doc", nullptr},
+                {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
+            }
         );
     }
 
     TEST_CASE("装饰器表达式本身可以是调用") {
         CHECK(
             parse_json(U"@dec(1, 2) func f() {}")["decorators"] ==
-            nlohmann::json::array(
-                {nlohmann::json{
-                    {"type", "Call"},
-                    {"object", ident("dec")},
-                    {"args", nlohmann::json::array(
-                                 {nlohmann::json::parse(R"({"type":"LiteralInt","raw":"1"})"),
-                                  nlohmann::json::parse(R"({"type":"LiteralInt","raw":"2"})")}
-                             )},
-                    {"kwargs", nlohmann::json::array()}}}
-            )
+            nlohmann::json::array({nlohmann::json{
+                {"type", "Call"},
+                {"object", ident("dec")},
+                {"args",
+                 nlohmann::json::array(
+                     {nlohmann::json::parse(R"({"type":"LiteralInt","raw":"1"})"),
+                      nlohmann::json::parse(R"({"type":"LiteralInt","raw":"2"})")}
+                 )},
+                {"kwargs", nlohmann::json::array()}
+            }})
         );
     }
 }
@@ -74,9 +78,10 @@ TEST_SUITE("2.2.8 装饰器——通用形式") {
 
     TEST_CASE("单个装饰器包裹普通表达式") {
         CHECK(
-            parse_json(U"@dec x") == nlohmann::json{{"type", "Decorator"},
-                                                    {"decorator", ident("dec")},
-                                                    {"target", ident("x")}}
+            parse_json(U"@dec x") ==
+            nlohmann::json{
+                {"type", "Decorator"}, {"decorator", ident("dec")}, {"target", ident("x")}
+            }
         );
     }
 
@@ -87,7 +92,8 @@ TEST_SUITE("2.2.8 装饰器——通用形式") {
                 {"type", "Decorator"},
                 {"decorator", ident("d1")},
                 {"target",
-                 {{"type", "Decorator"}, {"decorator", ident("d2")}, {"target", ident("x")}}}}
+                 {{"type", "Decorator"}, {"decorator", ident("d2")}, {"target", ident("x")}}}
+            }
         );
     }
 
@@ -100,7 +106,8 @@ TEST_SUITE("2.2.8 装饰器——通用形式") {
                 {"target",
                  {{"type", "Assign"},
                   {"target", ident("x")},
-                  {"value", nlohmann::json::parse(R"({"type":"LiteralInt","raw":"1"})")}}}}
+                  {"value", nlohmann::json::parse(R"({"type":"LiteralInt","raw":"1"})")}}}
+            }
         );
     }
 

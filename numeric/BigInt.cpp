@@ -22,8 +22,9 @@ BigInt BigInt::promoted() const {
 
     const bool negative{small_ < 0};
     // 分两步算 magnitude，避免 small_ == INT64_MIN 时 -small_ 本身溢出 int64_t 的表示范围
-    const uint64_t magnitude{negative ? static_cast<uint64_t>(-(small_ + 1)) + 1
-                                      : static_cast<uint64_t>(small_)};
+    const uint64_t magnitude{
+        negative ? static_cast<uint64_t>(-(small_ + 1)) + 1 : static_cast<uint64_t>(small_)
+    };
     std::vector<uint32_t> limbs;
     uint64_t remaining{magnitude};
     while (remaining != 0) {
@@ -89,8 +90,9 @@ BigInt::sub_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t
     result.reserve(a.size());
     int64_t borrow{0};
     for (size_t i{0}; i < a.size(); ++i) {
-        int64_t diff{static_cast<int64_t>(a[i]) - borrow -
-                     (i < b.size() ? static_cast<int64_t>(b[i]) : 0)};
+        int64_t diff{
+            static_cast<int64_t>(a[i]) - borrow - (i < b.size() ? static_cast<int64_t>(b[i]) : 0)
+        };
         if (diff < 0) {
             diff += (static_cast<int64_t>(1) << 32);
             borrow = 1;
@@ -226,8 +228,10 @@ std::pair<BigInt, BigInt> BigInt::divmod_floor_big(const BigInt &divisor) const 
 
     if (negative_ == divisor.negative_) {
         // 同号：向负无穷取整的商就是截断商（结果非负）；余数符号跟除数一致
-        return {from_magnitude(std::move(q_mag), false),
-                from_magnitude(std::move(r_mag), divisor.negative_)};
+        return {
+            from_magnitude(std::move(q_mag), false),
+            from_magnitude(std::move(r_mag), divisor.negative_)
+        };
     }
 
     // 异号：向负无穷取整的商比截断商更小（更负）1；余数 = |divisor| - r_mag，符号跟除数一致

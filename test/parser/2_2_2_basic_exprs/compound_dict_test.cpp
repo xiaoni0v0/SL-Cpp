@@ -28,10 +28,12 @@ TEST_SUITE("2.2.2 {} 判别规则") {
             parse_json(U"{**d}") ==
             nlohmann::json{
                 {"type", "LiteralDict"},
-                {"items", nlohmann::json::array(
-                              {{{"key", {{"type", "DoubleStar"}, {"operand", ident("d")}}},
-                                {"val", nullptr}}}
-                          )}}
+                {"items",
+                 nlohmann::json::array(
+                     {{{"key", {{"type", "DoubleStar"}, {"operand", ident("d")}}},
+                       {"val", nullptr}}}
+                 )}
+            }
         );
     }
 
@@ -40,7 +42,8 @@ TEST_SUITE("2.2.2 {} 判别规则") {
             parse_json(U"{k: v}") ==
             nlohmann::json{
                 {"type", "LiteralDict"},
-                {"items", nlohmann::json::array({{{"key", ident("k")}, {"val", ident("v")}}})}}
+                {"items", nlohmann::json::array({{{"key", ident("k")}, {"val", ident("v")}}})}
+            }
         );
     }
 
@@ -49,7 +52,8 @@ TEST_SUITE("2.2.2 {} 判别规则") {
             parse_json(U"{k\n: v}") ==
             nlohmann::json{
                 {"type", "LiteralDict"},
-                {"items", nlohmann::json::array({{{"key", ident("k")}, {"val", ident("v")}}})}}
+                {"items", nlohmann::json::array({{{"key", ident("k")}, {"val", ident("v")}}})}
+            }
         );
     }
 
@@ -63,16 +67,20 @@ TEST_SUITE("2.2.2 {} 判别规则") {
     TEST_CASE("复合表达式：分号分隔多条") {
         CHECK(
             parse_json(U"{a; b; c}") ==
-            nlohmann::json{{"type", "Compound"},
-                           {"exprs", nlohmann::json::array({ident("a"), ident("b"), ident("c")})}}
+            nlohmann::json{
+                {"type", "Compound"},
+                {"exprs", nlohmann::json::array({ident("a"), ident("b"), ident("c")})}
+            }
         );
     }
 
     TEST_CASE("复合表达式：换行分隔多条，不需要分号") {
         CHECK(
             parse_json(U"{a\nb\nc}") ==
-            nlohmann::json{{"type", "Compound"},
-                           {"exprs", nlohmann::json::array({ident("a"), ident("b"), ident("c")})}}
+            nlohmann::json{
+                {"type", "Compound"},
+                {"exprs", nlohmann::json::array({ident("a"), ident("b"), ident("c")})}
+            }
         );
     }
 
@@ -81,9 +89,11 @@ TEST_SUITE("2.2.2 {} 判别规则") {
             parse_json(U"{{}}") ==
             nlohmann::json{
                 {"type", "Compound"},
-                {"exprs", nlohmann::json::array(
-                              {{{"type", "Compound"}, {"exprs", nlohmann::json::array()}}}
-                          )}}
+                {"exprs",
+                 nlohmann::json::array(
+                     {{{"type", "Compound"}, {"exprs", nlohmann::json::array()}}}
+                 )}
+            }
         );
     }
 
@@ -123,11 +133,13 @@ TEST_SUITE("2.2.2 字典展开项：按表达式本身是不是 ** 展开判定�
             parse_json(U"{k: v, **d2}") ==
             nlohmann::json{
                 {"type", "LiteralDict"},
-                {"items", nlohmann::json::array(
-                              {{{"key", ident("k")}, {"val", ident("v")}},
-                               {{"key", {{"type", "DoubleStar"}, {"operand", ident("d2")}}},
-                                {"val", nullptr}}}
-                          )}}
+                {"items",
+                 nlohmann::json::array(
+                     {{{"key", ident("k")}, {"val", ident("v")}},
+                      {{"key", {{"type", "DoubleStar"}, {"operand", ident("d2")}}},
+                       {"val", nullptr}}}
+                 )}
+            }
         );
     }
 
@@ -136,13 +148,15 @@ TEST_SUITE("2.2.2 字典展开项：按表达式本身是不是 ** 展开判定�
             parse_json(U"{**d1, k: v, **d2}") ==
             nlohmann::json{
                 {"type", "LiteralDict"},
-                {"items", nlohmann::json::array(
-                              {{{"key", {{"type", "DoubleStar"}, {"operand", ident("d1")}}},
-                                {"val", nullptr}},
-                               {{"key", ident("k")}, {"val", ident("v")}},
-                               {{"key", {{"type", "DoubleStar"}, {"operand", ident("d2")}}},
-                                {"val", nullptr}}}
-                          )}}
+                {"items",
+                 nlohmann::json::array(
+                     {{{"key", {{"type", "DoubleStar"}, {"operand", ident("d1")}}},
+                       {"val", nullptr}},
+                      {{"key", ident("k")}, {"val", ident("v")}},
+                      {{"key", {{"type", "DoubleStar"}, {"operand", ident("d2")}}},
+                       {"val", nullptr}}}
+                 )}
+            }
         );
     }
 
@@ -151,11 +165,13 @@ TEST_SUITE("2.2.2 字典展开项：按表达式本身是不是 ** 展开判定�
             parse_json(U"{k: v, **d2,}") ==
             nlohmann::json{
                 {"type", "LiteralDict"},
-                {"items", nlohmann::json::array(
-                              {{{"key", ident("k")}, {"val", ident("v")}},
-                               {{"key", {{"type", "DoubleStar"}, {"operand", ident("d2")}}},
-                                {"val", nullptr}}}
-                          )}}
+                {"items",
+                 nlohmann::json::array(
+                     {{{"key", ident("k")}, {"val", ident("v")}},
+                      {{"key", {{"type", "DoubleStar"}, {"operand", ident("d2")}}},
+                       {"val", nullptr}}}
+                 )}
+            }
         );
     }
 
@@ -196,13 +212,15 @@ TEST_SUITE("2.2.2 复合表达式内部也必须有合法分隔符") {
     TEST_CASE("first 和后续表达式之间只要有合法分隔符（换行/分号）就没问题") {
         CHECK(
             parse_json(U"{a\nb}") ==
-            nlohmann::json{{"type", "Compound"},
-                           {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}
+            nlohmann::json{
+                {"type", "Compound"}, {"exprs", nlohmann::json::array({ident("a"), ident("b")})}
+            }
         );
         CHECK(
             parse_json(U"{a; b}") ==
-            nlohmann::json{{"type", "Compound"},
-                           {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}
+            nlohmann::json{
+                {"type", "Compound"}, {"exprs", nlohmann::json::array({ident("a"), ident("b")})}
+            }
         );
     }
 }
@@ -219,12 +237,14 @@ TEST_SUITE("2.2.2 字典与复合表达式的其他边缘情况") {
             parse_json(U"{k: {a; b}}") ==
             nlohmann::json{
                 {"type", "LiteralDict"},
-                {"items", nlohmann::json::array(
-                              {{{"key", ident("k")},
-                                {"val",
-                                 {{"type", "Compound"},
-                                  {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}}}}
-                          )}}
+                {"items",
+                 nlohmann::json::array(
+                     {{{"key", ident("k")},
+                       {"val",
+                        {{"type", "Compound"},
+                         {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}}}}
+                 )}
+            }
         );
         CHECK(
             parse_json(U"{ {k: v}; x }") ==
@@ -236,7 +256,8 @@ TEST_SUITE("2.2.2 字典与复合表达式的其他边缘情况") {
                        {"items",
                         nlohmann::json::array({{{"key", ident("k")}, {"val", ident("v")}}})}},
                       ident("x")}
-                 )}}
+                 )}
+            }
         );
     }
 
@@ -253,8 +274,9 @@ TEST_SUITE("2.2.2 字典与复合表达式的其他边缘情况") {
         );
         CHECK(
             parse_json(U"{; a; b}") ==
-            nlohmann::json{{"type", "Compound"},
-                           {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}
+            nlohmann::json{
+                {"type", "Compound"}, {"exprs", nlohmann::json::array({ident("a"), ident("b")})}
+            }
         );
     }
 
@@ -279,10 +301,12 @@ TEST_SUITE("2.2.2 字典与复合表达式的其他边缘情况") {
             parse_json(U"{**\nd}") ==
             nlohmann::json{
                 {"type", "LiteralDict"},
-                {"items", nlohmann::json::array(
-                              {{{"key", {{"type", "DoubleStar"}, {"operand", ident("d")}}},
-                                {"val", nullptr}}}
-                          )}}
+                {"items",
+                 nlohmann::json::array(
+                     {{{"key", {{"type", "DoubleStar"}, {"operand", ident("d")}}},
+                       {"val", nullptr}}}
+                 )}
+            }
         );
     }
 }
@@ -299,11 +323,13 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
             nlohmann::json{
                 {"type", "Call"},
                 {"object", ident("f")},
-                {"args", nlohmann::json::array(
-                             {{{"type", "Compound"},
-                               {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}}
-                         )},
-                {"kwargs", nlohmann::json::array()}}
+                {"args",
+                 nlohmann::json::array(
+                     {{{"type", "Compound"},
+                       {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}}
+                 )},
+                {"kwargs", nlohmann::json::array()}
+            }
         );
     }
 
@@ -312,26 +338,30 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
             parse_json(U"[{a\nb}]") ==
             nlohmann::json{
                 {"type", "LiteralList"},
-                {"items", nlohmann::json::array(
-                              {{{"type", "Compound"},
-                                {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}}
-                          )}}
+                {"items",
+                 nlohmann::json::array(
+                     {{{"type", "Compound"},
+                       {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}}
+                 )}
+            }
         );
     }
 
     TEST_CASE("圆括号分组里的复合表达式同理") {
         CHECK(
             parse_json(U"({a\nb})") ==
-            nlohmann::json{{"type", "Compound"},
-                           {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}
+            nlohmann::json{
+                {"type", "Compound"}, {"exprs", nlohmann::json::array({ident("a"), ident("b")})}
+            }
         );
     }
 
     TEST_CASE("前导 ';' 分支同样在独立语境里解析") {
         CHECK(
             parse_json(U"f({; a\nb})")["args"][0] ==
-            nlohmann::json{{"type", "Compound"},
-                           {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}
+            nlohmann::json{
+                {"type", "Compound"}, {"exprs", nlohmann::json::array({ident("a"), ident("b")})}
+            }
         );
     }
 
@@ -340,22 +370,27 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
             parse_json(U"f({a\n{b\nc}})")["args"][0] ==
             nlohmann::json{
                 {"type", "Compound"},
-                {"exprs", nlohmann::json::array(
-                              {ident("a"),
-                               {{"type", "Compound"},
-                                {"exprs", nlohmann::json::array({ident("b"), ident("c")})}}}
-                          )}}
+                {"exprs",
+                 nlohmann::json::array(
+                     {ident("a"),
+                      {{"type", "Compound"},
+                       {"exprs", nlohmann::json::array({ident("b"), ident("c")})}}}
+                 )}
+            }
         );
     }
 
     TEST_CASE("调用实参里的多行字典照常工作（字典跨行靠自身对换行的显式容忍，与括号续行无关）") {
         CHECK(
             parse_json(U"f({\nk: v,\nk2: v2,\n})")["args"][0] ==
-            nlohmann::json{{"type", "LiteralDict"},
-                           {"items", nlohmann::json::array(
-                                         {{{"key", ident("k")}, {"val", ident("v")}},
-                                          {{"key", ident("k2")}, {"val", ident("v2")}}}
-                                     )}}
+            nlohmann::json{
+                {"type", "LiteralDict"},
+                {"items",
+                 nlohmann::json::array(
+                     {{{"key", ident("k")}, {"val", ident("v")}},
+                      {{"key", ident("k2")}, {"val", ident("v2")}}}
+                 )}
+            }
         );
     }
 
@@ -364,7 +399,8 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
             parse_json(U"f({k\n: v})")["args"][0] ==
             nlohmann::json{
                 {"type", "LiteralDict"},
-                {"items", nlohmann::json::array({{{"key", ident("k")}, {"val", ident("v")}}})}}
+                {"items", nlohmann::json::array({{{"key", ident("k")}, {"val", ident("v")}}})}
+            }
         );
     }
 
@@ -381,12 +417,14 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
             parse_json(U"f({k: {a\nb}})")["args"][0] ==
             nlohmann::json{
                 {"type", "LiteralDict"},
-                {"items", nlohmann::json::array(
-                              {{{"key", ident("k")},
-                                {"val",
-                                 {{"type", "Compound"},
-                                  {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}}}}
-                          )}}
+                {"items",
+                 nlohmann::json::array(
+                     {{{"key", ident("k")},
+                       {"val",
+                        {{"type", "Compound"},
+                         {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}}}}
+                 )}
+            }
         );
     }
 
@@ -398,11 +436,13 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
     TEST_CASE("'}' 之后回到外层语境：括号内 '}' 后面的换行仍按括号续行规则合并") {
         CHECK(
             parse_json(U"f({a; b}\n.c)")["args"][0] ==
-            nlohmann::json{{"type", "Attr"},
-                           {"object",
-                            {{"type", "Compound"},
-                             {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}},
-                           {"attr", "c"}}
+            nlohmann::json{
+                {"type", "Attr"},
+                {"object",
+                 {{"type", "Compound"},
+                  {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}},
+                {"attr", "c"}
+            }
         );
     }
 

@@ -23,7 +23,8 @@ TEST_SUITE("2.2.5.1 if——基本形式") {
             nlohmann::json{
                 {"type", "If"},
                 {"clauses", nlohmann::json::array({{{"cond", ident("a")}, {"body", ident("b")}}})},
-                {"else_expr", nullptr}}
+                {"else_expr", nullptr}
+            }
         );
     }
 
@@ -33,32 +34,39 @@ TEST_SUITE("2.2.5.1 if——基本形式") {
             nlohmann::json{
                 {"type", "If"},
                 {"clauses", nlohmann::json::array({{{"cond", ident("a")}, {"body", ident("b")}}})},
-                {"else_expr", ident("c")}}
+                {"else_expr", ident("c")}
+            }
         );
     }
 
     TEST_CASE("多个 elif，无 else") {
         CHECK(
             parse_json(U"if (a) x elif (b) y elif (c) z") ==
-            nlohmann::json{{"type", "If"},
-                           {"clauses", nlohmann::json::array(
-                                           {{{"cond", ident("a")}, {"body", ident("x")}},
-                                            {{"cond", ident("b")}, {"body", ident("y")}},
-                                            {{"cond", ident("c")}, {"body", ident("z")}}}
-                                       )},
-                           {"else_expr", nullptr}}
+            nlohmann::json{
+                {"type", "If"},
+                {"clauses",
+                 nlohmann::json::array(
+                     {{{"cond", ident("a")}, {"body", ident("x")}},
+                      {{"cond", ident("b")}, {"body", ident("y")}},
+                      {{"cond", ident("c")}, {"body", ident("z")}}}
+                 )},
+                {"else_expr", nullptr}
+            }
         );
     }
 
     TEST_CASE("elif 加 else") {
         CHECK(
             parse_json(U"if (a) x elif (b) y else z") ==
-            nlohmann::json{{"type", "If"},
-                           {"clauses", nlohmann::json::array(
-                                           {{{"cond", ident("a")}, {"body", ident("x")}},
-                                            {{"cond", ident("b")}, {"body", ident("y")}}}
-                                       )},
-                           {"else_expr", ident("z")}}
+            nlohmann::json{
+                {"type", "If"},
+                {"clauses",
+                 nlohmann::json::array(
+                     {{{"cond", ident("a")}, {"body", ident("x")}},
+                      {{"cond", ident("b")}, {"body", ident("y")}}}
+                 )},
+                {"else_expr", ident("z")}
+            }
         );
     }
 
@@ -67,14 +75,16 @@ TEST_SUITE("2.2.5.1 if——基本形式") {
             parse_json(U"if (x == 1) y") ==
             nlohmann::json{
                 {"type", "If"},
-                {"clauses", nlohmann::json::array(
-                                {{{"cond",
-                                   {{"type", "Compare"},
-                                    {"operands", nlohmann::json::array({ident("x"), int_lit("1")})},
-                                    {"ops", nlohmann::json::array({"=="})}}},
-                                  {"body", ident("y")}}}
-                            )},
-                {"else_expr", nullptr}}
+                {"clauses",
+                 nlohmann::json::array(
+                     {{{"cond",
+                        {{"type", "Compare"},
+                         {"operands", nlohmann::json::array({ident("x"), int_lit("1")})},
+                         {"ops", nlohmann::json::array({"=="})}}},
+                       {"body", ident("y")}}}
+                 )},
+                {"else_expr", nullptr}
+            }
         );
     }
 
@@ -113,23 +123,26 @@ TEST_SUITE("2.2.5.1 if——cond 槽禁止裸的普通赋值") {
                         {{"type", "Assign"}, {"target", ident("x")}, {"value", int_lit("1")}}},
                        {"body", ident("y")}}}
                  )},
-                {"else_expr", nullptr}}
+                {"else_expr", nullptr}
+            }
         );
     }
 
     TEST_CASE("裸的复合赋值不受限制，可以直接写：if (x += 1) y") {
         CHECK(
-            parse_json(U"if (x += 1) y") ==
-            nlohmann::json{{"type", "If"},
-                           {"clauses", nlohmann::json::array(
-                                           {{{"cond",
-                                              {{"type", "CompoundAssign"},
-                                               {"target", ident("x")},
-                                               {"op", "+"},
-                                               {"value", int_lit("1")}}},
-                                             {"body", ident("y")}}}
-                                       )},
-                           {"else_expr", nullptr}}
+            parse_json(U"if (x += 1) y") == nlohmann::json{
+                                                {"type", "If"},
+                                                {"clauses",
+                                                 nlohmann::json::array(
+                                                     {{{"cond",
+                                                        {{"type", "CompoundAssign"},
+                                                         {"target", ident("x")},
+                                                         {"op", "+"},
+                                                         {"value", int_lit("1")}}},
+                                                       {"body", ident("y")}}}
+                                                 )},
+                                                {"else_expr", nullptr}
+                                            }
         );
     }
 

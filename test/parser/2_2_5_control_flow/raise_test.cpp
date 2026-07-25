@@ -9,8 +9,9 @@ TEST_SUITE("2.2.5.8 raise") {
     TEST_CASE("基本形式") {
         CHECK(
             parse_json(U"raise e") ==
-            nlohmann::json{{"type", "Raise"},
-                           {"value", {{"type", "Identifier"}, {"identifier", "e"}}}}
+            nlohmann::json{
+                {"type", "Raise"}, {"value", {{"type", "Identifier"}, {"identifier", "e"}}}
+            }
         );
     }
 
@@ -23,7 +24,8 @@ TEST_SUITE("2.2.5.8 raise") {
                  {{"type", "Call"},
                   {"object", {{"type", "Identifier"}, {"identifier", "Exception"}}},
                   {"args", nlohmann::json::array({{{"type", "LiteralStr"}, {"value", "msg"}}})},
-                  {"kwargs", nlohmann::json::array()}}}}
+                  {"kwargs", nlohmann::json::array()}}}
+            }
         );
     }
 

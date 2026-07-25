@@ -21,7 +21,8 @@ TEST_SUITE("SyntaxChecker 防御性断言（畸形 AST，正常解析永远构�
     TEST_CASE("AstNodeIf::clauses_ 为空") {
         std::vector<AstNodeIf::AstNodeCondAndExpr> clauses;
         AstNodeProgramPtr program{
-            wrap(std::make_unique<AstNodeIf>(Position{0, 0}, std::move(clauses), nullptr))};
+            wrap(std::make_unique<AstNodeIf>(Position{0, 0}, std::move(clauses), nullptr))
+        };
         check_throws_internal_error_with(*program, "too few elements");
     }
 
@@ -78,16 +79,22 @@ TEST_SUITE("SyntaxChecker 防御性断言（畸形 AST，正常解析永远构�
             int_lit() // 不该有值，正确的 Parser 输出这里永远是 nullptr
         );
         AstNodeProgramPtr program{
-            wrap(std::make_unique<AstNodeLiteralDict>(Position{0, 0}, std::move(items)))};
+            wrap(std::make_unique<AstNodeLiteralDict>(Position{0, 0}, std::move(items)))
+        };
         check_throws_internal_error_with(*program, "** dict-spread entry must not have a value");
     }
 
     TEST_CASE("AstNodeFunc/AstNodeClass：name_ 是空字符串（应该要么 nullopt 要么有内容）") {
         AstNodeProgramPtr func_program{wrap(
             std::make_unique<AstNodeFunc>(
-                Position{0, 0}, std::vector<AstNodePtr>{}, std::vector<Position>{},
-                std::optional<std::u32string>{U""}, std::vector<OneCapture>{},
-                AstNodeFunc::AllParams{}, nullptr, nullptr,
+                Position{0, 0},
+                std::vector<AstNodePtr>{},
+                std::vector<Position>{},
+                std::optional<std::u32string>{U""},
+                std::vector<OneCapture>{},
+                AstNodeFunc::AllParams{},
+                nullptr,
+                nullptr,
                 std::make_unique<AstNodeProgram>(Position{0, 0}, std::vector<AstNodePtr>{})
             )
         )};
@@ -95,9 +102,13 @@ TEST_SUITE("SyntaxChecker 防御性断言（畸形 AST，正常解析永远构�
 
         AstNodeProgramPtr class_program{wrap(
             std::make_unique<AstNodeClass>(
-                Position{0, 0}, std::vector<AstNodePtr>{}, std::vector<Position>{},
-                std::optional<std::u32string>{U""}, std::vector<AstNodePtr>{},
-                std::vector<OneCapture>{}, nullptr,
+                Position{0, 0},
+                std::vector<AstNodePtr>{},
+                std::vector<Position>{},
+                std::optional<std::u32string>{U""},
+                std::vector<AstNodePtr>{},
+                std::vector<OneCapture>{},
+                nullptr,
                 std::make_unique<AstNodeProgram>(Position{0, 0}, std::vector<AstNodePtr>{})
             )
         )};
@@ -109,8 +120,14 @@ TEST_SUITE("SyntaxChecker 防御性断言（畸形 AST，正常解析永远构�
         decorators.push_back(int_lit());
         AstNodeProgramPtr func_program{wrap(
             std::make_unique<AstNodeFunc>(
-                Position{0, 0}, std::move(decorators), std::vector<Position>{}, std::nullopt,
-                std::vector<OneCapture>{}, AstNodeFunc::AllParams{}, nullptr, nullptr,
+                Position{0, 0},
+                std::move(decorators),
+                std::vector<Position>{},
+                std::nullopt,
+                std::vector<OneCapture>{},
+                AstNodeFunc::AllParams{},
+                nullptr,
+                nullptr,
                 std::make_unique<AstNodeProgram>(Position{0, 0}, std::vector<AstNodePtr>{})
             )
         )};
@@ -122,8 +139,13 @@ TEST_SUITE("SyntaxChecker 防御性断言（畸形 AST，正常解析永远构�
         captures.push_back({OneCapture::CaptureType::Value, U"", nullptr});
         AstNodeProgramPtr program{wrap(
             std::make_unique<AstNodeClass>(
-                Position{0, 0}, std::vector<AstNodePtr>{}, std::vector<Position>{}, std::nullopt,
-                std::vector<AstNodePtr>{}, std::move(captures), nullptr,
+                Position{0, 0},
+                std::vector<AstNodePtr>{},
+                std::vector<Position>{},
+                std::nullopt,
+                std::vector<AstNodePtr>{},
+                std::move(captures),
+                nullptr,
                 std::make_unique<AstNodeProgram>(Position{0, 0}, std::vector<AstNodePtr>{})
             )
         )};
@@ -137,8 +159,14 @@ TEST_SUITE("SyntaxChecker 防御性断言（畸形 AST，正常解析永远构�
         params1.var_args_name_ = U"";
         AstNodeProgramPtr program1{wrap(
             std::make_unique<AstNodeFunc>(
-                Position{0, 0}, std::vector<AstNodePtr>{}, std::vector<Position>{}, std::nullopt,
-                std::vector<OneCapture>{}, std::move(params1), nullptr, nullptr,
+                Position{0, 0},
+                std::vector<AstNodePtr>{},
+                std::vector<Position>{},
+                std::nullopt,
+                std::vector<OneCapture>{},
+                std::move(params1),
+                nullptr,
+                nullptr,
                 std::make_unique<AstNodeProgram>(Position{0, 0}, std::vector<AstNodePtr>{})
             )
         )};
@@ -148,8 +176,14 @@ TEST_SUITE("SyntaxChecker 防御性断言（畸形 AST，正常解析永远构�
         params2.var_kwargs_name_ = U"";
         AstNodeProgramPtr program2{wrap(
             std::make_unique<AstNodeFunc>(
-                Position{0, 0}, std::vector<AstNodePtr>{}, std::vector<Position>{}, std::nullopt,
-                std::vector<OneCapture>{}, std::move(params2), nullptr, nullptr,
+                Position{0, 0},
+                std::vector<AstNodePtr>{},
+                std::vector<Position>{},
+                std::nullopt,
+                std::vector<OneCapture>{},
+                std::move(params2),
+                nullptr,
+                nullptr,
                 std::make_unique<AstNodeProgram>(Position{0, 0}, std::vector<AstNodePtr>{})
             )
         )};
@@ -159,8 +193,10 @@ TEST_SUITE("SyntaxChecker 防御性断言（畸形 AST，正常解析永远构�
     TEST_CASE("AstNodeIndex：args_ 为空（a[] 语法上不允许，Parser 已经保证，这里是防御性断言）") {
         AstNodeProgramPtr program{wrap(
             std::make_unique<AstNodeIndex>(
-                Position{0, 0}, std::make_unique<AstNodeIdentifier>(Position{0, 0}, U"a"),
-                std::vector<AstNodePtr>{}, Position{0, 0}
+                Position{0, 0},
+                std::make_unique<AstNodeIdentifier>(Position{0, 0}, U"a"),
+                std::vector<AstNodePtr>{},
+                Position{0, 0}
             )
         )};
         check_throws_internal_error_with(*program, "too few elements");

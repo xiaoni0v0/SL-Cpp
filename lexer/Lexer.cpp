@@ -67,8 +67,17 @@ Token Lexer::read_string(const char32_t quote) {
     // 工具：某些字符到对应转义字符的映射
     // a b f n r t v 0 \ ' "
     static const std::unordered_map<char32_t, char32_t> ESCAPE_CHAR_MAPPING{
-        {U'a', U'\a'}, {U'b', U'\b'}, {U'f', U'\f'},  {U'n', U'\n'},  {U'r', U'\r'}, {U't', U'\t'},
-        {U'v', U'\v'}, {U'0', U'\0'}, {U'\\', U'\\'}, {U'\'', U'\''}, {U'"', U'"'},
+        {U'a', U'\a'},
+        {U'b', U'\b'},
+        {U'f', U'\f'},
+        {U'n', U'\n'},
+        {U'r', U'\r'},
+        {U't', U'\t'},
+        {U'v', U'\v'},
+        {U'0', U'\0'},
+        {U'\\', U'\\'},
+        {U'\'', U'\''},
+        {U'"', U'"'},
     };
 
     const int start_row{row_}, start_col{col_};
@@ -92,7 +101,8 @@ Token Lexer::read_string(const char32_t quote) {
                 str_literal += it->second;
             } else {
                 error(
-                    std::format("unknown escape sequence '\\{}'", u32_to_utf8(esc)), esc_row,
+                    std::format("unknown escape sequence '\\{}'", u32_to_utf8(esc)),
+                    esc_row,
                     esc_col
                 );
             }
@@ -139,7 +149,9 @@ Token Lexer::read_number() {
     }
 
     return make_token(
-        is_float ? TokenType::LITERAL_FLOAT : TokenType::LITERAL_INT, start_row, start_col,
+        is_float ? TokenType::LITERAL_FLOAT : TokenType::LITERAL_INT,
+        start_row,
+        start_col,
         num_literal
     );
 }

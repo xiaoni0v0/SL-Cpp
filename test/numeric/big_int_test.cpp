@@ -197,9 +197,12 @@ TEST_SUITE("BigInt——floor_div / mod：向负无穷取整，语义与 Python 
     }
 
     TEST_CASE("恒等式 x == (x // y) * y + x % y 在正负交叉组合下都成立") {
-        for (const auto &[x, y] : {std::pair{d("17"), d("5")}, std::pair{d("-17"), d("5")},
-                                   std::pair{d("17"), d("-5")}, std::pair{d("-17"), d("-5")},
-                                   std::pair{d("123456789012345678901234567890"), d("7")}}) {
+        for (const auto &[x, y] :
+             {std::pair{d("17"), d("5")},
+              std::pair{d("-17"), d("5")},
+              std::pair{d("17"), d("-5")},
+              std::pair{d("-17"), d("-5")},
+              std::pair{d("123456789012345678901234567890"), d("7")}}) {
             const BigInt q{x.floor_div(y)};
             const BigInt r{x.mod(y)};
             CHECK((q * y + r) == x);

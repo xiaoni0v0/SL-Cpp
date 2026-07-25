@@ -37,29 +37,34 @@ TEST_SUITE("2.2.5.2 for——步进模式") {
                   {"target", ident("i")},
                   {"op", "+"},
                   {"value", int_lit("1")}}},
-                {"body", ident("body")}}
+                {"body", ident("body")}
+            }
         );
     }
 
     TEST_CASE("三槽全空：无限循环 for (;;)") {
         CHECK(
-            parse_json(U"for (;;) body") == nlohmann::json{{"type", "ForCond"},
-                                                           {"collect", false},
-                                                           {"init", nullptr},
-                                                           {"cond", nullptr},
-                                                           {"inc", nullptr},
-                                                           {"body", ident("body")}}
+            parse_json(U"for (;;) body") == nlohmann::json{
+                                                {"type", "ForCond"},
+                                                {"collect", false},
+                                                {"init", nullptr},
+                                                {"cond", nullptr},
+                                                {"inc", nullptr},
+                                                {"body", ident("body")}
+                                            }
         );
     }
 
     TEST_CASE("只有 cond：for (; cond ;) body") {
         CHECK(
-            parse_json(U"for (; c ;) body") == nlohmann::json{{"type", "ForCond"},
-                                                              {"collect", false},
-                                                              {"init", nullptr},
-                                                              {"cond", ident("c")},
-                                                              {"inc", nullptr},
-                                                              {"body", ident("body")}}
+            parse_json(U"for (; c ;) body") == nlohmann::json{
+                                                   {"type", "ForCond"},
+                                                   {"collect", false},
+                                                   {"init", nullptr},
+                                                   {"cond", ident("c")},
+                                                   {"inc", nullptr},
+                                                   {"body", ident("body")}
+                                               }
         );
     }
 
@@ -72,22 +77,25 @@ TEST_SUITE("2.2.5.2 for——步进模式") {
                 {"init", {{"type", "Assign"}, {"target", ident("i")}, {"value", int_lit("0")}}},
                 {"cond", nullptr},
                 {"inc", nullptr},
-                {"body", ident("body")}}
+                {"body", ident("body")}
+            }
         );
     }
 
     TEST_CASE("只有 inc：for (;; i += 1) body") {
         CHECK(
-            parse_json(U"for (;; i += 1) body") == nlohmann::json{{"type", "ForCond"},
-                                                                  {"collect", false},
-                                                                  {"init", nullptr},
-                                                                  {"cond", nullptr},
-                                                                  {"inc",
-                                                                   {{"type", "CompoundAssign"},
-                                                                    {"target", ident("i")},
-                                                                    {"op", "+"},
-                                                                    {"value", int_lit("1")}}},
-                                                                  {"body", ident("body")}}
+            parse_json(U"for (;; i += 1) body") == nlohmann::json{
+                                                       {"type", "ForCond"},
+                                                       {"collect", false},
+                                                       {"init", nullptr},
+                                                       {"cond", nullptr},
+                                                       {"inc",
+                                                        {{"type", "CompoundAssign"},
+                                                         {"target", ident("i")},
+                                                         {"op", "+"},
+                                                         {"value", int_lit("1")}}},
+                                                       {"body", ident("body")}
+                                                   }
         );
     }
 
@@ -107,7 +115,8 @@ TEST_SUITE("2.2.5.2 for——步进模式") {
                   {"target", ident("i")},
                   {"op", "+"},
                   {"value", int_lit("1")}}},
-                {"body", ident("body")}}
+                {"body", ident("body")}
+            }
         );
     }
 
@@ -127,7 +136,8 @@ TEST_SUITE("2.2.5.2 for——步进模式") {
                   {"target", ident("i")},
                   {"op", "+"},
                   {"value", int_lit("1")}}},
-                {"body", ident("body")}}
+                {"body", ident("body")}
+            }
         );
     }
 
@@ -175,12 +185,14 @@ TEST_SUITE("2.2.5.2 for——步进模式") {
 
     TEST_CASE("换行 + 换行分隔的空槽必须紧跟着显式 ';' 才行：加上分号就恢复合法") {
         CHECK(
-            parse_json(U"for (a\nb\n;) body") == nlohmann::json{{"type", "ForCond"},
-                                                                {"collect", false},
-                                                                {"init", ident("a")},
-                                                                {"cond", ident("b")},
-                                                                {"inc", nullptr},
-                                                                {"body", ident("body")}}
+            parse_json(U"for (a\nb\n;) body") == nlohmann::json{
+                                                     {"type", "ForCond"},
+                                                     {"collect", false},
+                                                     {"init", ident("a")},
+                                                     {"cond", ident("b")},
+                                                     {"inc", nullptr},
+                                                     {"body", ident("body")}
+                                                 }
         );
     }
 
@@ -200,18 +212,21 @@ TEST_SUITE("2.2.5.2 for——步进模式") {
                   {"target", ident("i")},
                   {"op", "+"},
                   {"value", int_lit("1")}}},
-                {"body", ident("body")}}
+                {"body", ident("body")}
+            }
         );
     }
 
     TEST_CASE("换行分隔符之间允许多个空行，不只是恰好一个换行") {
         CHECK(
-            parse_json(U"for (a\n\n\nb\n\n\nc) body") == nlohmann::json{{"type", "ForCond"},
-                                                                        {"collect", false},
-                                                                        {"init", ident("a")},
-                                                                        {"cond", ident("b")},
-                                                                        {"inc", ident("c")},
-                                                                        {"body", ident("body")}}
+            parse_json(U"for (a\n\n\nb\n\n\nc) body") == nlohmann::json{
+                                                             {"type", "ForCond"},
+                                                             {"collect", false},
+                                                             {"init", ident("a")},
+                                                             {"cond", ident("b")},
+                                                             {"inc", ident("c")},
+                                                             {"body", ident("body")}
+                                                         }
         );
     }
 
@@ -233,46 +248,55 @@ TEST_SUITE("2.2.5.2 for——迭代模式") {
 
     TEST_CASE("基本迭代") {
         CHECK(
-            parse_json(U"for (x : xs) body") == nlohmann::json{{"type", "ForIter"},
-                                                               {"collect", false},
-                                                               {"target", ident("x")},
-                                                               {"iterable", ident("xs")},
-                                                               {"body", ident("body")}}
+            parse_json(U"for (x : xs) body") == nlohmann::json{
+                                                    {"type", "ForIter"},
+                                                    {"collect", false},
+                                                    {"target", ident("x")},
+                                                    {"iterable", ident("xs")},
+                                                    {"body", ident("body")}
+                                                }
         );
     }
 
     TEST_CASE("收集模式迭代") {
         CHECK(
-            parse_json(U"for $ (x : xs) body") == nlohmann::json{{"type", "ForIter"},
-                                                                 {"collect", true},
-                                                                 {"target", ident("x")},
-                                                                 {"iterable", ident("xs")},
-                                                                 {"body", ident("body")}}
+            parse_json(U"for $ (x : xs) body") == nlohmann::json{
+                                                      {"type", "ForIter"},
+                                                      {"collect", true},
+                                                      {"target", ident("x")},
+                                                      {"iterable", ident("xs")},
+                                                      {"body", ident("body")}
+                                                  }
         );
     }
 
     TEST_CASE("目标可以是解构元组/列表（语法层放行任意左值形状，交语义层校验）") {
         CHECK(
             parse_json(U"for ((a, b) : pairs) body") ==
-            nlohmann::json{{"type", "ForIter"},
-                           {"collect", false},
-                           {"target",
-                            {{"type", "LiteralTuple"},
-                             {"items", nlohmann::json::array({ident("a"), ident("b")})}}},
-                           {"iterable", ident("pairs")},
-                           {"body", ident("body")}}
+            nlohmann::json{
+                {"type", "ForIter"},
+                {"collect", false},
+                {"target",
+                 {{"type", "LiteralTuple"},
+                  {"items", nlohmann::json::array({ident("a"), ident("b")})}}},
+                {"iterable", ident("pairs")},
+                {"body", ident("body")}
+            }
         );
         CHECK(
             parse_json(U"for ([a, *b] : xs) body") ==
-            nlohmann::json{{"type", "ForIter"},
-                           {"collect", false},
-                           {"target",
-                            {{"type", "LiteralList"},
-                             {"items", nlohmann::json::array(
-                                           {ident("a"), {{"type", "Star"}, {"operand", ident("b")}}}
-                                       )}}},
-                           {"iterable", ident("xs")},
-                           {"body", ident("body")}}
+            nlohmann::json{
+                {"type", "ForIter"},
+                {"collect", false},
+                {"target",
+                 {{"type", "LiteralList"},
+                  {"items",
+                   nlohmann::json::array(
+                       {ident("a"), {{"type", "Star"}, {"operand", ident("b")}}}
+                   )}}},
+                {"iterable", ident("xs")},
+                {"body", ident("body")}
+            }
         );
     }
 
@@ -294,16 +318,18 @@ TEST_SUITE("2.2.5.2 for——cond 槽禁止裸的普通赋值（init/inc 不受�
 
     TEST_CASE("中间 cond 槽裸复合赋值不受限") {
         CHECK(
-            parse_json(U"for (; x += 1;) body") == nlohmann::json{{"type", "ForCond"},
-                                                                  {"collect", false},
-                                                                  {"init", nullptr},
-                                                                  {"cond",
-                                                                   {{"type", "CompoundAssign"},
-                                                                    {"target", ident("x")},
-                                                                    {"op", "+"},
-                                                                    {"value", int_lit("1")}}},
-                                                                  {"inc", nullptr},
-                                                                  {"body", ident("body")}}
+            parse_json(U"for (; x += 1;) body") == nlohmann::json{
+                                                       {"type", "ForCond"},
+                                                       {"collect", false},
+                                                       {"init", nullptr},
+                                                       {"cond",
+                                                        {{"type", "CompoundAssign"},
+                                                         {"target", ident("x")},
+                                                         {"op", "+"},
+                                                         {"value", int_lit("1")}}},
+                                                       {"inc", nullptr},
+                                                       {"body", ident("body")}
+                                                   }
         );
     }
 
@@ -316,7 +342,8 @@ TEST_SUITE("2.2.5.2 for——cond 槽禁止裸的普通赋值（init/inc 不受�
                 {"init", nullptr},
                 {"cond", {{"type", "Assign"}, {"target", ident("x")}, {"value", int_lit("1")}}},
                 {"inc", nullptr},
-                {"body", ident("body")}}
+                {"body", ident("body")}
+            }
         );
     }
 

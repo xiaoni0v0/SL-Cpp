@@ -39,14 +39,17 @@ struct AstNodeCall : AstNode {
         auto kwargs = json::array();
         for (const auto &kw : keyword_args_)
             kwargs.push_back(
-                {{"key", kw.kind_ == OneKwArg::Kind::Keyword ? json(u32_to_utf8(kw.keyword_))
-                                                             : json(nullptr)},
+                {{"key",
+                  kw.kind_ == OneKwArg::Kind::Keyword ? json(u32_to_utf8(kw.keyword_))
+                                                      : json(nullptr)},
                  {"value", kw.value_->to_json()}}
             );
-        return json{{"type", "Call"},
-                    {"object", object_->to_json()},
-                    {"args", std::move(args)},
-                    {"kwargs", std::move(kwargs)}};
+        return json{
+            {"type", "Call"},
+            {"object", object_->to_json()},
+            {"args", std::move(args)},
+            {"kwargs", std::move(kwargs)}
+        };
     }
 };
 

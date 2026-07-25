@@ -182,7 +182,8 @@ const Token &Parser::expect(const TokenType expected_type) {
     if (const Token &token{peek()}; token.type != expected_type) {
         error(
             std::format(
-                "expected {} but got {}", Lexer::get_displayname_by_tokentype(expected_type),
+                "expected {} but got {}",
+                Lexer::get_displayname_by_tokentype(expected_type),
                 Lexer::get_displayname_by_tokentype(token.type)
             )
         );
@@ -284,7 +285,9 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         if (op == TokenType::SIGN_DOT) {
             skip_newline();
             left = std::make_unique<AstNodeAttr>(
-                start_pos, std::move(left), expect(TokenType::IDENTIFIER).lexeme,
+                start_pos,
+                std::move(left),
+                expect(TokenType::IDENTIFIER).lexeme,
                 op_pos // 消耗标识符
             );
             continue;
@@ -306,7 +309,10 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         // 才是运算符自己的位置）
         skip_newline();
         left = std::make_unique<AstNodeOpBinary>(
-            start_pos, *token_type_to_binary_op_type(op), std::move(left), parse_expr_pratt(rbp),
+            start_pos,
+            *token_type_to_binary_op_type(op),
+            std::move(left),
+            parse_expr_pratt(rbp),
             op_pos
         );
     }
@@ -527,7 +533,10 @@ AstNodePtr Parser::parse_expr_as_cond() {
         const auto &[op, op_row, op_col, lexeme]{advance()};
         skip_newline();
         left = std::make_unique<AstNodeCompoundAssign>(
-            start_pos, std::move(left), *compound_op, parse_expr_pratt(infix_bp(op).second),
+            start_pos,
+            std::move(left),
+            *compound_op,
+            parse_expr_pratt(infix_bp(op).second),
             Position{op_row, op_col}
         );
     }
@@ -541,8 +550,9 @@ AstNodePtr Parser::parse_paren_or_tuple() {
     expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
 
     std::vector<AstNodePtr> items;
-    const bool has_seen_comma{
-        finish_comma_batch(TokenType::SIGN_RPAREN, [&] { items.push_back(parse_expr()); })};
+    const bool has_seen_comma{finish_comma_batch(TokenType::SIGN_RPAREN, [&] {
+        items.push_back(parse_expr());
+    })};
 
     if (!check(TokenType::SIGN_RPAREN)) {
         error(
@@ -769,10 +779,12 @@ AstNodePtr Parser::parse_return() {
     expect(TokenType::KW_RETURN); // 消耗 'return'
     // 若紧跟终止符则为裸 return（值为 None）
     // 语句终止符 NEWLINE, ';', EOF, '}' + 括号语境的闭合 / 分隔符 ')', ']', ','
-    const bool bare{check(TokenType::NEWLINE) || check(TokenType::SIGN_SEMICOLON) ||
-                    check(TokenType::END_OF_FILE) || check(TokenType::SIGN_RBRACE) ||
-                    check(TokenType::SIGN_RPAREN) || check(TokenType::SIGN_RBRACKET) ||
-                    check(TokenType::SIGN_COMMA)};
+    const bool bare{
+        check(TokenType::NEWLINE) || check(TokenType::SIGN_SEMICOLON) ||
+        check(TokenType::END_OF_FILE) || check(TokenType::SIGN_RBRACE) ||
+        check(TokenType::SIGN_RPAREN) || check(TokenType::SIGN_RBRACKET) ||
+        check(TokenType::SIGN_COMMA)
+    };
     return std::make_unique<AstNodeReturn>(start_pos, bare ? nullptr : parse_expr());
 }
 
@@ -881,8 +893,14 @@ AstNodePtr Parser::parse_func(
     expect(TokenType::SIGN_RBRACE), paren_depth_ = outer_paren_depth; // 消耗 '}'
 
     return std::make_unique<AstNodeFunc>(
-        start_pos, std::move(decorators), std::move(decorator_positions), std::move(name),
-        std::move(captures), std::move(params), std::move(return_type), std::move(doc),
+        start_pos,
+        std::move(decorators),
+        std::move(decorator_positions),
+        std::move(name),
+        std::move(captures),
+        std::move(params),
+        std::move(return_type),
+        std::move(doc),
         std::make_unique<AstNodeProgram>(body_pos, std::move(body))
     );
 }
@@ -937,8 +955,13 @@ AstNodePtr Parser::parse_class(
     expect(TokenType::SIGN_RBRACE), paren_depth_ = outer_paren_depth; // 消耗 '}'
 
     return std::make_unique<AstNodeClass>(
-        start_pos, std::move(decorators), std::move(decorator_positions), std::move(name),
-        std::move(bases), std::move(captures), std::move(doc),
+        start_pos,
+        std::move(decorators),
+        std::move(decorator_positions),
+        std::move(name),
+        std::move(bases),
+        std::move(captures),
+        std::move(doc),
         std::make_unique<AstNodeProgram>(body_pos, std::move(body))
     );
 }
@@ -1200,13 +1223,18 @@ Parser::Parser(std::vector<Token> tokens, std::string file_path)
 
     // 2. 最后必须是 END_OF_FILE
     if (tokens_.back().type != TokenType::END_OF_FILE) {
-        throw SyntaxError{file_path_, tokens_.back().row, tokens_.back().col,
-                          "Bad tokens: missing END_OF_FILE token at the end"};
+        throw SyntaxError{
+            file_path_,
+            tokens_.back().row,
+            tokens_.back().col,
+            "Bad tokens: missing END_OF_FILE token at the end"
+        };
     }
 
     // 3. 前边不能有 END_OF_FILE
     if (const auto it{std::find_if(
-            tokens_.begin(), tokens_.end() - 1,
+            tokens_.begin(),
+            tokens_.end() - 1,
             [](const Token &t) -> bool { return t.type == TokenType::END_OF_FILE; }
         )};
         it != tokens_.end() - 1) {

@@ -288,7 +288,8 @@ AstNodePtr StaticEvaler::fold_for_cond(AstNodeForCond &node) {
             ? static_cast<AstNodePtr>(
                   std::make_unique<AstNodeLiteralList>(node.pos_, std::vector<AstNodePtr>{})
               )
-            : static_cast<AstNodePtr>(std::make_unique<AstNodeLiteralInt>(node.pos_, U"0"))};
+            : static_cast<AstNodePtr>(std::make_unique<AstNodeLiteralInt>(node.pos_, U"0"))
+    };
     if (!node.init_) return result;
 
     std::vector<AstNodePtr> exprs;
@@ -523,7 +524,8 @@ StaticEvaler::CmpResult StaticEvaler::literal_compare(const AstNode &a, const As
             return xa.size() < xb.size()   ? CmpResult::Less
                    : xa.size() > xb.size() ? CmpResult::Greater
                                            : CmpResult::Equal;
-        }};
+        }
+    };
     if (const auto *ta{dynamic_cast<const AstNodeLiteralTuple *>(&a)}) {
         const auto *tb{dynamic_cast<const AstNodeLiteralTuple *>(&b)};
         return tb ? lexicographic(ta->items_, tb->items_) : CmpResult::Unordered;

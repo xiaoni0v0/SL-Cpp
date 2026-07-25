@@ -35,9 +35,11 @@ struct AstNodeIf : AstNode {
             clauses.push_back(
                 {{"cond", clause.cond_->to_json()}, {"body", clause.body_->to_json()}}
             );
-        return json{{"type", "If"},
-                    {"clauses", std::move(clauses)},
-                    {"else_expr", else_expr_ ? else_expr_->to_json() : json(nullptr)}};
+        return json{
+            {"type", "If"},
+            {"clauses", std::move(clauses)},
+            {"else_expr", else_expr_ ? else_expr_->to_json() : json(nullptr)}
+        };
     }
 };
 
@@ -58,12 +60,14 @@ struct AstNodeForCond : AstNode {
           inc_{std::move(inc)}, body_{std::move(body)} {}
 
     [[nodiscard]] json to_json() const override {
-        return json{{"type", "ForCond"},
-                    {"collect", collect_},
-                    {"init", init_ ? init_->to_json() : json(nullptr)},
-                    {"cond", cond_ ? cond_->to_json() : json(nullptr)},
-                    {"inc", inc_ ? inc_->to_json() : json(nullptr)},
-                    {"body", body_->to_json()}};
+        return json{
+            {"type", "ForCond"},
+            {"collect", collect_},
+            {"init", init_ ? init_->to_json() : json(nullptr)},
+            {"cond", cond_ ? cond_->to_json() : json(nullptr)},
+            {"inc", inc_ ? inc_->to_json() : json(nullptr)},
+            {"body", body_->to_json()}
+        };
     }
 };
 
@@ -83,11 +87,13 @@ struct AstNodeForIter : AstNode {
           iterable_{std::move(iterable)}, body_{std::move(body)} {}
 
     [[nodiscard]] json to_json() const override {
-        return json{{"type", "ForIter"},
-                    {"collect", collect_},
-                    {"target", target_->to_json()},
-                    {"iterable", iterable_->to_json()},
-                    {"body", body_->to_json()}};
+        return json{
+            {"type", "ForIter"},
+            {"collect", collect_},
+            {"target", target_->to_json()},
+            {"iterable", iterable_->to_json()},
+            {"body", body_->to_json()}
+        };
     }
 };
 
@@ -147,10 +153,12 @@ struct AstNodeTry : AstNode {
                 {{"exceptions", std::move(exceptions)}, {"body", clause.body_->to_json()}}
             );
         }
-        return json{{"type", "Try"},
-                    {"try_expr", try_expr_->to_json()},
-                    {"except_clauses", std::move(except_clauses)},
-                    {"finally_expr", finally_expr_ ? finally_expr_->to_json() : json(nullptr)}};
+        return json{
+            {"type", "Try"},
+            {"try_expr", try_expr_->to_json()},
+            {"except_clauses", std::move(except_clauses)},
+            {"finally_expr", finally_expr_ ? finally_expr_->to_json() : json(nullptr)}
+        };
     }
 };
 

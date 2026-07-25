@@ -60,8 +60,11 @@ std::u32string utf8_to_u32(const std::string &utf8, const std::string &file_path
             const unsigned char c{*p++};
             // 必须是 10xxxxxx
             if ((c & 0xC0) != 0x80) {
-                throw EncodingError{file_path, static_cast<size_t>(p - base - 1),
-                                    "utf8_to_u32: invalid continuation byte"};
+                throw EncodingError{
+                    file_path,
+                    static_cast<size_t>(p - base - 1),
+                    "utf8_to_u32: invalid continuation byte"
+                };
             }
             cp = (cp << 6) | (c & 0x3F);
         }

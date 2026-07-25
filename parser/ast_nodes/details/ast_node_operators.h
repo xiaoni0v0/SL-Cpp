@@ -119,10 +119,12 @@ struct AstNodeOpBinary : AstNode {
     }
 
     [[nodiscard]] json to_json() const override {
-        return json{{"type", "OpBinary"},
-                    {"op", op_str(op_)},
-                    {"left", left_->to_json()},
-                    {"right", right_->to_json()}};
+        return json{
+            {"type", "OpBinary"},
+            {"op", op_str(op_)},
+            {"left", left_->to_json()},
+            {"right", right_->to_json()}
+        };
     }
 
     // AstNodeCompoundAssign 复用同一个 OpType，也复用这个字符串化
@@ -187,7 +189,8 @@ struct AstNodeCompare : AstNode {
         auto ops = json::array();
         for (const auto &op : ops_) ops.push_back(op_str(op));
         return json{
-            {"type", "Compare"}, {"operands", std::move(operands)}, {"ops", std::move(ops)}};
+            {"type", "Compare"}, {"operands", std::move(operands)}, {"ops", std::move(ops)}
+        };
     }
 
     [[nodiscard]] static constexpr const char *op_str(const OpType op) {
@@ -239,7 +242,8 @@ struct AstNodeAssign : AstNode {
 
     [[nodiscard]] json to_json() const override {
         return json{
-            {"type", "Assign"}, {"target", target_->to_json()}, {"value", value_->to_json()}};
+            {"type", "Assign"}, {"target", target_->to_json()}, {"value", value_->to_json()}
+        };
     }
 };
 
@@ -260,9 +264,11 @@ struct AstNodeCompoundAssign : AstNode {
           op_pos_{op_pos} {}
 
     [[nodiscard]] json to_json() const override {
-        return json{{"type", "CompoundAssign"},
-                    {"target", target_->to_json()},
-                    {"op", AstNodeOpBinary::op_str(op_)},
-                    {"value", value_->to_json()}};
+        return json{
+            {"type", "CompoundAssign"},
+            {"target", target_->to_json()},
+            {"op", AstNodeOpBinary::op_str(op_)},
+            {"value", value_->to_json()}
+        };
     }
 };

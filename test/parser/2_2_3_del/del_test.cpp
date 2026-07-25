@@ -12,19 +12,22 @@ TEST_SUITE("2.2.3 del") {
     TEST_CASE("del 标识符") {
         CHECK(
             parse_json(U"del x") ==
-            nlohmann::json{{"type", "Del"},
-                           {"target", {{"type", "Identifier"}, {"identifier", "x"}}}}
+            nlohmann::json{
+                {"type", "Del"}, {"target", {{"type", "Identifier"}, {"identifier", "x"}}}
+            }
         );
     }
 
     TEST_CASE("del 属性访问") {
         CHECK(
             parse_json(U"del x.attr") ==
-            nlohmann::json{{"type", "Del"},
-                           {"target",
-                            {{"type", "Attr"},
-                             {"object", {{"type", "Identifier"}, {"identifier", "x"}}},
-                             {"attr", "attr"}}}}
+            nlohmann::json{
+                {"type", "Del"},
+                {"target",
+                 {{"type", "Attr"},
+                  {"object", {{"type", "Identifier"}, {"identifier", "x"}}},
+                  {"attr", "attr"}}}
+            }
         );
     }
 
@@ -38,14 +41,18 @@ TEST_SUITE("2.2.3 del") {
                 {"target",
                  {{"type", "Index"},
                   {"object", {{"type", "Identifier"}, {"identifier", "x"}}},
-                  {"args", nlohmann::json::array(
-                               {nlohmann::json::parse(R"({"type":"LiteralInt","raw":"0"})")}
-                           )}}}}
+                  {"args",
+                   nlohmann::json::array(
+                       {nlohmann::json::parse(R"({"type":"LiteralInt","raw":"0"})")}
+                   )}}}
+            }
         );
         CHECK(
             parse_json(U"del 5") ==
-            nlohmann::json{{"type", "Del"},
-                           {"target", nlohmann::json::parse(R"({"type":"LiteralInt","raw":"5"})")}}
+            nlohmann::json{
+                {"type", "Del"},
+                {"target", nlohmann::json::parse(R"({"type":"LiteralInt","raw":"5"})")}
+            }
         );
     }
 

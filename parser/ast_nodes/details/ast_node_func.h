@@ -60,7 +60,8 @@ struct AstNodeFunc : AstNode {
         return json{
             {"identifier", u32_to_utf8(p.identifier_)},
             {"type_annotation", p.type_annotation_ ? p.type_annotation_->to_json() : json(nullptr)},
-            {"default_value", p.default_value_ ? p.default_value_->to_json() : json(nullptr)}};
+            {"default_value", p.default_value_ ? p.default_value_->to_json() : json(nullptr)}
+        };
     }
 
     [[nodiscard]] static json all_params_to_json(const AllParams &params) {
@@ -70,26 +71,29 @@ struct AstNodeFunc : AstNode {
         auto kw_only = json::array();
         for (const auto &p : params.kw_only_) kw_only.push_back(one_param_to_json(p));
 
-        return json{{"positional", std::move(positional)},
-                    {"var_args", params.var_args_name_ ? json(u32_to_utf8(*params.var_args_name_))
-                                                       : json(nullptr)},
-                    {"kw_only", std::move(kw_only)},
-                    {"var_kwargs", params.var_kwargs_name_
-                                       ? json(u32_to_utf8(*params.var_kwargs_name_))
-                                       : json(nullptr)}};
+        return json{
+            {"positional", std::move(positional)},
+            {"var_args",
+             params.var_args_name_ ? json(u32_to_utf8(*params.var_args_name_)) : json(nullptr)},
+            {"kw_only", std::move(kw_only)},
+            {"var_kwargs",
+             params.var_kwargs_name_ ? json(u32_to_utf8(*params.var_kwargs_name_)) : json(nullptr)}
+        };
     }
 
     [[nodiscard]] json to_json() const override {
         auto decorators = json::array();
         for (const auto &d : decorators_) decorators.push_back(d->to_json());
 
-        return json{{"type", "Func"},
-                    {"decorators", std::move(decorators)},
-                    {"name", name_ ? json(u32_to_utf8(*name_)) : json(nullptr)},
-                    {"captures", captures_to_json(captures_)},
-                    {"params", all_params_to_json(params_)},
-                    {"return_type", return_type_ ? return_type_->to_json() : json(nullptr)},
-                    {"doc", doc_ ? doc_->to_json() : json(nullptr)},
-                    {"body", body_->to_json()}};
+        return json{
+            {"type", "Func"},
+            {"decorators", std::move(decorators)},
+            {"name", name_ ? json(u32_to_utf8(*name_)) : json(nullptr)},
+            {"captures", captures_to_json(captures_)},
+            {"params", all_params_to_json(params_)},
+            {"return_type", return_type_ ? return_type_->to_json() : json(nullptr)},
+            {"doc", doc_ ? doc_->to_json() : json(nullptr)},
+            {"body", body_->to_json()}
+        };
     }
 };
