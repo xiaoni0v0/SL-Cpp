@@ -9,7 +9,8 @@ json captures_to_json(const std::vector<OneCapture> &captures, const bool includ
     auto result = json::array();
     for (const auto &c : captures)
         result.push_back(
-            {{"kind", c.capture_type_ == OneCapture::CaptureType::Value ? "Value" : "Reference"},
+            {{"capture_type",
+              c.capture_type_ == OneCapture::CaptureType::Value ? "Value" : "Reference"},
              {"identifier", u32_to_utf8(c.identifier_)},
              {"value_expr", c.value_expr_ ? c.value_expr_->to_json(include_pos) : json(nullptr)}}
         );
@@ -35,10 +36,10 @@ json all_params_to_json(const AstNodeFunc::AllParams &params, const bool include
 
     return json{
         {"positional", std::move(positional)},
-        {"var_args",
+        {"var_args_name",
          params.var_args_name_ ? json(u32_to_utf8(*params.var_args_name_)) : json(nullptr)},
         {"kw_only", std::move(kw_only)},
-        {"var_kwargs",
+        {"var_kwargs_name",
          params.var_kwargs_name_ ? json(u32_to_utf8(*params.var_kwargs_name_)) : json(nullptr)}
     };
 }
@@ -510,12 +511,12 @@ json AstNodeCompoundAssign::to_json_impl(const bool include_pos) const {
 }
 
 json AstNodeCall::to_json_impl(const bool include_pos) const {
-    auto args = json::array();
-    for (const auto &arg : positional_args_) args.push_back(arg->to_json(include_pos));
-    auto kwargs = json::array();
+    auto positional_args = json::array();
+    for (const auto &arg : positional_args_) positional_args.push_back(arg->to_json(include_pos));
+    auto keyword_args = json::array();
     for (const auto &kw : keyword_args_)
-        kwargs.push_back(
-            {{"key",
+        keyword_args.push_back(
+            {{"keyword",
               kw.kind_ == OneKwArg::Kind::Keyword ? json(u32_to_utf8(kw.keyword_)) : json(nullptr)},
              {"value", kw.value_->to_json(include_pos)}}
         );
@@ -525,14 +526,14 @@ json AstNodeCall::to_json_impl(const bool include_pos) const {
             {"type", "Call"},
             {"pos", pos_to_json(pos_)},
             {"object", object_->to_json(include_pos)},
-            {"args", args},
-            {"kwargs", kwargs}
+            {"positional_args", positional_args},
+            {"keyword_args", keyword_args}
         };
     return json{
         {"type", "Call"},
         {"object", object_->to_json(include_pos)},
-        {"args", std::move(args)},
-        {"kwargs", std::move(kwargs)}
+        {"positional_args", std::move(positional_args)},
+        {"keyword_args", std::move(keyword_args)}
     };
 }
 

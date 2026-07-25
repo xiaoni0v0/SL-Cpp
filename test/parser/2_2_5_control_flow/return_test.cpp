@@ -68,8 +68,8 @@ TEST_SUITE("2.2.5.6 return") {
             nlohmann::json{
                 {"type", "Call"},
                 {"object", {{"type", "Identifier"}, {"identifier", "f"}}},
-                {"args", nlohmann::json::array({{{"type", "Return"}, {"value", nullptr}}})},
-                {"kwargs", nlohmann::json::array()}
+                {"positional_args", nlohmann::json::array({{{"type", "Return"}, {"value", nullptr}}})},
+                {"keyword_args", nlohmann::json::array()}
             }
         );
     }

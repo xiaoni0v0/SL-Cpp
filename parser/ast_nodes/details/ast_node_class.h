@@ -34,5 +34,6 @@ struct AstNodeClass : AstNode {
           bases_{std::move(bases)}, captures_{std::move(captures)}, doc_{std::move(doc)},
           body_{std::move(body)} {}
 
+private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };

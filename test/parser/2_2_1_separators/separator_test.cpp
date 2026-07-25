@@ -63,8 +63,8 @@ TEST_SUITE("2.2.1 表达式分隔符——标准例子") {
                  nlohmann::json::array(
                      {{{"type", "Call"},
                        {"object", {{"type", "Attr"}, {"object", ident("x")}, {"attr", "m"}}},
-                       {"args", nlohmann::json::array()},
-                       {"kwargs", nlohmann::json::array()}}}
+                       {"positional_args", nlohmann::json::array()},
+                       {"keyword_args", nlohmann::json::array()}}}
                  )}
             }
         );
@@ -83,8 +83,8 @@ TEST_SUITE("2.2.1 表达式分隔符——标准例子") {
                  nlohmann::json::array(
                      {{{"type", "Call"},
                        {"object", {{"type", "Attr"}, {"object", ident("x")}, {"attr", "m"}}},
-                       {"args", nlohmann::json::array()},
-                       {"kwargs", nlohmann::json::array()}}}
+                       {"positional_args", nlohmann::json::array()},
+                       {"keyword_args", nlohmann::json::array()}}}
                  )}
             }
         );

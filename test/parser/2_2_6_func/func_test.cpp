@@ -35,9 +35,9 @@ nlohmann::json all_params(
 ) {
     return nlohmann::json{
         {"positional", positional},
-        {"var_args", var_args},
+        {"var_args_name", var_args},
         {"kw_only", kw_only},
-        {"var_kwargs", var_kwargs}
+        {"var_kwargs_name", var_kwargs}
     };
 }
 } // namespace
@@ -134,7 +134,7 @@ TEST_SUITE("2.2.6 func——形参") {
 
     TEST_CASE("*args 之后的普通形参进 kw_only，支持类型注解/默认值，形状跟 positional 一样") {
         const auto j = parse_json(U"func f(*args, x: int = 1, y) {}")["params"];
-        CHECK(j["var_args"] == "args");
+        CHECK(j["var_args_name"] == "args");
         CHECK(
             j["kw_only"] ==
             nlohmann::json::array(
@@ -199,7 +199,7 @@ TEST_SUITE("2.2.6 func——捕获列表") {
         CHECK(
             parse_json(U"func f[x]() {}")["captures"] ==
             nlohmann::json::array(
-                {nlohmann::json{{"kind", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}}}
+                {nlohmann::json{{"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}}}
             )
         );
     }
@@ -208,7 +208,7 @@ TEST_SUITE("2.2.6 func——捕获列表") {
         CHECK(
             parse_json(U"func f[x = 1 + 2]() {}")["captures"] ==
             nlohmann::json::array({nlohmann::json{
-                {"kind", "Value"},
+                {"capture_type", "Value"},
                 {"identifier", "x"},
                 {"value_expr",
                  {{"type", "OpBinary"},
@@ -223,7 +223,7 @@ TEST_SUITE("2.2.6 func——捕获列表") {
         CHECK(
             parse_json(U"func f[&y]() {}")["captures"] ==
             nlohmann::json::array({nlohmann::json{
-                {"kind", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
+                {"capture_type", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
             }})
         );
     }
@@ -232,12 +232,12 @@ TEST_SUITE("2.2.6 func——捕获列表") {
         CHECK(
             parse_json(U"func f[x, &y, z = 1]() {}")["captures"] ==
             nlohmann::json::array(
-                {nlohmann::json{{"kind", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}},
+                {nlohmann::json{{"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}},
                  nlohmann::json{
-                     {"kind", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
+                     {"capture_type", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
                  },
                  nlohmann::json{
-                     {"kind", "Value"}, {"identifier", "z"}, {"value_expr", int_lit("1")}
+                     {"capture_type", "Value"}, {"identifier", "z"}, {"value_expr", int_lit("1")}
                  }}
             )
         );

@@ -23,8 +23,9 @@ TEST_SUITE("2.2.5.8 raise") {
                 {"value",
                  {{"type", "Call"},
                   {"object", {{"type", "Identifier"}, {"identifier", "Exception"}}},
-                  {"args", nlohmann::json::array({{{"type", "LiteralStr"}, {"value", "msg"}}})},
-                  {"kwargs", nlohmann::json::array()}}}
+                  {"positional_args",
+                   nlohmann::json::array({{{"type", "LiteralStr"}, {"value", "msg"}}})},
+                  {"keyword_args", nlohmann::json::array()}}}
             }
         );
     }

@@ -25,9 +25,9 @@ TEST_SUITE("2.2.8 装饰器——紧邻 func/class") {
                 {"captures", nlohmann::json::array()},
                 {"params",
                  {{"positional", nlohmann::json::array()},
-                  {"var_args", nullptr},
+                  {"var_args_name", nullptr},
                   {"kw_only", nlohmann::json::array()},
-                  {"var_kwargs", nullptr}}},
+                  {"var_kwargs_name", nullptr}}},
                 {"return_type", nullptr},
                 {"doc", nullptr},
                 {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
@@ -63,12 +63,12 @@ TEST_SUITE("2.2.8 装饰器——紧邻 func/class") {
             nlohmann::json::array({nlohmann::json{
                 {"type", "Call"},
                 {"object", ident("dec")},
-                {"args",
+                {"positional_args",
                  nlohmann::json::array(
                      {nlohmann::json::parse(R"({"type":"LiteralInt","raw":"1"})"),
                       nlohmann::json::parse(R"({"type":"LiteralInt","raw":"2"})")}
                  )},
-                {"kwargs", nlohmann::json::array()}
+                {"keyword_args", nlohmann::json::array()}
             }})
         );
     }

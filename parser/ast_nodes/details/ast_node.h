@@ -30,6 +30,7 @@ struct AstNode {
         return to_json_impl(include_pos);
     }
 
+private:
     [[nodiscard]] virtual json to_json_impl(bool include_pos) const = 0;
 };
 

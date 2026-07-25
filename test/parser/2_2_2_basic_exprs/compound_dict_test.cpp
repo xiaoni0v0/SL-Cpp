@@ -323,12 +323,12 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
             nlohmann::json{
                 {"type", "Call"},
                 {"object", ident("f")},
-                {"args",
+                {"positional_args",
                  nlohmann::json::array(
                      {{{"type", "Compound"},
                        {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}}
                  )},
-                {"kwargs", nlohmann::json::array()}
+                {"keyword_args", nlohmann::json::array()}
             }
         );
     }
@@ -358,7 +358,7 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
 
     TEST_CASE("前导 ';' 分支同样在独立语境里解析") {
         CHECK(
-            parse_json(U"f({; a\nb})")["args"][0] ==
+            parse_json(U"f({; a\nb})")["positional_args"][0] ==
             nlohmann::json{
                 {"type", "Compound"}, {"exprs", nlohmann::json::array({ident("a"), ident("b")})}
             }
@@ -367,7 +367,7 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
 
     TEST_CASE("嵌套复合表达式：外层在调用实参里，内层还有自己的换行，逐层语境正确切换") {
         CHECK(
-            parse_json(U"f({a\n{b\nc}})")["args"][0] ==
+            parse_json(U"f({a\n{b\nc}})")["positional_args"][0] ==
             nlohmann::json{
                 {"type", "Compound"},
                 {"exprs",
@@ -382,7 +382,7 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
 
     TEST_CASE("调用实参里的多行字典照常工作（字典跨行靠自身对换行的显式容忍，与括号续行无关）") {
         CHECK(
-            parse_json(U"f({\nk: v,\nk2: v2,\n})")["args"][0] ==
+            parse_json(U"f({\nk: v,\nk2: v2,\n})")["positional_args"][0] ==
             nlohmann::json{
                 {"type", "LiteralDict"},
                 {"items",
@@ -396,7 +396,7 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
 
     TEST_CASE("调用实参里的字典：键与 ':' 之间的换行照常允许") {
         CHECK(
-            parse_json(U"f({k\n: v})")["args"][0] ==
+            parse_json(U"f({k\n: v})")["positional_args"][0] ==
             nlohmann::json{
                 {"type", "LiteralDict"},
                 {"items", nlohmann::json::array({{{"key", ident("k")}, {"val", ident("v")}}})}
@@ -414,7 +414,7 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
 
     TEST_CASE("字典值是复合表达式、整体又在调用实参里：逐层语境正确切换") {
         CHECK(
-            parse_json(U"f({k: {a\nb}})")["args"][0] ==
+            parse_json(U"f({k: {a\nb}})")["positional_args"][0] ==
             nlohmann::json{
                 {"type", "LiteralDict"},
                 {"items",
@@ -429,13 +429,13 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
     }
 
     TEST_CASE("函数体/类体同样是独立语句语境（整个 func/class 写在调用实参里）") {
-        CHECK(parse_json(U"f(func() {a\nb})")["args"][0]["body"]["exprs"].size() == 2);
-        CHECK(parse_json(U"f(class C {a\nb})")["args"][0]["body"]["exprs"].size() == 2);
+        CHECK(parse_json(U"f(func() {a\nb})")["positional_args"][0]["body"]["exprs"].size() == 2);
+        CHECK(parse_json(U"f(class C {a\nb})")["positional_args"][0]["body"]["exprs"].size() == 2);
     }
 
     TEST_CASE("'}' 之后回到外层语境：括号内 '}' 后面的换行仍按括号续行规则合并") {
         CHECK(
-            parse_json(U"f({a; b}\n.c)")["args"][0] ==
+            parse_json(U"f({a; b}\n.c)")["positional_args"][0] ==
             nlohmann::json{
                 {"type", "Attr"},
                 {"object",

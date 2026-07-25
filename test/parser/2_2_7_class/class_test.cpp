@@ -107,8 +107,8 @@ TEST_SUITE("2.2.7 class") {
             nlohmann::json::array({nlohmann::json{
                 {"type", "Call"},
                 {"object", ident("make_base")},
-                {"args", nlohmann::json::array()},
-                {"kwargs", nlohmann::json::array()}
+                {"positional_args", nlohmann::json::array()},
+                {"keyword_args", nlohmann::json::array()}
             }})
         );
     }
@@ -140,13 +140,13 @@ TEST_SUITE("2.2.7 class——捕获列表") {
         CHECK(
             parse_json(U"class C[x] {}")["captures"] ==
             nlohmann::json::array(
-                {nlohmann::json{{"kind", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}}}
+                {nlohmann::json{{"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}}}
             )
         );
         CHECK(
             parse_json(U"class C[x = 1 + 2] {}")["captures"] ==
             nlohmann::json::array({nlohmann::json{
-                {"kind", "Value"},
+                {"capture_type", "Value"},
                 {"identifier", "x"},
                 {"value_expr",
                  {{"type", "OpBinary"},
@@ -158,18 +158,18 @@ TEST_SUITE("2.2.7 class——捕获列表") {
         CHECK(
             parse_json(U"class C[&y] {}")["captures"] ==
             nlohmann::json::array({nlohmann::json{
-                {"kind", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
+                {"capture_type", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
             }})
         );
         CHECK(
             parse_json(U"class C[x, &y, z = 1] {}")["captures"] ==
             nlohmann::json::array(
-                {nlohmann::json{{"kind", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}},
+                {nlohmann::json{{"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}},
                  nlohmann::json{
-                     {"kind", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
+                     {"capture_type", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
                  },
                  nlohmann::json{
-                     {"kind", "Value"}, {"identifier", "z"}, {"value_expr", int_lit("1")}
+                     {"capture_type", "Value"}, {"identifier", "z"}, {"value_expr", int_lit("1")}
                  }}
             )
         );
@@ -182,7 +182,7 @@ TEST_SUITE("2.2.7 class——捕获列表") {
         CHECK(
             j["captures"] ==
             nlohmann::json::array(
-                {nlohmann::json{{"kind", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}}}
+                {nlohmann::json{{"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}}}
             )
         );
     }
@@ -191,7 +191,7 @@ TEST_SUITE("2.2.7 class——捕获列表") {
         CHECK(
             parse_json(U"class [x] {}")["captures"] ==
             nlohmann::json::array(
-                {nlohmann::json{{"kind", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}}}
+                {nlohmann::json{{"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}}}
             )
         );
     }
@@ -220,8 +220,8 @@ TEST_SUITE("2.2.7 class——匿名类 + 基类 + 捕获 + 文档字符串全部
                 {"bases", nlohmann::json::array({ident("Base1"), ident("Base2")})},
                 {"captures",
                  nlohmann::json::array(
-                     {{{"kind", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}},
-                      {{"kind", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}}}
+                     {{{"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}},
+                      {{"capture_type", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}}}
                  )},
                 {"doc", {{"type", "LiteralStr"}, {"value", "doc"}}},
                 {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
@@ -239,7 +239,7 @@ TEST_SUITE("2.2.7 class——匿名类 + 基类 + 捕获 + 文档字符串全部
                 {"bases", nlohmann::json::array()},
                 {"captures",
                  nlohmann::json::array(
-                     {{{"kind", "Value"},
+                     {{{"capture_type", "Value"},
                        {"identifier", "a"},
                        {"value_expr",
                         {{"type", "OpBinary"},

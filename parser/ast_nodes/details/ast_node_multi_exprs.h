@@ -13,6 +13,7 @@ struct AstNodeProgram : AstNode {
     explicit AstNodeProgram(const Position pos, std::vector<AstNodePtr> exprs)
         : AstNode{pos}, exprs_{std::move(exprs)} {}
 
+private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
@@ -25,5 +26,6 @@ struct AstNodeCompound : AstNode {
     explicit AstNodeCompound(const Position pos, std::vector<AstNodePtr> exprs)
         : AstNode{pos}, exprs_{std::move(exprs)} {}
 
+private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };

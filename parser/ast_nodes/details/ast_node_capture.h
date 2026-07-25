@@ -14,6 +14,5 @@ struct OneCapture {
     enum class CaptureType { Value, Reference } capture_type_;
 
     std::u32string identifier_;
-    AstNodePtr value_expr_; // 仅 CaptureType::Value 且显式写了 "= expr"
-                            // 时非空；裸标识符或引用捕获均为 nullptr
+    AstNodePtr value_expr_; // 仅 CaptureType::Value 且显式写了 "= expr" 时非空
 };

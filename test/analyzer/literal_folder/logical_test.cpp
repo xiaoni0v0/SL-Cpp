@@ -42,8 +42,8 @@ TEST_SUITE("StaticEvaler 逻辑运算") {
             nlohmann::json{
                 {"type", "Call"},
                 {"object", {{"type", "Identifier"}, {"identifier", "f"}}},
-                {"args", nlohmann::json::array()},
-                {"kwargs", nlohmann::json::array()}
+                {"positional_args", nlohmann::json::array()},
+                {"keyword_args", nlohmann::json::array()}
             }
         );
         // 左边 False 为假，or 取右边（哪怕右边是没法预知结果的调用）
@@ -52,8 +52,8 @@ TEST_SUITE("StaticEvaler 逻辑运算") {
             nlohmann::json{
                 {"type", "Call"},
                 {"object", {{"type", "Identifier"}, {"identifier", "f"}}},
-                {"args", nlohmann::json::array()},
-                {"kwargs", nlohmann::json::array()}
+                {"positional_args", nlohmann::json::array()},
+                {"keyword_args", nlohmann::json::array()}
             }
         );
     }

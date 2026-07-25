@@ -32,6 +32,7 @@ struct AstNodeCall : AstNode {
         : AstNode{pos}, object_{std::move(object)}, positional_args_{std::move(positional_args)},
           keyword_args_{std::move(keyword_args)}, paren_pos_{paren_pos} {}
 
+private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
@@ -48,6 +49,7 @@ struct AstNodeIndex : AstNode {
         : AstNode{pos}, object_{std::move(object)}, args_{std::move(args)},
           bracket_pos_{bracket_pos} {}
 
+private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
@@ -62,5 +64,6 @@ struct AstNodeAttr : AstNode {
     )
         : AstNode{pos}, object_{std::move(object)}, attr_{std::move(attr)}, dot_pos_{dot_pos} {}
 
+private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };

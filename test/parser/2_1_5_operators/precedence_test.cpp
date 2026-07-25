@@ -324,8 +324,8 @@ TEST_SUITE("2.1.5 索引/调用/属性访问链") {
             parse_json(U"f()") == nlohmann::json{
                                       {"type", "Call"},
                                       {"object", {{"type", "Identifier"}, {"identifier", "f"}}},
-                                      {"args", nlohmann::json::array()},
-                                      {"kwargs", nlohmann::json::array()}
+                                      {"positional_args", nlohmann::json::array()},
+                                      {"keyword_args", nlohmann::json::array()}
                                   }
         );
         CHECK(
@@ -350,9 +350,9 @@ TEST_SUITE("2.1.5 索引/调用/属性访问链") {
             nlohmann::json{
                 {"type", "Call"},
                 {"object", {{"type", "Identifier"}, {"identifier", "f"}}},
-                {"args", nlohmann::json::array({int_lit("1"), int_lit("2")})},
-                {"kwargs",
-                 nlohmann::json::array({nlohmann::json{{"key", "x"}, {"value", int_lit("3")}}})}
+                {"positional_args", nlohmann::json::array({int_lit("1"), int_lit("2")})},
+                {"keyword_args",
+                 nlohmann::json::array({nlohmann::json{{"keyword", "x"}, {"value", int_lit("3")}}})}
             }
         );
     }
@@ -363,14 +363,14 @@ TEST_SUITE("2.1.5 索引/调用/属性访问链") {
             nlohmann::json{
                 {"type", "Call"},
                 {"object", {{"type", "Identifier"}, {"identifier", "f"}}},
-                {"args",
+                {"positional_args",
                  nlohmann::json::array(
                      {{{"type", "Star"},
                        {"operand", {{"type", "Identifier"}, {"identifier", "args"}}}}}
                  )},
-                {"kwargs",
+                {"keyword_args",
                  nlohmann::json::array(
-                     {{{"key", nullptr},
+                     {{{"keyword", nullptr},
                        {"value",
                         {{"type", "DoubleStar"},
                          {"operand", {{"type", "Identifier"}, {"identifier", "kwargs"}}}}}}}
@@ -459,8 +459,8 @@ TEST_SUITE("2.1.5 索引/调用/属性访问链") {
                       {"object", {{"type", "Identifier"}, {"identifier", "obj"}}},
                       {"attr", "attr"}}},
                     {"args", nlohmann::json::array({int_lit("0")})}}},
-                  {"args", nlohmann::json::array({int_lit("1"), int_lit("2")})},
-                  {"kwargs", nlohmann::json::array()}}}
+                  {"positional_args", nlohmann::json::array({int_lit("1"), int_lit("2")})},
+                  {"keyword_args", nlohmann::json::array()}}}
             }
         );
     }
