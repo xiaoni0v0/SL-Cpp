@@ -12,8 +12,8 @@
 
 // token 类型转换为一元运算符类型
 static std::optional<AstNodeOpUnary::OpType> token_type_to_unary_op_type(const TokenType t) {
+    // clang-format off
     switch (t) {
-        // clang-format off
     case TokenType::SIGN_PLUS:     return AstNodeOpUnary::OpType::Pos;
     case TokenType::SIGN_MINUS:    return AstNodeOpUnary::OpType::Neg;
     case TokenType::SIGN_TILDE:    return AstNodeOpUnary::OpType::BitNot;
@@ -28,8 +28,8 @@ static std::optional<AstNodeOpUnary::OpType> token_type_to_unary_op_type(const T
 
 // token 类型转换为二元运算符类型（不含比较运算符）
 static std::optional<AstNodeOpBinary::OpType> token_type_to_binary_op_type(const TokenType t) {
+    // clang-format off
     switch (t) {
-        // clang-format off
     case TokenType::SIGN_PLUS:        return AstNodeOpBinary::OpType::Add;
     case TokenType::SIGN_MINUS:       return AstNodeOpBinary::OpType::Sub;
     case TokenType::SIGN_STAR:        return AstNodeOpBinary::OpType::Mul;
@@ -77,35 +77,49 @@ static std::optional<AstNodeCompare::OpType> token_type_to_compare_op_type(const
 // {-1,-1} 表示不是中缀/后缀运算符
 static std::pair<int, int> infix_bp(const TokenType type) {
     switch (type) {
-        // clang-format off
-    case TokenType::SIGN_DOT:        return {170, 170};
+    case TokenType::SIGN_DOT:
+        return {170, 170};
     case TokenType::SIGN_LPAREN:
-    case TokenType::SIGN_LBRACKET:   return {170, -1}; // 函数调用、索引
+    case TokenType::SIGN_LBRACKET:
+        return {170, -1}; // 函数调用、索引
     case TokenType::SIGN_QUESTION:
-    case TokenType::SIGN_EXCLAIM:    return {160, -1}; // ? !
-    case TokenType::SIGN_DOUBLESTAR: return {150, 149}; // **（右结合）
+    case TokenType::SIGN_EXCLAIM:
+        return {160, -1}; // ? !
+    case TokenType::SIGN_DOUBLESTAR:
+        return {150, 149}; // **（右结合）
     case TokenType::SIGN_STAR:
     case TokenType::SIGN_SLASH:
     case TokenType::SIGN_DOUBLESLASH:
-    case TokenType::SIGN_PERCENT:    return {130, 131}; // * / // %
+    case TokenType::SIGN_PERCENT:
+        return {130, 131}; // * / // %
     case TokenType::SIGN_PLUS:
-    case TokenType::SIGN_MINUS:      return {120, 121}; // + -
-    case TokenType::SIGN_DOTDOT:     return {110, 111}; // ..
+    case TokenType::SIGN_MINUS:
+        return {120, 121}; // + -
+    case TokenType::SIGN_DOTDOT:
+        return {110, 111}; // ..
     case TokenType::SIGN_LSHIFT:
-    case TokenType::SIGN_RSHIFT:     return {100, 101}; // << >>
-    case TokenType::SIGN_AMPERSAND:  return {90, 91}; // &
-    case TokenType::SIGN_CARET:      return {80, 81}; // ^
-    case TokenType::SIGN_PIPE:       return {70, 71}; // |
+    case TokenType::SIGN_RSHIFT:
+        return {100, 101}; // << >>
+    case TokenType::SIGN_AMPERSAND:
+        return {90, 91}; // &
+    case TokenType::SIGN_CARET:
+        return {80, 81}; // ^
+    case TokenType::SIGN_PIPE:
+        return {70, 71}; // |
     // < <= > >= == !=（链式比较；rbp 未被使用，链内自行控制操作数的 min_bp）
     case TokenType::SIGN_LT:
     case TokenType::SIGN_LE:
     case TokenType::SIGN_GT:
     case TokenType::SIGN_GE:
     case TokenType::SIGN_EQ:
-    case TokenType::SIGN_NE:         return {60, 61};
-    case TokenType::KW_IS:           return {50, 51}; // is（自成一组的链式比较，不与上面 6 者混链）
-    case TokenType::KW_AND:          return {30, 31}; // and
-    case TokenType::KW_OR:           return {20, 21}; // or
+    case TokenType::SIGN_NE:
+        return {60, 61};
+    case TokenType::KW_IS:
+        return {50, 51}; // is（自成一组的链式比较，不与上面 6 者混链）
+    case TokenType::KW_AND:
+        return {30, 31}; // and
+    case TokenType::KW_OR:
+        return {20, 21}; // or
     // 赋值（右结合）
     case TokenType::SIGN_ASSIGN:
     case TokenType::SIGN_PLUS_ASSIGN:
@@ -119,8 +133,8 @@ static std::pair<int, int> infix_bp(const TokenType type) {
     case TokenType::SIGN_PIPE_ASSIGN:
     case TokenType::SIGN_CARET_ASSIGN:
     case TokenType::SIGN_LSHIFT_ASSIGN:
-    case TokenType::SIGN_RSHIFT_ASSIGN: return {10, 9};
-    // clang-format on
+    case TokenType::SIGN_RSHIFT_ASSIGN:
+        return {10, 9};
     default:
         return {-1, -1};
     }
@@ -128,8 +142,8 @@ static std::pair<int, int> infix_bp(const TokenType type) {
 
 // token 类型是否是复合赋值 op=，是则转换成对应的二元运算符，否则 nullopt
 static std::optional<AstNodeOpBinary::OpType> assign_compound_to_binary(const TokenType op) {
+    // clang-format off
     switch (op) {
-        // clang-format off
     case TokenType::SIGN_PLUS_ASSIGN:        return AstNodeOpBinary::OpType::Add;
     case TokenType::SIGN_MINUS_ASSIGN:       return AstNodeOpBinary::OpType::Sub;
     case TokenType::SIGN_STAR_ASSIGN:        return AstNodeOpBinary::OpType::Mul;
