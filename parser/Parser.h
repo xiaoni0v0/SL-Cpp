@@ -35,6 +35,7 @@ class Parser {
     void skip_terminator();
 
     [[noreturn]] void error(const std::string &msg) const;
+    [[noreturn]] void error_internal(const std::string &msg, Position pos = {-1, -1}) const;
 
     /**
      * 尽可能多地解析表达式，直到 EOF 或 '}'

@@ -1,5 +1,6 @@
 #include "Parser.h"
 
+#include "../builtins/exceptions/InternalError.h"
 #include "../builtins/exceptions/SyntaxError.h"
 #include "../lexer/Lexer.h"
 #include "../utils/string_utils.h"
@@ -220,6 +221,10 @@ void Parser::skip_terminator() {
 void Parser::error(const std::string &msg) const {
     const Token &token{peek()};
     throw SyntaxError{file_path_, token.row, token.col, msg};
+}
+
+void Parser::error_internal(const std::string &msg, const Position pos) const {
+    throw InternalError{file_path_, pos.row, pos.col, msg};
 }
 
 std::vector<AstNodePtr> Parser::parse_exprs() {
@@ -1232,16 +1237,14 @@ AstNodePtr Parser::finish_index(AstNodePtr obj, const Position start_pos) {
 Parser::Parser(std::vector<Token> tokens, std::string file_path)
     : tokens_{std::move(tokens)}, file_path_{std::move(file_path)} {
     // 1. 空的肯定不行
-    if (tokens_.empty()) throw SyntaxError{file_path_, "Bad tokens: empty token list"};
+    if (tokens_.empty()) error_internal("Bad tokens: empty token list");
 
     // 2. 最后必须是 END_OF_FILE
     if (tokens_.back().type != TokenType::END_OF_FILE) {
-        throw SyntaxError{
-            file_path_,
-            tokens_.back().row,
-            tokens_.back().col,
-            "Bad tokens: missing END_OF_FILE token at the end"
-        };
+        error_internal(
+            "Bad tokens: missing END_OF_FILE token at the end",
+            {tokens_.back().row, tokens_.back().col}
+        );
     }
 
     // 3. 前边不能有 END_OF_FILE
@@ -1251,7 +1254,7 @@ Parser::Parser(std::vector<Token> tokens, std::string file_path)
             [](const Token &t) -> bool { return t.type == TokenType::END_OF_FILE; }
         )};
         it != tokens_.end() - 1) {
-        throw SyntaxError{file_path_, it->row, it->col, "Bad tokens: unexpected END_OF_FILE"};
+        error_internal("Bad tokens: unexpected END_OF_FILE", {it->row, it->col});
     }
 }
 
