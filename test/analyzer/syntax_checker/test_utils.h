@@ -2,8 +2,9 @@
 
 // 测试专用工具：解析一份源码并跑一遍 SyntaxChecker。
 
+#include "../../../builtins/exceptions/InternalError.h"
 #include "../../../analyzer/syntax_checker/SyntaxChecker.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 #include "../../parser/test_utils.h"
 
 #include <doctest/doctest.h>
@@ -42,6 +43,20 @@ inline void check_throws_with(AstNodeProgram &program, const std::string &messag
         check_ast(program);
         FAIL("expected SyntaxError containing: " << message_substring);
     } catch (const SyntaxError &e) {
+        const std::string what{e.what()};
+        CHECK_MESSAGE(what.find(message_substring) != std::string::npos,
+                      "expected message to contain \"" << message_substring << "\", got: " << what);
+    }
+}
+
+// 配防御性断言用：手工搭的畸形 AST 违反了 Parser 自己的结构性保证，抛的是 InternalError（代表
+// 编译器有 bug），不是 SyntaxError（代表 SL 源码有问题）——这两者是平级的两个异常类型，不能用
+// 上面那个 check_throws_with 混着捕获。
+inline void check_throws_internal_error_with(AstNodeProgram &program, const std::string &message_substring) {
+    try {
+        check_ast(program);
+        FAIL("expected InternalError containing: " << message_substring);
+    } catch (const InternalError &e) {
         const std::string what{e.what()};
         CHECK_MESSAGE(what.find(message_substring) != std::string::npos,
                       "expected message to contain \"" << message_substring << "\", got: " << what);

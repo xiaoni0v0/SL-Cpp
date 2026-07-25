@@ -2453,6 +2453,32 @@ JSON 形状完全没变（`params`/`var_args`/`kw_only_params`/`var_kwargs` 这�
 5 处都补上了对应检查，`test/syntax_checker/defensive_test.cpp` 各加一个手工搭畸形 AST 的测试
 用例验证。`.ai/run_test.bat` 全绿：SyntaxChecker 49/109（新增 5 个 test case / 6 个 assertion）。
 
+## 新增 `InternalError`：跟 `SyntaxError` 区分"你的 SL 代码有问题" vs "编译器自己有 bug"
+
+用户指出一个设计问题：上面这些 `"Bad AstNode: ..."` 开头的防御性断言，触发条件是"AST 违反了
+Parser 自己的结构性保证"——正常情况下**永远**不会真的跑到，只有外部代码绕过 Parser 直接手工
+构造/篡改了一棵不合法的 AST 才会触发。但这些断言之前全都走 `error()`，跟其他真正的 SL 语义错误
+（查重、`break` 在循环外等）一样抛 `SyntaxError`。这不合适：`SyntaxError` 语义上代表"用户的 SL
+源码违反了语言语法"，而这些防御性断言代表的是"编译器实现本身有 bug"，是完全不同性质的问题，
+混在一起会让人误以为是自己代码写错了。
+
+新增 `analyzer/InternalError.h`：`InternalError` 类**不继承 `SLException`**——`SLException` 是
+SL 内建异常类（`SyntaxError`/`EncodingError`/`FileNotFoundError` 等，都在
+`builtins/classes/exceptions/`）的 C++ 载体，语义上专门对应"SL 代码运行时能被 `except` 捕获到的
+异常"；`InternalError` 发生在分析阶段，压根没有 SL 代码在运行，也不该被任何 `except` 捕获到，
+所以直接继承 `std::runtime_error`，跟 `SLException` 是平级的两条分支。
+
+`SyntaxChecker` 新增私有方法 `internal_error(msg, pos)`（跟 `error(msg, pos)` 平级），所有
+`"Bad AstNode: ..."` 开头的调用点（`require_not_null` 的两个非模板重载 + 两个模板、
+`check_not_null` 的两个重载、字典 `**`/val 检查、`Compare`/`Is` 的"mismatched count"检查）全部
+从 `error()` 改成 `internal_error()`，消息里去掉了"Bad AstNode: "前缀（异常类型本身已经通过
+"InternalError (this is a compiler bug, not a problem with your SL code): ..."这句话表达了
+这层意思，前缀显得多余）。测试这边：`test/analyzer/syntax_checker/defensive_test.cpp` 里全部
+14 处 `check_throws_with` 调用（这个文件所有用例本质上都是"Bad AstNode"类）改成新加的
+`check_throws_internal_error_with`（`test_utils.h` 新增，捕获 `InternalError` 而不是
+`SyntaxError`）。`.ai/run_test.bat` 全绿，用例数不变（子串匹配的文本本身没变，只是去掉了前缀、
+换了要捕获的异常类型）。
+
 `Parser.cpp` 里 `finish_func_params`/`finish_call`/`finish_captures` 也按要求加了注释，说明各自
 在 Parser 层保证了什么、留给语义层检查什么——这样以后再有类似"到底该 Parser 查还是 SyntaxChecker
 查"的疑问，直接看这几个函数的注释就有答案，不用重新推一遍。

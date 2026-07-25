@@ -16,23 +16,26 @@ class SyntaxChecker {
         bool can_double_star{false};
     } ctx_;
 
-    // 报错
+    // 报错：SyntaxError
     [[noreturn]] void error(const std::string &msg, Position pos) const;
-    // 节点不能是 nullptr
+    // 报错：InternalError
+    [[noreturn]] void error_internal(const std::string &msg, Position pos) const;
+
+    // 节点不能是 nullptr（Parser 保证，触发即 InternalError）
     void require_not_null(const AstNodePtr &node, Position pos) const;
-    // 名字不能是 ""
+    // 名字不能是 ""（Parser 保证，触发即 InternalError）
     void require_not_null(const std::u32string &name, Position pos) const;
 
-    // vector 元素个数不能少于 min_size
+    // vector 元素个数不能少于 min_size（Parser 保证，触发即 InternalError）
     template <typename T>
     void require_not_null(const std::vector<T> &vec, const size_t min_size, const Position pos) const {
-        if (vec.size() < min_size) error("Bad AstNode: too few elements", pos);
+        if (vec.size() < min_size) error_internal("too few elements", pos);
     }
 
-    // 两个 vector 长度必须相等
+    // 两个 vector 长度必须相等（Parser 保证，触发即 InternalError）
     template <typename T, typename U>
     void require_same_size(const std::vector<T> &a, const std::vector<U> &b, const Position pos) const {
-        if (a.size() != b.size()) error("Bad AstNode: mismatched array sizes", pos);
+        if (a.size() != b.size()) error_internal("mismatched array sizes", pos);
     }
 
     // 检查节点，dispatch

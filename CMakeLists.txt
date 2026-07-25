@@ -59,12 +59,11 @@ add_executable(SL main.cpp
         lexer/x_reservedword.h
 
         # builtins
-        builtins/object/SlObject.cpp
-        builtins/object/SlObject.h
-        builtins/classes/exceptions/SLException.h
-        builtins/classes/exceptions/SyntaxError.h
-        builtins/classes/exceptions/EncodingError.h
-        builtins/classes/exceptions/FileNotFoundError.h
+        builtins/exceptions/InternalError.h
+        builtins/exceptions/SLException.h
+        builtins/exceptions/SyntaxError.h
+        builtins/exceptions/EncodingError.h
+        builtins/exceptions/FileNotFoundError.h
 
         # Parser
         parser/Parser.cpp
@@ -290,6 +289,7 @@ add_executable(SL_Cpp_Analyzer_Tests
         parser/ast_nodes/details/ast_node_operators.h
         parser/ast_nodes/details/ast_node_postfix.h
         parser/ast_nodes/details/ast_node_var.h
+        builtins/exceptions/InternalError.h
         analyzer/literal_folder/LiteralFolder.cpp
         analyzer/literal_folder/LiteralFolder.h
         analyzer/literal_folder/StaticEvaler.cpp

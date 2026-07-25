@@ -1,6 +1,7 @@
 #include "SyntaxChecker.h"
 
-#include "../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../builtins/exceptions/InternalError.h"
+#include "../../builtins/exceptions/SyntaxError.h"
 
 #include <cassert>
 #include <unordered_set>
@@ -9,12 +10,16 @@ void SyntaxChecker::error(const std::string &msg, const Position pos) const {
     throw SyntaxError{file_path_, pos.row, pos.col, msg};
 }
 
+void SyntaxChecker::error_internal(const std::string &msg, const Position pos) const {
+    throw InternalError{file_path_, pos.row, pos.col, msg};
+}
+
 void SyntaxChecker::require_not_null(const AstNodePtr &node, const Position pos) const {
-    if (!node) error("Bad AstNode: unexpected null node", pos);
+    if (!node) error_internal("unexpected null node", pos);
 }
 
 void SyntaxChecker::require_not_null(const std::u32string &name, const Position pos) const {
-    if (name.empty()) error("Bad AstNode: unexpected empty name", pos);
+    if (name.empty()) error_internal("unexpected empty name", pos);
 }
 
 void SyntaxChecker::check(const AstNode &node) {
@@ -278,7 +283,7 @@ void SyntaxChecker::check(const AstNodeLiteralDict &node) {
 
         // 是 **dict
         if (dynamic_cast<const AstNodeDoubleStar *>(k.get())) {
-            if (v) error("Bad AstNode: ** dict-spread entry must not have a value", pos);
+            if (v) error_internal("** dict-spread entry must not have a value", pos);
         }
         // 是 k: v
         else check_not_null(v, pos);
@@ -368,7 +373,7 @@ void SyntaxChecker::check(const AstNodeCompare &node) {
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    if (node.operands_.size() != node.ops_.size() + 1) error("Bad AstNode: mismatched count", pos);
+    if (node.operands_.size() != node.ops_.size() + 1) error_internal("mismatched count", pos);
     require_not_null(node.operands_, 2, pos);
     require_same_size(node.ops_, node.op_positions_, pos);
     for (const auto &operand : node.operands_) check_not_null(operand, pos);
@@ -384,7 +389,7 @@ void SyntaxChecker::check(const AstNodeIs &node) {
     ctx_.can_double_star = false;
 
     require_not_null(node.operands_, 2, node.pos_);
-    if (node.operands_.size() != node.op_positions_.size() + 1) error("Bad AstNode: mismatched count", pos);
+    if (node.operands_.size() != node.op_positions_.size() + 1) error_internal("mismatched count", pos);
     for (const auto &operand : node.operands_) check_not_null(operand, pos);
 
     ctx_ = saved;
@@ -496,12 +501,12 @@ void SyntaxChecker::check(const AstNodeGlobal &node) {
 }
 
 void SyntaxChecker::check_not_null(const AstNodePtr &node, const Position pos) {
-    if (!node) error("Bad AstNode: unexpected null node", pos);
+    if (!node) error_internal("unexpected null node", pos);
     check(*node);
 }
 
 void SyntaxChecker::check_not_null(const AstNodeProgramPtr &node, const Position pos) {
-    if (!node) error("Bad AstNode: unexpected null node", pos);
+    if (!node) error_internal("unexpected null node", pos);
     check(*node);
 }
 
