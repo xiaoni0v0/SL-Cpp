@@ -35,11 +35,11 @@ TEST_SUITE("StaticEvaler 比较") {
                 {"operands",
                  {nlohmann::json{
                       {"type", "LiteralDict"},
-                      {"items", {nlohmann::json{{"key", int_lit("1")}, {"val", int_lit("2")}}}}
+                      {"items", {nlohmann::json{{"key", int_lit("1")}, {"value", int_lit("2")}}}}
                   },
                   nlohmann::json{
                       {"type", "LiteralDict"},
-                      {"items", {nlohmann::json{{"key", int_lit("1")}, {"val", int_lit("2")}}}}
+                      {"items", {nlohmann::json{{"key", int_lit("1")}, {"value", int_lit("2")}}}}
                   }}},
                 {"ops", {"=="}}
             }

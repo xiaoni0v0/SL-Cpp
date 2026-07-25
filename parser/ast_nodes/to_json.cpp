@@ -376,7 +376,7 @@ json AstNodeLiteralDict::to_json_impl(const bool include_pos) const {
     for (const auto &[key, val] : items_)
         items.push_back(
             {{"key", key->to_json(include_pos)},
-             {"val", val ? val->to_json(include_pos) : json(nullptr)}}
+             {"value", val ? val->to_json(include_pos) : json(nullptr)}}
         );
 
     if (include_pos)

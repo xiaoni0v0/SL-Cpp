@@ -287,7 +287,7 @@ TEST_SUITE("2.1.4 字典") {
         CHECK(
             parse_json(U"{'a': 1}") == nlohmann::json::parse(
                                            R"({"type":"LiteralDict","items":[
-                  {"key":{"type":"LiteralStr","value":"a"},"val":{"type":"LiteralInt","raw":"1"}}
+                  {"key":{"type":"LiteralStr","value":"a"},"value":{"type":"LiteralInt","raw":"1"}}
               ]})"
                                        )
         );
@@ -297,8 +297,8 @@ TEST_SUITE("2.1.4 字典") {
         CHECK(
             parse_json(U"{'a': 1, 'b': 2}") == nlohmann::json::parse(
                                                    R"({"type":"LiteralDict","items":[
-                  {"key":{"type":"LiteralStr","value":"a"},"val":{"type":"LiteralInt","raw":"1"}},
-                  {"key":{"type":"LiteralStr","value":"b"},"val":{"type":"LiteralInt","raw":"2"}}
+                  {"key":{"type":"LiteralStr","value":"a"},"value":{"type":"LiteralInt","raw":"1"}},
+                  {"key":{"type":"LiteralStr","value":"b"},"value":{"type":"LiteralInt","raw":"2"}}
               ]})"
                                                )
         );
@@ -308,9 +308,9 @@ TEST_SUITE("2.1.4 字典") {
         CHECK(
             parse_json(U"{1: 'a', (1+1): 'b'}") == nlohmann::json::parse(
                                                        R"({"type":"LiteralDict","items":[
-                  {"key":{"type":"LiteralInt","raw":"1"},"val":{"type":"LiteralStr","value":"a"}},
+                  {"key":{"type":"LiteralInt","raw":"1"},"value":{"type":"LiteralStr","value":"a"}},
                   {"key":{"type":"OpBinary","op":"+","left":{"type":"LiteralInt","raw":"1"},
-                          "right":{"type":"LiteralInt","raw":"1"}},"val":{"type":"LiteralStr","value":"b"}}
+                          "right":{"type":"LiteralInt","raw":"1"}},"value":{"type":"LiteralStr","value":"b"}}
               ]})"
                                                    )
         );
@@ -320,7 +320,7 @@ TEST_SUITE("2.1.4 字典") {
         CHECK(
             parse_json(U"{'a': 1,}") == nlohmann::json::parse(
                                             R"({"type":"LiteralDict","items":[
-                  {"key":{"type":"LiteralStr","value":"a"},"val":{"type":"LiteralInt","raw":"1"}}
+                  {"key":{"type":"LiteralStr","value":"a"},"value":{"type":"LiteralInt","raw":"1"}}
               ]})"
                                         )
         );
@@ -330,8 +330,8 @@ TEST_SUITE("2.1.4 字典") {
         CHECK(
             parse_json(U"{'a': {'b': 1}}") == nlohmann::json::parse(
                                                   R"({"type":"LiteralDict","items":[
-                  {"key":{"type":"LiteralStr","value":"a"},"val":{"type":"LiteralDict","items":[
-                      {"key":{"type":"LiteralStr","value":"b"},"val":{"type":"LiteralInt","raw":"1"}}
+                  {"key":{"type":"LiteralStr","value":"a"},"value":{"type":"LiteralDict","items":[
+                      {"key":{"type":"LiteralStr","value":"b"},"value":{"type":"LiteralInt","raw":"1"}}
                   ]}}
               ]})"
                                               )

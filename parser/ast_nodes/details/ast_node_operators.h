@@ -17,7 +17,7 @@ struct AstNodeStar : AstNode {
     explicit AstNodeStar(const Position pos, AstNodePtr operand)
         : AstNode{pos}, operand_{std::move(operand)} {}
 
-private:
+  private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
@@ -28,7 +28,7 @@ struct AstNodeDoubleStar : AstNode {
     explicit AstNodeDoubleStar(const Position pos, AstNodePtr operand)
         : AstNode{pos}, operand_{std::move(operand)} {}
 
-private:
+  private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
@@ -56,7 +56,7 @@ struct AstNodeOpUnary : AstNode {
     )
         : AstNode{pos}, op_{op}, operand_{std::move(operand)}, op_pos_{op_pos} {}
 
-private:
+  private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
@@ -96,7 +96,7 @@ struct AstNodeOpBinary : AstNode {
         : AstNode{pos}, op_{op}, left_{std::move(left)}, right_{std::move(right)}, op_pos_{op_pos} {
     }
 
-private:
+  private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
@@ -117,7 +117,7 @@ struct AstNodeCompare : AstNode {
         : AstNode{pos}, ops_{std::move(ops)}, operands_{std::move(operands)},
           op_positions_{std::move(op_positions)} {}
 
-private:
+  private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
@@ -133,7 +133,7 @@ struct AstNodeIs : AstNode {
     )
         : AstNode{pos}, operands_{std::move(operands)}, op_positions_{std::move(op_positions)} {}
 
-private:
+  private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
@@ -145,7 +145,7 @@ struct AstNodeAssign : AstNode {
     explicit AstNodeAssign(const Position pos, AstNodePtr target, AstNodePtr value)
         : AstNode{pos}, target_{std::move(target)}, value_{std::move(value)} {}
 
-private:
+  private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
@@ -165,6 +165,6 @@ struct AstNodeCompoundAssign : AstNode {
         : AstNode{pos}, target_{std::move(target)}, op_{op}, value_{std::move(value)},
           op_pos_{op_pos} {}
 
-private:
+  private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };

@@ -80,7 +80,7 @@ TEST_SUITE("跨章节组合——装饰器/类/函数/for/try/字典展开/is �
         CHECK(dict_val["type"] == "LiteralDict");
         REQUIRE(dict_val["items"].size() == 3);
         CHECK(dict_val["items"][0]["key"]["type"] == "DoubleStar");
-        CHECK(dict_val["items"][2]["val"]["type"] == "Is");
+        CHECK(dict_val["items"][2]["value"]["type"] == "Is");
 
         REQUIRE(try_node["except_clauses"].size() == 1);
         CHECK(
@@ -123,7 +123,7 @@ TEST_SUITE("跨章节组合——{}/()/[] 混着嵌套时 paren_depth_ 的一致
                        {"items",
                         nlohmann::json::array(
                             {{{"key", {{"type", "LiteralStr"}, {"value", "a"}}},
-                              {"val", int_lit("1")}}}
+                              {"value", int_lit("1")}}}
                         )}},
                       {{"type", "OpBinary"},
                        {"op", "+"},

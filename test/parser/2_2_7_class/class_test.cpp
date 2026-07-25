@@ -139,9 +139,9 @@ TEST_SUITE("2.2.7 class——捕获列表") {
     TEST_CASE("值捕获（裸标识符/显式表达式）、引用捕获、混合捕获、空捕获列表 []") {
         CHECK(
             parse_json(U"class C[x] {}")["captures"] ==
-            nlohmann::json::array(
-                {nlohmann::json{{"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}}}
-            )
+            nlohmann::json::array({nlohmann::json{
+                {"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}
+            }})
         );
         CHECK(
             parse_json(U"class C[x = 1 + 2] {}")["captures"] ==
@@ -164,7 +164,9 @@ TEST_SUITE("2.2.7 class——捕获列表") {
         CHECK(
             parse_json(U"class C[x, &y, z = 1] {}")["captures"] ==
             nlohmann::json::array(
-                {nlohmann::json{{"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}},
+                {nlohmann::json{
+                     {"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}
+                 },
                  nlohmann::json{
                      {"capture_type", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
                  },
@@ -181,18 +183,18 @@ TEST_SUITE("2.2.7 class——捕获列表") {
         CHECK(j["bases"] == nlohmann::json::array({ident("Base")}));
         CHECK(
             j["captures"] ==
-            nlohmann::json::array(
-                {nlohmann::json{{"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}}}
-            )
+            nlohmann::json::array({nlohmann::json{
+                {"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}
+            }})
         );
     }
 
     TEST_CASE("匿名类、无基类列表时捕获列表照样能单独出现") {
         CHECK(
             parse_json(U"class [x] {}")["captures"] ==
-            nlohmann::json::array(
-                {nlohmann::json{{"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}}}
-            )
+            nlohmann::json::array({nlohmann::json{
+                {"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}
+            }})
         );
     }
 

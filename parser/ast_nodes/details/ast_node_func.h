@@ -55,6 +55,6 @@ struct AstNodeFunc : AstNode {
           captures_{std::move(captures)}, params_{std::move(params)},
           return_type_{std::move(return_type)}, doc_{std::move(doc)}, body_{std::move(body)} {}
 
-private:
+  private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };

@@ -90,12 +90,12 @@ TEST_SUITE("StaticEvaler 容器运算") {
                 {"op", "|"},
                 {"left",
                  {{"type", "LiteralDict"},
-                  {"items", {nlohmann::json{{"key", int_lit("1")}, {"val", int_lit("2")}}}}}},
+                  {"items", {nlohmann::json{{"key", int_lit("1")}, {"value", int_lit("2")}}}}}},
                 {"right",
                  {{"type", "LiteralDict"},
                   {"items",
-                   {nlohmann::json{{"key", int_lit("1")}, {"val", int_lit("3")}},
-                    nlohmann::json{{"key", int_lit("4")}, {"val", int_lit("5")}}}}}}
+                   {nlohmann::json{{"key", int_lit("1")}, {"value", int_lit("3")}},
+                    nlohmann::json{{"key", int_lit("4")}, {"value", int_lit("5")}}}}}}
             }
         );
     }

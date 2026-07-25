@@ -370,8 +370,8 @@ TEST_SUITE("2.1.5 */** 展开") {
                 {"items",
                  nlohmann::json::array(
                      {{{"key", {{"type", "DoubleStar"}, {"operand", ident("a")}}},
-                       {"val", nullptr}},
-                      {{"key", {{"type", "LiteralStr"}, {"value", "b"}}}, {"val", int_lit("1")}}}
+                       {"value", nullptr}},
+                      {{"key", {{"type", "LiteralStr"}, {"value", "b"}}}, {"value", int_lit("1")}}}
                  )}
             }
         );

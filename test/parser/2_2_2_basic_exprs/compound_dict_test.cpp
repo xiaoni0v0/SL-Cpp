@@ -31,7 +31,7 @@ TEST_SUITE("2.2.2 {} 判别规则") {
                 {"items",
                  nlohmann::json::array(
                      {{{"key", {{"type", "DoubleStar"}, {"operand", ident("d")}}},
-                       {"val", nullptr}}}
+                       {"value", nullptr}}}
                  )}
             }
         );
@@ -42,7 +42,7 @@ TEST_SUITE("2.2.2 {} 判别规则") {
             parse_json(U"{k: v}") ==
             nlohmann::json{
                 {"type", "LiteralDict"},
-                {"items", nlohmann::json::array({{{"key", ident("k")}, {"val", ident("v")}}})}
+                {"items", nlohmann::json::array({{{"key", ident("k")}, {"value", ident("v")}}})}
             }
         );
     }
@@ -52,7 +52,7 @@ TEST_SUITE("2.2.2 {} 判别规则") {
             parse_json(U"{k\n: v}") ==
             nlohmann::json{
                 {"type", "LiteralDict"},
-                {"items", nlohmann::json::array({{{"key", ident("k")}, {"val", ident("v")}}})}
+                {"items", nlohmann::json::array({{{"key", ident("k")}, {"value", ident("v")}}})}
             }
         );
     }
@@ -135,9 +135,9 @@ TEST_SUITE("2.2.2 字典展开项：按表达式本身是不是 ** 展开判定�
                 {"type", "LiteralDict"},
                 {"items",
                  nlohmann::json::array(
-                     {{{"key", ident("k")}, {"val", ident("v")}},
+                     {{{"key", ident("k")}, {"value", ident("v")}},
                       {{"key", {{"type", "DoubleStar"}, {"operand", ident("d2")}}},
-                       {"val", nullptr}}}
+                       {"value", nullptr}}}
                  )}
             }
         );
@@ -151,10 +151,10 @@ TEST_SUITE("2.2.2 字典展开项：按表达式本身是不是 ** 展开判定�
                 {"items",
                  nlohmann::json::array(
                      {{{"key", {{"type", "DoubleStar"}, {"operand", ident("d1")}}},
-                       {"val", nullptr}},
-                      {{"key", ident("k")}, {"val", ident("v")}},
+                       {"value", nullptr}},
+                      {{"key", ident("k")}, {"value", ident("v")}},
                       {{"key", {{"type", "DoubleStar"}, {"operand", ident("d2")}}},
-                       {"val", nullptr}}}
+                       {"value", nullptr}}}
                  )}
             }
         );
@@ -167,9 +167,9 @@ TEST_SUITE("2.2.2 字典展开项：按表达式本身是不是 ** 展开判定�
                 {"type", "LiteralDict"},
                 {"items",
                  nlohmann::json::array(
-                     {{{"key", ident("k")}, {"val", ident("v")}},
+                     {{{"key", ident("k")}, {"value", ident("v")}},
                       {{"key", {{"type", "DoubleStar"}, {"operand", ident("d2")}}},
-                       {"val", nullptr}}}
+                       {"value", nullptr}}}
                  )}
             }
         );
@@ -240,7 +240,7 @@ TEST_SUITE("2.2.2 字典与复合表达式的其他边缘情况") {
                 {"items",
                  nlohmann::json::array(
                      {{{"key", ident("k")},
-                       {"val",
+                       {"value",
                         {{"type", "Compound"},
                          {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}}}}
                  )}
@@ -254,7 +254,7 @@ TEST_SUITE("2.2.2 字典与复合表达式的其他边缘情况") {
                  nlohmann::json::array(
                      {{{"type", "LiteralDict"},
                        {"items",
-                        nlohmann::json::array({{{"key", ident("k")}, {"val", ident("v")}}})}},
+                        nlohmann::json::array({{{"key", ident("k")}, {"value", ident("v")}}})}},
                       ident("x")}
                  )}
             }
@@ -304,7 +304,7 @@ TEST_SUITE("2.2.2 字典与复合表达式的其他边缘情况") {
                 {"items",
                  nlohmann::json::array(
                      {{{"key", {{"type", "DoubleStar"}, {"operand", ident("d")}}},
-                       {"val", nullptr}}}
+                       {"value", nullptr}}}
                  )}
             }
         );
@@ -387,8 +387,8 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
                 {"type", "LiteralDict"},
                 {"items",
                  nlohmann::json::array(
-                     {{{"key", ident("k")}, {"val", ident("v")}},
-                      {{"key", ident("k2")}, {"val", ident("v2")}}}
+                     {{{"key", ident("k")}, {"value", ident("v")}},
+                      {{"key", ident("k2")}, {"value", ident("v2")}}}
                  )}
             }
         );
@@ -399,7 +399,7 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
             parse_json(U"f({k\n: v})")["positional_args"][0] ==
             nlohmann::json{
                 {"type", "LiteralDict"},
-                {"items", nlohmann::json::array({{{"key", ident("k")}, {"val", ident("v")}}})}
+                {"items", nlohmann::json::array({{{"key", ident("k")}, {"value", ident("v")}}})}
             }
         );
     }
@@ -420,7 +420,7 @@ TEST_SUITE("2.2.2 {} 内部是独立的语句语境：块内换行不受外层�
                 {"items",
                  nlohmann::json::array(
                      {{{"key", ident("k")},
-                       {"val",
+                       {"value",
                         {{"type", "Compound"},
                          {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}}}}
                  )}

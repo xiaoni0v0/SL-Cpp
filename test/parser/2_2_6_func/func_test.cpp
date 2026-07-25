@@ -198,9 +198,9 @@ TEST_SUITE("2.2.6 func——捕获列表") {
     TEST_CASE("值捕获（裸标识符）") {
         CHECK(
             parse_json(U"func f[x]() {}")["captures"] ==
-            nlohmann::json::array(
-                {nlohmann::json{{"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}}}
-            )
+            nlohmann::json::array({nlohmann::json{
+                {"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}
+            }})
         );
     }
 
@@ -232,7 +232,9 @@ TEST_SUITE("2.2.6 func——捕获列表") {
         CHECK(
             parse_json(U"func f[x, &y, z = 1]() {}")["captures"] ==
             nlohmann::json::array(
-                {nlohmann::json{{"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}},
+                {nlohmann::json{
+                     {"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}
+                 },
                  nlohmann::json{
                      {"capture_type", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
                  },
