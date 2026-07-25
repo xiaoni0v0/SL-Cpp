@@ -56,30 +56,5 @@ struct AstNodeFunc : AstNode {
           captures_{std::move(captures)}, params_{std::move(params)},
           return_type_{std::move(return_type)}, doc_{std::move(doc)}, body_{std::move(body)} {}
 
-    [[nodiscard]] static json one_param_to_json(const OneParam &p) {
-        return json{
-            {"identifier", u32_to_utf8(p.identifier_)},
-            {"type_annotation", p.type_annotation_ ? p.type_annotation_->to_json() : json(nullptr)},
-            {"default_value", p.default_value_ ? p.default_value_->to_json() : json(nullptr)}
-        };
-    }
-
-    [[nodiscard]] static json all_params_to_json(const AllParams &params) {
-        auto positional = json::array();
-        for (const auto &p : params.positional_) positional.push_back(one_param_to_json(p));
-
-        auto kw_only = json::array();
-        for (const auto &p : params.kw_only_) kw_only.push_back(one_param_to_json(p));
-
-        return json{
-            {"positional", std::move(positional)},
-            {"var_args",
-             params.var_args_name_ ? json(u32_to_utf8(*params.var_args_name_)) : json(nullptr)},
-            {"kw_only", std::move(kw_only)},
-            {"var_kwargs",
-             params.var_kwargs_name_ ? json(u32_to_utf8(*params.var_kwargs_name_)) : json(nullptr)}
-        };
-    }
-
     [[nodiscard]] json to_json() const override;
 };

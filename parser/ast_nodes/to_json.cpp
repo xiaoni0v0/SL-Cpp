@@ -3,6 +3,124 @@
 // 本文件集中存放所有 AST 节点的 to_json() 实现，
 // 按 x_ast_nodes.h 中的顺序排列。
 
+namespace {
+
+// ── 来自 ast_node_capture.h ──
+json captures_to_json(const std::vector<OneCapture> &captures) {
+    auto result = json::array();
+    for (const auto &c : captures)
+        result.push_back(
+            {{"kind", c.capture_type_ == OneCapture::CaptureType::Value ? "Value" : "Reference"},
+             {"identifier", u32_to_utf8(c.identifier_)},
+             {"value_expr", c.value_expr_ ? c.value_expr_->to_json() : json(nullptr)}}
+        );
+    return result;
+}
+
+// ── 来自 ast_node_func.h ──
+json one_param_to_json(const AstNodeFunc::OneParam &p) {
+    return json{
+        {"identifier", u32_to_utf8(p.identifier_)},
+        {"type_annotation", p.type_annotation_ ? p.type_annotation_->to_json() : json(nullptr)},
+        {"default_value", p.default_value_ ? p.default_value_->to_json() : json(nullptr)}
+    };
+}
+
+json all_params_to_json(const AstNodeFunc::AllParams &params) {
+    auto positional = json::array();
+    for (const auto &p : params.positional_) positional.push_back(one_param_to_json(p));
+
+    auto kw_only = json::array();
+    for (const auto &p : params.kw_only_) kw_only.push_back(one_param_to_json(p));
+
+    return json{
+        {"positional", std::move(positional)},
+        {"var_args",
+         params.var_args_name_ ? json(u32_to_utf8(*params.var_args_name_)) : json(nullptr)},
+        {"kw_only", std::move(kw_only)},
+        {"var_kwargs",
+         params.var_kwargs_name_ ? json(u32_to_utf8(*params.var_kwargs_name_)) : json(nullptr)}
+    };
+}
+
+// ── 来自 ast_node_operators.h ──
+const char *op_str(const AstNodeOpUnary::OpType op) {
+    switch (op) {
+    case AstNodeOpUnary::OpType::Question:
+        return "?";
+    case AstNodeOpUnary::OpType::Exclaim:
+        return "!";
+    case AstNodeOpUnary::OpType::Pos:
+        return "+";
+    case AstNodeOpUnary::OpType::Neg:
+        return "-";
+    case AstNodeOpUnary::OpType::BitNot:
+        return "~";
+    case AstNodeOpUnary::OpType::Not:
+        return "not";
+    default:
+        return "<unknown>";
+    }
+}
+
+const char *op_str(const AstNodeOpBinary::OpType op) {
+    switch (op) {
+    case AstNodeOpBinary::OpType::Add:
+        return "+";
+    case AstNodeOpBinary::OpType::Sub:
+        return "-";
+    case AstNodeOpBinary::OpType::Mul:
+        return "*";
+    case AstNodeOpBinary::OpType::Div:
+        return "/";
+    case AstNodeOpBinary::OpType::DivFloor:
+        return "//";
+    case AstNodeOpBinary::OpType::Mod:
+        return "%";
+    case AstNodeOpBinary::OpType::Pow:
+        return "**";
+    case AstNodeOpBinary::OpType::BitAnd:
+        return "&";
+    case AstNodeOpBinary::OpType::BitOr:
+        return "|";
+    case AstNodeOpBinary::OpType::BitXor:
+        return "^";
+    case AstNodeOpBinary::OpType::LShift:
+        return "<<";
+    case AstNodeOpBinary::OpType::RShift:
+        return ">>";
+    case AstNodeOpBinary::OpType::And:
+        return "and";
+    case AstNodeOpBinary::OpType::Or:
+        return "or";
+    case AstNodeOpBinary::OpType::Range:
+        return "..";
+    default:
+        return "<unknown>";
+    }
+}
+
+const char *op_str(const AstNodeCompare::OpType op) {
+    switch (op) {
+    case AstNodeCompare::OpType::Lt:
+        return "<";
+    case AstNodeCompare::OpType::Le:
+        return "<=";
+    case AstNodeCompare::OpType::Gt:
+        return ">";
+    case AstNodeCompare::OpType::Ge:
+        return ">=";
+    case AstNodeCompare::OpType::Eq:
+        return "==";
+    case AstNodeCompare::OpType::Ne:
+        return "!=";
+    default:
+        return "<unknown>";
+    }
+}
+
+} // namespace
+
 json AstNodeClass::to_json() const {
     auto decorators = json::array();
     for (const auto &d : decorators_) decorators.push_back(d->to_json());
@@ -199,7 +317,7 @@ json AstNodeCompoundAssign::to_json() const {
     return json{
         {"type", "CompoundAssign"},
         {"target", target_->to_json()},
-        {"op", AstNodeOpBinary::op_str(op_)},
+        {"op", op_str(op_)},
         {"value", value_->to_json()}
     };
 }
@@ -240,16 +358,4 @@ json AstNodeDel::to_json() const { return json{{"type", "Del"}, {"target", targe
 
 json AstNodeGlobal::to_json() const {
     return json{{"type", "Global"}, {"identifier", u32_to_utf8(identifier_)}};
-}
-
-// 来自 ast_node_capture.h
-json captures_to_json(const std::vector<OneCapture> &captures) {
-    auto result = json::array();
-    for (const auto &c : captures)
-        result.push_back(
-            {{"kind", c.capture_type_ == OneCapture::CaptureType::Value ? "Value" : "Reference"},
-             {"identifier", u32_to_utf8(c.identifier_)},
-             {"value_expr", c.value_expr_ ? c.value_expr_->to_json() : json(nullptr)}}
-        );
-    return result;
 }

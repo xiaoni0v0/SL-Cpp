@@ -55,25 +55,6 @@ struct AstNodeOpUnary : AstNode {
         : AstNode{pos}, op_{op}, operand_{std::move(operand)}, op_pos_{op_pos} {}
 
     [[nodiscard]] json to_json() const override;
-
-    [[nodiscard]] static constexpr const char *op_str(const OpType op) {
-        switch (op) {
-        case OpType::Question:
-            return "?";
-        case OpType::Exclaim:
-            return "!";
-        case OpType::Pos:
-            return "+";
-        case OpType::Neg:
-            return "-";
-        case OpType::BitNot:
-            return "~";
-        case OpType::Not:
-            return "not";
-        default:
-            return "<unknown>";
-        }
-    }
 };
 
 // 二元运算符：+  -  *  /  //  %  **  &  |  ^  <<  >>  and  or  ..
@@ -113,44 +94,6 @@ struct AstNodeOpBinary : AstNode {
     }
 
     [[nodiscard]] json to_json() const override;
-
-    // AstNodeCompoundAssign 复用同一个 OpType，也复用这个字符串化
-    [[nodiscard]] static constexpr const char *op_str(const OpType op) {
-        switch (op) {
-        case OpType::Add:
-            return "+";
-        case OpType::Sub:
-            return "-";
-        case OpType::Mul:
-            return "*";
-        case OpType::Div:
-            return "/";
-        case OpType::DivFloor:
-            return "//";
-        case OpType::Mod:
-            return "%";
-        case OpType::Pow:
-            return "**";
-        case OpType::BitAnd:
-            return "&";
-        case OpType::BitOr:
-            return "|";
-        case OpType::BitXor:
-            return "^";
-        case OpType::LShift:
-            return "<<";
-        case OpType::RShift:
-            return ">>";
-        case OpType::And:
-            return "and";
-        case OpType::Or:
-            return "or";
-        case OpType::Range:
-            return "..";
-        default:
-            return "<unknown>";
-        }
-    }
 };
 
 // 比较运算：a OP1 b ⟦OP2 c ...⟧（== != < <= > >= 一组）
@@ -171,25 +114,6 @@ struct AstNodeCompare : AstNode {
           op_positions_{std::move(op_positions)} {}
 
     [[nodiscard]] json to_json() const override;
-
-    [[nodiscard]] static constexpr const char *op_str(const OpType op) {
-        switch (op) {
-        case OpType::Lt:
-            return "<";
-        case OpType::Le:
-            return "<=";
-        case OpType::Gt:
-            return ">";
-        case OpType::Ge:
-            return ">=";
-        case OpType::Eq:
-            return "==";
-        case OpType::Ne:
-            return "!=";
-        default:
-            return "<unknown>";
-        }
-    }
 };
 
 // a is b ⟦is c ...⟧（is）

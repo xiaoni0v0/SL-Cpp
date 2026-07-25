@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "../../../utils/string_utils.h"
 #include "ast_node.h"
@@ -19,5 +19,3 @@ struct OneCapture {
     AstNodePtr value_expr_; // 仅 CaptureType::Value 且显式写了 "= expr"
                             // 时非空；裸标识符或引用捕获均为 nullptr
 };
-
-json captures_to_json(const std::vector<OneCapture> &captures);
