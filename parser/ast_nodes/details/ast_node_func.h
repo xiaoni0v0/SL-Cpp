@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../../../utils/string_utils.h"
 #include "ast_node.h"
 #include "ast_node_capture.h"
 #include "ast_node_multi_exprs.h"

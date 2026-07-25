@@ -1,11 +1,8 @@
+#include "../../utils/string_utils.h"
 #include "ast_nodes.h"
-
-// 本文件集中存放所有 AST 节点的 to_json() 实现，
-// 按 x_ast_nodes.h 中的顺序排列。
 
 namespace {
 
-// ── 来自 ast_node_capture.h ──
 json captures_to_json(const std::vector<OneCapture> &captures) {
     auto result = json::array();
     for (const auto &c : captures)
@@ -17,7 +14,6 @@ json captures_to_json(const std::vector<OneCapture> &captures) {
     return result;
 }
 
-// ── 来自 ast_node_func.h ──
 json one_param_to_json(const AstNodeFunc::OneParam &p) {
     return json{
         {"identifier", u32_to_utf8(p.identifier_)},
@@ -43,7 +39,6 @@ json all_params_to_json(const AstNodeFunc::AllParams &params) {
     };
 }
 
-// ── 来自 ast_node_operators.h ──
 const char *op_str(const AstNodeOpUnary::OpType op) {
     switch (op) {
     case AstNodeOpUnary::OpType::Question:

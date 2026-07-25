@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../../../utils/string_utils.h"
 #include "ast_node.h"
 #include "ast_node_capture.h"
 #include "ast_node_multi_exprs.h"
@@ -17,7 +16,7 @@
 // ⟦@decorator ...⟧ class ⟦name⟧ ⟦(bases)⟧ ⟦[captures]⟧ ⟦doc⟧ { body }
 struct AstNodeClass : AstNode {
     std::vector<AstNodePtr> decorators_;        // 可空
-    std::vector<Position> decorator_positions_; // 每个装饰器自己的位置，跟 decorators_ 一一对应
+    std::vector<Position> decorator_positions_; // 每个装饰器自己的位置
     std::optional<std::u32string> name_;        // nullopt 表示匿名类
     std::vector<AstNodePtr> bases_;             // 可空
     std::vector<OneCapture> captures_;          // 可空，语法/语义与 AstNodeFunc 的捕获列表完全一致

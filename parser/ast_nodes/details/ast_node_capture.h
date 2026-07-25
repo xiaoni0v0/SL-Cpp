@@ -1,10 +1,8 @@
 ﻿#pragma once
 
-#include "../../../utils/string_utils.h"
 #include "ast_node.h"
 
 #include <string>
-#include <vector>
 
 // ============================================================
 // 捕获列表：func、class 共用
