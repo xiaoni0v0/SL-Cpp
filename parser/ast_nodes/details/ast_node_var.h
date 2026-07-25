@@ -12,7 +12,7 @@ struct AstNodeIdentifier : AstNode {
     explicit AstNodeIdentifier(const Position pos, std::u32string identifier)
         : AstNode{pos}, identifier_{std::move(identifier)} {}
 
-    [[nodiscard]] json to_json() const override;
+    [[nodiscard]] json to_json(bool include_pos = false) const override;
 };
 
 // del target（target 语法上是表达式，2.2.3 限定只能是标识符或属性访问，由语义层校验具体形状）
@@ -22,7 +22,7 @@ struct AstNodeDel : AstNode {
     explicit AstNodeDel(const Position pos, AstNodePtr target)
         : AstNode{pos}, target_{std::move(target)} {}
 
-    [[nodiscard]] json to_json() const override;
+    [[nodiscard]] json to_json(bool include_pos = false) const override;
 };
 
 // global identifier（语法本身就是标识符，2.2.4，不是表达式，解析时直接 expect(IDENTIFIER)）
@@ -32,5 +32,5 @@ struct AstNodeGlobal : AstNode {
     explicit AstNodeGlobal(const Position pos, std::u32string identifier)
         : AstNode{pos}, identifier_{std::move(identifier)} {}
 
-    [[nodiscard]] json to_json() const override;
+    [[nodiscard]] json to_json(bool include_pos = false) const override;
 };

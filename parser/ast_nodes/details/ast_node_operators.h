@@ -17,7 +17,7 @@ struct AstNodeStar : AstNode {
     explicit AstNodeStar(const Position pos, AstNodePtr operand)
         : AstNode{pos}, operand_{std::move(operand)} {}
 
-    [[nodiscard]] json to_json() const override;
+    [[nodiscard]] json to_json(bool include_pos = false) const override;
 };
 
 // **expr（字典展开，不包括可变长关键字形参）
@@ -27,7 +27,7 @@ struct AstNodeDoubleStar : AstNode {
     explicit AstNodeDoubleStar(const Position pos, AstNodePtr operand)
         : AstNode{pos}, operand_{std::move(operand)} {}
 
-    [[nodiscard]] json to_json() const override;
+    [[nodiscard]] json to_json(bool include_pos = false) const override;
 };
 
 // 一元运算符：+x  -x  ~x  not x  x?  x!
@@ -54,7 +54,7 @@ struct AstNodeOpUnary : AstNode {
     )
         : AstNode{pos}, op_{op}, operand_{std::move(operand)}, op_pos_{op_pos} {}
 
-    [[nodiscard]] json to_json() const override;
+    [[nodiscard]] json to_json(bool include_pos = false) const override;
 };
 
 // 二元运算符：+  -  *  /  //  %  **  &  |  ^  <<  >>  and  or  ..
@@ -93,7 +93,7 @@ struct AstNodeOpBinary : AstNode {
         : AstNode{pos}, op_{op}, left_{std::move(left)}, right_{std::move(right)}, op_pos_{op_pos} {
     }
 
-    [[nodiscard]] json to_json() const override;
+    [[nodiscard]] json to_json(bool include_pos = false) const override;
 };
 
 // 比较运算：a OP1 b ⟦OP2 c ...⟧（== != < <= > >= 一组）
@@ -113,7 +113,7 @@ struct AstNodeCompare : AstNode {
         : AstNode{pos}, ops_{std::move(ops)}, operands_{std::move(operands)},
           op_positions_{std::move(op_positions)} {}
 
-    [[nodiscard]] json to_json() const override;
+    [[nodiscard]] json to_json(bool include_pos = false) const override;
 };
 
 // a is b ⟦is c ...⟧（is）
@@ -128,7 +128,7 @@ struct AstNodeIs : AstNode {
     )
         : AstNode{pos}, operands_{std::move(operands)}, op_positions_{std::move(op_positions)} {}
 
-    [[nodiscard]] json to_json() const override;
+    [[nodiscard]] json to_json(bool include_pos = false) const override;
 };
 
 // target = expr
@@ -139,7 +139,7 @@ struct AstNodeAssign : AstNode {
     explicit AstNodeAssign(const Position pos, AstNodePtr target, AstNodePtr value)
         : AstNode{pos}, target_{std::move(target)}, value_{std::move(value)} {}
 
-    [[nodiscard]] json to_json() const override;
+    [[nodiscard]] json to_json(bool include_pos = false) const override;
 };
 
 // target op= expr（op 为算术/位运算，由语义层校验）
@@ -158,5 +158,5 @@ struct AstNodeCompoundAssign : AstNode {
         : AstNode{pos}, target_{std::move(target)}, op_{op}, value_{std::move(value)},
           op_pos_{op_pos} {}
 
-    [[nodiscard]] json to_json() const override;
+    [[nodiscard]] json to_json(bool include_pos = false) const override;
 };

@@ -16,5 +16,5 @@ struct AstNodeDecorator : AstNode {
     explicit AstNodeDecorator(const Position pos, AstNodePtr decorator, AstNodePtr target)
         : AstNode{pos}, decorator_{std::move(decorator)}, target_{std::move(target)} {}
 
-    [[nodiscard]] json to_json() const override;
+    [[nodiscard]] json to_json(bool include_pos = false) const override;
 };
