@@ -2,7 +2,7 @@
 // 语法层只解析一个表达式当 target，"target 必须是标识符或属性访问" 是语义层（SyntaxChecker）的校验，
 // 不是 parser 的事，所以这里故意也测了几个语义上非法、但语法上能正常解析出来的 target。
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

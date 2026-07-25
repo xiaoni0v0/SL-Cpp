@@ -1,7 +1,7 @@
 // SL.md 2.2.4 global 表达式——语法：global identifier。
 // 注意：identifier 本身就是标识符 token，不是"解析成表达式再校验形状"，parser 直接 expect(IDENTIFIER)。
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

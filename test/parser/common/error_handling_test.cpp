@@ -1,8 +1,8 @@
 // 跨章节：Parser 抛出的 SyntaxError 本身的行为——继承关系、消息里的文件名/行列是否正确。
 // 各类具体的触发条件已经分散在各自章节的测试文件里，这里只关心“报错这件事本身做得对不对”。
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SLException.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SLException.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <stdexcept>
 #include <doctest/doctest.h>

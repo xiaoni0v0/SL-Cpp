@@ -1,7 +1,7 @@
 // SL.md 2.1.5 运算符——优先级表、结合性、后缀访问链（索引/调用/属性/?/!）。
 // 链式比较、is 链、赋值/复合赋值放在同目录的 compare_is_assign_test.cpp。
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

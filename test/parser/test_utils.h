@@ -4,7 +4,7 @@
 
 #include "../../lexer/Lexer.h"
 #include "../../parser/Parser.h"
-#include "../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 #include <nlohmann/json.hpp>

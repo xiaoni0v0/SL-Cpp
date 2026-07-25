@@ -1,6 +1,6 @@
 // SL.md 2.1.4 字面量——int：`123`，暂不支持二进制/八进制/十六进制
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

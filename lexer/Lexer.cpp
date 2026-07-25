@@ -1,6 +1,6 @@
 #include "Lexer.h"
 
-#include "../builtins/classes/exceptions/SyntaxError.h"
+#include "../builtins/exceptions/SyntaxError.h"
 #include "../utils/string_utils.h"
 
 #include <format>

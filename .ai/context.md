@@ -741,7 +741,7 @@ func/class，比如 `not_method = @staticmethod outer`），两种语义不再�
    但它直接读 `AstNode::row_/col_`，基类字段一改这边必然跟着炸，所以顺带也把 `SyntaxChecker::error()`
    改成吃 `Position`，全部 19 处 `error(msg, node->row_, node->col_)` 简化成了 `error(msg, node->pos_)`。
 
-`SyntaxError`（[SyntaxError.h](builtins/classes/exceptions/SyntaxError.h)）的构造函数、以及 `Lexer.cpp`
+`SyntaxError`（[SyntaxError.h](builtins/exceptions/SyntaxError.h)）的构造函数、以及 `Lexer.cpp`
 里 `Lexer::error`/`make_token` 这三处依然保留 `(row, col)` 两个 int 的老样子，没有跟着改——`SyntaxError`
 是 Lexer 和 Parser 共用的底层异常类，不属于"parser"；`Lexer::error`/`make_token` 属于前面确认过不用动的
 lexer 部分。全仓库搜了一遍确认没有遗漏，也没有过度延伸到不该改的地方。
@@ -1602,7 +1602,7 @@ with a string argument with array`——`root` 本身变成了"一个只有 1 �
 
 ## 架构讨论：编译期 C++ 异常 vs SL 运行时异常对象；整条前端流水线跟 VM 的边界在哪
 
-用户发现一个容易被忽略的问题：现在 `builtins/classes/exceptions/SyntaxError.h` 里的 `SyntaxError`
+用户发现一个容易被忽略的问题：现在 `builtins/exceptions/SyntaxError.h` 里的 `SyntaxError`
 （`: public SLException : public std::runtime_error`，纯 C++ 异常）和 SL.md 4.2.23 里文档化的、
 将来暴露给 SL 用户代码的异常类 `SyntaxError`（`BaseException > Exception > SyntaxError`），只是碰巧
 重名，现阶段完全不是同一个东西——`SlObject`（`builtins/object/SlObject.h`）目前还是个空壳，没有任何
@@ -1617,7 +1617,7 @@ with a string argument with array`——`root` 本身变成了"一个只有 1 �
 
 也就是说：**解析器（Lexer/Parser/Analyzer）保持"很静态"是故意的、正确的设计**——纯文本→AST 的变换，
 不需要一个跑起来的 VM 才能工作，`Executor.cpp` 现在的样子（三段各自 `try { ... } catch (SLException&)
-{ 打印到 stderr; return 1; }`，压根没有第 4 步"执行"）正好体现了这一点。`builtins/classes/exceptions/
+{ 打印到 stderr; return 1; }`，压根没有第 4 步"执行"）正好体现了这一点。`builtins/exceptions/
 *.h` 这一整套的定位就是"前端自己内部用的 C++ 报错信号/栈展开载体"，类比 CPython 的 `PyErr_SyntaxError`
 这层 C API 跟 Python 层真正暴露给用户代码的 `SyntaxError` 类——同名、同概念、不同层，本来就不该是同一个
 东西。
@@ -2464,7 +2464,7 @@ Parser 自己的结构性保证"——正常情况下**永远**不会真的跑�
 
 新增 `analyzer/InternalError.h`：`InternalError` 类**不继承 `SLException`**——`SLException` 是
 SL 内建异常类（`SyntaxError`/`EncodingError`/`FileNotFoundError` 等，都在
-`builtins/classes/exceptions/`）的 C++ 载体，语义上专门对应"SL 代码运行时能被 `except` 捕获到的
+`builtins/exceptions/`）的 C++ 载体，语义上专门对应"SL 代码运行时能被 `except` 捕获到的
 异常"；`InternalError` 发生在分析阶段，压根没有 SL 代码在运行，也不该被任何 `except` 捕获到，
 所以直接继承 `std::runtime_error`，跟 `SLException` 是平级的两条分支。
 

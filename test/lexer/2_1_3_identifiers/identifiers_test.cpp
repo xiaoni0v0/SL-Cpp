@@ -1,6 +1,6 @@
 // SL.md 2.1.3 标识符：正则 [a-zA-Z_][a-zA-Z0-9_]*，且不能是关键字/保留字
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

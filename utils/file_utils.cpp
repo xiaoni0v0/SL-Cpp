@@ -1,6 +1,6 @@
 #include "file_utils.h"
 
-#include "../builtins/classes/exceptions/FileNotFoundError.h"
+#include "../builtins/exceptions/FileNotFoundError.h"
 
 #include <fstream>
 #include <sstream>

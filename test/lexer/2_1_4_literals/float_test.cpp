@@ -4,7 +4,7 @@
 // 点号和数字更复杂的交互（`1.0..1.2` 这类）放在 2_1_5_operators/dot_disambiguation_test.cpp，
 // 这里只测 float 字面量本身的基本形状。
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

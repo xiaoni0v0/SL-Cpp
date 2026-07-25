@@ -1,7 +1,7 @@
 #include "Executor.h"
 
 #include "../analyzer/Analyzer.h"
-#include "../builtins/classes/exceptions/SLException.h"
+#include "../builtins/exceptions/SLException.h"
 #include "../lexer/Lexer.h"
 #include "../parser/Parser.h"
 #include "../parser/ast_nodes/details/ast_node_multi_exprs.h"

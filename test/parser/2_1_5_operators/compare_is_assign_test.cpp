@@ -1,7 +1,6 @@
 // SL.md 2.1.5——链式比较（== != < <= > >=）、is 链（自成一组，不与比较组混链）、
 // 赋值与复合赋值（右结合）、*expr/**expr 展开。
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

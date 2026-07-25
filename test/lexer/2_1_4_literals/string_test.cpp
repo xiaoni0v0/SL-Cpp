@@ -1,6 +1,6 @@
 ﻿// SL.md 2.1.4 字面量——str（"..." 和 '...'）：支持转义，不支持多行
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

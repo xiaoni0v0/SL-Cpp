@@ -2,7 +2,7 @@
 // 内部复用 AstNodeForCond（init_/inc_ 皆为 nullptr），不单独建节点类型，但对外观察到的 JSON 形状
 // 就是按 ForCond 来的，这里直接按 ForCond 的字段断言。
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

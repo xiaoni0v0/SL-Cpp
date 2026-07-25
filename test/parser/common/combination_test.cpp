@@ -3,7 +3,7 @@
 // paren_depth_、换行判定这些跨函数共享的状态会不会在深层嵌套下失效；以及报错发生在深层嵌套
 // 结构内部时，位置是否依然精确指向真正出问题的那个 token。
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

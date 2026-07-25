@@ -2,7 +2,7 @@
 // "except 和 finally 不能同时省略" 是语义层校验（Parser.cpp 里也明确注释了这一点），
 // 语法层单纯 try expr（不写 except/finally）也能正常解析出来。
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

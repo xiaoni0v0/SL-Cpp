@@ -3,7 +3,7 @@
 // （单趟递归下降/Pratt，在语法结构决定“看起来还没完”的地方主动 skip_newline），但对外可观察行为
 // 应该完全一致——这里测的就是这个“对外行为”，不关心内部怎么实现的。
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

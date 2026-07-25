@@ -4,7 +4,7 @@
 // 这里只测判别规则本身和复合表达式的形状；字典各类项的具体语义（key 是否任意表达式等）已在
 // 2_1_4_literals/literals_test.cpp 测过。
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

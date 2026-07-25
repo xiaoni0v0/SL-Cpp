@@ -1,6 +1,6 @@
 // SL.md 2.2.5.8 raise 表达式：raise expr（跟 return 不同，expr 不可省略）
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

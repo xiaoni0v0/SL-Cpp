@@ -6,7 +6,7 @@
 // 语义层校验（见 test/analyzer/syntax_checker），这里只测语法形状本身，以及"至多一个 *args""**kwargs 必须
 // 最后"这两条现在由 Parser 直接保证的规则。
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

@@ -1,6 +1,6 @@
 // SL.md 2.2.5.6 return 表达式：return [expr]
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

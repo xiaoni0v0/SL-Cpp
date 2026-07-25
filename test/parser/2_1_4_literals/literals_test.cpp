@@ -2,7 +2,7 @@
 // None/bool/_G/_L/int/float/str/... 已在 lexer 测试里覆盖过 token 化本身，这里只关心 Parser 是否
 // 把对应 token 原样正确地包进对应的 AstNode（字符串转义等已由 Lexer 处理完毕，不再重复测）。
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 

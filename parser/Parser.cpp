@@ -1,6 +1,6 @@
 #include "Parser.h"
 
-#include "../builtins/classes/exceptions/SyntaxError.h"
+#include "../builtins/exceptions/SyntaxError.h"
 #include "../lexer/Lexer.h"
 #include "../utils/string_utils.h"
 

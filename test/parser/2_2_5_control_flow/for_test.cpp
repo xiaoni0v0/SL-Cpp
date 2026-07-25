@@ -5,7 +5,7 @@
 //   2. 中间 cond 槽禁止裸的普通赋值 =（init/inc 不受限）；
 //   3. for () 彻底为空时的专门报错。
 #include "../test_utils.h"
-#include "../../../builtins/classes/exceptions/SyntaxError.h"
+#include "../../../builtins/exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 
