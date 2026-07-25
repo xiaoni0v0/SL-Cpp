@@ -154,7 +154,6 @@ Token Lexer::read_identifier_keyword_reservedword() {
     static const std::unordered_map<std::u32string, TokenType> KEYWORDS_MAPPING{
 #define X(a, b) {U"" #a, TokenType::b},
 #include "x_keyword.h"
-
 #undef X
     };
 
@@ -162,7 +161,6 @@ Token Lexer::read_identifier_keyword_reservedword() {
     static const std::unordered_map<std::u32string, TokenType> RESERVEDWORDS_MAPPING{
 #define X(a, b) {U"" #a, TokenType::b},
 #include "x_reservedword.h"
-
 #undef X
     };
 

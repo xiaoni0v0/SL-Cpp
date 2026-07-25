@@ -15,9 +15,7 @@ void LiteralFolder::visit(AstNode &node) const {
     AstNode *const p{&node}; // 变成指针再 dynamic_cast
 
 #define X(nt)                                                                                      \
-    if (auto *n{dynamic_cast<nt *>(p)}) {                                                          \
-        return visit(*n);                                                                          \
-    }
+    if (auto *n{dynamic_cast<nt *>(p)}) return visit(*n);
 #include "../../parser/ast_nodes/x_ast_nodes.h"
 #undef X
 
