@@ -36,11 +36,10 @@ struct AstNodeFunc : AstNode {
         std::optional<std::u32string> var_kwargs_name_;
     };
 
-    std::vector<AstNodePtr> decorators_; // 可空
-    std::vector<Position>
-        decorator_positions_;            // 每个装饰器自己的 '@' 位置，跟 decorators_ 一一对应
-    std::optional<std::u32string> name_; // nullopt 表示匿名函数
-    std::vector<OneCapture> captures_;   // 可空
+    std::vector<AstNodePtr> decorators_;        // 可空
+    std::vector<Position> decorator_positions_; // 每个装饰器自己的 '@' 位置
+    std::optional<std::u32string> name_;        // nullopt 表示匿名函数
+    std::vector<OneCapture> captures_;          // 可空
     AllParams params_;
     AstNodePtr return_type_; // 可空
     AstNodePtr doc_;         // 可空

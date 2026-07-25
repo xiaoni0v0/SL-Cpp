@@ -23,5 +23,8 @@ SpaceAfterCStyleCast: true
 ColumnLimit: 100
 
 AlignAfterOpenBracket: true
+BinPackArguments: false
 BreakAfterOpenBracketFunction: true
 BreakBeforeCloseBracketFunction: true
+BreakAfterOpenBracketBracedList: true
+BreakBeforeCloseBracketBracedList: true
