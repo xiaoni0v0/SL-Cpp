@@ -131,9 +131,9 @@ json AstNodeClass::to_json_impl(const bool include_pos) const {
         return json{
             {"type", "Class"},
             {"pos", pos_to_json(pos_)},
-            {"decorators", decorators},
+            {"decorators", std::move(decorators)},
             {"name", name_ ? json(u32_to_utf8(*name_)) : json(nullptr)},
-            {"bases", bases},
+            {"bases", std::move(bases)},
             {"captures", captures_to_json(captures_, include_pos)},
             {"doc", doc_ ? doc_->to_json(include_pos) : json(nullptr)},
             {"body", body_->to_json(include_pos)}
@@ -161,7 +161,7 @@ json AstNodeIf::to_json_impl(const bool include_pos) const {
         return json{
             {"type", "If"},
             {"pos", pos_to_json(pos_)},
-            {"clauses", clauses},
+            {"clauses", std::move(clauses)},
             {"else_expr", else_expr_ ? else_expr_->to_json(include_pos) : json(nullptr)}
         };
     return json{
@@ -248,7 +248,7 @@ json AstNodeTry::to_json_impl(const bool include_pos) const {
             {"type", "Try"},
             {"pos", pos_to_json(pos_)},
             {"try_expr", try_expr_->to_json(include_pos)},
-            {"except_clauses", except_clauses},
+            {"except_clauses", std::move(except_clauses)},
             {"finally_expr", finally_expr_ ? finally_expr_->to_json(include_pos) : json(nullptr)}
         };
     return json{
@@ -290,7 +290,7 @@ json AstNodeFunc::to_json_impl(const bool include_pos) const {
         return json{
             {"type", "Func"},
             {"pos", pos_to_json(pos_)},
-            {"decorators", decorators},
+            {"decorators", std::move(decorators)},
             {"name", name_ ? json(u32_to_utf8(*name_)) : json(nullptr)},
             {"captures", captures_to_json(captures_, include_pos)},
             {"params", all_params_to_json(params_, include_pos)},
@@ -358,7 +358,9 @@ json AstNodeLiteralTuple::to_json_impl(const bool include_pos) const {
     for (const auto &item : items_) items.push_back(item->to_json(include_pos));
 
     if (include_pos)
-        return json{{"type", "LiteralTuple"}, {"pos", pos_to_json(pos_)}, {"items", items}};
+        return json{
+            {"type", "LiteralTuple"}, {"pos", pos_to_json(pos_)}, {"items", std::move(items)}
+        };
     return json{{"type", "LiteralTuple"}, {"items", std::move(items)}};
 }
 
@@ -367,7 +369,9 @@ json AstNodeLiteralList::to_json_impl(const bool include_pos) const {
     for (const auto &item : items_) items.push_back(item->to_json(include_pos));
 
     if (include_pos)
-        return json{{"type", "LiteralList"}, {"pos", pos_to_json(pos_)}, {"items", items}};
+        return json{
+            {"type", "LiteralList"}, {"pos", pos_to_json(pos_)}, {"items", std::move(items)}
+        };
     return json{{"type", "LiteralList"}, {"items", std::move(items)}};
 }
 
@@ -380,7 +384,9 @@ json AstNodeLiteralDict::to_json_impl(const bool include_pos) const {
         );
 
     if (include_pos)
-        return json{{"type", "LiteralDict"}, {"pos", pos_to_json(pos_)}, {"items", items}};
+        return json{
+            {"type", "LiteralDict"}, {"pos", pos_to_json(pos_)}, {"items", std::move(items)}
+        };
     return json{{"type", "LiteralDict"}, {"items", std::move(items)}};
 }
 
@@ -393,7 +399,8 @@ json AstNodeProgram::to_json_impl(const bool include_pos) const {
     auto exprs = json::array();
     for (const auto &e : exprs_) exprs.push_back(e->to_json(include_pos));
 
-    if (include_pos) return json{{"type", "Program"}, {"pos", pos_to_json(pos_)}, {"exprs", exprs}};
+    if (include_pos)
+        return json{{"type", "Program"}, {"pos", pos_to_json(pos_)}, {"exprs", std::move(exprs)}};
     return json{{"type", "Program"}, {"exprs", std::move(exprs)}};
 }
 
@@ -402,7 +409,7 @@ json AstNodeCompound::to_json_impl(const bool include_pos) const {
     for (const auto &e : exprs_) exprs.push_back(e->to_json(include_pos));
 
     if (include_pos)
-        return json{{"type", "Compound"}, {"pos", pos_to_json(pos_)}, {"exprs", exprs}};
+        return json{{"type", "Compound"}, {"pos", pos_to_json(pos_)}, {"exprs", std::move(exprs)}};
     return json{{"type", "Compound"}, {"exprs", std::move(exprs)}};
 }
 
@@ -464,7 +471,10 @@ json AstNodeCompare::to_json_impl(const bool include_pos) const {
 
     if (include_pos)
         return json{
-            {"type", "Compare"}, {"pos", pos_to_json(pos_)}, {"operands", operands}, {"ops", ops}
+            {"type", "Compare"},
+            {"pos", pos_to_json(pos_)},
+            {"operands", std::move(operands)},
+            {"ops", std::move(ops)}
         };
     return json{{"type", "Compare"}, {"operands", std::move(operands)}, {"ops", std::move(ops)}};
 }
@@ -474,7 +484,7 @@ json AstNodeIs::to_json_impl(const bool include_pos) const {
     for (const auto &operand : operands_) operands.push_back(operand->to_json(include_pos));
 
     if (include_pos)
-        return json{{"type", "Is"}, {"pos", pos_to_json(pos_)}, {"operands", operands}};
+        return json{{"type", "Is"}, {"pos", pos_to_json(pos_)}, {"operands", std::move(operands)}};
     return json{{"type", "Is"}, {"operands", std::move(operands)}};
 }
 
@@ -526,8 +536,8 @@ json AstNodeCall::to_json_impl(const bool include_pos) const {
             {"type", "Call"},
             {"pos", pos_to_json(pos_)},
             {"object", object_->to_json(include_pos)},
-            {"positional_args", positional_args},
-            {"keyword_args", keyword_args}
+            {"positional_args", std::move(positional_args)},
+            {"keyword_args", std::move(keyword_args)}
         };
     return json{
         {"type", "Call"},
@@ -546,7 +556,7 @@ json AstNodeIndex::to_json_impl(const bool include_pos) const {
             {"type", "Index"},
             {"pos", pos_to_json(pos_)},
             {"object", object_->to_json(include_pos)},
-            {"args", args}
+            {"args", std::move(args)}
         };
     return json{
         {"type", "Index"}, {"object", object_->to_json(include_pos)}, {"args", std::move(args)}
