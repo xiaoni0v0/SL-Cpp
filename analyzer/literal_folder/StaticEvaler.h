@@ -39,7 +39,7 @@
  *   for/while 的 cond 折成的字面量真值为 True 的不折。
  */
 class StaticEvaler final {
-    // @formatter:off
+    // clang-format off
     // 一级入口
     [[nodiscard]] static AstNodePtr fold_unary(AstNodeOpUnary &node);    // 一元
     [[nodiscard]] static AstNodePtr fold_binary(AstNodeOpBinary &node);  // 二元
@@ -73,7 +73,7 @@ class StaticEvaler final {
     [[nodiscard]] static BigInt to_bigint(const AstNode &node);                   // 要求 is_int_family(node)
     [[nodiscard]] static double to_double(const AstNode &node);                   // 要求 is_numeric(node)
     [[nodiscard]] static std::optional<long long> try_to_ll(const BigInt &value); // BigInt 转 long long，装不下返回 nullopt
-    // @formatter:on
+    // clang-format on
 
     // ---- 构造折叠结果 ----
     // 结果不是有限数（±inf/NaN）时返回 nullptr——当前 float 字面量语法写不出这两种值，交给运行时处理

@@ -13,14 +13,14 @@
 // token 类型转换为一元运算符类型
 static std::optional<AstNodeOpUnary::OpType> token_type_to_unary_op_type(const TokenType t) {
     switch (t) {
-    // @formatter:off
+    // clang-format off
     case TokenType::SIGN_PLUS:     return AstNodeOpUnary::OpType::Pos;
     case TokenType::SIGN_MINUS:    return AstNodeOpUnary::OpType::Neg;
     case TokenType::SIGN_TILDE:    return AstNodeOpUnary::OpType::BitNot;
     case TokenType::KW_NOT:        return AstNodeOpUnary::OpType::Not;
     case TokenType::SIGN_QUESTION: return AstNodeOpUnary::OpType::Question;
     case TokenType::SIGN_EXCLAIM:  return AstNodeOpUnary::OpType::Exclaim;
-    // @formatter:on
+    // clang-format on
     default: return std::nullopt;
     }
 }
@@ -28,7 +28,7 @@ static std::optional<AstNodeOpUnary::OpType> token_type_to_unary_op_type(const T
 // token 类型转换为二元运算符类型（不含比较运算符）
 static std::optional<AstNodeOpBinary::OpType> token_type_to_binary_op_type(const TokenType t) {
     switch (t) {
-    // @formatter:off
+    // clang-format off
     case TokenType::SIGN_PLUS:        return AstNodeOpBinary::OpType::Add;
     case TokenType::SIGN_MINUS:       return AstNodeOpBinary::OpType::Sub;
     case TokenType::SIGN_STAR:        return AstNodeOpBinary::OpType::Mul;
@@ -44,7 +44,7 @@ static std::optional<AstNodeOpBinary::OpType> token_type_to_binary_op_type(const
     case TokenType::KW_AND:           return AstNodeOpBinary::OpType::And;
     case TokenType::KW_OR:            return AstNodeOpBinary::OpType::Or;
     case TokenType::SIGN_DOTDOT:      return AstNodeOpBinary::OpType::Range;
-    // @formatter:on
+    // clang-format on
     default: return std::nullopt;
     }
 }
@@ -67,7 +67,7 @@ static std::optional<AstNodeCompare::OpType> token_type_to_compare_op_type(const
 // {-1,-1} 表示不是中缀/后缀运算符
 static std::pair<int, int> infix_bp(const TokenType type) {
     switch (type) {
-    // @formatter:off
+    // clang-format off
     case TokenType::SIGN_DOT:        return {170, 170};
     case TokenType::SIGN_LPAREN:
     case TokenType::SIGN_LBRACKET:   return {170, -1}; // 函数调用、索引
@@ -110,7 +110,7 @@ static std::pair<int, int> infix_bp(const TokenType type) {
     case TokenType::SIGN_CARET_ASSIGN:
     case TokenType::SIGN_LSHIFT_ASSIGN:
     case TokenType::SIGN_RSHIFT_ASSIGN: return {10, 9};
-    // @formatter:on
+    // clang-format on
     default: return {-1, -1};
     }
 }
@@ -118,7 +118,7 @@ static std::pair<int, int> infix_bp(const TokenType type) {
 // token 类型是否是复合赋值 op=，是则转换成对应的二元运算符，否则 nullopt
 static std::optional<AstNodeOpBinary::OpType> assign_compound_to_binary(const TokenType op) {
     switch (op) {
-    // @formatter:off
+    // clang-format off
     case TokenType::SIGN_PLUS_ASSIGN:        return AstNodeOpBinary::OpType::Add;
     case TokenType::SIGN_MINUS_ASSIGN:       return AstNodeOpBinary::OpType::Sub;
     case TokenType::SIGN_STAR_ASSIGN:        return AstNodeOpBinary::OpType::Mul;
@@ -131,7 +131,7 @@ static std::optional<AstNodeOpBinary::OpType> assign_compound_to_binary(const To
     case TokenType::SIGN_CARET_ASSIGN:       return AstNodeOpBinary::OpType::BitXor;
     case TokenType::SIGN_LSHIFT_ASSIGN:      return AstNodeOpBinary::OpType::LShift;
     case TokenType::SIGN_RSHIFT_ASSIGN:      return AstNodeOpBinary::OpType::RShift;
-    // @formatter:on
+    // clang-format on
     default: return std::nullopt;
     }
 }

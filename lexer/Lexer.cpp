@@ -379,7 +379,7 @@ std::string Lexer::get_typename_by_tokentype(const TokenType type) {
 
 std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
     switch (type) {
-    // @formatter:off
+    // clang-format off
     case TokenType::LITERAL_NONE:            return "'None'";
     case TokenType::LITERAL_TRUE:            return "'True'";
     case TokenType::LITERAL_FALSE:           return "'False'";
@@ -484,7 +484,7 @@ std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
 
     case TokenType::NEWLINE:                 return "a newline";
     case TokenType::END_OF_FILE:             return "EOF";
-    // @formatter:on
+    // clang-format on
     default: return "<unknown token type>";
     }
 }

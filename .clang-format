@@ -20,5 +20,8 @@ AllowShortIfStatementsOnASingleLine: true
 AllowShortLoopsOnASingleLine: true
 InsertNewlineAtEOF: true
 SpaceAfterCStyleCast: true
-ColumnLimit: 120
-AllowShortCaseLabelsOnASingleLine: true
+ColumnLimit: 100
+
+AlignAfterOpenBracket: BlockIndent
+BinPackArguments: true
+BinPackParameters: true
