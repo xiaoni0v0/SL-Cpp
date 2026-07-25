@@ -7,12 +7,6 @@
 #include <unordered_map>
 #include <utility>
 
-// 工具，创建一个 token
-static Token
-make_token(const TokenType type, const int row, const int col, const std::u32string &value) {
-    return Token{type, row, col, value};
-}
-
 char32_t Lexer::peek(const size_t offset) const {
     const size_t idx{pos_ + offset};
     return idx < source_.size() ? source_[idx] : U'\0';
@@ -43,7 +37,7 @@ Token Lexer::read_newline() {
     const int start_row{row_}, start_col{col_};
 
     advance(); // 消耗 '\n'
-    return make_token(TokenType::NEWLINE, start_row, start_col, U"\n");
+    return {TokenType::NEWLINE, start_row, start_col, U"\n"};
 }
 
 void Lexer::read_comment_line() {
@@ -86,8 +80,7 @@ Token Lexer::read_string(const char32_t quote) {
     std::u32string str_literal;
     while (!is_eof() && peek() != U'\n') {
         const char32_t c{advance()};
-        if (c == quote)
-            return make_token(TokenType::LITERAL_STR, start_row, start_col, str_literal);
+        if (c == quote) return {TokenType::LITERAL_STR, start_row, start_col, str_literal};
 
         // 转义字符
         if (c == U'\\') {
@@ -120,7 +113,7 @@ Token Lexer::read_raw_string() {
     std::u32string str_literal;
     while (!is_eof()) {
         const char32_t c{advance()};
-        if (c == U'`') return make_token(TokenType::LITERAL_STR, start_row, start_col, str_literal);
+        if (c == U'`') return {TokenType::LITERAL_STR, start_row, start_col, str_literal};
         str_literal += c;
     }
     error("unterminated raw string literal", start_row, start_col);
@@ -148,12 +141,12 @@ Token Lexer::read_number() {
         );
     }
 
-    return make_token(
+    return {
         is_float ? TokenType::LITERAL_FLOAT : TokenType::LITERAL_INT,
         start_row,
         start_col,
         num_literal
-    );
+    };
 }
 
 Token Lexer::read_identifier_keyword_reservedword() {
@@ -161,6 +154,7 @@ Token Lexer::read_identifier_keyword_reservedword() {
     static const std::unordered_map<std::u32string, TokenType> KEYWORDS_MAPPING{
 #define X(a, b) {U"" #a, TokenType::b},
 #include "x_keyword.h"
+
 #undef X
     };
 
@@ -168,6 +162,7 @@ Token Lexer::read_identifier_keyword_reservedword() {
     static const std::unordered_map<std::u32string, TokenType> RESERVEDWORDS_MAPPING{
 #define X(a, b) {U"" #a, TokenType::b},
 #include "x_reservedword.h"
+
 #undef X
     };
 
@@ -181,10 +176,10 @@ Token Lexer::read_identifier_keyword_reservedword() {
         error(std::format("'{}' is a reserved word", u32_to_utf8(word)), start_row, start_col);
     }
     if (const auto it{KEYWORDS_MAPPING.find(word)}; it != KEYWORDS_MAPPING.end()) {
-        return make_token(it->second, start_row, start_col, word);
+        return {it->second, start_row, start_col, word};
     }
 
-    return make_token(TokenType::IDENTIFIER, start_row, start_col, word);
+    return {TokenType::IDENTIFIER, start_row, start_col, word};
 }
 
 Token Lexer::read_symbol() {
@@ -194,148 +189,148 @@ Token Lexer::read_symbol() {
 
     // 对于严格单个字符符号
     case U'(':
-        return make_token(TokenType::SIGN_LPAREN, start_row, start_col, U"(");
+        return {TokenType::SIGN_LPAREN, start_row, start_col, U"("};
     case U')':
-        return make_token(TokenType::SIGN_RPAREN, start_row, start_col, U")");
+        return {TokenType::SIGN_RPAREN, start_row, start_col, U")"};
     case U'[':
-        return make_token(TokenType::SIGN_LBRACKET, start_row, start_col, U"[");
+        return {TokenType::SIGN_LBRACKET, start_row, start_col, U"["};
     case U']':
-        return make_token(TokenType::SIGN_RBRACKET, start_row, start_col, U"]");
+        return {TokenType::SIGN_RBRACKET, start_row, start_col, U"]"};
     case U'{':
-        return make_token(TokenType::SIGN_LBRACE, start_row, start_col, U"{");
+        return {TokenType::SIGN_LBRACE, start_row, start_col, U"{"};
     case U'}':
-        return make_token(TokenType::SIGN_RBRACE, start_row, start_col, U"}");
+        return {TokenType::SIGN_RBRACE, start_row, start_col, U"}"};
     case U',':
-        return make_token(TokenType::SIGN_COMMA, start_row, start_col, U",");
+        return {TokenType::SIGN_COMMA, start_row, start_col, U","};
     case U';':
-        return make_token(TokenType::SIGN_SEMICOLON, start_row, start_col, U";");
+        return {TokenType::SIGN_SEMICOLON, start_row, start_col, U";"};
     case U':':
-        return make_token(TokenType::SIGN_COLON, start_row, start_col, U":");
+        return {TokenType::SIGN_COLON, start_row, start_col, U":"};
     case U'@':
-        return make_token(TokenType::SIGN_AT, start_row, start_col, U"@");
+        return {TokenType::SIGN_AT, start_row, start_col, U"@"};
     case U'$':
-        return make_token(TokenType::SIGN_DOLLAR, start_row, start_col, U"$");
+        return {TokenType::SIGN_DOLLAR, start_row, start_col, U"$"};
     case U'~':
-        return make_token(TokenType::SIGN_TILDE, start_row, start_col, U"~");
+        return {TokenType::SIGN_TILDE, start_row, start_col, U"~"};
     case U'?':
-        return make_token(TokenType::SIGN_QUESTION, start_row, start_col, U"?");
+        return {TokenType::SIGN_QUESTION, start_row, start_col, U"?"};
 
     // 对于可能的多字符符号
     case U'+':
         if (peek() == U'=') {
             advance();
-            return make_token(TokenType::SIGN_PLUS_ASSIGN, start_row, start_col, U"+=");
+            return {TokenType::SIGN_PLUS_ASSIGN, start_row, start_col, U"+="};
         }
-        return make_token(TokenType::SIGN_PLUS, start_row, start_col, U"+");
+        return {TokenType::SIGN_PLUS, start_row, start_col, U"+"};
 
     case U'-':
         if (peek() == U'=') {
             advance();
-            return make_token(TokenType::SIGN_MINUS_ASSIGN, start_row, start_col, U"-=");
+            return {TokenType::SIGN_MINUS_ASSIGN, start_row, start_col, U"-="};
         }
-        return make_token(TokenType::SIGN_MINUS, start_row, start_col, U"-");
+        return {TokenType::SIGN_MINUS, start_row, start_col, U"-"};
 
     case U'*':
         if (peek() == U'*') {
             advance();
             if (peek() == U'=') {
                 advance();
-                return make_token(TokenType::SIGN_DOUBLESTAR_ASSIGN, start_row, start_col, U"**=");
+                return {TokenType::SIGN_DOUBLESTAR_ASSIGN, start_row, start_col, U"**="};
             }
-            return make_token(TokenType::SIGN_DOUBLESTAR, start_row, start_col, U"**");
+            return {TokenType::SIGN_DOUBLESTAR, start_row, start_col, U"**"};
         }
         if (peek() == U'=') {
             advance();
-            return make_token(TokenType::SIGN_STAR_ASSIGN, start_row, start_col, U"*=");
+            return {TokenType::SIGN_STAR_ASSIGN, start_row, start_col, U"*="};
         }
-        return make_token(TokenType::SIGN_STAR, start_row, start_col, U"*");
+        return {TokenType::SIGN_STAR, start_row, start_col, U"*"};
 
     case U'/':
         if (peek() == U'/') {
             advance();
             if (peek() == U'=') {
                 advance();
-                return make_token(TokenType::SIGN_DOUBLESLASH_ASSIGN, start_row, start_col, U"//=");
+                return {TokenType::SIGN_DOUBLESLASH_ASSIGN, start_row, start_col, U"//="};
             }
-            return make_token(TokenType::SIGN_DOUBLESLASH, start_row, start_col, U"//");
+            return {TokenType::SIGN_DOUBLESLASH, start_row, start_col, U"//"};
         }
         if (peek() == U'=') {
             advance();
-            return make_token(TokenType::SIGN_SLASH_ASSIGN, start_row, start_col, U"/=");
+            return {TokenType::SIGN_SLASH_ASSIGN, start_row, start_col, U"/="};
         }
-        return make_token(TokenType::SIGN_SLASH, start_row, start_col, U"/");
+        return {TokenType::SIGN_SLASH, start_row, start_col, U"/"};
 
     case U'%':
         if (peek() == U'=') {
             advance();
-            return make_token(TokenType::SIGN_PERCENT_ASSIGN, start_row, start_col, U"%=");
+            return {TokenType::SIGN_PERCENT_ASSIGN, start_row, start_col, U"%="};
         }
-        return make_token(TokenType::SIGN_PERCENT, start_row, start_col, U"%");
+        return {TokenType::SIGN_PERCENT, start_row, start_col, U"%"};
 
     case U'&':
         if (peek() == U'=') {
             advance();
-            return make_token(TokenType::SIGN_AMPERSAND_ASSIGN, start_row, start_col, U"&=");
+            return {TokenType::SIGN_AMPERSAND_ASSIGN, start_row, start_col, U"&="};
         }
-        return make_token(TokenType::SIGN_AMPERSAND, start_row, start_col, U"&");
+        return {TokenType::SIGN_AMPERSAND, start_row, start_col, U"&"};
 
     case U'|':
         if (peek() == U'=') {
             advance();
-            return make_token(TokenType::SIGN_PIPE_ASSIGN, start_row, start_col, U"|=");
+            return {TokenType::SIGN_PIPE_ASSIGN, start_row, start_col, U"|="};
         }
-        return make_token(TokenType::SIGN_PIPE, start_row, start_col, U"|");
+        return {TokenType::SIGN_PIPE, start_row, start_col, U"|"};
 
     case U'^':
         if (peek() == U'=') {
             advance();
-            return make_token(TokenType::SIGN_CARET_ASSIGN, start_row, start_col, U"^=");
+            return {TokenType::SIGN_CARET_ASSIGN, start_row, start_col, U"^="};
         }
-        return make_token(TokenType::SIGN_CARET, start_row, start_col, U"^");
+        return {TokenType::SIGN_CARET, start_row, start_col, U"^"};
 
     case U'<':
         if (peek() == U'<') {
             advance();
             if (peek() == U'=') {
                 advance();
-                return make_token(TokenType::SIGN_LSHIFT_ASSIGN, start_row, start_col, U"<<=");
+                return {TokenType::SIGN_LSHIFT_ASSIGN, start_row, start_col, U"<<="};
             }
-            return make_token(TokenType::SIGN_LSHIFT, start_row, start_col, U"<<");
+            return {TokenType::SIGN_LSHIFT, start_row, start_col, U"<<"};
         }
         if (peek() == U'=') {
             advance();
-            return make_token(TokenType::SIGN_LE, start_row, start_col, U"<=");
+            return {TokenType::SIGN_LE, start_row, start_col, U"<="};
         }
-        return make_token(TokenType::SIGN_LT, start_row, start_col, U"<");
+        return {TokenType::SIGN_LT, start_row, start_col, U"<"};
 
     case U'>':
         if (peek() == U'>') {
             advance();
             if (peek() == U'=') {
                 advance();
-                return make_token(TokenType::SIGN_RSHIFT_ASSIGN, start_row, start_col, U">>=");
+                return {TokenType::SIGN_RSHIFT_ASSIGN, start_row, start_col, U">>="};
             }
-            return make_token(TokenType::SIGN_RSHIFT, start_row, start_col, U">>");
+            return {TokenType::SIGN_RSHIFT, start_row, start_col, U">>"};
         }
         if (peek() == U'=') {
             advance();
-            return make_token(TokenType::SIGN_GE, start_row, start_col, U">=");
+            return {TokenType::SIGN_GE, start_row, start_col, U">="};
         }
-        return make_token(TokenType::SIGN_GT, start_row, start_col, U">");
+        return {TokenType::SIGN_GT, start_row, start_col, U">"};
 
     case U'=':
         if (peek() == U'=') {
             advance();
-            return make_token(TokenType::SIGN_EQ, start_row, start_col, U"==");
+            return {TokenType::SIGN_EQ, start_row, start_col, U"=="};
         }
-        return make_token(TokenType::SIGN_ASSIGN, start_row, start_col, U"=");
+        return {TokenType::SIGN_ASSIGN, start_row, start_col, U"="};
 
     case U'!':
         if (peek() == U'=') {
             advance();
-            return make_token(TokenType::SIGN_NE, start_row, start_col, U"!=");
+            return {TokenType::SIGN_NE, start_row, start_col, U"!="};
         }
-        return make_token(TokenType::SIGN_EXCLAIM, start_row, start_col, U"!");
+        return {TokenType::SIGN_EXCLAIM, start_row, start_col, U"!"};
 
     case U'.': {
         // 贪婪匹配：尽可能多吃连续的点，最多 3 个
@@ -347,11 +342,11 @@ Token Lexer::read_symbol() {
         }
         switch (dot_count) {
         case 3:
-            return make_token(TokenType::LITERAL_ELLIPSIS, start_row, start_col, U"...");
+            return {TokenType::LITERAL_ELLIPSIS, start_row, start_col, U"..."};
         case 2:
-            return make_token(TokenType::SIGN_DOTDOT, start_row, start_col, U"..");
+            return {TokenType::SIGN_DOTDOT, start_row, start_col, U".."};
         default:
-            return make_token(TokenType::SIGN_DOT, start_row, start_col, U".");
+            return {TokenType::SIGN_DOT, start_row, start_col, U"."};
         }
     }
 
@@ -370,7 +365,7 @@ std::vector<Token> Lexer::tokenize() && {
         skip_spaces();
 
         if (is_eof()) {
-            all_tokens.push_back(make_token(TokenType::END_OF_FILE, row_, col_, U""));
+            all_tokens.push_back({TokenType::END_OF_FILE, row_, col_, U""});
             break;
         }
 
@@ -430,8 +425,8 @@ std::string Lexer::get_typename_by_tokentype(const TokenType type) {
 }
 
 std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
+    // clang-format off
     switch (type) {
-        // clang-format off
     case TokenType::LITERAL_NONE:            return "'None'";
     case TokenType::LITERAL_TRUE:            return "'True'";
     case TokenType::LITERAL_FALSE:           return "'False'";
