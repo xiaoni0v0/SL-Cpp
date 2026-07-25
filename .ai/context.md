@@ -2462,22 +2462,43 @@ Parser 自己的结构性保证"——正常情况下**永远**不会真的跑�
 源码违反了语言语法"，而这些防御性断言代表的是"编译器实现本身有 bug"，是完全不同性质的问题，
 混在一起会让人误以为是自己代码写错了。
 
-新增 `analyzer/InternalError.h`：`InternalError` 类**不继承 `SLException`**——`SLException` 是
-SL 内建异常类（`SyntaxError`/`EncodingError`/`FileNotFoundError` 等，都在
-`builtins/exceptions/`）的 C++ 载体，语义上专门对应"SL 代码运行时能被 `except` 捕获到的
-异常"；`InternalError` 发生在分析阶段，压根没有 SL 代码在运行，也不该被任何 `except` 捕获到，
-所以直接继承 `std::runtime_error`，跟 `SLException` 是平级的两条分支。
+最初的实现：新增 `analyzer/InternalError.h`，`InternalError` 类**不继承 `SLException`**——理由是
+`SLException` 是 SL 内建异常类的 C++ 载体，专门对应"SL 代码运行时能被 `except` 捕获到的异常"，
+`InternalError` 不该被任何 `except` 捕获到，所以让它直接继承 `std::runtime_error`，跟
+`SLException` 是平级的两条分支。
 
 `SyntaxChecker` 新增私有方法 `internal_error(msg, pos)`（跟 `error(msg, pos)` 平级），所有
 `"Bad AstNode: ..."` 开头的调用点（`require_not_null` 的两个非模板重载 + 两个模板、
 `check_not_null` 的两个重载、字典 `**`/val 检查、`Compare`/`Is` 的"mismatched count"检查）全部
 从 `error()` 改成 `internal_error()`，消息里去掉了"Bad AstNode: "前缀（异常类型本身已经通过
 "InternalError (this is a compiler bug, not a problem with your SL code): ..."这句话表达了
-这层意思，前缀显得多余）。测试这边：`test/analyzer/syntax_checker/defensive_test.cpp` 里全部
-14 处 `check_throws_with` 调用（这个文件所有用例本质上都是"Bad AstNode"类）改成新加的
+这层意思，前缀显得多余）。测试这边：`test/syntax_checker/defensive_test.cpp` 里全部 14 处
+`check_throws_with` 调用（这个文件所有用例本质上都是"Bad AstNode"类）改成新加的
 `check_throws_internal_error_with`（`test_utils.h` 新增，捕获 `InternalError` 而不是
-`SyntaxError`）。`.ai/run_test.bat` 全绿，用例数不变（子串匹配的文本本身没变，只是去掉了前缀、
-换了要捕获的异常类型）。
+`SyntaxError`）。
+
+**用户想了想之后改了主意，最终定案是继承 `SLException`**：理由是这些 C++ 异常要对应到 SL 层，
+本来就得再包一层转换（C++ 异常 → SL 异常对象，供 `except` 捕获），SL 层压根不会给 `InternalError`
+注册对应的 SL 类，"能不能被 SL 的 `except` 捕获"这件事由那层注册表决定，不由 C++ 里继承哪个基类
+决定——所以 `InternalError` 继承不继承 `SLException` 对"是否能被 SL 代码捕获"这件事没有影响，
+纯粹是 C++ 层的类层次要不要统一的问题，继承 `SLException` 更一致（复用同一套构造/格式化逻辑），
+没有坏处。用户直接动手做了这一轮改动（本会话里没有逐步展示，是"文件被修改过"式的直接改动）：
+
+1. `builtins/classes/exceptions/` 整个目录改名成 `builtins/exceptions/`（去掉了 `classes` 这层），
+   仓库里所有引用这个路径的地方（`Lexer.cpp`/`Parser.cpp`/`Executor.cpp`/`utils/*.cpp`/一大批
+   `test/parser`、`test/lexer` 下的测试文件、`CMakeLists.txt`）全部跟着改了路径；
+2. `InternalError.h` 从 `analyzer/InternalError.h` 挪到 `builtins/exceptions/InternalError.h`，
+   改成继承 `SLException`，注释改成"是 exceptions 里唯一没有对应 SL 类的异常，当然更不能在 SL
+   层捕获"——`builtins/exceptions/` 目录不再是"纯 SL 内建类"专属，`InternalError` 是个例外，
+   靠这条注释和"没有对应 SL 类"这个事实来说明它的特殊性，而不是靠不继承 `SLException`；
+3. `SyntaxChecker` 里 `internal_error` 改名成 `error_internal`（跟 `error` 保持同样的前缀词序）。
+
+`test/syntax_checker/` 也已经跟着搬到了 `test/analyzer/syntax_checker/`（前一轮 CMake target
+合并时定的目录结构），`test_utils.h`/`defensive_test.cpp` 都指向了新路径，`check_throws_with`/
+`check_throws_internal_error_with` 两个各自 `catch` 的具体类型（`SyntaxError`/`InternalError`）
+没受继承关系变化影响——两者依然是互相独立的兄弟类型，`catch (const SyntaxError&)` 本来就不会
+捕获到 `InternalError`，不管它们的公共基类是不是 `SLException`。`.ai/run_test.bat` 验证：全部
+改动已经是一致、可编译、可通过的状态（96/220），没有遗留的旧路径引用或没改完的半成品。
 
 `Parser.cpp` 里 `finish_func_params`/`finish_call`/`finish_captures` 也按要求加了注释，说明各自
 在 Parser 层保证了什么、留给语义层检查什么——这样以后再有类似"到底该 Parser 查还是 SyntaxChecker
