@@ -1,4 +1,4 @@
-// SL.md 2.2.5.2 for 表达式：
+﻿// SL.md 2.2.5.2 for 表达式：
 //   步进模式 for [$] (init cond inc) expr；迭代模式 for [$] (lvalue : iterable) expr。
 // 这里重点覆盖：
 //   1. "裸单表达式当条件" for (cond) body 不是 SL.md 授权的语法，必须报错；
@@ -142,9 +142,6 @@ TEST_SUITE("2.2.5.2 for——步进模式") {
     }
 
     TEST_CASE("槽之间缺分隔符报错，位置指向下一槽开头（不是上一槽结尾）") {
-        // "for (i = 0 i < 10; i += 1) body"
-        // f(1)o(2)r(3) (4)((5)i(6) (7)=(8) (9)0(10) (11)i(12) (13)<(14) (15)1(16)0(17);(18)...
-        // 第一槽 "i = 0" 解析完后，缺 ';'/换行直接紧跟第二槽的 'i'（第 12 列），报错应指向这个 'i'
         try {
             parse_program(U"for (i = 0 i < 10; i += 1) body");
             FAIL("应当抛出异常");
@@ -159,20 +156,12 @@ TEST_SUITE("2.2.5.2 for——步进模式") {
         "换行不能替代 ';' 来标记空槽：只写两个换行分隔的槽就直接收尾必须报错，"
         "不能把第三槽悄悄当成空的接受掉"
     ) {
-        // for(a\nb\n) {} —— a、b 两个槽之间确实是合法的换行分隔，
-        // 但 b 后面只有一个换行就直接是 ')'，第三槽（inc）既没写内容也没有显式 ';'，
-        // 不能被默认接受成"inc 为空"（SL.md 2.2.5.2：空槽必须显式用 ';'）
         CHECK_THROWS_AS(parse_program(U"for (a\nb\n) body"), SyntaxError);
-        // 退化到只有一个槽的情况同理：换行之后直接收尾，不能被当成"只写了 init，cond/inc 隐式为空"
         CHECK_THROWS_AS(parse_program(U"for (a\n) body"), SyntaxError);
-        // 前面的槽用显式 ';' 标记为空，不代表后面的槽也能只凭换行标记为空——
-        // init 用 ';' 正确标空，但 inc 只有换行、没有显式 ';'，同样要报错
         CHECK_THROWS_AS(parse_program(U"for (; c\n) body"), SyntaxError);
     }
 
     TEST_CASE("空槽换行报错的消息说明白要补 ';'，位置指向那个不该出现的 ')'") {
-        // "for (a\nb\n) body" -> 第 1 行 "for (a"，第 2 行 "b"，第 3 行 ") body"
-        // ')' 是第 3 行第 1 个字符
         try {
             parse_program(U"for (a\nb\n) body");
             FAIL("应当抛出异常");
@@ -349,5 +338,68 @@ TEST_SUITE("2.2.5.2 for——cond 槽禁止裸的普通赋值（init/inc 不受�
 
     TEST_CASE("init/inc 槽裸赋值不受限（本来就是为赋值而生）") {
         CHECK_NOTHROW(parse_program(U"for (i = 0; c; i = i + 1) body"));
+    }
+}
+
+TEST_SUITE("2.2.5.2 for——$ 与 for 之间不需要空白（spec 2.1.6）") {
+
+    TEST_CASE("步进模式 for$ 无空格") {
+        CHECK(
+            parse_json(U"for$(i = 0; i < 10; i += 1) body") ==
+            nlohmann::json{
+                {"type", "ForCond"},
+                {"collect", true},
+                {"init", {{"type", "Assign"}, {"target", ident("i")}, {"value", int_lit("0")}}},
+                {"cond",
+                 {{"type", "Compare"},
+                  {"operands", nlohmann::json::array({ident("i"), int_lit("10")})},
+                  {"ops", nlohmann::json::array({"<"})}}},
+                {"inc",
+                 {{"type", "CompoundAssign"},
+                  {"target", ident("i")},
+                  {"op", "+"},
+                  {"value", int_lit("1")}}},
+                {"body", ident("body")}
+            }
+        );
+    }
+
+    TEST_CASE("迭代模式 for$ 无空格") {
+        CHECK(
+            parse_json(U"for$(x : xs) body") == nlohmann::json{
+                                                    {"type", "ForIter"},
+                                                    {"collect", true},
+                                                    {"target", ident("x")},
+                                                    {"iterable", ident("xs")},
+                                                    {"body", ident("body")}
+                                                }
+        );
+    }
+}
+
+TEST_SUITE("2.2.5.2 for——迭代模式 : 前允许换行") {
+
+    TEST_CASE(": 紧跟前导换行，仍能正确识别为迭代模式") {
+        CHECK(
+            parse_json(U"for (x\n: xs) body") == nlohmann::json{
+                                                     {"type", "ForIter"},
+                                                     {"collect", false},
+                                                     {"target", ident("x")},
+                                                     {"iterable", ident("xs")},
+                                                     {"body", ident("body")}
+                                                 }
+        );
+    }
+
+    TEST_CASE(": 前有多个空行也同样正确") {
+        CHECK(
+            parse_json(U"for (x\n\n\n: xs) body") == nlohmann::json{
+                                                         {"type", "ForIter"},
+                                                         {"collect", false},
+                                                         {"target", ident("x")},
+                                                         {"iterable", ident("xs")},
+                                                         {"body", ident("body")}
+                                                     }
+        );
     }
 }

@@ -123,14 +123,13 @@ TEST_SUITE("2.2.7 class") {
     }
 
     TEST_CASE("基类列表未闭合的消息明确说'base class list'，位置指向多出来的 '{'（不是 EOF）") {
-        // "class C(Base {}" -> c(1)l(2)a(3)s(4)s(5) (6)C(7)((8)B(9)a(10)s(11)e(12) (13){(14)}(15)
         try {
             parse_program(U"class C(Base {}");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
             CHECK(msg.find("close base class list") != std::string::npos);
-            CHECK(msg.find("1:14:") != std::string::npos); // '{'
+            CHECK(msg.find("1:14:") != std::string::npos);
         }
     }
 }
@@ -198,14 +197,59 @@ TEST_SUITE("2.2.7 class——捕获列表") {
     }
 
     TEST_CASE("捕获列表未闭合的消息明确说'capture list'，位置指向多出来的 '{'（不是 EOF）") {
-        // "class C[x {}" -> c(1)l(2)a(3)s(4)s(5) (6)C(7)[(8)x(9) (10){(11)}(12)
         try {
             parse_program(U"class C[x {}");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
             CHECK(msg.find("close capture list") != std::string::npos);
-            CHECK(msg.find("1:11:") != std::string::npos); // '{'
+            CHECK(msg.find("1:11:") != std::string::npos);
         }
+    }
+}
+
+TEST_SUITE("2.2.7 class——匿名类 + 基类 + 捕获 + 文档字符串全部组合") {
+
+    TEST_CASE("四项齐全：匿名 + 基类列表 + 捕获列表 + 文档字符串") {
+        CHECK(
+            parse_json(U"class (Base1, Base2)[x, &y]'doc' {}") ==
+            nlohmann::json{
+                {"type", "Class"},
+                {"decorators", nlohmann::json::array()},
+                {"name", nullptr},
+                {"bases", nlohmann::json::array({ident("Base1"), ident("Base2")})},
+                {"captures",
+                 nlohmann::json::array(
+                     {{{"kind", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}},
+                      {{"kind", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}}}
+                 )},
+                {"doc", {{"type", "LiteralStr"}, {"value", "doc"}}},
+                {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
+            }
+        );
+    }
+
+    TEST_CASE("匿名 + 空基类列表 + 值捕获带表达式 + 文档字符串") {
+        CHECK(
+            parse_json(U"class ()[a = 1 + 2]'doc' {}") ==
+            nlohmann::json{
+                {"type", "Class"},
+                {"decorators", nlohmann::json::array()},
+                {"name", nullptr},
+                {"bases", nlohmann::json::array()},
+                {"captures",
+                 nlohmann::json::array(
+                     {{{"kind", "Value"},
+                       {"identifier", "a"},
+                       {"value_expr",
+                        {{"type", "OpBinary"},
+                         {"op", "+"},
+                         {"left", int_lit("1")},
+                         {"right", int_lit("2")}}}}}
+                 )},
+                {"doc", {{"type", "LiteralStr"}, {"value", "doc"}}},
+                {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
+            }
+        );
     }
 }

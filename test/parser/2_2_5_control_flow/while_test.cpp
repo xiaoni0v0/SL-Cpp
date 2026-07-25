@@ -103,3 +103,36 @@ TEST_SUITE("2.2.5.3 while——cond 禁止裸的普通赋值") {
         );
     }
 }
+
+TEST_SUITE("2.2.5.3 while——$ 与 while 之间不需要空白（spec 2.1.6）") {
+
+    TEST_CASE("基本 while$ 无空格") {
+        CHECK(
+            parse_json(U"while$(c) body") == nlohmann::json{
+                                                 {"type", "ForCond"},
+                                                 {"collect", true},
+                                                 {"init", nullptr},
+                                                 {"cond", ident("c")},
+                                                 {"inc", nullptr},
+                                                 {"body", ident("body")}
+                                             }
+        );
+    }
+
+    TEST_CASE("while$ 无空格 + 复杂条件") {
+        CHECK(
+            parse_json(U"while$(x < 10) body") ==
+            nlohmann::json{
+                {"type", "ForCond"},
+                {"collect", true},
+                {"init", nullptr},
+                {"cond",
+                 {{"type", "Compare"},
+                  {"operands", nlohmann::json::array({ident("x"), int_lit("10")})},
+                  {"ops", nlohmann::json::array({"<"})}}},
+                {"inc", nullptr},
+                {"body", ident("body")}
+            }
+        );
+    }
+}

@@ -68,7 +68,6 @@ def format_file(path: Path) -> bool:
 
 
 def pluralize(count: int, noun: str) -> str:
-    """按 black 的习惯做单复数：1 file / 2 files"""
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
