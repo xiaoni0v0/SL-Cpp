@@ -44,28 +44,23 @@ TEST_SUITE("StaticEvaler 数值算术") {
         CHECK(
             fold_json(U"1 / 0") ==
             nlohmann::json{
-                {"type", "OpBinary"}, {"op", "/"}, {"left", int_lit("1")}, {"right", int_lit("0")}
-            }
+                {"type", "OpBinary"}, {"op", "/"}, {"left", int_lit("1")}, {"right", int_lit("0")}}
         );
         CHECK(
             fold_json(U"1 // 0") ==
             nlohmann::json{
-                {"type", "OpBinary"}, {"op", "//"}, {"left", int_lit("1")}, {"right", int_lit("0")}
-            }
+                {"type", "OpBinary"}, {"op", "//"}, {"left", int_lit("1")}, {"right", int_lit("0")}}
         );
         CHECK(
             fold_json(U"1 % 0") ==
             nlohmann::json{
-                {"type", "OpBinary"}, {"op", "%"}, {"left", int_lit("1")}, {"right", int_lit("0")}
-            }
+                {"type", "OpBinary"}, {"op", "%"}, {"left", int_lit("1")}, {"right", int_lit("0")}}
         );
         CHECK(
-            fold_json(U"1.0 / 0.0") == nlohmann::json{
-                                           {"type", "OpBinary"},
-                                           {"op", "/"},
-                                           {"left", float_lit("1.0")},
-                                           {"right", float_lit("0.0")}
-                                       }
+            fold_json(U"1.0 / 0.0") == nlohmann::json{{"type", "OpBinary"},
+                                                      {"op", "/"},
+                                                      {"left", float_lit("1.0")},
+                                                      {"right", float_lit("0.0")}}
         );
     }
 
@@ -93,20 +88,18 @@ TEST_SUITE("StaticEvaler 数值算术") {
 
     TEST_CASE("含变量/调用的子表达式不折，只递归折内部能折的部分") {
         CHECK(
-            fold_json(U"x + 1") == nlohmann::json{
-                                       {"type", "OpBinary"},
-                                       {"op", "+"},
-                                       {"left", {{"type", "Identifier"}, {"identifier", "x"}}},
-                                       {"right", int_lit("1")}
-                                   }
+            fold_json(U"x + 1") ==
+            nlohmann::json{{"type", "OpBinary"},
+                           {"op", "+"},
+                           {"left", {{"type", "Identifier"}, {"identifier", "x"}}},
+                           {"right", int_lit("1")}}
         );
         CHECK(
-            fold_json(U"1 + 2 + x") == nlohmann::json{
-                                           {"type", "OpBinary"},
-                                           {"op", "+"},
-                                           {"left", int_lit("3")},
-                                           {"right", {{"type", "Identifier"}, {"identifier", "x"}}}
-                                       }
+            fold_json(U"1 + 2 + x") ==
+            nlohmann::json{{"type", "OpBinary"},
+                           {"op", "+"},
+                           {"left", int_lit("3")},
+                           {"right", {{"type", "Identifier"}, {"identifier", "x"}}}}
         );
     }
 }

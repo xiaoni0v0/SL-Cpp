@@ -28,10 +28,10 @@ TEST_SUITE("StaticEvaler 位运算") {
 
     TEST_CASE("负数移位不折，交给运行时报错") {
         CHECK(
-            fold_json(U"1 << -1") ==
-            nlohmann::json{
-                {"type", "OpBinary"}, {"op", "<<"}, {"left", int_lit("1")}, {"right", int_lit("-1")}
-            }
+            fold_json(U"1 << -1") == nlohmann::json{{"type", "OpBinary"},
+                                                    {"op", "<<"},
+                                                    {"left", int_lit("1")},
+                                                    {"right", int_lit("-1")}}
         );
     }
 
@@ -42,12 +42,10 @@ TEST_SUITE("StaticEvaler 位运算") {
 
     TEST_CASE("float 不参与位运算，不折") {
         CHECK(
-            fold_json(U"1.0 & 1") == nlohmann::json{
-                                         {"type", "OpBinary"},
-                                         {"op", "&"},
-                                         {"left", float_lit("1.0")},
-                                         {"right", int_lit("1")}
-                                     }
+            fold_json(U"1.0 & 1") == nlohmann::json{{"type", "OpBinary"},
+                                                    {"op", "&"},
+                                                    {"left", float_lit("1.0")},
+                                                    {"right", int_lit("1")}}
         );
     }
 }

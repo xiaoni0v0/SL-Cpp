@@ -22,75 +22,65 @@ TEST_SUITE("2.2.7 class") {
     TEST_CASE("最简单的具名类") {
         CHECK(
             parse_json(U"class C {}") ==
-            nlohmann::json{
-                {"type", "Class"},
-                {"decorators", nlohmann::json::array()},
-                {"name", "C"},
-                {"bases", nlohmann::json::array()},
-                {"captures", nlohmann::json::array()},
-                {"doc", nullptr},
-                {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
-            }
+            nlohmann::json{{"type", "Class"},
+                           {"decorators", nlohmann::json::array()},
+                           {"name", "C"},
+                           {"bases", nlohmann::json::array()},
+                           {"captures", nlohmann::json::array()},
+                           {"doc", nullptr},
+                           {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}}
         );
     }
 
     TEST_CASE("匿名类：省略名字") {
         CHECK(
             parse_json(U"class {}") ==
-            nlohmann::json{
-                {"type", "Class"},
-                {"decorators", nlohmann::json::array()},
-                {"name", nullptr},
-                {"bases", nlohmann::json::array()},
-                {"captures", nlohmann::json::array()},
-                {"doc", nullptr},
-                {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
-            }
+            nlohmann::json{{"type", "Class"},
+                           {"decorators", nlohmann::json::array()},
+                           {"name", nullptr},
+                           {"bases", nlohmann::json::array()},
+                           {"captures", nlohmann::json::array()},
+                           {"doc", nullptr},
+                           {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}}
         );
     }
 
     TEST_CASE("带基类列表") {
         CHECK(
             parse_json(U"class C(Base1, Base2) {}") ==
-            nlohmann::json{
-                {"type", "Class"},
-                {"decorators", nlohmann::json::array()},
-                {"name", "C"},
-                {"bases", nlohmann::json::array({ident("Base1"), ident("Base2")})},
-                {"captures", nlohmann::json::array()},
-                {"doc", nullptr},
-                {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
-            }
+            nlohmann::json{{"type", "Class"},
+                           {"decorators", nlohmann::json::array()},
+                           {"name", "C"},
+                           {"bases", nlohmann::json::array({ident("Base1"), ident("Base2")})},
+                           {"captures", nlohmann::json::array()},
+                           {"doc", nullptr},
+                           {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}}
         );
     }
 
     TEST_CASE("空基类列表 ()") {
         CHECK(
             parse_json(U"class C() {}") ==
-            nlohmann::json{
-                {"type", "Class"},
-                {"decorators", nlohmann::json::array()},
-                {"name", "C"},
-                {"bases", nlohmann::json::array()},
-                {"captures", nlohmann::json::array()},
-                {"doc", nullptr},
-                {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
-            }
+            nlohmann::json{{"type", "Class"},
+                           {"decorators", nlohmann::json::array()},
+                           {"name", "C"},
+                           {"bases", nlohmann::json::array()},
+                           {"captures", nlohmann::json::array()},
+                           {"doc", nullptr},
+                           {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}}
         );
     }
 
     TEST_CASE("文档字符串") {
         CHECK(
             parse_json(U"class C 'doc' {}") ==
-            nlohmann::json{
-                {"type", "Class"},
-                {"decorators", nlohmann::json::array()},
-                {"name", "C"},
-                {"bases", nlohmann::json::array()},
-                {"captures", nlohmann::json::array()},
-                {"doc", {{"type", "LiteralStr"}, {"value", "doc"}}},
-                {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
-            }
+            nlohmann::json{{"type", "Class"},
+                           {"decorators", nlohmann::json::array()},
+                           {"name", "C"},
+                           {"bases", nlohmann::json::array()},
+                           {"captures", nlohmann::json::array()},
+                           {"doc", {{"type", "LiteralStr"}, {"value", "doc"}}},
+                           {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}}
         );
     }
 
@@ -104,12 +94,12 @@ TEST_SUITE("2.2.7 class") {
     TEST_CASE("基类可以是任意表达式，比如调用") {
         CHECK(
             parse_json(U"class C(make_base()) {}")["bases"] ==
-            nlohmann::json::array({nlohmann::json{
-                {"type", "Call"},
-                {"object", ident("make_base")},
-                {"args", nlohmann::json::array()},
-                {"kwargs", nlohmann::json::array()}
-            }})
+            nlohmann::json::array(
+                {nlohmann::json{{"type", "Call"},
+                                {"object", ident("make_base")},
+                                {"args", nlohmann::json::array()},
+                                {"kwargs", nlohmann::json::array()}}}
+            )
         );
     }
 
@@ -146,32 +136,31 @@ TEST_SUITE("2.2.7 class——捕获列表") {
         );
         CHECK(
             parse_json(U"class C[x = 1 + 2] {}")["captures"] ==
-            nlohmann::json::array({nlohmann::json{
-                {"kind", "Value"},
-                {"identifier", "x"},
-                {"value_expr",
-                 {{"type", "OpBinary"},
-                  {"op", "+"},
-                  {"left", int_lit("1")},
-                  {"right", int_lit("2")}}}
-            }})
+            nlohmann::json::array(
+                {nlohmann::json{{"kind", "Value"},
+                                {"identifier", "x"},
+                                {"value_expr",
+                                 {{"type", "OpBinary"},
+                                  {"op", "+"},
+                                  {"left", int_lit("1")},
+                                  {"right", int_lit("2")}}}}}
+            )
         );
         CHECK(
             parse_json(U"class C[&y] {}")["captures"] ==
-            nlohmann::json::array({nlohmann::json{
-                {"kind", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
-            }})
+            nlohmann::json::array(
+                {nlohmann::json{
+                    {"kind", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}}}
+            )
         );
         CHECK(
             parse_json(U"class C[x, &y, z = 1] {}")["captures"] ==
             nlohmann::json::array(
                 {nlohmann::json{{"kind", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}},
                  nlohmann::json{
-                     {"kind", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
-                 },
+                     {"kind", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}},
                  nlohmann::json{
-                     {"kind", "Value"}, {"identifier", "z"}, {"value_expr", int_lit("1")}
-                 }}
+                     {"kind", "Value"}, {"identifier", "z"}, {"value_expr", int_lit("1")}}}
             )
         );
         CHECK(parse_json(U"class C[] {}")["captures"] == nlohmann::json::array());

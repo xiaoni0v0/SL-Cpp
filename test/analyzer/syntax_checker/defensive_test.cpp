@@ -21,8 +21,7 @@ TEST_SUITE("SyntaxChecker 防御性断言（畸形 AST，正常解析永远构�
     TEST_CASE("AstNodeIf::clauses_ 为空") {
         std::vector<AstNodeIf::AstNodeCondAndExpr> clauses;
         AstNodeProgramPtr program{
-            wrap(std::make_unique<AstNodeIf>(Position{0, 0}, std::move(clauses), nullptr))
-        };
+            wrap(std::make_unique<AstNodeIf>(Position{0, 0}, std::move(clauses), nullptr))};
         check_throws_internal_error_with(*program, "too few elements");
     }
 
@@ -79,8 +78,7 @@ TEST_SUITE("SyntaxChecker 防御性断言（畸形 AST，正常解析永远构�
             int_lit() // 不该有值，正确的 Parser 输出这里永远是 nullptr
         );
         AstNodeProgramPtr program{
-            wrap(std::make_unique<AstNodeLiteralDict>(Position{0, 0}, std::move(items)))
-        };
+            wrap(std::make_unique<AstNodeLiteralDict>(Position{0, 0}, std::move(items)))};
         check_throws_internal_error_with(*program, "** dict-spread entry must not have a value");
     }
 

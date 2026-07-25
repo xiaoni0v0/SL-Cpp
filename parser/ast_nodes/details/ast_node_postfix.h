@@ -43,12 +43,10 @@ struct AstNodeCall : AstNode {
                                                              : json(nullptr)},
                  {"value", kw.value_->to_json()}}
             );
-        return json{
-            {"type", "Call"},
-            {"object", object_->to_json()},
-            {"args", std::move(args)},
-            {"kwargs", std::move(kwargs)}
-        };
+        return json{{"type", "Call"},
+                    {"object", object_->to_json()},
+                    {"args", std::move(args)},
+                    {"kwargs", std::move(kwargs)}};
     }
 };
 

@@ -24,14 +24,12 @@ TEST_SUITE("2.2.5.6 return") {
 
     TEST_CASE("带值是复杂表达式") {
         CHECK(
-            parse_json(U"return 1 + 2") == nlohmann::json{
-                                               {"type", "Return"},
-                                               {"value",
-                                                {{"type", "OpBinary"},
-                                                 {"op", "+"},
-                                                 {"left", int_lit("1")},
-                                                 {"right", int_lit("2")}}}
-                                           }
+            parse_json(U"return 1 + 2") == nlohmann::json{{"type", "Return"},
+                                                          {"value",
+                                                           {{"type", "OpBinary"},
+                                                            {"op", "+"},
+                                                            {"left", int_lit("1")},
+                                                            {"right", int_lit("2")}}}}
         );
     }
 
@@ -41,8 +39,7 @@ TEST_SUITE("2.2.5.6 return") {
             nlohmann::json{
                 {"type", "Program"},
                 {"exprs",
-                 nlohmann::json::array({{{"type", "Return"}, {"value", nullptr}}, int_lit("1")})}
-            }
+                 nlohmann::json::array({{{"type", "Return"}, {"value", nullptr}}, int_lit("1")})}}
         );
     }
 
@@ -53,15 +50,13 @@ TEST_SUITE("2.2.5.6 return") {
             parse_json(U"(return,)") ==
             nlohmann::json{
                 {"type", "LiteralTuple"},
-                {"items", nlohmann::json::array({{{"type", "Return"}, {"value", nullptr}}})}
-            }
+                {"items", nlohmann::json::array({{{"type", "Return"}, {"value", nullptr}}})}}
         );
         CHECK(
             parse_json(U"[return]") ==
             nlohmann::json{
                 {"type", "LiteralList"},
-                {"items", nlohmann::json::array({{{"type", "Return"}, {"value", nullptr}}})}
-            }
+                {"items", nlohmann::json::array({{{"type", "Return"}, {"value", nullptr}}})}}
         );
         CHECK(
             parse_json(U"f(return)") ==
@@ -69,8 +64,7 @@ TEST_SUITE("2.2.5.6 return") {
                 {"type", "Call"},
                 {"object", {{"type", "Identifier"}, {"identifier", "f"}}},
                 {"args", nlohmann::json::array({{{"type", "Return"}, {"value", nullptr}}})},
-                {"kwargs", nlohmann::json::array()}
-            }
+                {"kwargs", nlohmann::json::array()}}
         );
     }
 }

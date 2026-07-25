@@ -52,9 +52,10 @@ TEST_SUITE("跨章节组合——装饰器/类/函数/for/try/字典展开/is �
         CHECK(func_node["decorators"] == nlohmann::json::array({ident("cached")}));
         CHECK(
             func_node["captures"] ==
-            nlohmann::json::array({nlohmann::json{
-                {"kind", "Value"}, {"identifier", "state"}, {"value_expr", nullptr}
-            }})
+            nlohmann::json::array(
+                {nlohmann::json{
+                    {"kind", "Value"}, {"identifier", "state"}, {"value_expr", nullptr}}}
+            )
         );
         REQUIRE(func_node["params"]["positional"].size() == 2);
         CHECK(func_node["params"]["positional"][0]["identifier"] == "self");
@@ -128,8 +129,7 @@ TEST_SUITE("跨章节组合——{}/()/[] 混着嵌套时 paren_depth_ 的一致
                                {"left", ident("x")},
                                {"right", ident("y")}}}
                          )},
-                {"kwargs", nlohmann::json::array()}
-            }
+                {"kwargs", nlohmann::json::array()}}
         );
     }
 
@@ -213,8 +213,7 @@ TEST_SUITE("跨章节组合——表达式位置的通用性（默认值/实参/
                         nlohmann::json::array({{{"cond", ident("a")}, {"body", int_lit("1")}}})},
                        {"else_expr", int_lit("2")}}}
                  )},
-                {"kwargs", nlohmann::json::array()}
-            }
+                {"kwargs", nlohmann::json::array()}}
         );
     }
 

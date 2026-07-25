@@ -41,14 +41,12 @@ struct AstNodeClass : AstNode {
         auto bases = json::array();
         for (const auto &base : bases_) bases.push_back(base->to_json());
 
-        return json{
-            {"type", "Class"},
-            {"decorators", std::move(decorators)},
-            {"name", name_ ? json(u32_to_utf8(*name_)) : json(nullptr)},
-            {"bases", std::move(bases)},
-            {"captures", captures_to_json(captures_)},
-            {"doc", doc_ ? doc_->to_json() : json(nullptr)},
-            {"body", body_->to_json()}
-        };
+        return json{{"type", "Class"},
+                    {"decorators", std::move(decorators)},
+                    {"name", name_ ? json(u32_to_utf8(*name_)) : json(nullptr)},
+                    {"bases", std::move(bases)},
+                    {"captures", captures_to_json(captures_)},
+                    {"doc", doc_ ? doc_->to_json() : json(nullptr)},
+                    {"body", body_->to_json()}};
     }
 };

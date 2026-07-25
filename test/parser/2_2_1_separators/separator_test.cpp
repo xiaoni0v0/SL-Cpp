@@ -27,25 +27,23 @@ TEST_SUITE("2.2.1 表达式分隔符——标准例子") {
                 {"exprs", nlohmann::json::array(
                               {{{"type", "Assign"}, {"target", ident("a")}, {"value", ident("b")}},
                                {{"type", "OpUnary"}, {"op", "+"}, {"operand", ident("c")}}}
-                          )}
-            }
+                          )}}
         );
     }
 
     TEST_CASE("d = e +\\nf：二元运算符只有左操作数，不完整，合并成一条表达式") {
         CHECK(
-            parse_program_json(U"d = e +\nf") == nlohmann::json{
-                                                     {"type", "Program"},
-                                                     {"exprs", nlohmann::json::array(
-                                                                   {{{"type", "Assign"},
-                                                                     {"target", ident("d")},
-                                                                     {"value",
-                                                                      {{"type", "OpBinary"},
-                                                                       {"op", "+"},
-                                                                       {"left", ident("e")},
-                                                                       {"right", ident("f")}}}}}
-                                                               )}
-                                                 }
+            parse_program_json(U"d = e +\nf") ==
+            nlohmann::json{{"type", "Program"},
+                           {"exprs", nlohmann::json::array(
+                                         {{{"type", "Assign"},
+                                           {"target", ident("d")},
+                                           {"value",
+                                            {{"type", "OpBinary"},
+                                             {"op", "+"},
+                                             {"left", ident("e")},
+                                             {"right", ident("f")}}}}}
+                                     )}}
         );
     }
 
@@ -63,8 +61,7 @@ TEST_SUITE("2.2.1 表达式分隔符——标准例子") {
                        {"object", {{"type", "Attr"}, {"object", ident("x")}, {"attr", "m"}}},
                        {"args", nlohmann::json::array()},
                        {"kwargs", nlohmann::json::array()}}}
-                 )}
-            }
+                 )}}
         );
     }
 
@@ -83,8 +80,7 @@ TEST_SUITE("2.2.1 表达式分隔符——标准例子") {
                        {"object", {{"type", "Attr"}, {"object", ident("x")}, {"attr", "m"}}},
                        {"args", nlohmann::json::array()},
                        {"kwargs", nlohmann::json::array()}}}
-                 )}
-            }
+                 )}}
         );
     }
 
@@ -96,19 +92,16 @@ TEST_SUITE("2.2.1 表达式分隔符——标准例子") {
                 {"exprs", nlohmann::json::array(
                               {{{"type", "LiteralTuple"},
                                 {"items", nlohmann::json::array({int_lit("1"), int_lit("2")})}}}
-                          )}
-            }
+                          )}}
         );
     }
 
     TEST_CASE(
         "if (x == 10) x = 100\\nelse x = 200：无 else 且下一条以 else 开头，合并成一条 if 表达式"
     ) {
-        const nlohmann::json cond{
-            {"type", "Compare"},
-            {"operands", nlohmann::json::array({ident("x"), int_lit("10")})},
-            {"ops", nlohmann::json::array({"=="})}
-        };
+        const nlohmann::json cond{{"type", "Compare"},
+                                  {"operands", nlohmann::json::array({ident("x"), int_lit("10")})},
+                                  {"ops", nlohmann::json::array({"=="})}};
         CHECK(
             parse_program_json(U"if (x == 10) x = 100\nelse x = 200") ==
             nlohmann::json{
@@ -125,8 +118,7 @@ TEST_SUITE("2.2.1 表达式分隔符——标准例子") {
                                    )},
                        {"else_expr",
                         {{"type", "Assign"}, {"target", ident("x")}, {"value", int_lit("200")}}}}}
-                 )}
-            }
+                 )}}
         );
     }
 
@@ -154,23 +146,20 @@ TEST_SUITE("2.2.1 表达式分隔符——其他续行场景（try/except/finall
                                                 {"body", ident("b")}}}
                                           )},
                        {"finally_expr", nullptr}}}
-                 )}
-            }
+                 )}}
         );
     }
 
     TEST_CASE("try a\\nfinally b：合并成一条 try 表达式") {
         CHECK(
             parse_program_json(U"try a\nfinally b") ==
-            nlohmann::json{
-                {"type", "Program"},
-                {"exprs", nlohmann::json::array(
-                              {{{"type", "Try"},
-                                {"try_expr", ident("a")},
-                                {"except_clauses", nlohmann::json::array()},
-                                {"finally_expr", ident("b")}}}
-                          )}
-            }
+            nlohmann::json{{"type", "Program"},
+                           {"exprs", nlohmann::json::array(
+                                         {{{"type", "Try"},
+                                           {"try_expr", ident("a")},
+                                           {"except_clauses", nlohmann::json::array()},
+                                           {"finally_expr", ident("b")}}}
+                                     )}}
         );
     }
 
@@ -193,29 +182,24 @@ TEST_SUITE("2.2.1 表达式分隔符——分号/换行的基本切分") {
     TEST_CASE("分号分隔多条表达式") {
         CHECK(
             parse_program_json(U"a; b; c") ==
-            nlohmann::json{
-                {"type", "Program"},
-                {"exprs", nlohmann::json::array({ident("a"), ident("b"), ident("c")})}
-            }
+            nlohmann::json{{"type", "Program"},
+                           {"exprs", nlohmann::json::array({ident("a"), ident("b"), ident("c")})}}
         );
     }
 
     TEST_CASE("换行分隔多条表达式（各自都是完整表达式，不触发合并）") {
         CHECK(
             parse_program_json(U"a\nb\nc") ==
-            nlohmann::json{
-                {"type", "Program"},
-                {"exprs", nlohmann::json::array({ident("a"), ident("b"), ident("c")})}
-            }
+            nlohmann::json{{"type", "Program"},
+                           {"exprs", nlohmann::json::array({ident("a"), ident("b"), ident("c")})}}
         );
     }
 
     TEST_CASE("空行、连续分号都会被忽略，不产生空表达式") {
         CHECK(
             parse_program_json(U"a\n\n\n;;;b") ==
-            nlohmann::json{
-                {"type", "Program"}, {"exprs", nlohmann::json::array({ident("a"), ident("b")})}
-            }
+            nlohmann::json{{"type", "Program"},
+                           {"exprs", nlohmann::json::array({ident("a"), ident("b")})}}
         );
     }
 

@@ -24,25 +24,22 @@ TEST_SUITE("2.2.5.7 try") {
                  nlohmann::json::array(
                      {{{"exceptions", nlohmann::json::array({ident("E")})}, {"body", ident("b")}}}
                  )},
-                {"finally_expr", nullptr}
-            }
+                {"finally_expr", nullptr}}
         );
     }
 
     TEST_CASE("一个 except 子句里可以有多个异常类型") {
         CHECK(
             parse_json(U"try a except (E1, E2, E3) b") ==
-            nlohmann::json{
-                {"type", "Try"},
-                {"try_expr", ident("a")},
-                {"except_clauses",
-                 nlohmann::json::array(
-                     {{{"exceptions",
-                        nlohmann::json::array({ident("E1"), ident("E2"), ident("E3")})},
-                       {"body", ident("b")}}}
-                 )},
-                {"finally_expr", nullptr}
-            }
+            nlohmann::json{{"type", "Try"},
+                           {"try_expr", ident("a")},
+                           {"except_clauses",
+                            nlohmann::json::array(
+                                {{{"exceptions",
+                                   nlohmann::json::array({ident("E1"), ident("E2"), ident("E3")})},
+                                  {"body", ident("b")}}}
+                            )},
+                           {"finally_expr", nullptr}}
         );
     }
 
@@ -57,30 +54,26 @@ TEST_SUITE("2.2.5.7 try") {
                      {{{"exceptions", nlohmann::json::array({ident("E1")})}, {"body", ident("b")}},
                       {{"exceptions", nlohmann::json::array({ident("E2")})}, {"body", ident("c")}}}
                  )},
-                {"finally_expr", ident("d")}
-            }
+                {"finally_expr", ident("d")}}
         );
     }
 
     TEST_CASE("只有 finally，没有 except") {
         CHECK(
-            parse_json(U"try a finally b") == nlohmann::json{
-                                                  {"type", "Try"},
-                                                  {"try_expr", ident("a")},
-                                                  {"except_clauses", nlohmann::json::array()},
-                                                  {"finally_expr", ident("b")}
-                                              }
+            parse_json(U"try a finally b") ==
+            nlohmann::json{{"type", "Try"},
+                           {"try_expr", ident("a")},
+                           {"except_clauses", nlohmann::json::array()},
+                           {"finally_expr", ident("b")}}
         );
     }
 
     TEST_CASE("语法层允许 except 和 finally 都不写（该约束交语义层校验）") {
         CHECK(
-            parse_json(U"try a") == nlohmann::json{
-                                        {"type", "Try"},
-                                        {"try_expr", ident("a")},
-                                        {"except_clauses", nlohmann::json::array()},
-                                        {"finally_expr", nullptr}
-                                    }
+            parse_json(U"try a") == nlohmann::json{{"type", "Try"},
+                                                   {"try_expr", ident("a")},
+                                                   {"except_clauses", nlohmann::json::array()},
+                                                   {"finally_expr", nullptr}}
         );
     }
 

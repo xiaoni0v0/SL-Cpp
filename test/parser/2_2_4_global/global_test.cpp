@@ -27,11 +27,10 @@ TEST_SUITE("2.2.4 global") {
         "global x 整体和其他基本表达式一样参与后缀运算符链：global x.y 会被解析成 (global x).y"
     ) {
         CHECK(
-            parse_json(U"global x.y") == nlohmann::json{
-                                             {"type", "Attr"},
-                                             {"object", {{"type", "Global"}, {"identifier", "x"}}},
-                                             {"attr", "y"}
-                                         }
+            parse_json(U"global x.y") ==
+            nlohmann::json{{"type", "Attr"},
+                           {"object", {{"type", "Global"}, {"identifier", "x"}}},
+                           {"attr", "y"}}
         );
     }
 
@@ -40,13 +39,11 @@ TEST_SUITE("2.2.4 global") {
     TEST_CASE("一行内可以有多条 global（用分号分隔）") {
         CHECK(
             parse_program_json(U"global x; global y") ==
-            nlohmann::json{
-                {"type", "Program"},
-                {"exprs", nlohmann::json::array(
-                              {{{"type", "Global"}, {"identifier", "x"}},
-                               {{"type", "Global"}, {"identifier", "y"}}}
-                          )}
-            }
+            nlohmann::json{{"type", "Program"},
+                           {"exprs", nlohmann::json::array(
+                                         {{{"type", "Global"}, {"identifier", "x"}},
+                                          {{"type", "Global"}, {"identifier", "y"}}}
+                                     )}}
         );
     }
 }

@@ -39,33 +39,28 @@ TEST_SUITE("StaticEvaler 逻辑运算") {
         // 右边 f() 不是字面量，但因为左边 True 为真，and 直接取右边（不需要右边本身可折）
         CHECK(
             fold_json(U"True and f()") ==
-            nlohmann::json{
-                {"type", "Call"},
-                {"object", {{"type", "Identifier"}, {"identifier", "f"}}},
-                {"args", nlohmann::json::array()},
-                {"kwargs", nlohmann::json::array()}
-            }
+            nlohmann::json{{"type", "Call"},
+                           {"object", {{"type", "Identifier"}, {"identifier", "f"}}},
+                           {"args", nlohmann::json::array()},
+                           {"kwargs", nlohmann::json::array()}}
         );
         // 左边 False 为假，or 取右边（哪怕右边是没法预知结果的调用）
         CHECK(
             fold_json(U"False or f()") ==
-            nlohmann::json{
-                {"type", "Call"},
-                {"object", {{"type", "Identifier"}, {"identifier", "f"}}},
-                {"args", nlohmann::json::array()},
-                {"kwargs", nlohmann::json::array()}
-            }
+            nlohmann::json{{"type", "Call"},
+                           {"object", {{"type", "Identifier"}, {"identifier", "f"}}},
+                           {"args", nlohmann::json::array()},
+                           {"kwargs", nlohmann::json::array()}}
         );
     }
 
     TEST_CASE("左操作数含变量、真值未知时不折") {
         CHECK(
-            fold_json(U"x and 1") == nlohmann::json{
-                                         {"type", "OpBinary"},
-                                         {"op", "and"},
-                                         {"left", {{"type", "Identifier"}, {"identifier", "x"}}},
-                                         {"right", int_lit("1")}
-                                     }
+            fold_json(U"x and 1") ==
+            nlohmann::json{{"type", "OpBinary"},
+                           {"op", "and"},
+                           {"left", {{"type", "Identifier"}, {"identifier", "x"}}},
+                           {"right", int_lit("1")}}
         );
     }
 }

@@ -22,6 +22,6 @@ InsertNewlineAtEOF: true
 SpaceAfterCStyleCast: true
 ColumnLimit: 100
 
-AlignAfterOpenBracket: BlockIndent
-BinPackArguments: true
-BinPackParameters: true
+AlignAfterOpenBracket: true
+BreakAfterOpenBracketFunction: true
+BreakBeforeCloseBracketFunction: true

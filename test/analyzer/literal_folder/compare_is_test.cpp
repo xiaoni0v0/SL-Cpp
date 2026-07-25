@@ -35,23 +35,19 @@ TEST_SUITE("StaticEvaler 比较") {
                 {"operands",
                  {nlohmann::json{
                       {"type", "LiteralDict"},
-                      {"items", {nlohmann::json{{"key", int_lit("1")}, {"val", int_lit("2")}}}}
-                  },
+                      {"items", {nlohmann::json{{"key", int_lit("1")}, {"val", int_lit("2")}}}}},
                   nlohmann::json{
                       {"type", "LiteralDict"},
-                      {"items", {nlohmann::json{{"key", int_lit("1")}, {"val", int_lit("2")}}}}
-                  }}},
-                {"ops", {"=="}}
-            }
+                      {"items", {nlohmann::json{{"key", int_lit("1")}, {"val", int_lit("2")}}}}}}},
+                {"ops", {"=="}}}
         );
     }
 
     TEST_CASE("跨类型比较大小不可比，不折；但 == 恒成立（跨类型必不相等）") {
         CHECK(
-            fold_json(U"1 < 'a'") ==
-            nlohmann::json{
-                {"type", "Compare"}, {"operands", {int_lit("1"), str_lit("a")}}, {"ops", {"<"}}
-            }
+            fold_json(U"1 < 'a'") == nlohmann::json{{"type", "Compare"},
+                                                    {"operands", {int_lit("1"), str_lit("a")}},
+                                                    {"ops", {"<"}}}
         );
         CHECK(fold_json(U"1 == 'a'") == bool_lit(false));
         CHECK(fold_json(U"None == 0") == bool_lit(false));
@@ -70,8 +66,7 @@ TEST_SUITE("StaticEvaler 比较") {
                 {"type", "Compare"},
                 {"operands",
                  {int_lit("1"), {{"type", "Identifier"}, {"identifier", "x"}}, int_lit("3")}},
-                {"ops", {"<", "<"}}
-            }
+                {"ops", {"<", "<"}}}
         );
     }
 

@@ -21,10 +21,8 @@ from pathlib import Path
 
 # 在环境变量里加入
 os.environ["PATH"] = (
-    r"C:\Program Files\JetBrains\CLion 2026.1\plugins\clion-radler\DotFiles\windows-x64;"
-    r"C:\Program Files\JetBrains\CLion 2026.1\bin\mingw\bin;"
-    r"C:\Program Files\JetBrains\CLion 2026.1\bin\cmake\win\x64\bin;"
-    r"C:\Program Files\JetBrains\CLion 2026.1\bin\ninja;" + os.environ["PATH"]
+    r"C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Tools\Llvm\x64\bin;"
+    + os.environ["PATH"]
 )
 
 # 默认额外排除的目录（噪音目录，可按需增删）

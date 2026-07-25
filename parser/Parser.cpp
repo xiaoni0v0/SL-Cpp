@@ -541,9 +541,8 @@ AstNodePtr Parser::parse_paren_or_tuple() {
     expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
 
     std::vector<AstNodePtr> items;
-    const bool has_seen_comma{finish_comma_batch(TokenType::SIGN_RPAREN, [&] {
-        items.push_back(parse_expr());
-    })};
+    const bool has_seen_comma{
+        finish_comma_batch(TokenType::SIGN_RPAREN, [&] { items.push_back(parse_expr()); })};
 
     if (!check(TokenType::SIGN_RPAREN)) {
         error(
@@ -770,12 +769,10 @@ AstNodePtr Parser::parse_return() {
     expect(TokenType::KW_RETURN); // 消耗 'return'
     // 若紧跟终止符则为裸 return（值为 None）
     // 语句终止符 NEWLINE, ';', EOF, '}' + 括号语境的闭合 / 分隔符 ')', ']', ','
-    const bool bare{
-        check(TokenType::NEWLINE) || check(TokenType::SIGN_SEMICOLON) ||
-        check(TokenType::END_OF_FILE) || check(TokenType::SIGN_RBRACE) ||
-        check(TokenType::SIGN_RPAREN) || check(TokenType::SIGN_RBRACKET) ||
-        check(TokenType::SIGN_COMMA)
-    };
+    const bool bare{check(TokenType::NEWLINE) || check(TokenType::SIGN_SEMICOLON) ||
+                    check(TokenType::END_OF_FILE) || check(TokenType::SIGN_RBRACE) ||
+                    check(TokenType::SIGN_RPAREN) || check(TokenType::SIGN_RBRACKET) ||
+                    check(TokenType::SIGN_COMMA)};
     return std::make_unique<AstNodeReturn>(start_pos, bare ? nullptr : parse_expr());
 }
 
@@ -1203,10 +1200,8 @@ Parser::Parser(std::vector<Token> tokens, std::string file_path)
 
     // 2. 最后必须是 END_OF_FILE
     if (tokens_.back().type != TokenType::END_OF_FILE) {
-        throw SyntaxError{
-            file_path_, tokens_.back().row, tokens_.back().col,
-            "Bad tokens: missing END_OF_FILE token at the end"
-        };
+        throw SyntaxError{file_path_, tokens_.back().row, tokens_.back().col,
+                          "Bad tokens: missing END_OF_FILE token at the end"};
     }
 
     // 3. 前边不能有 END_OF_FILE

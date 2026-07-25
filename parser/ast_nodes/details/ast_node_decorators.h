@@ -17,10 +17,8 @@ struct AstNodeDecorator : AstNode {
         : AstNode{pos}, decorator_{std::move(decorator)}, target_{std::move(target)} {}
 
     [[nodiscard]] json to_json() const override {
-        return json{
-            {"type", "Decorator"},
-            {"decorator", decorator_->to_json()},
-            {"target", target_->to_json()}
-        };
+        return json{{"type", "Decorator"},
+                    {"decorator", decorator_->to_json()},
+                    {"target", target_->to_json()}};
     }
 };

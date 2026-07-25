@@ -41,9 +41,8 @@ TEST_SUITE("2.1.3 标识符") {
         // 字符，不依赖源文件/编译器对字面量字符集的解释，跨平台更稳妥。
         const std::u32string e_acute{static_cast<char32_t>(0x00E9)}; // é
         CHECK_THROWS_AS(lex(e_acute), SyntaxError);
-        const std::u32string chinese_word{
-            static_cast<char32_t>(0x53D8), static_cast<char32_t>(0x91CF)
-        }; // 变量
+        const std::u32string chinese_word{static_cast<char32_t>(0x53D8),
+                                          static_cast<char32_t>(0x91CF)}; // 变量
         CHECK_THROWS_AS(lex(chinese_word), SyntaxError);
     }
 }

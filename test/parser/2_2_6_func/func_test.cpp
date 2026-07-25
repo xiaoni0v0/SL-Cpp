@@ -22,8 +22,7 @@ nlohmann::json int_lit(const char *raw) {
 nlohmann::json
 param(const char *id, const nlohmann::json &type_annotation, const nlohmann::json &default_value) {
     return nlohmann::json{
-        {"identifier", id}, {"type_annotation", type_annotation}, {"default_value", default_value}
-    };
+        {"identifier", id}, {"type_annotation", type_annotation}, {"default_value", default_value}};
 }
 
 // 形参整体（AstNodeFunc::AllParams 对应的 json 形状），4 个子段都给了默认值方便只关心其中一段的用例
@@ -33,12 +32,10 @@ nlohmann::json all_params(
     const nlohmann::json &kw_only = nlohmann::json::array(),
     const nlohmann::json &var_kwargs = nullptr
 ) {
-    return nlohmann::json{
-        {"positional", positional},
-        {"var_args", var_args},
-        {"kw_only", kw_only},
-        {"var_kwargs", var_kwargs}
-    };
+    return nlohmann::json{{"positional", positional},
+                          {"var_args", var_args},
+                          {"kw_only", kw_only},
+                          {"var_kwargs", var_kwargs}};
 }
 } // namespace
 
@@ -47,32 +44,28 @@ TEST_SUITE("2.2.6 func——基本形状") {
     TEST_CASE("最简单的具名函数") {
         CHECK(
             parse_json(U"func f() {}") ==
-            nlohmann::json{
-                {"type", "Func"},
-                {"decorators", nlohmann::json::array()},
-                {"name", "f"},
-                {"captures", nlohmann::json::array()},
-                {"params", all_params()},
-                {"return_type", nullptr},
-                {"doc", nullptr},
-                {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
-            }
+            nlohmann::json{{"type", "Func"},
+                           {"decorators", nlohmann::json::array()},
+                           {"name", "f"},
+                           {"captures", nlohmann::json::array()},
+                           {"params", all_params()},
+                           {"return_type", nullptr},
+                           {"doc", nullptr},
+                           {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}}
         );
     }
 
     TEST_CASE("匿名函数：省略名字") {
         CHECK(
             parse_json(U"func () {}") ==
-            nlohmann::json{
-                {"type", "Func"},
-                {"decorators", nlohmann::json::array()},
-                {"name", nullptr},
-                {"captures", nlohmann::json::array()},
-                {"params", all_params()},
-                {"return_type", nullptr},
-                {"doc", nullptr},
-                {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
-            }
+            nlohmann::json{{"type", "Func"},
+                           {"decorators", nlohmann::json::array()},
+                           {"name", nullptr},
+                           {"captures", nlohmann::json::array()},
+                           {"params", all_params()},
+                           {"return_type", nullptr},
+                           {"doc", nullptr},
+                           {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}}
         );
     }
 
@@ -207,24 +200,25 @@ TEST_SUITE("2.2.6 func——捕获列表") {
     TEST_CASE("值捕获（显式表达式）") {
         CHECK(
             parse_json(U"func f[x = 1 + 2]() {}")["captures"] ==
-            nlohmann::json::array({nlohmann::json{
-                {"kind", "Value"},
-                {"identifier", "x"},
-                {"value_expr",
-                 {{"type", "OpBinary"},
-                  {"op", "+"},
-                  {"left", int_lit("1")},
-                  {"right", int_lit("2")}}}
-            }})
+            nlohmann::json::array(
+                {nlohmann::json{{"kind", "Value"},
+                                {"identifier", "x"},
+                                {"value_expr",
+                                 {{"type", "OpBinary"},
+                                  {"op", "+"},
+                                  {"left", int_lit("1")},
+                                  {"right", int_lit("2")}}}}}
+            )
         );
     }
 
     TEST_CASE("引用捕获") {
         CHECK(
             parse_json(U"func f[&y]() {}")["captures"] ==
-            nlohmann::json::array({nlohmann::json{
-                {"kind", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
-            }})
+            nlohmann::json::array(
+                {nlohmann::json{
+                    {"kind", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}}}
+            )
         );
     }
 
@@ -234,11 +228,9 @@ TEST_SUITE("2.2.6 func——捕获列表") {
             nlohmann::json::array(
                 {nlohmann::json{{"kind", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}},
                  nlohmann::json{
-                     {"kind", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
-                 },
+                     {"kind", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}},
                  nlohmann::json{
-                     {"kind", "Value"}, {"identifier", "z"}, {"value_expr", int_lit("1")}
-                 }}
+                     {"kind", "Value"}, {"identifier", "z"}, {"value_expr", int_lit("1")}}}
             )
         );
         CHECK(parse_json(U"func f[]() {}")["captures"] == nlohmann::json::array());

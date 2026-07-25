@@ -20,44 +20,38 @@ TEST_SUITE("2.2.5.3 while") {
 
     TEST_CASE("基本形式，等价于 for (; cond ;)：init/inc 皆为 null") {
         CHECK(
-            parse_json(U"while (c) body") == nlohmann::json{
-                                                 {"type", "ForCond"},
-                                                 {"collect", false},
-                                                 {"init", nullptr},
-                                                 {"cond", ident("c")},
-                                                 {"inc", nullptr},
-                                                 {"body", ident("body")}
-                                             }
+            parse_json(U"while (c) body") == nlohmann::json{{"type", "ForCond"},
+                                                            {"collect", false},
+                                                            {"init", nullptr},
+                                                            {"cond", ident("c")},
+                                                            {"inc", nullptr},
+                                                            {"body", ident("body")}}
         );
     }
 
     TEST_CASE("收集模式 while $ (...)") {
         CHECK(
-            parse_json(U"while $ (c) body") == nlohmann::json{
-                                                   {"type", "ForCond"},
-                                                   {"collect", true},
-                                                   {"init", nullptr},
-                                                   {"cond", ident("c")},
-                                                   {"inc", nullptr},
-                                                   {"body", ident("body")}
-                                               }
+            parse_json(U"while $ (c) body") == nlohmann::json{{"type", "ForCond"},
+                                                              {"collect", true},
+                                                              {"init", nullptr},
+                                                              {"cond", ident("c")},
+                                                              {"inc", nullptr},
+                                                              {"body", ident("body")}}
         );
     }
 
     TEST_CASE("cond 可以是复杂表达式") {
         CHECK(
             parse_json(U"while (x < 10) body") ==
-            nlohmann::json{
-                {"type", "ForCond"},
-                {"collect", false},
-                {"init", nullptr},
-                {"cond",
-                 {{"type", "Compare"},
-                  {"operands", nlohmann::json::array({ident("x"), int_lit("10")})},
-                  {"ops", nlohmann::json::array({"<"})}}},
-                {"inc", nullptr},
-                {"body", ident("body")}
-            }
+            nlohmann::json{{"type", "ForCond"},
+                           {"collect", false},
+                           {"init", nullptr},
+                           {"cond",
+                            {{"type", "Compare"},
+                             {"operands", nlohmann::json::array({ident("x"), int_lit("10")})},
+                             {"ops", nlohmann::json::array({"<"})}}},
+                           {"inc", nullptr},
+                           {"body", ident("body")}}
         );
     }
 
@@ -74,18 +68,16 @@ TEST_SUITE("2.2.5.3 while——cond 禁止裸的普通赋值") {
 
     TEST_CASE("裸复合赋值不受限") {
         CHECK(
-            parse_json(U"while (x += 1) body") == nlohmann::json{
-                                                      {"type", "ForCond"},
-                                                      {"collect", false},
-                                                      {"init", nullptr},
-                                                      {"cond",
-                                                       {{"type", "CompoundAssign"},
-                                                        {"target", ident("x")},
-                                                        {"op", "+"},
-                                                        {"value", int_lit("1")}}},
-                                                      {"inc", nullptr},
-                                                      {"body", ident("body")}
-                                                  }
+            parse_json(U"while (x += 1) body") == nlohmann::json{{"type", "ForCond"},
+                                                                 {"collect", false},
+                                                                 {"init", nullptr},
+                                                                 {"cond",
+                                                                  {{"type", "CompoundAssign"},
+                                                                   {"target", ident("x")},
+                                                                   {"op", "+"},
+                                                                   {"value", int_lit("1")}}},
+                                                                 {"inc", nullptr},
+                                                                 {"body", ident("body")}}
         );
     }
 
@@ -98,8 +90,7 @@ TEST_SUITE("2.2.5.3 while——cond 禁止裸的普通赋值") {
                 {"init", nullptr},
                 {"cond", {{"type", "Assign"}, {"target", ident("x")}, {"value", int_lit("1")}}},
                 {"inc", nullptr},
-                {"body", ident("body")}
-            }
+                {"body", ident("body")}}
         );
     }
 }

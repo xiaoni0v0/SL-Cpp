@@ -9,6 +9,5 @@ class FileNotFoundError : public SLException {
   public:
     explicit FileNotFoundError(const std::string &message)
         : SLException{
-              std::format("FileNotFoundError: No such file or directory: \"{}\"", message)
-          } {}
+              std::format("FileNotFoundError: No such file or directory: \"{}\"", message)} {}
 };

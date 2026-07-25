@@ -20,14 +20,12 @@ TEST_SUITE("2.2.5.4/5 break / continue") {
     TEST_CASE("出现在循环体内") {
         CHECK(
             parse_json(U"while (c) break") ==
-            nlohmann::json{
-                {"type", "ForCond"},
-                {"collect", false},
-                {"init", nullptr},
-                {"cond", {{"type", "Identifier"}, {"identifier", "c"}}},
-                {"inc", nullptr},
-                {"body", {{"type", "Break"}}}
-            }
+            nlohmann::json{{"type", "ForCond"},
+                           {"collect", false},
+                           {"init", nullptr},
+                           {"cond", {{"type", "Identifier"}, {"identifier", "c"}}},
+                           {"inc", nullptr},
+                           {"body", {{"type", "Break"}}}}
         );
     }
 }
