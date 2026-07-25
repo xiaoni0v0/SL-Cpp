@@ -305,8 +305,7 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
             continue;
         }
 
-        // 普通二元运算符（运算符在行尾时右侧可换行；节点位置取左操作数的起始位置，op_pos
-        // 才是运算符自己的位置）
+        // 普通二元运算符
         skip_newline();
         left = std::make_unique<AstNodeOpBinary>(
             start_pos,
