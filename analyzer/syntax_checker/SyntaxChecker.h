@@ -4,14 +4,13 @@
 
 #include <string>
 
-
 class SyntaxChecker {
     const AstNodeProgram &root_;
     const std::string file_path_;
 
     struct Context {
         int local_scope_depth{0}; // 是否身处 func 体或 class 体的局部作用域内
-        int loop_depth{0}; // for、while 共用
+        int loop_depth{0};        // for、while 共用
         bool can_star{false};
         bool can_double_star{false};
     } ctx_;
@@ -28,13 +27,15 @@ class SyntaxChecker {
 
     // vector 元素个数不能少于 min_size（Parser 保证，触发即 InternalError）
     template <typename T>
-    void require_not_null(const std::vector<T> &vec, const size_t min_size, const Position pos) const {
+    void
+    require_not_null(const std::vector<T> &vec, const size_t min_size, const Position pos) const {
         if (vec.size() < min_size) error_internal("too few elements", pos);
     }
 
     // 两个 vector 长度必须相等（Parser 保证，触发即 InternalError）
     template <typename T, typename U>
-    void require_same_size(const std::vector<T> &a, const std::vector<U> &b, const Position pos) const {
+    void
+    require_same_size(const std::vector<T> &a, const std::vector<U> &b, const Position pos) const {
         if (a.size() != b.size()) error_internal("mismatched array sizes", pos);
     }
 
@@ -61,7 +62,7 @@ class SyntaxChecker {
     // 检查 func/class 的 doc 槽位：必须为空或者恰好是一个字符串字面量
     void check_doc(const AstNodePtr &doc) const;
 
-public:
+  public:
     /**
      * 构造 SyntaxChecker 对象
      * @param root      AST 的根节点

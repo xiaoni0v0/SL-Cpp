@@ -5,7 +5,6 @@
 
 #include <optional>
 
-
 /**
  * 编译期静态求值器
  * 折不动一律返回 nullptr，从不抛异常
@@ -34,9 +33,10 @@
  * 除此之外，and/or/not 对于字面量均折叠。
  *
  * 死分支消除：
- *   cond 折成的字面量真值为 False 的 clause/循环整个消失，值退化成 SL.md 3.4.5.2/3.4.5.3 规定的默认值）；
- *   if 的某个 clause 的 cond 折成的字面量真值为 True，则连同它自己在内后面的 clause/else 全部消失，只留这个 clause 的 body；
- *   for/while 的 cond 折成的字面量真值为 True 的不折。
+ *   cond 折成的字面量真值为 False 的 clause/循环整个消失，值退化成 SL.md 3.4.5.2/3.4.5.3
+ * 规定的默认值）； if 的某个 clause 的 cond 折成的字面量真值为 True，则连同它自己在内后面的
+ * clause/else 全部消失，只留这个 clause 的 body； for/while 的 cond 折成的字面量真值为 True
+ * 的不折。
  */
 class StaticEvaler final {
     // clang-format off
@@ -80,8 +80,8 @@ class StaticEvaler final {
     [[nodiscard]] static AstNodePtr make_bool(Position pos, bool value);
     [[nodiscard]] static AstNodePtr make_int(Position pos, const BigInt &value);
     [[nodiscard]] static AstNodePtr make_float(Position pos, double value);
-    // 把 double 格式化成合法的 SL float 字面量文本（永远带小数点，不用科学计数法，见 SL.md 2.1.4），
-    // 取能精确 round-trip 回原值的最短小数位数
+    // 把 double 格式化成合法的 SL float 字面量文本（永远带小数点，不用科学计数法，见
+    // SL.md 2.1.4）， 取能精确 round-trip 回原值的最短小数位数
     [[nodiscard]] static std::string format_double(double value);
     // 深拷贝一份字面量子树；要求 is_literal(node)。只处理 is_literal 认可的这个子集（不是给 AstNode
     // 整体加一个通用多态 clone()——目前只有 * 的容器重复需要"同一份内容用多次"这一个场景，没必要为了
@@ -93,10 +93,11 @@ class StaticEvaler final {
 
     // ==/!= 用：字面量之间的值相等（跨数字类型；str 按内容；tuple/list 逐元素；其余跨类型恒不相等）
     [[nodiscard]] static bool literal_equal(const AstNode &a, const AstNode &b);
-    // </<=/>/>= 用：数字按大小、str 按字典序、tuple/list 按字典序逐元素比较；其余（含跨类型）不可比较
+    // </<=/>/>= 用：数字按大小、str 按字典序、tuple/list
+    // 按字典序逐元素比较；其余（含跨类型）不可比较
     [[nodiscard]] static CmpResult literal_compare(const AstNode &a, const AstNode &b);
 
-public:
+  public:
     // 纯工具类，静态、无状态，直接禁止实例化
     StaticEvaler() = delete;
     ~StaticEvaler() = delete;

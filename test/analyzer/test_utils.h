@@ -14,7 +14,9 @@ inline nlohmann::json fold_json(const std::u32string &source) {
     AstNodeProgramPtr program{parse_program(source)};
     if (program->exprs_.size() != 1) {
         throw std::runtime_error(
-            "fold_json: expected exactly 1 top-level expr, got " + std::to_string(program->exprs_.size()));
+            "fold_json: expected exactly 1 top-level expr, got " +
+            std::to_string(program->exprs_.size())
+        );
     }
     LiteralFolder{*program}.fold();
     return nlohmann::json(program->exprs_[0]->to_json());
@@ -36,6 +38,4 @@ inline nlohmann::json str_lit(const std::string &value) {
     return nlohmann::json{{"type", "LiteralStr"}, {"value", value}};
 }
 
-inline nlohmann::json none_lit() {
-    return nlohmann::json{{"type", "LiteralNone"}};
-}
+inline nlohmann::json none_lit() { return nlohmann::json{{"type", "LiteralNone"}}; }

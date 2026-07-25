@@ -17,8 +17,7 @@ static std::string path_abspath(const std::string &path) {
     return std::filesystem::absolute(path, ec).string();
 }
 
-Executor::Executor(const std::string &s) : file_path{path_abspath(s)} {
-}
+Executor::Executor(const std::string &s) : file_path{path_abspath(s)} {}
 
 int Executor::run() const {
     // 输入文件不存在

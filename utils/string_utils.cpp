@@ -5,29 +5,17 @@
 #include <cstdint>
 #include <string>
 
-bool is_digit(const char c) {
-    return c >= '0' && c <= '9';
-}
+bool is_digit(const char c) { return c >= '0' && c <= '9'; }
 
-bool is_digit(const char32_t c) {
-    return c >= U'0' && c <= U'9';
-}
+bool is_digit(const char32_t c) { return c >= U'0' && c <= U'9'; }
 
-bool is_alpha(const char c) {
-    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
-}
+bool is_alpha(const char c) { return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'); }
 
-bool is_alpha(const char32_t c) {
-    return (c >= U'A' && c <= U'Z') || (c >= U'a' && c <= U'z');
-}
+bool is_alpha(const char32_t c) { return (c >= U'A' && c <= U'Z') || (c >= U'a' && c <= U'z'); }
 
-bool is_alpha_digit(const char c) {
-    return is_digit(c) || is_alpha(c);
-}
+bool is_alpha_digit(const char c) { return is_digit(c) || is_alpha(c); }
 
-bool is_alpha_digit(const char32_t c) {
-    return is_digit(c) || is_alpha(c);
-}
+bool is_alpha_digit(const char32_t c) { return is_digit(c) || is_alpha(c); }
 
 std::u32string utf8_to_u32(const std::string &utf8, const std::string &file_path) {
     std::u32string result;
@@ -72,8 +60,10 @@ std::u32string utf8_to_u32(const std::string &utf8, const std::string &file_path
             const unsigned char c{*p++};
             // 必须是 10xxxxxx
             if ((c & 0xC0) != 0x80) {
-                throw EncodingError{file_path, static_cast<size_t>(p - base - 1),
-                                    "utf8_to_u32: invalid continuation byte"};
+                throw EncodingError{
+                    file_path, static_cast<size_t>(p - base - 1),
+                    "utf8_to_u32: invalid continuation byte"
+                };
             }
             cp = (cp << 6) | (c & 0x3F);
         }

@@ -4,12 +4,11 @@
 
 #include <string>
 
-
 class Analyzer {
     AstNodeProgram &root_;
     const std::string file_path_;
 
-public:
+  public:
     /**
      * 构造 Analyzer 对象
      * @param root      AST 的根节点

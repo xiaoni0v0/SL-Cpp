@@ -23,9 +23,7 @@ BigInt BigInt::promoted() const {
     const bool negative{small_ < 0};
     // 分两步算 magnitude，避免 small_ == INT64_MIN 时 -small_ 本身溢出 int64_t 的表示范围
     const uint64_t magnitude{
-        negative
-            ? static_cast<uint64_t>(-(small_ + 1)) + 1
-            : static_cast<uint64_t>(small_)
+        negative ? static_cast<uint64_t>(-(small_ + 1)) + 1 : static_cast<uint64_t>(small_)
     };
     std::vector<uint32_t> limbs;
     uint64_t remaining{magnitude};
@@ -59,7 +57,8 @@ BigInt BigInt::shrink(BigInt big) {
     return result;
 }
 
-std::strong_ordering BigInt::compare_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
+std::strong_ordering
+BigInt::compare_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
     if (a.size() != b.size()) return a.size() <=> b.size();
     for (size_t i{a.size()}; i-- > 0;) {
         if (a[i] != b[i]) return a[i] <=> b[i];
@@ -67,7 +66,8 @@ std::strong_ordering BigInt::compare_magnitude(const std::vector<uint32_t> &a, c
     return std::strong_ordering::equal;
 }
 
-std::vector<uint32_t> BigInt::add_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
+std::vector<uint32_t>
+BigInt::add_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
     const std::vector<uint32_t> &longer{a.size() >= b.size() ? a : b};
     const std::vector<uint32_t> &shorter{a.size() >= b.size() ? b : a};
 
@@ -84,12 +84,15 @@ std::vector<uint32_t> BigInt::add_magnitude(const std::vector<uint32_t> &a, cons
 }
 
 // 要求 a >= b（按 compare_magnitude），否则结果无意义（调用方保证）
-std::vector<uint32_t> BigInt::sub_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
+std::vector<uint32_t>
+BigInt::sub_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
     std::vector<uint32_t> result;
     result.reserve(a.size());
     int64_t borrow{0};
     for (size_t i{0}; i < a.size(); ++i) {
-        int64_t diff{static_cast<int64_t>(a[i]) - borrow - (i < b.size() ? static_cast<int64_t>(b[i]) : 0)};
+        int64_t diff{
+            static_cast<int64_t>(a[i]) - borrow - (i < b.size() ? static_cast<int64_t>(b[i]) : 0)
+        };
         if (diff < 0) {
             diff += (static_cast<int64_t>(1) << 32);
             borrow = 1;
@@ -102,7 +105,8 @@ std::vector<uint32_t> BigInt::sub_magnitude(const std::vector<uint32_t> &a, cons
     return result;
 }
 
-std::vector<uint32_t> BigInt::mul_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
+std::vector<uint32_t>
+BigInt::mul_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
     if (a.empty() || b.empty()) return {};
 
     std::vector<uint32_t> result(a.size() + b.size(), 0);
@@ -125,7 +129,8 @@ std::vector<uint32_t> BigInt::mul_magnitude(const std::vector<uint32_t> &a, cons
     return result;
 }
 
-std::vector<uint32_t> BigInt::shift_left_magnitude(const std::vector<uint32_t> &a, const uint64_t bits) {
+std::vector<uint32_t>
+BigInt::shift_left_magnitude(const std::vector<uint32_t> &a, const uint64_t bits) {
     if (a.empty() || bits == 0) return a;
 
     const size_t limb_shift{static_cast<size_t>(bits / 32)};
@@ -142,9 +147,10 @@ std::vector<uint32_t> BigInt::shift_left_magnitude(const std::vector<uint32_t> &
 }
 
 // 二进制逐位长除法：从最高位到最低位，边移边比较边减，是标准手算长除法的二进制版本。
-// 不是渐进最优（Knuth Algorithm D 更快），但正确性显然、不需要处理"猜商偏大要修正"这类容易出错的细节。
-std::pair<std::vector<uint32_t>, std::vector<uint32_t>> BigInt::div_mod_magnitude(
-    const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
+// 不是渐进最优（Knuth Algorithm D
+// 更快），但正确性显然、不需要处理"猜商偏大要修正"这类容易出错的细节。
+std::pair<std::vector<uint32_t>, std::vector<uint32_t>>
+BigInt::div_mod_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
     if (a.empty()) return {{}, {}};
 
     std::vector<uint32_t> quotient(a.size(), 0);
@@ -158,8 +164,10 @@ std::pair<std::vector<uint32_t>, std::vector<uint32_t>> BigInt::div_mod_magnitud
         const size_t limb_i{bit_index / 32};
         const size_t bit_in_limb{bit_index % 32};
         if ((a[limb_i] >> bit_in_limb) & 1u) {
-            if (remainder.empty()) remainder.push_back(1);
-            else remainder[0] |= 1u;
+            if (remainder.empty())
+                remainder.push_back(1);
+            else
+                remainder[0] |= 1u;
         }
 
         if (compare_magnitude(remainder, b) >= 0) {
@@ -220,7 +228,10 @@ std::pair<BigInt, BigInt> BigInt::divmod_floor_big(const BigInt &divisor) const 
 
     if (negative_ == divisor.negative_) {
         // 同号：向负无穷取整的商就是截断商（结果非负）；余数符号跟除数一致
-        return {from_magnitude(std::move(q_mag), false), from_magnitude(std::move(r_mag), divisor.negative_)};
+        return {
+            from_magnitude(std::move(q_mag), false),
+            from_magnitude(std::move(r_mag), divisor.negative_)
+        };
     }
 
     // 异号：向负无穷取整的商比截断商更小（更负）1；余数 = |divisor| - r_mag，符号跟除数一致
@@ -229,8 +240,7 @@ std::pair<BigInt, BigInt> BigInt::divmod_floor_big(const BigInt &divisor) const 
     return {std::move(quotient), std::move(remainder)};
 }
 
-BigInt::BigInt(const long long value) : is_small_{true}, small_{value} {
-}
+BigInt::BigInt(const long long value) : is_small_{true}, small_{value} {}
 
 BigInt BigInt::from_decimal_string(const std::string &s) {
     if (s.empty()) throw std::invalid_argument("BigInt::from_decimal_string: empty string");
@@ -246,7 +256,8 @@ BigInt BigInt::from_decimal_string(const std::string &s) {
     std::vector<uint32_t> limbs;
     for (; i < s.size(); ++i) {
         const char c{s[i]};
-        if (c < '0' || c > '9') throw std::invalid_argument("BigInt::from_decimal_string: invalid character");
+        if (c < '0' || c > '9')
+            throw std::invalid_argument("BigInt::from_decimal_string: invalid character");
 
         // limbs = limbs * 10 + digit
         uint64_t carry{static_cast<uint64_t>(c - '0')};
@@ -306,7 +317,8 @@ int BigInt::sign() const {
 
 BigInt BigInt::abs() const {
     if (is_small_) {
-        if (small_ == INT64_MIN) return shrink(promoted().abs()); // |INT64_MIN| == 2^63，装不进 int64_t
+        if (small_ == INT64_MIN)
+            return shrink(promoted().abs()); // |INT64_MIN| == 2^63，装不进 int64_t
         BigInt result;
         result.is_small_ = true;
         result.small_ = small_ < 0 ? -small_ : small_;
@@ -335,9 +347,7 @@ BigInt BigInt::operator-() const {
     return result;
 }
 
-BigInt BigInt::operator~() const {
-    return -(*this) - BigInt(1);
-}
+BigInt BigInt::operator~() const { return -(*this) - BigInt(1); }
 
 BigInt BigInt::operator+(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) {
@@ -352,7 +362,8 @@ BigInt BigInt::operator+(const BigInt &rhs) const {
 
     const BigInt a{promoted()};
     const BigInt b{rhs.promoted()};
-    if (a.negative_ == b.negative_) return shrink(from_magnitude(add_magnitude(a.limbs_, b.limbs_), a.negative_));
+    if (a.negative_ == b.negative_)
+        return shrink(from_magnitude(add_magnitude(a.limbs_, b.limbs_), a.negative_));
 
     const auto cmp{compare_magnitude(a.limbs_, b.limbs_)};
     if (cmp > 0) return shrink(from_magnitude(sub_magnitude(a.limbs_, b.limbs_), a.negative_));
@@ -360,9 +371,7 @@ BigInt BigInt::operator+(const BigInt &rhs) const {
     return BigInt{}; // 异号且大小相等，结果为 0
 }
 
-BigInt BigInt::operator-(const BigInt &rhs) const {
-    return *this + (-rhs);
-}
+BigInt BigInt::operator-(const BigInt &rhs) const { return *this + (-rhs); }
 
 BigInt BigInt::operator*(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) {
@@ -437,7 +446,8 @@ BigInt BigInt::operator&(const BigInt &rhs) const {
 
     // n 按"提升到大路径之后"的 limb 数来算：走小路径的操作数提升前 limbs_ 是空的（根本没用过），
     // 直接拿提升前的 limbs_.size() 参与 max 虽然巧合之下也不会出错（另一个操作数一定是真大数、
-    // limb 数至少是 2，max 不会被那个 0 带偏），但依赖这个不太直观的不变量没必要，按提升后的算更直接
+    // limb 数至少是 2，max 不会被那个 0
+    // 带偏），但依赖这个不太直观的不变量没必要，按提升后的算更直接
     const BigInt a{promoted()};
     const BigInt b{rhs.promoted()};
     const size_t n{(a.limbs_.size() > b.limbs_.size() ? a.limbs_.size() : b.limbs_.size()) + 1};
@@ -484,7 +494,9 @@ BigInt BigInt::operator<<(const long long k) const {
         if (!__builtin_mul_overflow(small_, int64_t{1} << k, &product)) return BigInt(product);
     }
 
-    return shrink(from_magnitude(shift_left_magnitude(promoted().limbs_, static_cast<uint64_t>(k)), is_negative()));
+    return shrink(from_magnitude(
+        shift_left_magnitude(promoted().limbs_, static_cast<uint64_t>(k)), is_negative()
+    ));
 }
 
 BigInt BigInt::operator>>(const long long k) const {
@@ -507,13 +519,16 @@ std::strong_ordering BigInt::operator<=>(const BigInt &rhs) const {
 
     const BigInt a{promoted()};
     const BigInt b{rhs.promoted()};
-    if (a.negative_ != b.negative_) return a.negative_ ? std::strong_ordering::less : std::strong_ordering::greater;
+    if (a.negative_ != b.negative_)
+        return a.negative_ ? std::strong_ordering::less : std::strong_ordering::greater;
     // 同号：非负直接比大小；同为负数时，量级越大值越小，反过来比较参数顺序即可拿到正确结果
-    return a.negative_ ? compare_magnitude(b.limbs_, a.limbs_) : compare_magnitude(a.limbs_, b.limbs_);
+    return a.negative_ ? compare_magnitude(b.limbs_, a.limbs_)
+                       : compare_magnitude(a.limbs_, b.limbs_);
 }
 
 bool BigInt::operator==(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) return small_ == rhs.small_;
-    if (is_small_ != rhs.is_small_) return false; // 按不变量，能装进 int64_t 的值必然走小路径，不用再比较
+    if (is_small_ != rhs.is_small_)
+        return false; // 按不变量，能装进 int64_t 的值必然走小路径，不用再比较
     return negative_ == rhs.negative_ && limbs_ == rhs.limbs_;
 }

@@ -11,9 +11,7 @@
 
 // 直接跑词法分析，拿到原始 token 序列（含结尾 EOF）。
 // 用于需要检查 row/col、或者需要检查 EOF 本身的用例。
-inline std::vector<Token> lex(const std::u32string &source) {
-    return Lexer{source}.tokenize();
-}
+inline std::vector<Token> lex(const std::u32string &source) { return Lexer{source}.tokenize(); }
 
 // 把一个 u32string 里的控制字符转成可见的转义序列，纯粹是为了让转储结果保持单行、方便阅读/比对，
 // 跟词法分析本身的转义处理（Lexer::read_string）无关，只是测试展示层面的东西。
@@ -21,13 +19,17 @@ inline std::string escape_for_dump(const std::u32string &s) {
     std::string out;
     for (const char32_t c : s) {
         switch (c) {
-        case U'\n': out += "\\n";
+        case U'\n':
+            out += "\\n";
             break;
-        case U'\t': out += "\\t";
+        case U'\t':
+            out += "\\t";
             break;
-        case U'\r': out += "\\r";
+        case U'\r':
+            out += "\\r";
             break;
-        default: out += u32_to_utf8(c);
+        default:
+            out += u32_to_utf8(c);
         }
     }
     return out;
@@ -49,9 +51,11 @@ inline std::string lex_dump(const std::u32string &source) {
         case TokenType::LITERAL_INT:
         case TokenType::LITERAL_FLOAT:
         case TokenType::LITERAL_STR:
-        case TokenType::IDENTIFIER: oss << '(' << escape_for_dump(tok.lexeme) << ')';
+        case TokenType::IDENTIFIER:
+            oss << '(' << escape_for_dump(tok.lexeme) << ')';
             break;
-        default: break;
+        default:
+            break;
         }
     }
     return oss.str();

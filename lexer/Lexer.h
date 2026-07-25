@@ -5,7 +5,6 @@
 #include <string>
 #include <vector>
 
-
 class Lexer {
     const std::u32string source_;
     size_t pos_{0};
@@ -44,7 +43,7 @@ class Lexer {
     // 读符号
     [[nodiscard]] Token read_symbol();
 
-public:
+  public:
     /**
      * 构造 Lexer 对象
      * @param source    源代码

@@ -4,8 +4,7 @@
 #include "syntax_checker/SyntaxChecker.h"
 
 Analyzer::Analyzer(AstNodeProgram &root, std::string file_path)
-    : root_{root}, file_path_{std::move(file_path)} {
-}
+    : root_{root}, file_path_{std::move(file_path)} {}
 
 void Analyzer::analyze() const && {
     // 先检查。这个 SyntaxChecker 可能报错，但绝不修改树

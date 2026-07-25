@@ -25,7 +25,10 @@ void SyntaxChecker::require_not_null(const std::u32string &name, const Position 
 void SyntaxChecker::check(const AstNode &node) {
     const AstNode *const p{&node}; // 变成指针再 dynamic_cast
 
-#define X(nt) if (const auto *n{dynamic_cast<const nt *>(p)}) { return check(*n); }
+#define X(nt)                                                                                      \
+    if (const auto *n{dynamic_cast<const nt *>(p)}) {                                              \
+        return check(*n);                                                                          \
+    }
 #include "../../parser/ast_nodes/x_ast_nodes.h"
 #undef X
 
@@ -186,12 +189,10 @@ void SyntaxChecker::check(const AstNodeFunc &node) {
     std::unordered_set<std::u32string> names;
 
     // 排重函数
-    auto ensure_unique{
-        [&](const std::u32string &name) {
-            // 如果是已经存在
-            if (!names.insert(name).second) error("duplicate name in capture/parameter list", pos);
-        }
-    };
+    auto ensure_unique{[&](const std::u32string &name) {
+        // 如果是已经存在
+        if (!names.insert(name).second) error("duplicate name in capture/parameter list", pos);
+    }};
 
     // 捕获
     for (const auto &capture : node.captures_) {
@@ -203,14 +204,16 @@ void SyntaxChecker::check(const AstNodeFunc &node) {
     bool has_seen_default{false};
     for (const auto &param : node.params_.positional_) {
         require_not_null(param.identifier_, pos), ensure_unique(param.identifier_);
-        if (param.default_value_) has_seen_default = true;
+        if (param.default_value_)
+            has_seen_default = true;
         else // 如果当前这个没有默认值，且前边的某个有默认值
             if (has_seen_default) error("non-default parameter after default parameter", pos);
         check_nullable(param.type_annotation_);
         check_nullable(param.default_value_);
     }
     if (node.params_.var_args_name_) {
-        require_not_null(*node.params_.var_args_name_, pos), ensure_unique(*node.params_.var_args_name_);
+        require_not_null(*node.params_.var_args_name_, pos),
+            ensure_unique(*node.params_.var_args_name_);
     }
     for (const auto &param : node.params_.kw_only_) {
         require_not_null(param.identifier_, pos), ensure_unique(param.identifier_);
@@ -218,7 +221,8 @@ void SyntaxChecker::check(const AstNodeFunc &node) {
         check_nullable(param.default_value_);
     }
     if (node.params_.var_kwargs_name_) {
-        require_not_null(*node.params_.var_kwargs_name_, pos), ensure_unique(*node.params_.var_kwargs_name_);
+        require_not_null(*node.params_.var_kwargs_name_, pos),
+            ensure_unique(*node.params_.var_kwargs_name_);
     }
 
     check_nullable(node.return_type_);
@@ -231,23 +235,17 @@ void SyntaxChecker::check(const AstNodeFunc &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeLiteralNone &) {
-}
+void SyntaxChecker::check(const AstNodeLiteralNone &) {}
 
-void SyntaxChecker::check(const AstNodeLiteralBool &) {
-}
+void SyntaxChecker::check(const AstNodeLiteralBool &) {}
 
-void SyntaxChecker::check(const AstNodeLiteralGL &) {
-}
+void SyntaxChecker::check(const AstNodeLiteralGL &) {}
 
-void SyntaxChecker::check(const AstNodeLiteralInt &) {
-}
+void SyntaxChecker::check(const AstNodeLiteralInt &) {}
 
-void SyntaxChecker::check(const AstNodeLiteralFloat &) {
-}
+void SyntaxChecker::check(const AstNodeLiteralFloat &) {}
 
-void SyntaxChecker::check(const AstNodeLiteralStr &) {
-}
+void SyntaxChecker::check(const AstNodeLiteralStr &) {}
 
 void SyntaxChecker::check(const AstNodeLiteralTuple &node) {
     const Context saved{ctx_};
@@ -286,14 +284,14 @@ void SyntaxChecker::check(const AstNodeLiteralDict &node) {
             if (v) error_internal("** dict-spread entry must not have a value", pos);
         }
         // 是 k: v
-        else check_not_null(v, pos);
+        else
+            check_not_null(v, pos);
     }
 
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeLiteralEllipsis &) {
-}
+void SyntaxChecker::check(const AstNodeLiteralEllipsis &) {}
 
 void SyntaxChecker::check(const AstNodeProgram &node) {
     const Context saved{ctx_};
@@ -332,7 +330,8 @@ void SyntaxChecker::check(const AstNodeStar &node) {
 void SyntaxChecker::check(const AstNodeDoubleStar &node) {
     const Position pos{node.pos_};
 
-    if (!ctx_.can_double_star) error("** can only appear in dict literal or function call arguments", pos);
+    if (!ctx_.can_double_star)
+        error("** can only appear in dict literal or function call arguments", pos);
 
     const Context saved{ctx_};
     ctx_.can_star = false;
@@ -389,7 +388,8 @@ void SyntaxChecker::check(const AstNodeIs &node) {
     ctx_.can_double_star = false;
 
     require_not_null(node.operands_, 2, node.pos_);
-    if (node.operands_.size() != node.op_positions_.size() + 1) error_internal("mismatched count", pos);
+    if (node.operands_.size() != node.op_positions_.size() + 1)
+        error_internal("mismatched count", pos);
     for (const auto &operand : node.operands_) check_not_null(operand, pos);
 
     ctx_ = saved;
@@ -517,8 +517,7 @@ void SyntaxChecker::check_nullable(const AstNodePtr &node) {
 void SyntaxChecker::check_lvalue(const AstNode &node) {
     // a  a[ind]  a.x
     if (dynamic_cast<const AstNodeIdentifier *>(&node) ||
-        dynamic_cast<const AstNodeIndex *>(&node) ||
-        dynamic_cast<const AstNodeAttr *>(&node)) {
+        dynamic_cast<const AstNodeIndex *>(&node) || dynamic_cast<const AstNodeAttr *>(&node)) {
         return check(node);
     }
 
@@ -539,7 +538,8 @@ void SyntaxChecker::check_lvalue_items(const std::vector<AstNodePtr> &items, con
         require_not_null(item, pos);
         if (const auto *star{dynamic_cast<const AstNodeStar *>(item.get())}) {
             // 解构时至多一个左值可以带 * 前缀
-            if (has_seen_star) error("at most one starred lvalue allowed in destructuring", star->pos_);
+            if (has_seen_star)
+                error("at most one starred lvalue allowed in destructuring", star->pos_);
             has_seen_star = true;
             require_not_null(star->operand_, pos), check_lvalue(*star->operand_);
         } else {
@@ -551,8 +551,7 @@ void SyntaxChecker::check_lvalue_items(const std::vector<AstNodePtr> &items, con
 void SyntaxChecker::check_lvalue_pure(const AstNode &node) {
     // a  a[ind]  a.x
     if (dynamic_cast<const AstNodeIdentifier *>(&node) ||
-        dynamic_cast<const AstNodeIndex *>(&node) ||
-        dynamic_cast<const AstNodeAttr *>(&node)) {
+        dynamic_cast<const AstNodeIndex *>(&node) || dynamic_cast<const AstNodeAttr *>(&node)) {
         return check(node);
     }
 
@@ -560,13 +559,11 @@ void SyntaxChecker::check_lvalue_pure(const AstNode &node) {
 }
 
 void SyntaxChecker::check_doc(const AstNodePtr &doc) const {
-    if (doc && !dynamic_cast<const AstNodeLiteralStr *>(doc.get())) error("doc must be a string literal", doc->pos_);
+    if (doc && !dynamic_cast<const AstNodeLiteralStr *>(doc.get()))
+        error("doc must be a string literal", doc->pos_);
 }
 
 SyntaxChecker::SyntaxChecker(const AstNodeProgram &root, std::string file_path)
-    : root_{root}, file_path_{std::move(file_path)} {
-}
+    : root_{root}, file_path_{std::move(file_path)} {}
 
-void SyntaxChecker::check() && {
-    check(root_);
-}
+void SyntaxChecker::check() && { check(root_); }

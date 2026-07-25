@@ -8,10 +8,9 @@
 #include <string>
 #include <vector>
 
-
 class Parser {
     const std::vector<Token> tokens_;
-    size_t pos_{0}; // 当前 token 的索引
+    size_t pos_{0};      // 当前 token 的索引
     int paren_depth_{0}; // 未闭合的 '(' 和 '[' 深度（不含 '{'）
     const std::string file_path_;
 
@@ -22,7 +21,8 @@ class Parser {
     // 检查下一个 token 类型是否为 type
     [[nodiscard]] bool check(TokenType type) const;
     // 检查从 start（缺省为当前位置 pos_）开始，跳过 NEWLINE 之后的第一个 token 是否为 type
-    [[nodiscard]] bool check_over_newline(TokenType type, std::optional<size_t> start = std::nullopt) const;
+    [[nodiscard]] bool
+    check_over_newline(TokenType type, std::optional<size_t> start = std::nullopt) const;
     // 检查当前位置是不是一条表达式合法的终止符（换行、';'、EOF、'}'），不是则抛语法错误
     void check_terminator() const;
     // 消耗对应类型 token，否则抛出异常
@@ -64,8 +64,9 @@ class Parser {
      * @param first_op     第一个运算符的类型
      * @param first_op_pos 第一个运算符的位置
      */
-    [[nodiscard]] AstNodePtr parse_chain_compare(AstNodePtr left, Position start_pos,
-                                                 AstNodeCompare::OpType first_op, Position first_op_pos);
+    [[nodiscard]] AstNodePtr parse_chain_compare(
+        AstNodePtr left, Position start_pos, AstNodeCompare::OpType first_op, Position first_op_pos
+    );
 
     /**
      * 链式 is
@@ -73,7 +74,8 @@ class Parser {
      * @param start_pos    整个表达式开始的位置
      * @param first_is_pos 第一个 is 的位置
      */
-    [[nodiscard]] AstNodePtr parse_chain_is(AstNodePtr left, Position start_pos, Position first_is_pos);
+    [[nodiscard]] AstNodePtr
+    parse_chain_is(AstNodePtr left, Position start_pos, Position first_is_pos);
 
     /**
      * 解析一个无运算符的表达式
@@ -107,13 +109,15 @@ class Parser {
     // raise
     [[nodiscard]] AstNodePtr parse_raise();
     // 函数
-    [[nodiscard]] AstNodePtr parse_func(std::vector<AstNodePtr> decorators = {},
-                                        std::vector<Position> decorator_positions = {},
-                                        Position deco_pos = {});
+    [[nodiscard]] AstNodePtr parse_func(
+        std::vector<AstNodePtr> decorators = {}, std::vector<Position> decorator_positions = {},
+        Position deco_pos = {}
+    );
     // 类
-    [[nodiscard]] AstNodePtr parse_class(std::vector<AstNodePtr> decorators = {},
-                                         std::vector<Position> decorator_positions = {},
-                                         Position deco_pos = {});
+    [[nodiscard]] AstNodePtr parse_class(
+        std::vector<AstNodePtr> decorators = {}, std::vector<Position> decorator_positions = {},
+        Position deco_pos = {}
+    );
     // 装饰器表达式 / 函数 / 类
     [[nodiscard]] AstNodePtr parse_decorator();
 
@@ -136,7 +140,7 @@ class Parser {
     // 完成索引 x[...]。消耗括号、管理 paren_depth_
     [[nodiscard]] AstNodePtr finish_index(AstNodePtr obj, Position start_pos);
 
-public:
+  public:
     /**
      * 构造 Lexer 对象
      * @param tokens    由 Lexer 输出的 tokens

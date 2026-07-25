@@ -1,32 +1,25 @@
 #pragma once
 
-#include "ast_node.h"
 #include "../../../utils/string_utils.h"
+#include "ast_node.h"
 
 #include <memory>
 #include <string>
 #include <vector>
 
-
 // None
 struct AstNodeLiteralNone : AstNode {
-    explicit AstNodeLiteralNone(const Position pos)
-        : AstNode{pos} {
-    }
+    explicit AstNodeLiteralNone(const Position pos) : AstNode{pos} {}
 
-    [[nodiscard]] json to_json() const override {
-        return json{{"type", "LiteralNone"}};
-    }
+    [[nodiscard]] json to_json() const override { return json{{"type", "LiteralNone"}}; }
 };
 
 // bool
 struct AstNodeLiteralBool : AstNode {
     bool value_;
 
-    explicit AstNodeLiteralBool(const Position pos,
-                                const bool value)
-        : AstNode{pos}, value_{value} {
-    }
+    explicit AstNodeLiteralBool(const Position pos, const bool value)
+        : AstNode{pos}, value_{value} {}
 
     [[nodiscard]] json to_json() const override {
         return json{{"type", "LiteralBool"}, {"value", value_}};
@@ -36,10 +29,8 @@ struct AstNodeLiteralBool : AstNode {
 struct AstNodeLiteralGL : AstNode {
     enum class GLType { G, L } value_;
 
-    explicit AstNodeLiteralGL(const Position pos,
-                              const GLType value)
-        : AstNode{pos}, value_{value} {
-    }
+    explicit AstNodeLiteralGL(const Position pos, const GLType value)
+        : AstNode{pos}, value_{value} {}
 
     [[nodiscard]] json to_json() const override {
         return json{{"type", "LiteralGL"}, {"value", value_ == GLType::G ? "_G" : "_L"}};
@@ -50,10 +41,8 @@ struct AstNodeLiteralGL : AstNode {
 struct AstNodeLiteralInt : AstNode {
     std::u32string raw_;
 
-    explicit AstNodeLiteralInt(const Position pos,
-                               std::u32string raw)
-        : AstNode{pos}, raw_{std::move(raw)} {
-    }
+    explicit AstNodeLiteralInt(const Position pos, std::u32string raw)
+        : AstNode{pos}, raw_{std::move(raw)} {}
 
     [[nodiscard]] json to_json() const override {
         return json{{"type", "LiteralInt"}, {"raw", u32_to_utf8(raw_)}};
@@ -64,10 +53,8 @@ struct AstNodeLiteralInt : AstNode {
 struct AstNodeLiteralFloat : AstNode {
     std::u32string raw_;
 
-    explicit AstNodeLiteralFloat(const Position pos,
-                                 std::u32string raw)
-        : AstNode{pos}, raw_{std::move(raw)} {
-    }
+    explicit AstNodeLiteralFloat(const Position pos, std::u32string raw)
+        : AstNode{pos}, raw_{std::move(raw)} {}
 
     [[nodiscard]] json to_json() const override {
         return json{{"type", "LiteralFloat"}, {"raw", u32_to_utf8(raw_)}};
@@ -80,8 +67,7 @@ struct AstNodeLiteralStr : AstNode {
     std::u32string value_;
 
     explicit AstNodeLiteralStr(const Position pos, std::u32string value)
-        : AstNode{pos}, value_{std::move(value)} {
-    }
+        : AstNode{pos}, value_{std::move(value)} {}
 
     [[nodiscard]] json to_json() const override {
         return json{{"type", "LiteralStr"}, {"value", u32_to_utf8(value_)}};
@@ -93,8 +79,7 @@ struct AstNodeLiteralTuple : AstNode {
     std::vector<AstNodePtr> items_; // 可空
 
     explicit AstNodeLiteralTuple(const Position pos, std::vector<AstNodePtr> items)
-        : AstNode{pos}, items_{std::move(items)} {
-    }
+        : AstNode{pos}, items_{std::move(items)} {}
 
     [[nodiscard]] json to_json() const override {
         auto items = json::array();
@@ -107,10 +92,8 @@ struct AstNodeLiteralTuple : AstNode {
 struct AstNodeLiteralList : AstNode {
     std::vector<AstNodePtr> items_; // 可空
 
-    explicit AstNodeLiteralList(const Position pos,
-                                std::vector<AstNodePtr> items)
-        : AstNode{pos}, items_{std::move(items)} {
-    }
+    explicit AstNodeLiteralList(const Position pos, std::vector<AstNodePtr> items)
+        : AstNode{pos}, items_{std::move(items)} {}
 
     [[nodiscard]] json to_json() const override {
         auto items = json::array();
@@ -123,27 +106,24 @@ struct AstNodeLiteralList : AstNode {
 struct AstNodeLiteralDict : AstNode {
     std::vector<std::pair<AstNodePtr, AstNodePtr>> items_; // 可空
 
-    explicit AstNodeLiteralDict(const Position pos,
-                                std::vector<std::pair<AstNodePtr, AstNodePtr>> items)
-        : AstNode{pos}, items_{std::move(items)} {
-    }
+    explicit AstNodeLiteralDict(
+        const Position pos, std::vector<std::pair<AstNodePtr, AstNodePtr>> items
+    )
+        : AstNode{pos}, items_{std::move(items)} {}
 
     [[nodiscard]] json to_json() const override {
         auto items = json::array();
         for (const auto &[key, val] : items_)
-            items.push_back({{"key", key->to_json()},
-                             {"val", val ? val->to_json() : json(nullptr)}});
+            items.push_back(
+                {{"key", key->to_json()}, {"val", val ? val->to_json() : json(nullptr)}}
+            );
         return json{{"type", "LiteralDict"}, {"items", std::move(items)}};
     }
 };
 
 // ...
 struct AstNodeLiteralEllipsis : AstNode {
-    explicit AstNodeLiteralEllipsis(const Position pos)
-        : AstNode{pos} {
-    }
+    explicit AstNodeLiteralEllipsis(const Position pos) : AstNode{pos} {}
 
-    [[nodiscard]] json to_json() const override {
-        return json{{"type", "LiteralEllipsis"}};
-    }
+    [[nodiscard]] json to_json() const override { return json{{"type", "LiteralEllipsis"}}; }
 };

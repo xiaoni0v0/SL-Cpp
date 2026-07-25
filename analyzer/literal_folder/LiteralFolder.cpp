@@ -14,7 +14,10 @@ void LiteralFolder::visit_and_replace(AstNodePtr &node) const {
 void LiteralFolder::visit(AstNode &node) const {
     AstNode *const p{&node}; // 变成指针再 dynamic_cast
 
-#define X(nt) if (auto *n{dynamic_cast<nt *>(p)}) { return visit(*n); }
+#define X(nt)                                                                                      \
+    if (auto *n{dynamic_cast<nt *>(p)}) {                                                          \
+        return visit(*n);                                                                          \
+    }
 #include "../../parser/ast_nodes/x_ast_nodes.h"
 #undef X
 
@@ -50,15 +53,11 @@ void LiteralFolder::visit(AstNodeForIter &node) const {
     visit_and_replace(node.body_);
 }
 
-void LiteralFolder::visit(AstNodeBreak &) const {
-}
+void LiteralFolder::visit(AstNodeBreak &) const {}
 
-void LiteralFolder::visit(AstNodeContinue &) const {
-}
+void LiteralFolder::visit(AstNodeContinue &) const {}
 
-void LiteralFolder::visit(AstNodeReturn &node) const {
-    visit_and_replace(node.value_);
-}
+void LiteralFolder::visit(AstNodeReturn &node) const { visit_and_replace(node.value_); }
 
 void LiteralFolder::visit(AstNodeTry &node) const {
     visit_and_replace(node.try_expr_);
@@ -69,9 +68,7 @@ void LiteralFolder::visit(AstNodeTry &node) const {
     visit_and_replace(node.finally_expr_);
 }
 
-void LiteralFolder::visit(AstNodeRaise &node) const {
-    visit_and_replace(node.value_);
-}
+void LiteralFolder::visit(AstNodeRaise &node) const { visit_and_replace(node.value_); }
 
 void LiteralFolder::visit(AstNodeDecorator &node) const {
     visit_and_replace(node.decorator_);
@@ -94,23 +91,17 @@ void LiteralFolder::visit(AstNodeFunc &node) const {
     visit(*node.body_);
 }
 
-void LiteralFolder::visit(AstNodeLiteralNone &) const {
-}
+void LiteralFolder::visit(AstNodeLiteralNone &) const {}
 
-void LiteralFolder::visit(AstNodeLiteralBool &) const {
-}
+void LiteralFolder::visit(AstNodeLiteralBool &) const {}
 
-void LiteralFolder::visit(AstNodeLiteralGL &) const {
-}
+void LiteralFolder::visit(AstNodeLiteralGL &) const {}
 
-void LiteralFolder::visit(AstNodeLiteralInt &) const {
-}
+void LiteralFolder::visit(AstNodeLiteralInt &) const {}
 
-void LiteralFolder::visit(AstNodeLiteralFloat &) const {
-}
+void LiteralFolder::visit(AstNodeLiteralFloat &) const {}
 
-void LiteralFolder::visit(AstNodeLiteralStr &) const {
-}
+void LiteralFolder::visit(AstNodeLiteralStr &) const {}
 
 void LiteralFolder::visit(AstNodeLiteralTuple &node) const {
     for (auto &item : node.items_) visit_and_replace(item);
@@ -127,8 +118,7 @@ void LiteralFolder::visit(AstNodeLiteralDict &node) const {
     }
 }
 
-void LiteralFolder::visit(AstNodeLiteralEllipsis &) const {
-}
+void LiteralFolder::visit(AstNodeLiteralEllipsis &) const {}
 
 void LiteralFolder::visit(AstNodeProgram &node) const {
     for (auto &e : node.exprs_) visit_and_replace(e);
@@ -138,17 +128,11 @@ void LiteralFolder::visit(AstNodeCompound &node) const {
     for (auto &e : node.exprs_) visit_and_replace(e);
 }
 
-void LiteralFolder::visit(AstNodeStar &node) const {
-    visit_and_replace(node.operand_);
-}
+void LiteralFolder::visit(AstNodeStar &node) const { visit_and_replace(node.operand_); }
 
-void LiteralFolder::visit(AstNodeDoubleStar &node) const {
-    visit_and_replace(node.operand_);
-}
+void LiteralFolder::visit(AstNodeDoubleStar &node) const { visit_and_replace(node.operand_); }
 
-void LiteralFolder::visit(AstNodeOpUnary &node) const {
-    visit_and_replace(node.operand_);
-}
+void LiteralFolder::visit(AstNodeOpUnary &node) const { visit_and_replace(node.operand_); }
 
 void LiteralFolder::visit(AstNodeOpBinary &node) const {
     visit_and_replace(node.left_);
@@ -184,23 +168,14 @@ void LiteralFolder::visit(AstNodeIndex &node) const {
     for (auto &arg : node.args_) visit_and_replace(arg);
 }
 
-void LiteralFolder::visit(AstNodeAttr &node) const {
-    visit_and_replace(node.object_);
-}
+void LiteralFolder::visit(AstNodeAttr &node) const { visit_and_replace(node.object_); }
 
-void LiteralFolder::visit(AstNodeIdentifier &) const {
-}
+void LiteralFolder::visit(AstNodeIdentifier &) const {}
 
-void LiteralFolder::visit(AstNodeDel &node) const {
-    visit_and_replace(node.target_);
-}
+void LiteralFolder::visit(AstNodeDel &node) const { visit_and_replace(node.target_); }
 
-void LiteralFolder::visit(AstNodeGlobal &) const {
-}
+void LiteralFolder::visit(AstNodeGlobal &) const {}
 
-LiteralFolder::LiteralFolder(AstNodeProgram &root) : root_{root} {
-}
+LiteralFolder::LiteralFolder(AstNodeProgram &root) : root_{root} {}
 
-void LiteralFolder::fold() const && {
-    visit(root_);
-}
+void LiteralFolder::fold() const && { visit(root_); }

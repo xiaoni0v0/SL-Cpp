@@ -7,7 +7,6 @@
 
 #include "executor/Executor.h"
 
-
 int main(const int argc, char *argv[]) {
 #ifdef _WIN32
     SetConsoleCP(CP_UTF8);
@@ -16,7 +15,8 @@ int main(const int argc, char *argv[]) {
 
     // 没有输入文件
     if (argc != 2) {
-        std::cerr << "Usage: " << std::filesystem::path(argv[0]).filename().string() << " <input_file>" << std::endl;
+        std::cerr << "Usage: " << std::filesystem::path(argv[0]).filename().string()
+                  << " <input_file>" << std::endl;
         return 1;
     }
 

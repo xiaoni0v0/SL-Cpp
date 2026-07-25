@@ -1,20 +1,17 @@
 #pragma once
 
-#include "ast_node.h"
 #include "../../../utils/string_utils.h"
+#include "ast_node.h"
 
 #include <string>
 #include <utility>
-
 
 // 标识符
 struct AstNodeIdentifier : AstNode {
     std::u32string identifier_;
 
-    explicit AstNodeIdentifier(const Position pos,
-                               std::u32string identifier)
-        : AstNode{pos}, identifier_{std::move(identifier)} {
-    }
+    explicit AstNodeIdentifier(const Position pos, std::u32string identifier)
+        : AstNode{pos}, identifier_{std::move(identifier)} {}
 
     [[nodiscard]] json to_json() const override {
         return json{{"type", "Identifier"}, {"identifier", u32_to_utf8(identifier_)}};
@@ -25,10 +22,8 @@ struct AstNodeIdentifier : AstNode {
 struct AstNodeDel : AstNode {
     AstNodePtr target_;
 
-    explicit AstNodeDel(const Position pos,
-                        AstNodePtr target)
-        : AstNode{pos}, target_{std::move(target)} {
-    }
+    explicit AstNodeDel(const Position pos, AstNodePtr target)
+        : AstNode{pos}, target_{std::move(target)} {}
 
     [[nodiscard]] json to_json() const override {
         return json{{"type", "Del"}, {"target", target_->to_json()}};
@@ -39,10 +34,8 @@ struct AstNodeDel : AstNode {
 struct AstNodeGlobal : AstNode {
     std::u32string identifier_;
 
-    explicit AstNodeGlobal(const Position pos,
-                           std::u32string identifier)
-        : AstNode{pos}, identifier_{std::move(identifier)} {
-    }
+    explicit AstNodeGlobal(const Position pos, std::u32string identifier)
+        : AstNode{pos}, identifier_{std::move(identifier)} {}
 
     [[nodiscard]] json to_json() const override {
         return json{{"type", "Global"}, {"identifier", u32_to_utf8(identifier_)}};

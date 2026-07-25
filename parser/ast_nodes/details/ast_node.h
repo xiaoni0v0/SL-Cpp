@@ -18,8 +18,7 @@ struct AstNode {
     // 开始的位置
     Position pos_;
 
-    explicit AstNode(const Position pos) : pos_{pos} {
-    }
+    explicit AstNode(const Position pos) : pos_{pos} {}
 
     virtual ~AstNode() = default;
 

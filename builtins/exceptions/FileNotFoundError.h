@@ -5,10 +5,10 @@
 #include <format>
 #include <string>
 
-
 class FileNotFoundError : public SLException {
-public:
+  public:
     explicit FileNotFoundError(const std::string &message)
-        : SLException{std::format("FileNotFoundError: No such file or directory: \"{}\"", message)} {
-    }
+        : SLException{
+              std::format("FileNotFoundError: No such file or directory: \"{}\"", message)
+          } {}
 };

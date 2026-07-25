@@ -2,7 +2,6 @@
 
 #include "../../parser/ast_nodes/ast_nodes.h"
 
-
 /**
  * 遍历 AST，字面量折叠
  */
@@ -24,7 +23,7 @@ class LiteralFolder {
 #include "../../parser/ast_nodes/x_ast_nodes.h"
 #undef X
 
-public:
+  public:
     /**
      * 构造 LiteralFolder 对象
      * @param root AST 的根节点
