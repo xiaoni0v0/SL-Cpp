@@ -60,3 +60,40 @@ TEST_SUITE("SyntaxChecker 作用域跟踪") {
         CHECK_THROWS_AS(check_program(U"for (;;) { global x }"), SyntaxError);
     }
 }
+
+TEST_SUITE("SyntaxChecker del 目标合法性") {
+
+    TEST_CASE("del 标识符合法") { CHECK_NOTHROW(check_program(U"del x")); }
+
+    TEST_CASE("del 属性访问合法") {
+        CHECK_NOTHROW(check_program(U"del x.y"));
+        CHECK_NOTHROW(check_program(U"del x.y.z"));
+    }
+
+    TEST_CASE("del 元素访问不合法（目标只能是标识符或属性访问）") {
+        check_throws_with(U"del x[0]", "del target must be an identifier or attribute access");
+    }
+
+    TEST_CASE("del 字面量不合法") {
+        check_throws_with(U"del 1", "del target must be an identifier or attribute access");
+    }
+
+    TEST_CASE("del 调用表达式不合法") {
+        check_throws_with(U"del f()", "del target must be an identifier or attribute access");
+    }
+}
+
+TEST_SUITE("SyntaxChecker try-finally") {
+
+    TEST_CASE("try 只有 finally 没有 except 合法") {
+        CHECK_NOTHROW(check_program(U"try a finally b"));
+    }
+
+    TEST_CASE("try 有 except 也有 finally 合法") {
+        CHECK_NOTHROW(check_program(U"try a except (E) b finally c"));
+    }
+
+    TEST_CASE("try 既无 except 也无 finally 报错") {
+        check_throws_with(U"try a", "try must have at least one except or finally");
+    }
+}
