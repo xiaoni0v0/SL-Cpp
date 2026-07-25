@@ -13,8 +13,8 @@ class InternalError : public SLException {
         const std::string &file_path, const int row, const int col, const std::string &message
     )
         : SLException{std::format(
-              "{}:{}:{}:\nInternalError (this is a compiler bug, not a problem with your SL code): "
-              "{}",
+              "{}:{}:{}:\nInternalError (This is usually because the compiler/VM itself has a bug, "
+              "not a problem with your SL code): {}",
               file_path, row, col, message
           )} {}
 };
