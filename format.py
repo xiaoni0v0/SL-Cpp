@@ -14,12 +14,10 @@ format.py
 """
 
 import argparse
+import shutil
 import subprocess
 import sys
 from pathlib import Path
-
-# clang-format 可执行文件路径
-CLANG_FORMAT_EXE = r"C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Tools\Llvm\x64\bin\clang-format.exe"
 
 # 默认额外排除的目录（噪音目录，可按需增删）
 EXCLUDE_DIRS = {".git", "build"}
@@ -58,7 +56,7 @@ def format_file(path: Path) -> bool:
     """
     original = path.read_bytes()
     result = subprocess.run(
-        [CLANG_FORMAT_EXE, "--style=file", str(path)],
+        ["clang-format", "--style=file", str(path)],
         capture_output=True,
         check=True,
     )
@@ -97,9 +95,10 @@ def main():
             print(f)
         return
 
-    if not Path(CLANG_FORMAT_EXE).is_file():
-        print(f"错误：找不到 clang-format：{CLANG_FORMAT_EXE}", file=sys.stderr)
-        print("请修改脚本里的 CLANG_FORMAT_EXE 常量为正确路径。", file=sys.stderr)
+    if shutil.which("clang-format") is None:
+        print(
+            "错误：找不到 clang-format，请先确认已安装并在 PATH 中。", file=sys.stderr
+        )
         sys.exit(1)
 
     reformatted_count = 0
