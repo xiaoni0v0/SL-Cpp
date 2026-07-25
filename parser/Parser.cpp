@@ -1,4 +1,4 @@
-#include "Parser.h"
+﻿#include "Parser.h"
 
 #include "../builtins/exceptions/InternalError.h"
 #include "../builtins/exceptions/SyntaxError.h"
@@ -17,7 +17,7 @@ static std::optional<AstNodeOpUnary::OpType> token_type_to_unary_op_type(const T
     switch (t) {
     case TokenType::SIGN_PLUS:     return AstNodeOpUnary::OpType::Pos;
     case TokenType::SIGN_MINUS:    return AstNodeOpUnary::OpType::Neg;
-    case TokenType::SIGN_TILDE:    return AstNodeOpUnary::OpType::BitNot;
+    case TokenType::SIGN_TILDE:    return AstNodeOpUnary::OpType::BitInvert;
     case TokenType::KW_NOT:        return AstNodeOpUnary::OpType::Not;
     case TokenType::SIGN_QUESTION: return AstNodeOpUnary::OpType::Question;
     case TokenType::SIGN_EXCLAIM:  return AstNodeOpUnary::OpType::Exclaim;

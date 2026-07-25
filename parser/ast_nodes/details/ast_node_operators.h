@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "ast_node.h"
 
@@ -39,9 +39,9 @@ struct AstNodeOpUnary : AstNode {
         Question, // x?
         Exclaim,  // x!
         // 140
-        Pos,    // +x
-        Neg,    // -x
-        BitNot, // ~x
+        Pos,       // +x
+        Neg,       // -x
+        BitInvert, // ~x
         // 40
         Not // not x
     };

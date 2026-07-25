@@ -1,4 +1,4 @@
-#include "../../utils/string_utils.h"
+﻿#include "../../utils/string_utils.h"
 #include "ast_nodes.h"
 
 namespace {
@@ -54,7 +54,7 @@ const char *op_str(const AstNodeOpUnary::OpType op) {
         return "+";
     case AstNodeOpUnary::OpType::Neg:
         return "-";
-    case AstNodeOpUnary::OpType::BitNot:
+    case AstNodeOpUnary::OpType::BitInvert:
         return "~";
     case AstNodeOpUnary::OpType::Not:
         return "not";

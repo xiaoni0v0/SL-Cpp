@@ -1,4 +1,4 @@
-#include "StaticEvaler.h"
+﻿#include "StaticEvaler.h"
 
 #include "../../utils/string_utils.h"
 
@@ -14,7 +14,7 @@ AstNodePtr StaticEvaler::fold_unary(AstNodeOpUnary &node) {
         return fold_not(node);
     case OpType::Pos:
     case OpType::Neg:
-    case OpType::BitNot:
+    case OpType::BitInvert:
         return fold_pos_neg_bitinvert(node);
     default:
         return nullptr;
@@ -31,7 +31,7 @@ AstNodePtr StaticEvaler::fold_pos_neg_bitinvert(AstNodeOpUnary &node) {
     const AstNode &operand{*node.operand_};
 
     if (!is_pure_literal(operand)) return nullptr;
-    if (node.op_ == OpType::BitNot) {
+    if (node.op_ == OpType::BitInvert) {
         if (!is_int_family(operand)) return nullptr; // ~x 仅对 int 有效
         return make_int(node.pos_, ~to_bigint(operand));
     }
