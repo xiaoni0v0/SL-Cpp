@@ -120,7 +120,7 @@ const char *op_str(const AstNodeCompare::OpType op) {
 
 } // namespace
 
-json AstNodeClass::to_json(const bool include_pos) const {
+json AstNodeClass::to_json_impl(const bool include_pos) const {
     auto decorators = json::array();
     for (const auto &d : decorators_) decorators.push_back(d->to_json(include_pos));
     auto bases = json::array();
@@ -148,7 +148,7 @@ json AstNodeClass::to_json(const bool include_pos) const {
     };
 }
 
-json AstNodeIf::to_json(const bool include_pos) const {
+json AstNodeIf::to_json_impl(const bool include_pos) const {
     auto clauses = json::array();
     for (const auto &clause : clauses_)
         clauses.push_back(
@@ -170,7 +170,7 @@ json AstNodeIf::to_json(const bool include_pos) const {
     };
 }
 
-json AstNodeForCond::to_json(const bool include_pos) const {
+json AstNodeForCond::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "ForCond"},
@@ -191,7 +191,7 @@ json AstNodeForCond::to_json(const bool include_pos) const {
     };
 }
 
-json AstNodeForIter::to_json(const bool include_pos) const {
+json AstNodeForIter::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "ForIter"},
@@ -210,17 +210,17 @@ json AstNodeForIter::to_json(const bool include_pos) const {
     };
 }
 
-json AstNodeBreak::to_json(const bool include_pos) const {
+json AstNodeBreak::to_json_impl(const bool include_pos) const {
     if (include_pos) return json{{"type", "Break"}, {"pos", pos_to_json(pos_)}};
     return json{{"type", "Break"}};
 }
 
-json AstNodeContinue::to_json(const bool include_pos) const {
+json AstNodeContinue::to_json_impl(const bool include_pos) const {
     if (include_pos) return json{{"type", "Continue"}, {"pos", pos_to_json(pos_)}};
     return json{{"type", "Continue"}};
 }
 
-json AstNodeReturn::to_json(const bool include_pos) const {
+json AstNodeReturn::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "Return"},
@@ -232,7 +232,7 @@ json AstNodeReturn::to_json(const bool include_pos) const {
     };
 }
 
-json AstNodeTry::to_json(const bool include_pos) const {
+json AstNodeTry::to_json_impl(const bool include_pos) const {
     auto except_clauses = json::array();
     for (const auto &clause : except_clauses_) {
         auto exceptions = json::array();
@@ -258,7 +258,7 @@ json AstNodeTry::to_json(const bool include_pos) const {
     };
 }
 
-json AstNodeRaise::to_json(const bool include_pos) const {
+json AstNodeRaise::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "Raise"}, {"pos", pos_to_json(pos_)}, {"value", value_->to_json(include_pos)}
@@ -266,7 +266,7 @@ json AstNodeRaise::to_json(const bool include_pos) const {
     return json{{"type", "Raise"}, {"value", value_->to_json(include_pos)}};
 }
 
-json AstNodeDecorator::to_json(const bool include_pos) const {
+json AstNodeDecorator::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "Decorator"},
@@ -281,7 +281,7 @@ json AstNodeDecorator::to_json(const bool include_pos) const {
     };
 }
 
-json AstNodeFunc::to_json(const bool include_pos) const {
+json AstNodeFunc::to_json_impl(const bool include_pos) const {
     auto decorators = json::array();
     for (const auto &d : decorators_) decorators.push_back(d->to_json(include_pos));
 
@@ -309,18 +309,18 @@ json AstNodeFunc::to_json(const bool include_pos) const {
     };
 }
 
-json AstNodeLiteralNone::to_json(const bool include_pos) const {
+json AstNodeLiteralNone::to_json_impl(const bool include_pos) const {
     if (include_pos) return json{{"type", "LiteralNone"}, {"pos", pos_to_json(pos_)}};
     return json{{"type", "LiteralNone"}};
 }
 
-json AstNodeLiteralBool::to_json(const bool include_pos) const {
+json AstNodeLiteralBool::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{{"type", "LiteralBool"}, {"pos", pos_to_json(pos_)}, {"value", value_}};
     return json{{"type", "LiteralBool"}, {"value", value_}};
 }
 
-json AstNodeLiteralGL::to_json(const bool include_pos) const {
+json AstNodeLiteralGL::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "LiteralGL"},
@@ -330,13 +330,13 @@ json AstNodeLiteralGL::to_json(const bool include_pos) const {
     return json{{"type", "LiteralGL"}, {"value", value_ == GLType::G ? "_G" : "_L"}};
 }
 
-json AstNodeLiteralInt::to_json(const bool include_pos) const {
+json AstNodeLiteralInt::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{{"type", "LiteralInt"}, {"pos", pos_to_json(pos_)}, {"raw", u32_to_utf8(raw_)}};
     return json{{"type", "LiteralInt"}, {"raw", u32_to_utf8(raw_)}};
 }
 
-json AstNodeLiteralFloat::to_json(const bool include_pos) const {
+json AstNodeLiteralFloat::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "LiteralFloat"}, {"pos", pos_to_json(pos_)}, {"raw", u32_to_utf8(raw_)}
@@ -344,7 +344,7 @@ json AstNodeLiteralFloat::to_json(const bool include_pos) const {
     return json{{"type", "LiteralFloat"}, {"raw", u32_to_utf8(raw_)}};
 }
 
-json AstNodeLiteralStr::to_json(const bool include_pos) const {
+json AstNodeLiteralStr::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "LiteralStr"}, {"pos", pos_to_json(pos_)}, {"value", u32_to_utf8(value_)}
@@ -352,7 +352,7 @@ json AstNodeLiteralStr::to_json(const bool include_pos) const {
     return json{{"type", "LiteralStr"}, {"value", u32_to_utf8(value_)}};
 }
 
-json AstNodeLiteralTuple::to_json(const bool include_pos) const {
+json AstNodeLiteralTuple::to_json_impl(const bool include_pos) const {
     auto items = json::array();
     for (const auto &item : items_) items.push_back(item->to_json(include_pos));
 
@@ -361,7 +361,7 @@ json AstNodeLiteralTuple::to_json(const bool include_pos) const {
     return json{{"type", "LiteralTuple"}, {"items", std::move(items)}};
 }
 
-json AstNodeLiteralList::to_json(const bool include_pos) const {
+json AstNodeLiteralList::to_json_impl(const bool include_pos) const {
     auto items = json::array();
     for (const auto &item : items_) items.push_back(item->to_json(include_pos));
 
@@ -370,7 +370,7 @@ json AstNodeLiteralList::to_json(const bool include_pos) const {
     return json{{"type", "LiteralList"}, {"items", std::move(items)}};
 }
 
-json AstNodeLiteralDict::to_json(const bool include_pos) const {
+json AstNodeLiteralDict::to_json_impl(const bool include_pos) const {
     auto items = json::array();
     for (const auto &[key, val] : items_)
         items.push_back(
@@ -383,12 +383,12 @@ json AstNodeLiteralDict::to_json(const bool include_pos) const {
     return json{{"type", "LiteralDict"}, {"items", std::move(items)}};
 }
 
-json AstNodeLiteralEllipsis::to_json(const bool include_pos) const {
+json AstNodeLiteralEllipsis::to_json_impl(const bool include_pos) const {
     if (include_pos) return json{{"type", "LiteralEllipsis"}, {"pos", pos_to_json(pos_)}};
     return json{{"type", "LiteralEllipsis"}};
 }
 
-json AstNodeProgram::to_json(const bool include_pos) const {
+json AstNodeProgram::to_json_impl(const bool include_pos) const {
     auto exprs = json::array();
     for (const auto &e : exprs_) exprs.push_back(e->to_json(include_pos));
 
@@ -396,7 +396,7 @@ json AstNodeProgram::to_json(const bool include_pos) const {
     return json{{"type", "Program"}, {"exprs", std::move(exprs)}};
 }
 
-json AstNodeCompound::to_json(const bool include_pos) const {
+json AstNodeCompound::to_json_impl(const bool include_pos) const {
     auto exprs = json::array();
     for (const auto &e : exprs_) exprs.push_back(e->to_json(include_pos));
 
@@ -405,7 +405,7 @@ json AstNodeCompound::to_json(const bool include_pos) const {
     return json{{"type", "Compound"}, {"exprs", std::move(exprs)}};
 }
 
-json AstNodeStar::to_json(const bool include_pos) const {
+json AstNodeStar::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "Star"},
@@ -415,7 +415,7 @@ json AstNodeStar::to_json(const bool include_pos) const {
     return json{{"type", "Star"}, {"operand", operand_->to_json(include_pos)}};
 }
 
-json AstNodeDoubleStar::to_json(const bool include_pos) const {
+json AstNodeDoubleStar::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "DoubleStar"},
@@ -425,7 +425,7 @@ json AstNodeDoubleStar::to_json(const bool include_pos) const {
     return json{{"type", "DoubleStar"}, {"operand", operand_->to_json(include_pos)}};
 }
 
-json AstNodeOpUnary::to_json(const bool include_pos) const {
+json AstNodeOpUnary::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "OpUnary"},
@@ -438,7 +438,7 @@ json AstNodeOpUnary::to_json(const bool include_pos) const {
     };
 }
 
-json AstNodeOpBinary::to_json(const bool include_pos) const {
+json AstNodeOpBinary::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "OpBinary"},
@@ -455,7 +455,7 @@ json AstNodeOpBinary::to_json(const bool include_pos) const {
     };
 }
 
-json AstNodeCompare::to_json(const bool include_pos) const {
+json AstNodeCompare::to_json_impl(const bool include_pos) const {
     auto operands = json::array();
     for (const auto &operand : operands_) operands.push_back(operand->to_json(include_pos));
     auto ops = json::array();
@@ -468,7 +468,7 @@ json AstNodeCompare::to_json(const bool include_pos) const {
     return json{{"type", "Compare"}, {"operands", std::move(operands)}, {"ops", std::move(ops)}};
 }
 
-json AstNodeIs::to_json(const bool include_pos) const {
+json AstNodeIs::to_json_impl(const bool include_pos) const {
     auto operands = json::array();
     for (const auto &operand : operands_) operands.push_back(operand->to_json(include_pos));
 
@@ -477,7 +477,7 @@ json AstNodeIs::to_json(const bool include_pos) const {
     return json{{"type", "Is"}, {"operands", std::move(operands)}};
 }
 
-json AstNodeAssign::to_json(const bool include_pos) const {
+json AstNodeAssign::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "Assign"},
@@ -492,7 +492,7 @@ json AstNodeAssign::to_json(const bool include_pos) const {
     };
 }
 
-json AstNodeCompoundAssign::to_json(const bool include_pos) const {
+json AstNodeCompoundAssign::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "CompoundAssign"},
@@ -509,7 +509,7 @@ json AstNodeCompoundAssign::to_json(const bool include_pos) const {
     };
 }
 
-json AstNodeCall::to_json(const bool include_pos) const {
+json AstNodeCall::to_json_impl(const bool include_pos) const {
     auto args = json::array();
     for (const auto &arg : positional_args_) args.push_back(arg->to_json(include_pos));
     auto kwargs = json::array();
@@ -536,7 +536,7 @@ json AstNodeCall::to_json(const bool include_pos) const {
     };
 }
 
-json AstNodeIndex::to_json(const bool include_pos) const {
+json AstNodeIndex::to_json_impl(const bool include_pos) const {
     auto args = json::array();
     for (const auto &arg : args_) args.push_back(arg->to_json(include_pos));
 
@@ -552,7 +552,7 @@ json AstNodeIndex::to_json(const bool include_pos) const {
     };
 }
 
-json AstNodeAttr::to_json(const bool include_pos) const {
+json AstNodeAttr::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "Attr"},
@@ -565,7 +565,7 @@ json AstNodeAttr::to_json(const bool include_pos) const {
     };
 }
 
-json AstNodeIdentifier::to_json(const bool include_pos) const {
+json AstNodeIdentifier::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "Identifier"},
@@ -575,7 +575,7 @@ json AstNodeIdentifier::to_json(const bool include_pos) const {
     return json{{"type", "Identifier"}, {"identifier", u32_to_utf8(identifier_)}};
 }
 
-json AstNodeDel::to_json(const bool include_pos) const {
+json AstNodeDel::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "Del"}, {"pos", pos_to_json(pos_)}, {"target", target_->to_json(include_pos)}
@@ -583,7 +583,7 @@ json AstNodeDel::to_json(const bool include_pos) const {
     return json{{"type", "Del"}, {"target", target_->to_json(include_pos)}};
 }
 
-json AstNodeGlobal::to_json(const bool include_pos) const {
+json AstNodeGlobal::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
             {"type", "Global"}, {"pos", pos_to_json(pos_)}, {"identifier", u32_to_utf8(identifier_)}

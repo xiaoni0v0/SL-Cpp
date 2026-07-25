@@ -22,8 +22,15 @@ struct AstNode {
 
     virtual ~AstNode() = default;
 
-    // 序列化为 JSON，用于 dump；include_pos 控制是否把节点自身的位置信息也 dump 进去
-    [[nodiscard]] virtual json to_json(bool include_pos = false) const = 0;
+    /**
+     * 序列化为 JSON
+     * @param include_pos 是否把节点自身的位置信息也 dump 进去
+     */
+    [[nodiscard]] json to_json(const bool include_pos = false) const {
+        return to_json_impl(include_pos);
+    }
+
+    [[nodiscard]] virtual json to_json_impl(bool include_pos) const = 0;
 };
 
 using AstNodePtr = std::unique_ptr<AstNode>;

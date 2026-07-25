@@ -55,5 +55,5 @@ struct AstNodeFunc : AstNode {
           captures_{std::move(captures)}, params_{std::move(params)},
           return_type_{std::move(return_type)}, doc_{std::move(doc)}, body_{std::move(body)} {}
 
-    [[nodiscard]] json to_json(bool include_pos = false) const override;
+    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };

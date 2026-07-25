@@ -29,7 +29,7 @@ struct AstNodeIf : AstNode {
     )
         : AstNode{pos}, clauses_{std::move(clauses)}, else_expr_{std::move(else_expr)} {}
 
-    [[nodiscard]] json to_json(bool include_pos = false) const override;
+    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // for [$] (init cond inc) body
@@ -48,7 +48,7 @@ struct AstNodeForCond : AstNode {
         : AstNode{pos}, collect_{collect}, init_{std::move(init)}, cond_{std::move(cond)},
           inc_{std::move(inc)}, body_{std::move(body)} {}
 
-    [[nodiscard]] json to_json(bool include_pos = false) const override;
+    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // for [$] (target : iterable) body（迭代模式）
@@ -66,19 +66,19 @@ struct AstNodeForIter : AstNode {
         : AstNode{pos}, collect_{collect}, target_{std::move(target)},
           iterable_{std::move(iterable)}, body_{std::move(body)} {}
 
-    [[nodiscard]] json to_json(bool include_pos = false) const override;
+    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 struct AstNodeBreak : AstNode {
     explicit AstNodeBreak(const Position pos) : AstNode{pos} {}
 
-    [[nodiscard]] json to_json(bool include_pos = false) const override;
+    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 struct AstNodeContinue : AstNode {
     explicit AstNodeContinue(const Position pos) : AstNode{pos} {}
 
-    [[nodiscard]] json to_json(bool include_pos = false) const override;
+    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // return [expr]
@@ -88,7 +88,7 @@ struct AstNodeReturn : AstNode {
     explicit AstNodeReturn(const Position pos, AstNodePtr value)
         : AstNode{pos}, value_{std::move(value)} {}
 
-    [[nodiscard]] json to_json(bool include_pos = false) const override;
+    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // try expr [except (Exception, ...) expr]* [finally expr]
@@ -114,7 +114,7 @@ struct AstNodeTry : AstNode {
         : AstNode{pos}, try_expr_{std::move(try_expr)}, except_clauses_{std::move(except_clauses)},
           finally_expr_{std::move(finally_expr)} {}
 
-    [[nodiscard]] json to_json(bool include_pos = false) const override;
+    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 struct AstNodeRaise : AstNode {
@@ -123,5 +123,5 @@ struct AstNodeRaise : AstNode {
     explicit AstNodeRaise(const Position pos, AstNodePtr value)
         : AstNode{pos}, value_{std::move(value)} {}
 
-    [[nodiscard]] json to_json(bool include_pos = false) const override;
+    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
