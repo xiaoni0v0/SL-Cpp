@@ -20,13 +20,4 @@ struct OneCapture {
                             // 时非空；裸标识符或引用捕获均为 nullptr
 };
 
-inline json captures_to_json(const std::vector<OneCapture> &captures) {
-    auto result = json::array();
-    for (const auto &c : captures)
-        result.push_back(
-            {{"kind", c.capture_type_ == OneCapture::CaptureType::Value ? "Value" : "Reference"},
-             {"identifier", u32_to_utf8(c.identifier_)},
-             {"value_expr", c.value_expr_ ? c.value_expr_->to_json() : json(nullptr)}}
-        );
-    return result;
-}
+json captures_to_json(const std::vector<OneCapture> &captures);

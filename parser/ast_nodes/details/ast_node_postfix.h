@@ -33,24 +33,7 @@ struct AstNodeCall : AstNode {
         : AstNode{pos}, object_{std::move(object)}, positional_args_{std::move(positional_args)},
           keyword_args_{std::move(keyword_args)}, paren_pos_{paren_pos} {}
 
-    [[nodiscard]] json to_json() const override {
-        auto args = json::array();
-        for (const auto &arg : positional_args_) args.push_back(arg->to_json());
-        auto kwargs = json::array();
-        for (const auto &kw : keyword_args_)
-            kwargs.push_back(
-                {{"key",
-                  kw.kind_ == OneKwArg::Kind::Keyword ? json(u32_to_utf8(kw.keyword_))
-                                                      : json(nullptr)},
-                 {"value", kw.value_->to_json()}}
-            );
-        return json{
-            {"type", "Call"},
-            {"object", object_->to_json()},
-            {"args", std::move(args)},
-            {"kwargs", std::move(kwargs)}
-        };
-    }
+    [[nodiscard]] json to_json() const override;
 };
 
 // x[i]  x[i, j, ...]
@@ -66,11 +49,7 @@ struct AstNodeIndex : AstNode {
         : AstNode{pos}, object_{std::move(object)}, args_{std::move(args)},
           bracket_pos_{bracket_pos} {}
 
-    [[nodiscard]] json to_json() const override {
-        auto args = json::array();
-        for (const auto &arg : args_) args.push_back(arg->to_json());
-        return json{{"type", "Index"}, {"object", object_->to_json()}, {"args", std::move(args)}};
-    }
+    [[nodiscard]] json to_json() const override;
 };
 
 // x.attr
@@ -84,7 +63,5 @@ struct AstNodeAttr : AstNode {
     )
         : AstNode{pos}, object_{std::move(object)}, attr_{std::move(attr)}, dot_pos_{dot_pos} {}
 
-    [[nodiscard]] json to_json() const override {
-        return json{{"type", "Attr"}, {"object", object_->to_json()}, {"attr", u32_to_utf8(attr_)}};
-    }
+    [[nodiscard]] json to_json() const override;
 };

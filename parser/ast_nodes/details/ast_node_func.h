@@ -81,19 +81,5 @@ struct AstNodeFunc : AstNode {
         };
     }
 
-    [[nodiscard]] json to_json() const override {
-        auto decorators = json::array();
-        for (const auto &d : decorators_) decorators.push_back(d->to_json());
-
-        return json{
-            {"type", "Func"},
-            {"decorators", std::move(decorators)},
-            {"name", name_ ? json(u32_to_utf8(*name_)) : json(nullptr)},
-            {"captures", captures_to_json(captures_)},
-            {"params", all_params_to_json(params_)},
-            {"return_type", return_type_ ? return_type_->to_json() : json(nullptr)},
-            {"doc", doc_ ? doc_->to_json() : json(nullptr)},
-            {"body", body_->to_json()}
-        };
-    }
+    [[nodiscard]] json to_json() const override;
 };

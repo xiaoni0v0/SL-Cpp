@@ -29,18 +29,7 @@ struct AstNodeIf : AstNode {
     )
         : AstNode{pos}, clauses_{std::move(clauses)}, else_expr_{std::move(else_expr)} {}
 
-    [[nodiscard]] json to_json() const override {
-        auto clauses = json::array();
-        for (const auto &clause : clauses_)
-            clauses.push_back(
-                {{"cond", clause.cond_->to_json()}, {"body", clause.body_->to_json()}}
-            );
-        return json{
-            {"type", "If"},
-            {"clauses", std::move(clauses)},
-            {"else_expr", else_expr_ ? else_expr_->to_json() : json(nullptr)}
-        };
-    }
+    [[nodiscard]] json to_json() const override;
 };
 
 // for [$] (init cond inc) body
@@ -59,16 +48,7 @@ struct AstNodeForCond : AstNode {
         : AstNode{pos}, collect_{collect}, init_{std::move(init)}, cond_{std::move(cond)},
           inc_{std::move(inc)}, body_{std::move(body)} {}
 
-    [[nodiscard]] json to_json() const override {
-        return json{
-            {"type", "ForCond"},
-            {"collect", collect_},
-            {"init", init_ ? init_->to_json() : json(nullptr)},
-            {"cond", cond_ ? cond_->to_json() : json(nullptr)},
-            {"inc", inc_ ? inc_->to_json() : json(nullptr)},
-            {"body", body_->to_json()}
-        };
-    }
+    [[nodiscard]] json to_json() const override;
 };
 
 // for [$] (target : iterable) body（迭代模式）
@@ -86,27 +66,19 @@ struct AstNodeForIter : AstNode {
         : AstNode{pos}, collect_{collect}, target_{std::move(target)},
           iterable_{std::move(iterable)}, body_{std::move(body)} {}
 
-    [[nodiscard]] json to_json() const override {
-        return json{
-            {"type", "ForIter"},
-            {"collect", collect_},
-            {"target", target_->to_json()},
-            {"iterable", iterable_->to_json()},
-            {"body", body_->to_json()}
-        };
-    }
+    [[nodiscard]] json to_json() const override;
 };
 
 struct AstNodeBreak : AstNode {
     explicit AstNodeBreak(const Position pos) : AstNode{pos} {}
 
-    [[nodiscard]] json to_json() const override { return json{{"type", "Break"}}; }
+    [[nodiscard]] json to_json() const override;
 };
 
 struct AstNodeContinue : AstNode {
     explicit AstNodeContinue(const Position pos) : AstNode{pos} {}
 
-    [[nodiscard]] json to_json() const override { return json{{"type", "Continue"}}; }
+    [[nodiscard]] json to_json() const override;
 };
 
 // return [expr]
@@ -116,9 +88,7 @@ struct AstNodeReturn : AstNode {
     explicit AstNodeReturn(const Position pos, AstNodePtr value)
         : AstNode{pos}, value_{std::move(value)} {}
 
-    [[nodiscard]] json to_json() const override {
-        return json{{"type", "Return"}, {"value", value_ ? value_->to_json() : json(nullptr)}};
-    }
+    [[nodiscard]] json to_json() const override;
 };
 
 // try expr [except (Exception, ...) expr]* [finally expr]
@@ -144,22 +114,7 @@ struct AstNodeTry : AstNode {
         : AstNode{pos}, try_expr_{std::move(try_expr)}, except_clauses_{std::move(except_clauses)},
           finally_expr_{std::move(finally_expr)} {}
 
-    [[nodiscard]] json to_json() const override {
-        auto except_clauses = json::array();
-        for (const auto &clause : except_clauses_) {
-            auto exceptions = json::array();
-            for (const auto &exc : clause.exceptions_) exceptions.push_back(exc->to_json());
-            except_clauses.push_back(
-                {{"exceptions", std::move(exceptions)}, {"body", clause.body_->to_json()}}
-            );
-        }
-        return json{
-            {"type", "Try"},
-            {"try_expr", try_expr_->to_json()},
-            {"except_clauses", std::move(except_clauses)},
-            {"finally_expr", finally_expr_ ? finally_expr_->to_json() : json(nullptr)}
-        };
-    }
+    [[nodiscard]] json to_json() const override;
 };
 
 struct AstNodeRaise : AstNode {
@@ -168,7 +123,5 @@ struct AstNodeRaise : AstNode {
     explicit AstNodeRaise(const Position pos, AstNodePtr value)
         : AstNode{pos}, value_{std::move(value)} {}
 
-    [[nodiscard]] json to_json() const override {
-        return json{{"type", "Raise"}, {"value", value_->to_json()}};
-    }
+    [[nodiscard]] json to_json() const override;
 };
