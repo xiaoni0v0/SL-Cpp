@@ -75,16 +75,16 @@ AstNodePtr StaticEvaler::fold_binary(AstNodeOpBinary &node) {
 
 AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
     using OpType = AstNodeOpBinary::OpType;
-    const AstNode &l{*node.left_};
-    const AstNode &r{*node.right_};
+    const AstNode &l{*node.left_}, &r{*node.right_};
+
     if (!is_pure_literal(l) || !is_pure_literal(r) || !is_numeric(l) || !is_numeric(r))
         return nullptr;
 
-    const bool int_int{is_int_family(l) && is_int_family(r)};
+    const bool is_both_int{is_int_family(l) && is_int_family(r)};
 
     switch (node.op_) {
     case OpType::Sub:
-        if (int_int) return make_int(node.pos_, to_bigint(l) - to_bigint(r));
+        if (is_both_int) return make_int(node.pos_, to_bigint(l) - to_bigint(r));
         return make_float(node.pos_, to_double(l) - to_double(r));
 
     case OpType::Div: {
@@ -94,7 +94,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
     }
 
     case OpType::DivFloor:
-        if (int_int) {
+        if (is_both_int) {
             const BigInt rv{to_bigint(r)};
             if (rv.is_zero()) return nullptr;
             return make_int(node.pos_, to_bigint(l).floor_div(rv));
@@ -105,7 +105,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
         }
 
     case OpType::Mod:
-        if (int_int) {
+        if (is_both_int) {
             const BigInt rv{to_bigint(r)};
             if (rv.is_zero()) return nullptr;
             return make_int(node.pos_, to_bigint(l).mod(rv));
@@ -120,7 +120,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
 
     case OpType::Pow:
         // 都是 int 且指数非负：结果仍是 int；否则（含负指数、掺了 float）一律走 float 幂
-        if (int_int && !to_bigint(r).is_negative())
+        if (is_both_int && !to_bigint(r).is_negative())
             return make_int(node.pos_, to_bigint(l).pow(to_bigint(r)));
         // 结果不是实数（如负数开偶次方根）或溢出成 ±inf，make_float 会因为不是有限数而返回
         // nullptr， 交给运行时报 MathError，这里不用单独判断
@@ -132,7 +132,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
 }
 
 AstNodePtr StaticEvaler::fold_add(AstNodeOpBinary &node) {
-    const AstNode &l{*node.left_}, &r{*node.right_};
+    AstNode &l{*node.left_}, &r{*node.right_};
     if (!is_pure_literal(l) || !is_pure_literal(r)) return nullptr;
 
     // 数字 + 数字
@@ -150,25 +150,21 @@ AstNodePtr StaticEvaler::fold_add(AstNodeOpBinary &node) {
     }
 
     // () + ()
-    if (const auto *lt{dynamic_cast<const AstNodeLiteralTuple *>(&l)},
-        *rt{dynamic_cast<const AstNodeLiteralTuple *>(&r)};
+    if (auto *lt{dynamic_cast<AstNodeLiteralTuple *>(&l)},
+        *rt{dynamic_cast<AstNodeLiteralTuple *>(&r)};
         lt && rt) {
-        std::vector<AstNodePtr> items;
-        items.reserve(lt->items_.size() + rt->items_.size());
-        for (const auto &item : lt->items_) items.push_back(clone_literal(*item));
-        for (const auto &item : rt->items_) items.push_back(clone_literal(*item));
-        return std::make_unique<AstNodeLiteralTuple>(node.pos_, std::move(items));
+        lt->items_.reserve(lt->items_.size() + rt->items_.size());
+        for (auto &item : rt->items_) lt->items_.push_back(std::move(item));
+        return std::make_unique<AstNodeLiteralTuple>(node.pos_, std::move(lt->items_));
     }
 
     // [] + []
-    if (const auto *ll{dynamic_cast<const AstNodeLiteralList *>(&l)},
-        *rl{dynamic_cast<const AstNodeLiteralList *>(&r)};
+    if (auto *ll{dynamic_cast<AstNodeLiteralList *>(&l)},
+        *rl{dynamic_cast<AstNodeLiteralList *>(&r)};
         ll && rl) {
-        std::vector<AstNodePtr> items;
-        items.reserve(ll->items_.size() + rl->items_.size());
-        for (const auto &item : ll->items_) items.push_back(clone_literal(*item));
-        for (const auto &item : rl->items_) items.push_back(clone_literal(*item));
-        return std::make_unique<AstNodeLiteralList>(node.pos_, std::move(items));
+        ll->items_.reserve(ll->items_.size() + rl->items_.size());
+        for (auto &item : rl->items_) ll->items_.push_back(std::move(item));
+        return std::make_unique<AstNodeLiteralList>(node.pos_, std::move(ll->items_));
     }
 
     return nullptr;
