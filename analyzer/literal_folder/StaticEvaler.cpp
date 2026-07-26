@@ -8,142 +8,143 @@
 #include <cstdlib>
 
 AstNodePtr StaticEvaler::fold_unary(AstNodeOpUnary &node) {
-    using OpType = AstNodeOpUnary::OpType;
+    using enum AstNodeOpUnary::OpType;
+
     switch (node.op_) {
-    case OpType::Not:
+    case Not:
         return fold_not(node);
-    case OpType::Pos:
-    case OpType::Neg:
-    case OpType::BitInvert:
-        return fold_pos_neg_bitinvert(node);
+    case Pos:
+    case Neg:
+        return fold_arithmetic(node);
+    case BitInvert:
+        return fold_bitwise(node);
     default:
         return nullptr;
     }
 }
 
-AstNodePtr StaticEvaler::fold_not(AstNodeOpUnary &node) {
-    if (!is_pure_literal(*node.operand_)) return nullptr;
-
-    return make_bool(node.pos_, !truthy(*node.operand_));
-}
-
-AstNodePtr StaticEvaler::fold_pos_neg_bitinvert(AstNodeOpUnary &node) {
-    using OpType = AstNodeOpUnary::OpType;
-    const AstNode &operand{*node.operand_};
-    if (!is_pure_literal(operand)) return nullptr;
-
-    if (node.op_ == OpType::BitInvert) {
-        if (!is_int_family(operand)) return nullptr; // ~x 仅对 int 有效
-        return make_int(node.pos_, ~to_bigint(operand));
-    }
-
-    if (!is_numeric(operand)) return nullptr; // +x -x 仅对数字有效
-    if (is_int_family(operand)) {
-        const BigInt v{to_bigint(operand)};
-        return make_int(node.pos_, node.op_ == OpType::Neg ? -v : +v);
-    }
-    const double v{to_double(operand)};
-    return make_float(node.pos_, node.op_ == OpType::Neg ? -v : v);
-}
-
 AstNodePtr StaticEvaler::fold_binary(AstNodeOpBinary &node) {
-    using OpType = AstNodeOpBinary::OpType;
+    using enum AstNodeOpBinary::OpType;
+
     switch (node.op_) {
-    case OpType::Add:
+    case Add:
         return fold_add(node);
-    case OpType::Mul:
+    case Mul:
         return fold_mul(node);
-    case OpType::Sub:
-    case OpType::Div:
-    case OpType::DivFloor:
-    case OpType::Mod:
-    case OpType::Pow:
+    case Sub:
+    case Div:
+    case DivFloor:
+    case Mod:
+    case Pow:
         return fold_arithmetic(node);
-    case OpType::BitAnd:
-    case OpType::BitOr:
-    case OpType::BitXor:
-    case OpType::LShift:
-    case OpType::RShift:
+    case BitAnd:
+    case BitOr:
+    case BitXor:
+    case LShift:
+    case RShift:
         return fold_bitwise(node);
-    case OpType::And:
-    case OpType::Or:
+    case And:
+    case Or:
         return fold_and_or(node);
     default:
         return nullptr;
     }
 }
+AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
+    using enum AstNodeCompare::OpType;
 
-AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
-    using OpType = AstNodeOpBinary::OpType;
-    const AstNode &l{*node.left_}, &r{*node.right_};
+    for (const auto &operand : node.operands_)
+        if (!is_literal_pure(*operand)) return nullptr;
 
-    if (!is_pure_literal(l) || !is_pure_literal(r) || !is_numeric(l) || !is_numeric(r))
-        return nullptr;
+    for (size_t i{0}; i < node.ops_.size(); ++i) {
+        const AstNode &a{*node.operands_[i]};
+        const AstNode &b{*node.operands_[i + 1]};
+        bool result;
 
-    const bool is_both_int{is_int_family(l) && is_int_family(r)};
-
-    switch (node.op_) {
-    case OpType::Add:
-        if (is_both_int) return make_int(node.pos_, to_bigint(l) + to_bigint(r));
-        return make_float(node.pos_, to_double(l) + to_double(r));
-
-    case OpType::Sub:
-        if (is_both_int) return make_int(node.pos_, to_bigint(l) - to_bigint(r));
-        return make_float(node.pos_, to_double(l) - to_double(r));
-
-    case OpType::Mul:
-        if (is_both_int) return make_int(node.pos_, to_bigint(l) * to_bigint(r));
-        return make_float(node.pos_, to_double(l) * to_double(r));
-
-    case OpType::Div: {
-        const double rv{to_double(r)};
-        if (rv == 0.0) return nullptr; // MathError，交给运行时
-        return make_float(node.pos_, to_double(l) / rv);
-    }
-
-    case OpType::DivFloor:
-        if (is_both_int) {
-            const BigInt rv{to_bigint(r)};
-            if (rv.is_zero()) return nullptr;
-            return make_int(node.pos_, to_bigint(l).floor_div(rv));
+        if (node.ops_[i] == Eq || node.ops_[i] == Ne) {
+            const bool eq{literal_equal(a, b)};
+            result = node.ops_[i] == Eq ? eq : !eq;
         } else {
-            const double rv{to_double(r)};
-            if (rv == 0.0) return nullptr;
-            return make_float(node.pos_, std::floor(to_double(l) / rv));
+            const CmpResult cmp{literal_compare(a, b)};
+            if (cmp == CmpResult::Unordered)
+                return nullptr; // 类型不支持比较，交给运行时报 TypeError
+            switch (node.ops_[i]) {
+            case Lt:
+                result = cmp == CmpResult::Less;
+                break;
+            case Le:
+                result = cmp != CmpResult::Greater;
+                break;
+            case Gt:
+                result = cmp == CmpResult::Greater;
+                break;
+            case Ge:
+                result = cmp != CmpResult::Less;
+                break;
+            default:
+                return nullptr; // 不可达（Eq/Ne 已经在上面处理）
+            }
         }
 
-    case OpType::Mod:
-        if (is_both_int) {
-            const BigInt rv{to_bigint(r)};
-            if (rv.is_zero()) return nullptr;
-            return make_int(node.pos_, to_bigint(l).mod(rv));
-        } else {
-            const double rv{to_double(r)};
-            if (rv == 0.0) return nullptr;
-            double m{std::fmod(to_double(l), rv)};
-            if (m != 0.0 && (m < 0.0) != (rv < 0.0))
-                m += rv; // 向 y 的符号方向调整，与 // 满足同一恒等式
-            return make_float(node.pos_, m);
-        }
-
-    case OpType::Pow:
-        // 都是 int 且指数非负：结果仍是 int；否则（含负指数、掺了 float）一律走 float 幂
-        if (is_both_int && !to_bigint(r).is_negative())
-            return make_int(node.pos_, to_bigint(l).pow(to_bigint(r)));
-        // 结果不是实数（如负数开偶次方根）或溢出成 ±inf，make_float 会因为不是有限数而返回
-        // nullptr， 交给运行时报 MathError，这里不用单独判断
-        return make_float(node.pos_, std::pow(to_double(l), to_double(r)));
-
-    default:
-        return nullptr;
+        // 链式比较：一旦某一环为假，整条链短路，值就是这一环的结果（恒为 False）
+        if (!result) return make_bool(node.pos_, false);
     }
+    return make_bool(node.pos_, true);
+}
+AstNodePtr StaticEvaler::fold_if(AstNodeIf &node) {
+    size_t i{0};
+    while (i < node.clauses_.size() && is_literal_pure(*node.clauses_[i].cond_) &&
+           !truthy(*node.clauses_[i].cond_)) {
+        ++i;
+    }
+
+    if (i < node.clauses_.size() && is_literal_pure(*node.clauses_[i].cond_)) {
+        // 循环只有在"非字面量"或者"字面量为 True"时才会停在这个位置，能到这里说明是后者
+        return std::move(node.clauses_[i].body_);
+    }
+    if (i == 0) return nullptr; // 第一个 clause 就没法判定，什么都没能折
+
+    if (i == node.clauses_.size()) {
+        if (node.else_expr_) return std::move(node.else_expr_);
+        return std::make_unique<AstNodeLiteralNone>(node.pos_);
+    }
+
+    // 跳过了至少一个确定为 False 的 clause，但后面接的是一个还不能判定的 cond：部分折叠
+    std::vector<AstNodeIf::AstNodeCondAndExpr> remaining;
+    for (size_t j{i}; j < node.clauses_.size(); ++j)
+        remaining.push_back(std::move(node.clauses_[j]));
+    return std::make_unique<AstNodeIf>(node.pos_, std::move(remaining), std::move(node.else_expr_));
+}
+
+AstNodePtr StaticEvaler::fold_for_cond(AstNodeForCond &node) {
+    if (!node.cond_ || !is_literal_pure(*node.cond_) || truthy(*node.cond_)) return nullptr;
+
+    AstNodePtr result{
+        node.collect_
+            ? static_cast<AstNodePtr>(
+                  std::make_unique<AstNodeLiteralList>(node.pos_, std::vector<AstNodePtr>{})
+              )
+            : static_cast<AstNodePtr>(std::make_unique<AstNodeLiteralInt>(node.pos_, U"0"))
+    };
+    if (!node.init_) return result;
+
+    std::vector<AstNodePtr> exprs;
+    exprs.push_back(std::move(node.init_));
+    exprs.push_back(std::move(result));
+    return std::make_unique<AstNodeCompound>(node.pos_, std::move(exprs));
+}
+
+AstNodePtr StaticEvaler::fold_not(AstNodeOpUnary &node) {
+    if (!is_literal_pure(*node.operand_)) return nullptr;
+
+    return make_bool(node.pos_, !truthy(*node.operand_));
 }
 
 AstNodePtr StaticEvaler::fold_add(AstNodeOpBinary &node) {
     AstNode &l{*node.left_}, &r{*node.right_};
-    if (!is_pure_literal(l) || !is_pure_literal(r)) return nullptr;
+    if (!is_literal_pure(l) || !is_literal_pure(r)) return nullptr;
 
-    // 数字 + 数字：交给 fold_arithmetic，不在这里重复一遍 int/float 分支
+    // 数字 + 数字：交给 fold_arithmetic
     if (is_numeric(l) && is_numeric(r)) return fold_arithmetic(node);
 
     // 'a' + 'b'
@@ -175,174 +176,177 @@ AstNodePtr StaticEvaler::fold_add(AstNodeOpBinary &node) {
 }
 
 AstNodePtr StaticEvaler::fold_mul(AstNodeOpBinary &node) {
-    const AstNode &l{*node.left_};
-    const AstNode &r{*node.right_};
-    if (!is_pure_literal(l) || !is_pure_literal(r)) return nullptr;
+    const AstNode &l{*node.left_}, &r{*node.right_};
+    if (!is_literal_pure(l) || !is_literal_pure(r)) return nullptr;
 
-    // 数字 * 数字：同样交给 fold_arithmetic
+    // 数字 * 数字：交给 fold_arithmetic
     if (is_numeric(l) && is_numeric(r)) return fold_arithmetic(node);
 
-    const AstNode *container{nullptr};
-    const AstNode *count_node{nullptr};
-    if (is_int_family(r)) {
-        container = &l;
-        count_node = &r;
-    } else if (is_int_family(l)) {
-        container = &r;
-        count_node = &l;
-    } else
-        return nullptr;
+    // 下面尝试理解为容器的重复
+    if (!is_int_family(l) && !is_int_family(r)) return nullptr;
+    // 确定哪个是重复次数，哪个可能是容器
+    const auto &[container, count_node] = [&]() -> std::pair<const AstNode &, const AstNode &> {
+        if (is_int_family(r)) return {l, r};
+        return {r, l};
+    }();
 
-    // 非负 int 才有定义（SL.md 3.4.2），负数交给运行时报错；数量大到 long long 都装不下的，
-    // 大概率本来就没法在编译期材料化出来，同样交给运行时
-    const std::optional<long long> count{try_to_ll(to_bigint(*count_node))};
+    // 非负 int 才有定义；数量大到 int 都装不下的，同样交给运行时
+    const std::optional count{try_to_int(to_bigint(count_node))};
     if (!count || *count < 0) return nullptr;
-    const auto n{static_cast<size_t>(*count)};
+    const size_t n{static_cast<size_t>(*count)};
 
-    if (const auto *s{dynamic_cast<const AstNodeLiteralStr *>(container)}) {
-        std::u32string result;
-        result.reserve(s->value_.size() * n);
-        for (size_t i{0}; i < n; ++i) result += s->value_;
-        return std::make_unique<AstNodeLiteralStr>(node.pos_, std::move(result));
+    // 现在，挑出来数字 count_node，另一个 container 不知道是啥
+    // 'a' * 3
+    if (const auto *s{dynamic_cast<const AstNodeLiteralStr *>(&container)}) {
+        std::u32string value;
+        value.reserve(s->value_.size() * n);
+        for (size_t i{0}; i < n; ++i) value += s->value_;
+        return std::make_unique<AstNodeLiteralStr>(node.pos_, std::move(value));
     }
-    if (const auto *t{dynamic_cast<const AstNodeLiteralTuple *>(container)}) {
+    // (a, b) * 3
+    if (const auto *t{dynamic_cast<const AstNodeLiteralTuple *>(&container)}) {
         std::vector<AstNodePtr> items;
         items.reserve(t->items_.size() * n);
-        for (size_t i{0}; i < n; ++i)
-            for (const auto &item : t->items_) items.push_back(clone_literal(*item));
+        for (size_t i{0}; i < n; ++i) {
+            for (const auto &item : t->items_) {
+                items.push_back(clone_literal(*item));
+            }
+        }
         return std::make_unique<AstNodeLiteralTuple>(node.pos_, std::move(items));
     }
-    if (const auto *lst{dynamic_cast<const AstNodeLiteralList *>(container)}) {
+    // [a, b] * 3
+    if (const auto *lst{dynamic_cast<const AstNodeLiteralList *>(&container)}) {
         std::vector<AstNodePtr> items;
         items.reserve(lst->items_.size() * n);
-        for (size_t i{0}; i < n; ++i)
-            for (const auto &item : lst->items_) items.push_back(clone_literal(*item));
+        for (size_t i{0}; i < n; ++i) {
+            for (const auto &item : lst->items_) {
+                items.push_back(clone_literal(*item));
+            }
+        }
         return std::make_unique<AstNodeLiteralList>(node.pos_, std::move(items));
     }
     return nullptr;
 }
 
-AstNodePtr StaticEvaler::fold_bitwise(AstNodeOpBinary &node) {
-    using OpType = AstNodeOpBinary::OpType;
-    const AstNode &l{*node.left_};
-    const AstNode &r{*node.right_};
-    if (!is_pure_literal(l) || !is_pure_literal(r) || !is_int_family(l) || !is_int_family(r))
+AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpUnary &node) {
+    using enum AstNodeOpUnary::OpType;
+    const AstNode &operand{*node.operand_};
+
+    if (!is_literal_pure(operand) || !is_numeric(operand)) return nullptr;
+
+    // int
+    if (is_int_family(operand)) {
+        const BigInt v{to_bigint(operand)};
+        return make_int(node.pos_, node.op_ == Neg ? -v : +v);
+    }
+    // float
+    const double v{to_double(operand)};
+    return make_float(node.pos_, node.op_ == Neg ? -v : v);
+}
+
+AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
+    using enum AstNodeOpBinary::OpType;
+    const AstNode &l{*node.left_}, &r{*node.right_};
+    if (!is_literal_pure(l) || !is_literal_pure(r) || !is_numeric(l) || !is_numeric(r))
         return nullptr;
 
-    const BigInt lv{to_bigint(l)};
-    const BigInt rv{to_bigint(r)};
+    const bool is_both_int{is_int_family(l) && is_int_family(r)};
+
     switch (node.op_) {
-    case OpType::BitAnd:
+    case Add:
+        if (is_both_int) return make_int(node.pos_, to_bigint(l) + to_bigint(r));
+        return make_float(node.pos_, to_double(l) + to_double(r));
+
+    case Sub:
+        if (is_both_int) return make_int(node.pos_, to_bigint(l) - to_bigint(r));
+        return make_float(node.pos_, to_double(l) - to_double(r));
+
+    case Mul:
+        if (is_both_int) return make_int(node.pos_, to_bigint(l) * to_bigint(r));
+        return make_float(node.pos_, to_double(l) * to_double(r));
+
+    case Div: {
+        const double rv{to_double(r)};
+        if (rv == 0.0) return nullptr; // MathError，交给运行时
+        return make_float(node.pos_, to_double(l) / rv);
+    }
+
+    case DivFloor: {
+        if (is_both_int) {
+            const BigInt rv{to_bigint(r)};
+            if (rv.is_zero()) return nullptr;
+            return make_int(node.pos_, to_bigint(l).floor_div(rv));
+        }
+        const double rv{to_double(r)};
+        if (rv == 0.0) return nullptr;
+        return make_float(node.pos_, std::floor(to_double(l) / rv));
+    }
+
+    case Mod: {
+        if (is_both_int) {
+            const BigInt rv{to_bigint(r)};
+            if (rv.is_zero()) return nullptr;
+            return make_int(node.pos_, to_bigint(l).mod(rv));
+        }
+        const double rv{to_double(r)};
+        if (rv == 0.0) return nullptr;
+        double m{std::fmod(to_double(l), rv)};
+        if (m != 0.0 && (m < 0.0) != (rv < 0.0))
+            m += rv; // 向 y 的符号方向调整，与 // 满足同一恒等式
+        return make_float(node.pos_, m);
+    }
+
+    case Pow:
+        // 都是 int 且指数非负：结果仍是 int
+        if (is_both_int && !to_bigint(r).is_negative())
+            return make_int(node.pos_, to_bigint(l).pow(to_bigint(r)));
+        // 否则一律走 float 幂
+        return make_float(node.pos_, std::pow(to_double(l), to_double(r)));
+
+    default:
+        return nullptr;
+    }
+}
+
+AstNodePtr StaticEvaler::fold_bitwise(AstNodeOpUnary &node) {
+    const AstNode &operand{*node.operand_};
+    if (!is_literal_pure(operand) || !is_int_family(operand)) return nullptr;
+
+    return make_int(node.pos_, ~to_bigint(operand));
+}
+
+AstNodePtr StaticEvaler::fold_bitwise(AstNodeOpBinary &node) {
+    using enum AstNodeOpBinary::OpType;
+    const AstNode &l{*node.left_}, &r{*node.right_};
+    if (!is_literal_pure(l) || !is_literal_pure(r) || !is_int_family(l) || !is_int_family(r))
+        return nullptr;
+
+    const BigInt lv{to_bigint(l)}, rv{to_bigint(r)};
+    switch (node.op_) {
+    case BitAnd:
         return make_int(node.pos_, lv & rv);
-    case OpType::BitOr:
+    case BitOr:
         return make_int(node.pos_, lv | rv);
-    case OpType::BitXor:
+    case BitXor:
         return make_int(node.pos_, lv ^ rv);
-    case OpType::LShift:
-    case OpType::RShift: {
-        const std::optional<long long> shift{try_to_ll(rv)};
+    case LShift:
+    case RShift: {
+        const std::optional<long long> shift{try_to_int(rv)};
         if (!shift || *shift < 0) return nullptr; // 负数移位交给运行时报错
-        return make_int(node.pos_, node.op_ == OpType::LShift ? lv << *shift : lv >> *shift);
+        return make_int(node.pos_, node.op_ == LShift ? lv << *shift : lv >> *shift);
     }
     default:
         return nullptr;
     }
 }
 
-// and/or：不短路，两个操作数各自已经在 LiteralFolder 里递归折过；只要左操作数是字面量，就知道
-// 该返回左边还是右边，把它整体移到父节点位置上（见 SL.md 3.4.2、类头注释）
 AstNodePtr StaticEvaler::fold_and_or(AstNodeOpBinary &node) {
-    using OpType = AstNodeOpBinary::OpType;
-    if (!is_pure_literal(*node.left_)) return nullptr; // 必须知道左操作数的真值才能判断该走哪边
+    using enum AstNodeOpBinary::OpType;
+    if (!is_literal_pure(*node.left_)) return nullptr;
+
     const bool left_truthy{truthy(*node.left_)};
-    const bool take_left{node.op_ == OpType::And ? !left_truthy : left_truthy};
+    const bool take_left{node.op_ == And ? !left_truthy : left_truthy};
     return std::move(take_left ? node.left_ : node.right_);
-}
-
-AstNodePtr StaticEvaler::fold_if(AstNodeIf &node) {
-    size_t i{0};
-    while (i < node.clauses_.size() && is_pure_literal(*node.clauses_[i].cond_) &&
-           !truthy(*node.clauses_[i].cond_)) {
-        ++i;
-    }
-
-    if (i < node.clauses_.size() && is_pure_literal(*node.clauses_[i].cond_)) {
-        // 循环只有在"非字面量"或者"字面量为 True"时才会停在这个位置，能到这里说明是后者
-        return std::move(node.clauses_[i].body_);
-    }
-    if (i == 0) return nullptr; // 第一个 clause 就没法判定，什么都没能折
-
-    if (i == node.clauses_.size()) {
-        if (node.else_expr_) return std::move(node.else_expr_);
-        return std::make_unique<AstNodeLiteralNone>(node.pos_);
-    }
-
-    // 跳过了至少一个确定为 False 的 clause，但后面接的是一个还不能判定的 cond：部分折叠
-    std::vector<AstNodeIf::AstNodeCondAndExpr> remaining;
-    for (size_t j{i}; j < node.clauses_.size(); ++j)
-        remaining.push_back(std::move(node.clauses_[j]));
-    return std::make_unique<AstNodeIf>(node.pos_, std::move(remaining), std::move(node.else_expr_));
-}
-
-AstNodePtr StaticEvaler::fold_for_cond(AstNodeForCond &node) {
-    if (!node.cond_ || !is_pure_literal(*node.cond_) || truthy(*node.cond_)) return nullptr;
-
-    AstNodePtr result{
-        node.collect_
-            ? static_cast<AstNodePtr>(
-                  std::make_unique<AstNodeLiteralList>(node.pos_, std::vector<AstNodePtr>{})
-              )
-            : static_cast<AstNodePtr>(std::make_unique<AstNodeLiteralInt>(node.pos_, U"0"))
-    };
-    if (!node.init_) return result;
-
-    std::vector<AstNodePtr> exprs;
-    exprs.push_back(std::move(node.init_));
-    exprs.push_back(std::move(result));
-    return std::make_unique<AstNodeCompound>(node.pos_, std::move(exprs));
-}
-
-AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
-    using OpType = AstNodeCompare::OpType;
-    // 链式比较的"提前短路"优化不做（一旦某一环能确定整条链是 False 就不用再算后面的），
-    // 只有整条链上所有操作数都是字面量才尝试折——这样不需要短路也能算出正确结果
-    for (const auto &operand : node.operands_)
-        if (!is_pure_literal(*operand)) return nullptr;
-
-    for (size_t i{0}; i < node.ops_.size(); ++i) {
-        const AstNode &a{*node.operands_[i]};
-        const AstNode &b{*node.operands_[i + 1]};
-        bool result;
-
-        if (node.ops_[i] == OpType::Eq || node.ops_[i] == OpType::Ne) {
-            const bool eq{literal_equal(a, b)};
-            result = node.ops_[i] == OpType::Eq ? eq : !eq;
-        } else {
-            const CmpResult cmp{literal_compare(a, b)};
-            if (cmp == CmpResult::Unordered)
-                return nullptr; // 类型不支持比较，交给运行时报 TypeError
-            switch (node.ops_[i]) {
-            case OpType::Lt:
-                result = cmp == CmpResult::Less;
-                break;
-            case OpType::Le:
-                result = cmp != CmpResult::Greater;
-                break;
-            case OpType::Gt:
-                result = cmp == CmpResult::Greater;
-                break;
-            case OpType::Ge:
-                result = cmp != CmpResult::Less;
-                break;
-            default:
-                return nullptr; // 不可达（Eq/Ne 已经在上面处理）
-            }
-        }
-
-        // 链式比较：一旦某一环为假，整条链短路，值就是这一环的结果（恒为 False）
-        if (!result) return make_bool(node.pos_, false);
-    }
-    return make_bool(node.pos_, true);
 }
 
 bool StaticEvaler::truthy(const AstNode &literal) {
@@ -360,7 +364,7 @@ bool StaticEvaler::truthy(const AstNode &literal) {
     return true; // 其他均为 True
 }
 
-bool StaticEvaler::is_pure_literal(const AstNode &node) {
+bool StaticEvaler::is_literal_pure(const AstNode &node) {
     // 天然满足的
     if (dynamic_cast<const AstNodeLiteralNone *>(&node)) return true;
     if (dynamic_cast<const AstNodeLiteralBool *>(&node)) return true;
@@ -372,13 +376,13 @@ bool StaticEvaler::is_pure_literal(const AstNode &node) {
     // 容器类的递归判断
     if (const auto *t{dynamic_cast<const AstNodeLiteralTuple *>(&node)})
         return std::ranges::all_of(t->items_, [](const AstNodePtr &item) {
-            return is_pure_literal(*item);
+            return is_literal_pure(*item);
         });
     if (const auto *l{dynamic_cast<const AstNodeLiteralList *>(&node)})
         return std::ranges::all_of(l->items_, [](const AstNodePtr &item) {
-            return is_pure_literal(*item);
+            return is_literal_pure(*item);
         });
-    return false; // dict、_G/_L、标识符、调用……都不是
+    return false; // dict、_G/_L、标识符等都不是
 }
 
 bool StaticEvaler::is_int_family(const AstNode &node) {
@@ -403,11 +407,11 @@ double StaticEvaler::to_double(const AstNode &node) {
     return std::strtod(u32_to_utf8(f.raw_).c_str(), nullptr);
 }
 
-std::optional<long long> StaticEvaler::try_to_ll(const BigInt &value) {
+std::optional<int> StaticEvaler::try_to_int(const BigInt &value) {
     try {
-        return std::stoll(value.to_decimal_string());
+        return std::stoi(value.to_decimal_string());
     } catch (const std::exception &) {
-        return std::nullopt; // 装不下 long long（数值太大/太小），不是我们能处理的规模，交给运行时
+        return std::nullopt; // 装不下 int
     }
 }
 

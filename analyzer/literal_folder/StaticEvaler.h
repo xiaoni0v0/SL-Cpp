@@ -30,6 +30,8 @@
  * D = { * != == }
  * E = { != == }
  *
+ * 以上中，数字与容器相乘的只有在数字在 int 能装下时才折叠。
+ *
  * 除此之外，and/or/not 对于字面量均折叠。
  *
  * 死分支消除：
@@ -56,15 +58,15 @@ class StaticEvaler final {
 
     // not
     [[nodiscard]] static AstNodePtr fold_not(AstNodeOpUnary &node);
-    // + - ~
-    [[nodiscard]] static AstNodePtr fold_pos_neg_bitinvert(AstNodeOpUnary &node);
     // + ：数值相加，或 str/tuple/list 拼接
     [[nodiscard]] static AstNodePtr fold_add(AstNodeOpBinary &node);
     // * ：数值相乘，或 str/tuple/list 重复
     [[nodiscard]] static AstNodePtr fold_mul(AstNodeOpBinary &node);
-    // 纯数值算术：+ - * / // % **
+    // 纯数值算术：一元 + -，二元 + - * / // % **；fold_add/fold_mul 数值分支也委托给二元版本
+    [[nodiscard]] static AstNodePtr fold_arithmetic(AstNodeOpUnary &node);
     [[nodiscard]] static AstNodePtr fold_arithmetic(AstNodeOpBinary &node);
-    // bool/int 的位运算：& ^ | << >>
+    // bool/int 的位运算：一元 ~，二元 & ^ | << >>
+    [[nodiscard]] static AstNodePtr fold_bitwise(AstNodeOpUnary &node);
     [[nodiscard]] static AstNodePtr fold_bitwise(AstNodeOpBinary &node);
     // and or；折叠的时候不短路
     [[nodiscard]] static AstNodePtr fold_and_or(AstNodeOpBinary &node);
@@ -80,7 +82,7 @@ class StaticEvaler final {
      *   tuple/list 要求每个元素递归满足；
      *   dict、_G/_L 恒不是。
      */
-    [[nodiscard]] static bool is_pure_literal(const AstNode &node);
+    [[nodiscard]] static bool is_literal_pure(const AstNode &node);
 
     // —————————— 数值提升相关 ——————————
 
@@ -92,20 +94,17 @@ class StaticEvaler final {
     [[nodiscard]] static BigInt to_bigint(const AstNode &node);
     // 要求 is_numeric(node)
     [[nodiscard]] static double to_double(const AstNode &node);
-    // BigInt 转 long long，装不下返回 nullopt
-    [[nodiscard]] static std::optional<long long> try_to_ll(const BigInt &value);
+    // BigInt 转 int，装不下返回 nullopt
+    [[nodiscard]] static std::optional<int> try_to_int(const BigInt &value);
 
     // —————————— 构造折叠结果 ——————————
-    // 结果不是有限数（±inf/NaN）时返回 nullptr——当前 float 字面量语法写不出这两种值，交给运行时处理
+
     [[nodiscard]] static AstNodePtr make_bool(Position pos, bool value);
     [[nodiscard]] static AstNodePtr make_int(Position pos, const BigInt &value);
-    [[nodiscard]] static AstNodePtr make_float(Position pos, double value);
-    // 把 double 格式化成合法的 SL float 字面量文本（永远带小数点，不用科学计数法，见
-    // SL.md 2.1.4）， 取能精确 round-trip 回原值的最短小数位数
+    [[nodiscard]] static AstNodePtr make_float(Position pos, double value); // ±inf/NaN 返回 nullptr
+    // 把 double 格式化成合法的 SL float 字面量文本（永远带小数点，不用科学计数法）
     [[nodiscard]] static std::string format_double(double value);
-    // 深拷贝一份字面量子树；要求 is_literal(node)。只处理 is_literal 认可的这个子集（不是给 AstNode
-    // 整体加一个通用多态 clone()——目前只有 * 的容器重复需要"同一份内容用多次"这一个场景，没必要为了
-    // 这一个场景就把克隆能力铺到所有几十种节点类型上，需要更通用的克隆能力时再加不迟）
+    // 深拷贝一份字面量子树；调用方保证 is_literal(node)
     [[nodiscard]] static AstNodePtr clone_literal(const AstNode &node);
 
     // 三态比较结果：Unordered 表示这两个类型之间不支持大小比较（交给运行时报 TypeError）
