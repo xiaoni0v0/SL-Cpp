@@ -39,22 +39,37 @@
  * 的不折。
  */
 class StaticEvaler final {
-    // clang-format off
-    // 一级入口
-    [[nodiscard]] static AstNodePtr fold_unary(AstNodeOpUnary &node);    // 一元
-    [[nodiscard]] static AstNodePtr fold_binary(AstNodeOpBinary &node);  // 二元
-    [[nodiscard]] static AstNodePtr fold_compare(AstNodeCompare &node);  // 二元比较
-    [[nodiscard]] static AstNodePtr fold_if(AstNodeIf &node);            // 死分支消除
-    [[nodiscard]] static AstNodePtr fold_for_cond(AstNodeForCond &node); // 死分支消除
+    // —————————— 一级入口 ——————————
 
-    // 二级入口
-    [[nodiscard]] static AstNodePtr fold_not(AstNodeOpUnary &node);               // not
-    [[nodiscard]] static AstNodePtr fold_pos_neg_bitinvert(AstNodeOpUnary &node); // + - ~
-    [[nodiscard]] static AstNodePtr fold_add(AstNodeOpBinary &node);              // + ：数值相加，或 str/tuple/list 拼接
-    [[nodiscard]] static AstNodePtr fold_mul(AstNodeOpBinary &node);              // * ：数值相乘，或 str/tuple/list 重复
-    [[nodiscard]] static AstNodePtr fold_arithmetic(AstNodeOpBinary &node);       // 纯数值算术：- / // % **
-    [[nodiscard]] static AstNodePtr fold_bitwise(AstNodeOpBinary &node);          // bool/int 的位运算：&& ^ | << >>
-    [[nodiscard]] static AstNodePtr fold_and_or(AstNodeOpBinary &node);           // and or；折叠的时候不短路
+    // 一元
+    [[nodiscard]] static AstNodePtr fold_unary(AstNodeOpUnary &node);
+    // 二元
+    [[nodiscard]] static AstNodePtr fold_binary(AstNodeOpBinary &node);
+    // 二元比较
+    [[nodiscard]] static AstNodePtr fold_compare(AstNodeCompare &node);
+    // 死分支消除
+    [[nodiscard]] static AstNodePtr fold_if(AstNodeIf &node);
+    // 死分支消除
+    [[nodiscard]] static AstNodePtr fold_for_cond(AstNodeForCond &node);
+
+    // —————————— 二级入口 ——————————
+
+    // not
+    [[nodiscard]] static AstNodePtr fold_not(AstNodeOpUnary &node);
+    // + - ~
+    [[nodiscard]] static AstNodePtr fold_pos_neg_bitinvert(AstNodeOpUnary &node);
+    // + ：数值相加，或 str/tuple/list 拼接
+    [[nodiscard]] static AstNodePtr fold_add(AstNodeOpBinary &node);
+    // * ：数值相乘，或 str/tuple/list 重复
+    [[nodiscard]] static AstNodePtr fold_mul(AstNodeOpBinary &node);
+    // 纯数值算术：+ - * / // % **
+    [[nodiscard]] static AstNodePtr fold_arithmetic(AstNodeOpBinary &node);
+    // bool/int 的位运算：& ^ | << >>
+    [[nodiscard]] static AstNodePtr fold_bitwise(AstNodeOpBinary &node);
+    // and or；折叠的时候不短路
+    [[nodiscard]] static AstNodePtr fold_and_or(AstNodeOpBinary &node);
+
+    // —————————— 判断 ——————————
 
     // 真值判断，要求 node 已经是字面量节点
     [[nodiscard]] static bool truthy(const AstNode &literal);
@@ -67,15 +82,20 @@ class StaticEvaler final {
      */
     [[nodiscard]] static bool is_pure_literal(const AstNode &node);
 
-    // 数值提升相关
-    [[nodiscard]] static bool is_int_family(const AstNode &node);                 // 是不是 bool 或 int
-    [[nodiscard]] static bool is_numeric(const AstNode &node);                    // is_int_family 或 float
-    [[nodiscard]] static BigInt to_bigint(const AstNode &node);                   // 要求 is_int_family(node)
-    [[nodiscard]] static double to_double(const AstNode &node);                   // 要求 is_numeric(node)
-    [[nodiscard]] static std::optional<long long> try_to_ll(const BigInt &value); // BigInt 转 long long，装不下返回 nullopt
-    // clang-format on
+    // —————————— 数值提升相关 ——————————
 
-    // ---- 构造折叠结果 ----
+    // 是不是 bool 或 int
+    [[nodiscard]] static bool is_int_family(const AstNode &node);
+    // is_int_family 或 float
+    [[nodiscard]] static bool is_numeric(const AstNode &node);
+    // 要求 is_int_family(node)
+    [[nodiscard]] static BigInt to_bigint(const AstNode &node);
+    // 要求 is_numeric(node)
+    [[nodiscard]] static double to_double(const AstNode &node);
+    // BigInt 转 long long，装不下返回 nullopt
+    [[nodiscard]] static std::optional<long long> try_to_ll(const BigInt &value);
+
+    // —————————— 构造折叠结果 ——————————
     // 结果不是有限数（±inf/NaN）时返回 nullptr——当前 float 字面量语法写不出这两种值，交给运行时处理
     [[nodiscard]] static AstNodePtr make_bool(Position pos, bool value);
     [[nodiscard]] static AstNodePtr make_int(Position pos, const BigInt &value);
@@ -106,6 +126,6 @@ class StaticEvaler final {
     StaticEvaler &operator=(const StaticEvaler &) = delete;
     StaticEvaler &operator=(StaticEvaler &&) = delete;
 
-    // 尝试把 node 折成一个字面量节点；不负责递归，返回 nullptr 表示折不动
+    // 尝试把 node 折成一个字面量节点；不递归，返回 nullptr 表示折不动
     [[nodiscard]] static AstNodePtr fold(AstNode &node);
 };

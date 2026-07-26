@@ -83,9 +83,17 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
     const bool is_both_int{is_int_family(l) && is_int_family(r)};
 
     switch (node.op_) {
+    case OpType::Add:
+        if (is_both_int) return make_int(node.pos_, to_bigint(l) + to_bigint(r));
+        return make_float(node.pos_, to_double(l) + to_double(r));
+
     case OpType::Sub:
         if (is_both_int) return make_int(node.pos_, to_bigint(l) - to_bigint(r));
         return make_float(node.pos_, to_double(l) - to_double(r));
+
+    case OpType::Mul:
+        if (is_both_int) return make_int(node.pos_, to_bigint(l) * to_bigint(r));
+        return make_float(node.pos_, to_double(l) * to_double(r));
 
     case OpType::Div: {
         const double rv{to_double(r)};
@@ -135,12 +143,8 @@ AstNodePtr StaticEvaler::fold_add(AstNodeOpBinary &node) {
     AstNode &l{*node.left_}, &r{*node.right_};
     if (!is_pure_literal(l) || !is_pure_literal(r)) return nullptr;
 
-    // 数字 + 数字
-    if (is_numeric(l) && is_numeric(r)) {
-        if (is_int_family(l) && is_int_family(r))
-            return make_int(node.pos_, to_bigint(l) + to_bigint(r));
-        return make_float(node.pos_, to_double(l) + to_double(r));
-    }
+    // 数字 + 数字：交给 fold_arithmetic，不在这里重复一遍 int/float 分支
+    if (is_numeric(l) && is_numeric(r)) return fold_arithmetic(node);
 
     // 'a' + 'b'
     if (const auto *ls{dynamic_cast<const AstNodeLiteralStr *>(&l)},
@@ -175,11 +179,8 @@ AstNodePtr StaticEvaler::fold_mul(AstNodeOpBinary &node) {
     const AstNode &r{*node.right_};
     if (!is_pure_literal(l) || !is_pure_literal(r)) return nullptr;
 
-    if (is_numeric(l) && is_numeric(r)) {
-        if (is_int_family(l) && is_int_family(r))
-            return make_int(node.pos_, to_bigint(l) * to_bigint(r));
-        return make_float(node.pos_, to_double(l) * to_double(r));
-    }
+    // 数字 * 数字：同样交给 fold_arithmetic
+    if (is_numeric(l) && is_numeric(r)) return fold_arithmetic(node);
 
     const AstNode *container{nullptr};
     const AstNode *count_node{nullptr};
