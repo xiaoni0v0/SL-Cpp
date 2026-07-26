@@ -23,14 +23,15 @@ AstNodePtr StaticEvaler::fold_unary(AstNodeOpUnary &node) {
 
 AstNodePtr StaticEvaler::fold_not(AstNodeOpUnary &node) {
     if (!is_pure_literal(*node.operand_)) return nullptr;
+
     return make_bool(node.pos_, !truthy(*node.operand_));
 }
 
 AstNodePtr StaticEvaler::fold_pos_neg_bitinvert(AstNodeOpUnary &node) {
     using OpType = AstNodeOpUnary::OpType;
     const AstNode &operand{*node.operand_};
-
     if (!is_pure_literal(operand)) return nullptr;
+
     if (node.op_ == OpType::BitInvert) {
         if (!is_int_family(operand)) return nullptr; // ~x 仅对 int 有效
         return make_int(node.pos_, ~to_bigint(operand));
@@ -131,40 +132,46 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
 }
 
 AstNodePtr StaticEvaler::fold_add(AstNodeOpBinary &node) {
-    const AstNode &l{*node.left_};
-    const AstNode &r{*node.right_};
+    const AstNode &l{*node.left_}, &r{*node.right_};
     if (!is_pure_literal(l) || !is_pure_literal(r)) return nullptr;
 
+    // 数字 + 数字
     if (is_numeric(l) && is_numeric(r)) {
         if (is_int_family(l) && is_int_family(r))
             return make_int(node.pos_, to_bigint(l) + to_bigint(r));
         return make_float(node.pos_, to_double(l) + to_double(r));
     }
 
-    if (const auto *ls{dynamic_cast<const AstNodeLiteralStr *>(&l)}) {
-        const auto *rs{dynamic_cast<const AstNodeLiteralStr *>(&r)};
-        if (!rs) return nullptr;
+    // 'a' + 'b'
+    if (const auto *ls{dynamic_cast<const AstNodeLiteralStr *>(&l)},
+        *rs{dynamic_cast<const AstNodeLiteralStr *>(&r)};
+        ls && rs) {
         return std::make_unique<AstNodeLiteralStr>(node.pos_, ls->value_ + rs->value_);
     }
-    if (const auto *lt{dynamic_cast<const AstNodeLiteralTuple *>(&l)}) {
-        const auto *rt{dynamic_cast<const AstNodeLiteralTuple *>(&r)};
-        if (!rt) return nullptr;
+
+    // () + ()
+    if (const auto *lt{dynamic_cast<const AstNodeLiteralTuple *>(&l)},
+        *rt{dynamic_cast<const AstNodeLiteralTuple *>(&r)};
+        lt && rt) {
         std::vector<AstNodePtr> items;
         items.reserve(lt->items_.size() + rt->items_.size());
         for (const auto &item : lt->items_) items.push_back(clone_literal(*item));
         for (const auto &item : rt->items_) items.push_back(clone_literal(*item));
         return std::make_unique<AstNodeLiteralTuple>(node.pos_, std::move(items));
     }
-    if (const auto *ll{dynamic_cast<const AstNodeLiteralList *>(&l)}) {
-        const auto *rl{dynamic_cast<const AstNodeLiteralList *>(&r)};
-        if (!rl) return nullptr;
+
+    // [] + []
+    if (const auto *ll{dynamic_cast<const AstNodeLiteralList *>(&l)},
+        *rl{dynamic_cast<const AstNodeLiteralList *>(&r)};
+        ll && rl) {
         std::vector<AstNodePtr> items;
         items.reserve(ll->items_.size() + rl->items_.size());
         for (const auto &item : ll->items_) items.push_back(clone_literal(*item));
         for (const auto &item : rl->items_) items.push_back(clone_literal(*item));
         return std::make_unique<AstNodeLiteralList>(node.pos_, std::move(items));
     }
-    return nullptr; // None/bool/... 之间不支持 +
+
+    return nullptr;
 }
 
 AstNodePtr StaticEvaler::fold_mul(AstNodeOpBinary &node) {
