@@ -6,11 +6,70 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
+# 允许通过 MSVC_RUNTIME_LIBRARY 属性控制 MSVC 运行时库的链接方式（静态 /MT 还是动态 /MD）而不是被 CMake 默认策略覆盖。
+if (POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif ()
+
+# ------------------------------------------------------------
+# 前端识别
+#   - GCC:      CMAKE_CXX_COMPILER_ID = "GNU"，无 FRONTEND_VARIANT
+#   - Clang:    CMAKE_CXX_COMPILER_ID = "Clang"，FRONTEND_VARIANT = "GNU" 或空
+#   - clang-cl: CMAKE_CXX_COMPILER_ID = "Clang"，FRONTEND_VARIANT = "MSVC"
+#   - MSVC:     CMAKE_CXX_COMPILER_ID = "MSVC"，无 FRONTEND_VARIANT
+# ------------------------------------------------------------
 if (NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "" AND
-        NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
+        NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU" AND
+        NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     message(FATAL_ERROR
             "不支持的编译器前端命令行风格 CMAKE_CXX_COMPILER_FRONTEND_VARIANT=\"${CMAKE_CXX_COMPILER_FRONTEND_VARIANT}\"")
 endif ()
+
+# 是否为 MSVC 命令行风格（cl.exe 或 clang-cl）
+set(SL_MSVC_LIKE_FRONTEND FALSE)
+if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" OR CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    set(SL_MSVC_LIKE_FRONTEND TRUE)
+    add_compile_options(/utf-8 /bigobj)
+endif ()
+
+# ------------------------------------------------------------
+# 编译参数统一封装
+# 对照关系：
+#   -Wall -Wextra -pedantic  ->  /W4 /permissive-
+#   -Werror                  ->  /WX
+#   -g                       ->  /Zi
+#   -O0 / -O2                ->  /Od / /O2
+#   -Wshadow -Wpointer-arith -Winvalid-pch 省略。
+#   /EHsc 是 MSVC 下开启标准 C++ 异常处理语义所必需的。
+# ------------------------------------------------------------
+
+function(sl_apply_main_target_warnings target)
+    if (SL_MSVC_LIKE_FRONTEND)
+        target_compile_options(${target} PRIVATE
+                /W4 /permissive- /EHsc
+                $<$<CONFIG:Debug>:/WX>
+                $<$<CONFIG:Debug>:/Zi>
+                $<$<CONFIG:Debug>:/Od>
+                $<$<CONFIG:Release>:/O2>
+        )
+    else ()
+        target_compile_options(${target} PRIVATE
+                -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Winvalid-pch
+                $<$<CONFIG:Debug>:-Werror>
+                $<$<CONFIG:Debug>:-g>
+                $<$<CONFIG:Debug>:-O0>
+                $<$<CONFIG:Release>:-O2>
+        )
+    endif ()
+endfunction()
+
+function(sl_apply_test_target_warnings target)
+    if (SL_MSVC_LIKE_FRONTEND)
+        target_compile_options(${target} PRIVATE /W4 /permissive- /EHsc /WX /Od)
+    else ()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
+    endif ()
+endfunction()
 
 # 第三方库
 include(FetchContent)
@@ -95,18 +154,22 @@ add_executable(SL main.cpp
 )
 
 # 编译选项
-target_compile_options(SL PRIVATE
-        -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Winvalid-pch
-        $<$<CONFIG:Debug>:-Werror>
-        $<$<CONFIG:Debug>:-g>
-        $<$<CONFIG:Debug>:-O0>
-        $<$<CONFIG:Release>:-O2>
-)
+sl_apply_main_target_warnings(SL)
 
 # 链接选项
-target_link_options(SL PRIVATE
-        $<$<CONFIG:Release>:-static>
-)
+if (SL_MSVC_LIKE_FRONTEND)
+    set_property(TARGET SL PROPERTY
+            MSVC_RUNTIME_LIBRARY "$<IF:$<CONFIG:Debug>,MultiThreadedDebugDLL,MultiThreaded>"
+    )
+else ()
+    target_link_options(SL PRIVATE
+            $<$<CONFIG:Release>:-static-libgcc>
+            $<$<CONFIG:Release>:-static-libstdc++>
+    )
+endif ()
+
+# 链接库
+target_link_libraries(SL PRIVATE nlohmann_json::nlohmann_json cxxopts::cxxopts)
 
 # 预编译头
 target_precompile_headers(SL PRIVATE
@@ -123,8 +186,6 @@ target_precompile_headers(SL PRIVATE
         <vector>
         <nlohmann/json.hpp>
 )
-
-target_link_libraries(SL PRIVATE nlohmann_json::nlohmann_json cxxopts::cxxopts)
 
 # ============================================================
 # 测试
@@ -143,7 +204,7 @@ add_executable(SL_Cpp_Numeric_Tests
         # 测试代码
         test/numeric/big_int_test.cpp
 )
-target_compile_options(SL_Cpp_Numeric_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
+sl_apply_test_target_warnings(SL_Cpp_Numeric_Tests)
 target_link_libraries(SL_Cpp_Numeric_Tests PRIVATE doctest::doctest)
 add_test(NAME SL_Cpp_Numeric_Tests COMMAND SL_Cpp_Numeric_Tests)
 
@@ -185,12 +246,12 @@ add_executable(SL_Cpp_Lexer_Tests
         test/lexer/common/position_tracking_test.cpp
         test/lexer/common/error_handling_test.cpp
 )
+sl_apply_test_target_warnings(SL_Cpp_Lexer_Tests)
+target_link_libraries(SL_Cpp_Lexer_Tests PRIVATE doctest::doctest)
 target_precompile_headers(SL_Cpp_Lexer_Tests PRIVATE
         <doctest/doctest.h>
 )
 set_source_files_properties(test/lexer/main_test.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-target_compile_options(SL_Cpp_Lexer_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
-target_link_libraries(SL_Cpp_Lexer_Tests PRIVATE doctest::doctest)
 add_test(NAME SL_Cpp_Lexer_Tests COMMAND SL_Cpp_Lexer_Tests)
 
 add_executable(SL_Cpp_Parser_Tests
@@ -256,13 +317,13 @@ add_executable(SL_Cpp_Parser_Tests
         test/parser/common/error_handling_test.cpp
         test/parser/common/combination_test.cpp
 )
+sl_apply_test_target_warnings(SL_Cpp_Parser_Tests)
+target_link_libraries(SL_Cpp_Parser_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
 target_precompile_headers(SL_Cpp_Parser_Tests PRIVATE
         <nlohmann/json.hpp>
         <doctest/doctest.h>
 )
 set_source_files_properties(test/parser/main_test.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-target_compile_options(SL_Cpp_Parser_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
-target_link_libraries(SL_Cpp_Parser_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
 add_test(NAME SL_Cpp_Parser_Tests COMMAND SL_Cpp_Parser_Tests)
 
 add_executable(SL_Cpp_Analyzer_Tests
@@ -321,11 +382,11 @@ add_executable(SL_Cpp_Analyzer_Tests
         test/analyzer/syntax_checker/dict_call_test.cpp
         test/analyzer/syntax_checker/defensive_test.cpp
 )
+sl_apply_test_target_warnings(SL_Cpp_Analyzer_Tests)
+target_link_libraries(SL_Cpp_Analyzer_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
 target_precompile_headers(SL_Cpp_Analyzer_Tests PRIVATE
         <nlohmann/json.hpp>
         <doctest/doctest.h>
 )
 set_source_files_properties(test/analyzer/main_test.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-target_compile_options(SL_Cpp_Analyzer_Tests PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
-target_link_libraries(SL_Cpp_Analyzer_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
 add_test(NAME SL_Cpp_Analyzer_Tests COMMAND SL_Cpp_Analyzer_Tests)
