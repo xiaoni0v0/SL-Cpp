@@ -2529,3 +2529,143 @@ Parser 自己的结构性保证"——正常情况下**永远**不会真的跑�
 里的路径、以及 3 处引用了旧路径的注释（`CMakeLists.txt`、`test/parser/2_2_6_func/func_test.cpp`、
 `test/parser/test_utils.h`）都同步改了。`.ai/run_test.bat` 验证：CMake 自动重新 configure，
 全绿，用例数不变。
+
+## `to_json()` 系列拆成独立文件 `parser/ast_nodes/to_json.cpp`，加 `include_pos` 参数
+
+用户自己把散落在各个 `ast_node_*.h` 里的 `to_json()` 实现抽成了一个独立的 `to_json.cpp`（之前
+这些实现是内联在头文件里的）。在此基础上要求：给这一整套 `to_json()` 加一个 `bool include_pos`
+参数，控制要不要把节点自身的位置信息也 dump 进 json，默认 `false`（不带，维持现状不影响任何
+既有测试）。
+
+**默认参数踩了 clang-tidy 的坑，改成 NVI（Non-Virtual Interface）模式**：最初直接在基类的纯虚
+函数上给 `include_pos` 加默认值 `= false`，clang-tidy 报"虚函数/override 不允许带默认实参"
+（这是个真实存在的陷阱：C++ 里默认实参是按*调用点看到的静态类型*决定的，虚函数在不同派生类
+override 里如果默认值不一致会导致同一份调用代码在不同静态类型下表现不一致，所以这条规则本身
+是对的）。改成标准 NVI 写法：基类 `AstNode` 里留一个**非虚**的公开 `to_json(bool include_pos =
+false) const`，内部转发给一个新增的**私有**纯虚 `to_json_impl(bool include_pos) const`（无默认值，
+清空了 clang-tidy 的顾虑）；所有派生类原来的 `to_json() override` 全部改名成
+`to_json_impl(...) override`，且移到 `private:` 下——外部只能通过基类那个非虚 wrapper 调用，
+不会有人绕过去直接调 `to_json_impl` 而忘了传参。9 个 `ast_node_*.h` 头文件、`to_json.cpp` 里
+~40 个函数全部跟着改了签名/改了名。
+
+`to_json.cpp` 里每个函数最后按 `include_pos` 分两条 `return json{...};`（真的写两遍字段列表，
+不是构造好之后再拿 `if` 改字段），`include_pos == true` 那条额外插一个 `{"pos", pos_to_json(pos_)}`；
+递归下钻子节点的地方全部把 `include_pos` 原样透传下去（`captures_to_json`/`one_param_to_json`/
+`all_params_to_json` 这几个辅助函数也都加了这个参数）。`Executor.cpp`/两处 `test_utils.h` 这些
+外部调用方全都是直接 `->to_json()`（走基类指针），默认值自动生效，不用改。
+
+## `to_json()` 输出键名跟字段名对不上的问题：找出并统一
+
+用户提出一条通用规则："json 里的键名，去掉字段自己的尾缀下划线之后应该完全一样"，要求逐个排查。
+找到并修正了这些不一致（全部同步改了对应测试）：
+
+- `OneCapture::capture_type_` → 原来键是 `"kind"`，改成 `"capture_type"`；
+- `AllParams::var_args_name_`/`var_kwargs_name_` → 原来是 `"var_args"`/`"var_kwargs"`，改成
+  `"var_args_name"`/`"var_kwargs_name"`；
+- `AstNodeCall::positional_args_`/`keyword_args_` → 原来是 `"args"`/`"kwargs"`，改成
+  `"positional_args"`/`"keyword_args"`（`AstNodeIndex::args_` 的 `"args"` 键本来就是对的，
+  字段本身就叫 `args_`，没动，注意别混淆这两个不同节点）；
+- `OneKwArg::keyword_` → 原来是 `"key"`，改成 `"keyword"`。
+
+另外 `AstNodeLiteralDict::items_`（`vector<pair<AstNodePtr, AstNodePtr>>`）本来键是 `"key"`/
+`"val"`——`pair` 本身没有字段名，严格按上面那条规则不适用（没有对应字段可比），但用户要求
+`"val"` 也统一成 `"value"`（跟 `AstNodeReturn`/`OneKwArg` 等别处的风格一致），已经改。
+
+## `StaticEvaler` 大改：去掉 `BigInt` 依赖，纯数值折叠改用 `int64_t` + 溢出检测，加折叠上限
+
+背景：用户观察到当时的 `StaticEvaler`（编译期常量折叠）对折叠"没有节制"——`2 ** 100`、
+`[0] * 100000000` 这类都会被无条件折叠，本质上是"编译炸弹"：折叠是编译期发生的，跟运行时开销
+是两回事，几十个字符的源码就能让编译阶段（甚至只是语法分析/静态检查阶段，程序都还没跑）自己
+把编译器拖死或吃爆内存。这是真实存在过的问题——CPython 的常量折叠器就因为类似原因（`**`/位移
+喂一个巨大指数/位移量）出过编译期卡死的 bug，后来加了限制。参照 CPython 的思路讨论出以下设计
+（讨论过程中反复对齐了好几轮，这里只记结论）：
+
+1. **纯数值运算（含位运算）改用 `int64_t` 计算，不再用任意精度的 `BigInt`**：折得动的前提是
+   操作数本身、以及运算结果都落在 `int64_t` 范围内，折不动就 `return nullptr`（原样留给以后的
+   执行器用真正的任意精度整数处理，语言本身的 `int` 语义不受影响，只是"编译期要不要提前算出来"
+   这个优化决策变保守了）。`literal_equal`/`literal_compare`（`==`/`<` 这些比较）不受影响，
+   继续用不依赖任何数值类型的纯字符串比较——比较运算不管操作数多大，结果就是个 bool，从来不会
+   有"结果比输入还大"这种爆炸风险，没必要跟着限制。`to_double`/`truthy` 同理，直接在字符串/
+   `strtod` 层面处理，不需要经过任何"大数类型"。这样一来 `numeric/BigInt.h` 这个依赖从
+   `StaticEvaler` 里整个消失了（`BigInt` 继续留着给以后的执行器/虚拟机用，那边才是真正需要
+   任意精度整数语义的地方）。
+2. **两个折叠上限，直接沿用 CPython 实测过的数字**：`kMaxStrLength = 4096`（str 的 `+` 拼接/`*`
+   重复，结果字符数上限）、`kMaxContainerItems = 256`（tuple/list 的 `+` 拼接、tuple 的 `*`
+   重复，结果元素个数上限）。判断"会不会超限"一律用减法/除法/（后来又改成 `ckd_*`，见下一节）
+   反着推，不对"结果的大小"本身做加法/乘法，避免检查过程自己先溢出。
+3. **tuple 的 `*` 重复，多加一道"深度不可变"门槛**：这是这轮讨论里最关键的一条洞察，来自用户
+   贴的三段 CPython `dis()` 对比：`(1, 2) * 3` 会被折成一个常量元组，`[1, 2] * 3` 完全不折，
+   `([1], 2) * 3`——外层明明是 tuple——也不折。根子在于 SL.md 3.4.2 现在明确了 list/tuple 的
+   `*` 重复语义是"重复出来的各份，对应位置的元素是同一个引用"（跟 Python 一致，`[[1]] * 3`
+   三个子列表其实是同一个对象，这条语义是这轮讨论顺带敲定、写进 SL.md 的）——而这套 AST 是
+   `unique_ptr` 独占所有权的树，折叠时物理上没法表达"这两个位置共享同一个对象"，只能靠
+   deep clone 伪造出"看起来一样"的独立副本。只要内容全程不可变（`None`/`bool`/`int`/`float`/
+   `str`/`Ellipsis`，或者递归展开全是这些的 tuple），clone 和共享引用在任何可观察行为上都没有
+   区别，折是安全的；但凡嵌套了哪怕一层 `list`（`list` 本身永远可变，不存在"深度不可变"这一说），
+   clone 出来的独立拷贝就跟"应有的共享引用"语义不一致，折了就是错的。于是新增
+   `is_deeply_immutable(node)`：`None`/`bool`/`int`/`float`/`str`/`Ellipsis` 天然是；`tuple`
+   要求每个元素递归满足；`list` 恒为假。`fold_mul` 的 tuple 分支现在要求
+   `is_deeply_immutable(t) && !repeated_size_exceeds(...)` 两者都满足才折，用
+   `clone_literal`（内容不可变，深拷贝和共享不可区分，用哪个都行，深拷贝实现最简单）；list 分支
+   整个删掉，恒 `return nullptr`，交给以后的执行器实现"共享引用"这层语义。`clone_literal` 因此
+   没法删掉（一度以为 list 也不折之后这个函数变死代码，但 tuple 的深度不可变重复分支还留着，
+   继续用它）。
+4. **`+` 拼接不需要这道门槛**：`fold_add` 的 tuple/list 分支本来就是 `std::move` 把子节点原样
+   接过去（而不是 clone），只是把已经存在的两棵子树重新挂到一个新父节点下，不产生任何新的
+   共享/复制关系，跟折叠前比没有引入任何新的可观察差异，天然安全，不管内容可变不可变都能折。
+
+**一处真实 bug，靠这轮补的边界测试才挖出来**：`fold_arithmetic` 的 `Pow` 分支，`is_both_int`
+为真但两个操作数解析成 `int64_t` 失败（比如指数本身文本上就超出 `int64_t` 范围）时，原来的
+写法会不小心继续往下走到最后的 `return make_float(...)` 兜底分支——SL.md 3.4.2
+明确"都是 int 且指数非负，结果必须仍是 int"，这种情况正确的行为是干脆不折，不能退化成 float
+（哪怕退化算出来的值凑巧看着没问题，比如 `1 ** 一个超大的数` 用 float 幂算出来正好是 `1.0`，
+类型也是错的）。改成 `int_operands()` 解析失败直接 `return nullptr`，只有"两个操作数都在范围内
+且指数为负"这一种情况才允许退化到 float 分支。
+
+`SL.md` 3.4.2 补充了 list/tuple `*` 重复的共享引用语义（如上）。
+
+## 溢出检测的实现选型：手写 → C23 `<stdckdint.h>`（`ckd_add`/`ckd_sub`/`ckd_mul`），不是 SafeInt
+
+上一节的 `int64_t` 溢出检测最初是手写的（`checked_add`/`checked_sub`/`checked_mul`/`checked_neg`，
+经典的"运算前先判断会不会溢出"那套教科书写法，`checked_pow`/`checked_lshift` 复用
+`checked_mul`）。全部边界情况都专门写了测试（`INT64_MAX`/`INT64_MIN` 边界、`INT64_MIN / -1`、
+移位范围等），也确实跑通了。
+
+用户追问"这个溢出检测你能 100% 确信没问题吗，不行就换现成库，比如 SafeInt，你来选"。老实答案是
+不能 100% 确信——溢出检测这类代码历史上就是特别容易"看起来对、边界抠错一位"的地方（这也是为什么
+C/C++ 标准最终专门加了对应机制），测试全过也只能说明"想到的边界都对了"，没法排除没想到的。
+
+**查了 SafeInt 的实际源码，发现接口对不上**：SafeInt 的公开用法是 `SafeInt<T>` 包一层、溢出时
+抛 `SafeIntException`，没有现成的"返回 bool、不抛异常"版本；这个类（以及整个项目的
+`StaticEvaler`）的既有风格是"折不动一律返回 `nullptr`，从不抛异常"（类头注释原话），用 SafeInt
+得自己包一层 try/catch 才能接上这个风格，不够干净，也会把异常引入一个原本完全不用异常做控制流
+的模块。
+
+**最终选了 C23 的 `<stdckdint.h>`**（`bool ckd_add(T* result, ...)` 这一族，溢出返回 `true` 且不
+碰 `*result`）——这个选择其实是用户自己先动手探路的（往文件里加了这个 `#include`，函数体还没
+改），我确认了方向对之后接着做完：现场编译了一个独立于项目构建系统之外的最小样例、用项目实际
+这套 Clang 工具链单独验证过 `ckd_add`/`ckd_mul` 在 C++23 模式下对 `int64_t` 和 `size_t` 都能正常
+工作（溢出正确返回 `true`，不溢出结果正确），然后把 `checked_add`/`checked_sub`/`checked_mul`
+的函数体换成三行薄封装、`checked_neg` 改成 `ckd_sub(&result, 0, a)`（顺带修正了一处不精确：
+原来手写版本对 `b == INT64_MIN` 一律保守地判"不折"，哪怕 `a < 0` 时其实落在范围内也没折——
+`ckd_sub` 算的是精确条件，这个不必要的过度保守消失了）；后来又把 `sum_exceeds`（`+` 拼接用的
+"两个 `size_t` 相加会不会超过上限"）和 `repeated_size_exceeds`（`*` 重复用的"乘出来会不会超过
+上限"）这两处原来靠减法/除法绕开溢出的手写判断，也一并换成了 `ckd_add`/`ckd_mul` 的薄封装。
+选择 `<stdckdint.h>` 而不是直接用 `__builtin_add_overflow` 这类编译器专有内建函数，是因为前者是
+C23 里明文定义的标准接口（不是某个编译器的专有名字），可移植性更好，跟"不要锁死在特定工具链"
+这条既有的顾虑不冲突——虽然底层实现依然要靠编译器支持，不是"零编译器依赖"，但至少接口本身是
+标准化的。
+
+改完之后 `numeric/BigInt.h`、`<limits>` 里 `checked_*` 曾经用过的 `numeric_limits<int64_t>::
+min()/max()`（现在只有 `DivFloor`/`Mod` 的 `INT64_MIN / -1` 特判还在用）之外，整个
+`StaticEvaler.cpp` 就没有自己手写的溢出判断逻辑了，全部靠 `<stdckdint.h>` 兜底。全程每一步改动
+后都跑了 `.ai/run_test.bat` 验证 100% 通过、断言数量不变，新旧两套实现在所有测过的边界上结果
+一致。
+
+**过程中一段插曲，纯粹是排查方法上的教训，跟生产代码无关**：写"容器大小恰好等于上限"这批边界
+测试时，`const auto j256{fold_json(...)};` 这行把已经是 `nlohmann::json` 的返回值又套了一层
+花括号——这正是 `.ai/notes/json-test-brace-init-trap.md` 记录过的坑，只是那份笔记当时只提到了
+`test/parser/**` 的 `parse_json`，这次在 `test/analyzer/**` 的 `fold_json` 上又踩了一次，
+一度往生产代码的 `to_json()`/`to_json_impl()` 方向排查了很久（加了好几层 `fprintf`/`std::cerr`
+调试输出逐层验证）才确认生产代码全程正确，问题只在测试自己那一行。笔记已经改成不限定具体函数名，
+扩大到"任何按值返回 `nlohmann::json`/`ordered_json` 的测试工具函数"这一类。

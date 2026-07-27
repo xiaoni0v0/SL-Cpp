@@ -1,8 +1,11 @@
-# 测试里 parse_json 结果的花括号初始化陷阱
+# 测试里 json 返回值的花括号初始化陷阱
 
-在 `test/parser/**` 里凡是要把 `parse_json(...)`/`parse_program_json(...)` 的返回值存进一个局部
-变量、之后还要对它做 `["field"]` 多次取值的，必须写成 `const auto x = parse_json(source);`（拷贝
-初始化，用 `=`），不能写成 `const auto x{parse_json(source)};`（花括号初始化）。
+凡是要把某个返回 `nlohmann::json`/`ordered_json`（按值）的测试工具函数结果存进一个局部变量、
+之后还要对它多次取值/断言的，必须写成 `const auto x = f(...);`（拷贝初始化，用 `=`），不能写成
+`const auto x{f(...)};`（花括号初始化）。目前踩过这个坑的至少有两处：`test/parser/**` 的
+`parse_json(...)`/`parse_program_json(...)`，以及 `test/analyzer/**` 的 `fold_json(...)`——
+但凡以后再加新的"解析/折叠后转 json 方便断言"这类工具函数，同样的坑大概率还会在新目录下复现
+一次，不是只有这两个函数名要小心。
 
 ## why
 
@@ -16,11 +19,16 @@
 
 这个坑在 `literals_test.cpp`/`func_test.cpp` 等文件里已经有注释提醒过（用于"expected 字面量"场景），
 但只覆盖了 `nlohmann::json{...}` 手写期望值那个方向；在"直接对 `parse_json` 返回值本身取值"这个新
-方向上又踩了一次（`combination_test.cpp` 里）。
+方向上又踩了一次（`combination_test.cpp` 里），后来在 `container_ops_test.cpp` 里对 `fold_json`
+返回值也踩了第三次——排查那次花了很大力气：一度怀疑到生产代码的 `to_json()`/`to_json_impl()`
+头上，往两处都加了 `fprintf`/`std::cerr` 调试输出逐层验证，才确认生产代码全程正确，问题只在测试
+自己那行 `const auto j256{fold_json(...)};`。以后再见到"json 断言莫名其妙变成数组"，先检查这一条，
+不用重新排查一遍。
 
 ## how to apply
 
-- `const auto x = parse_json(...);` / `const auto x = parse_program_json(...);` —— 必须用 `=`。
+- `const auto x = parse_json(...);` / `const auto x = parse_program_json(...);` /
+  `const auto x = fold_json(...);` —— 必须用 `=`。
 - `const auto &y{x["field"]};` —— 绑定已存在对象的子字段是**引用**，不走构造函数，花括号没问题，
   这种可以继续用 `{}`。
 - 判断标准就是"右边是不是在构造一个新的 `nlohmann::json`/`nlohmann::ordered_json` 对象"：是则必须
