@@ -1,8 +1,10 @@
 #pragma once
 
-#include "../../numeric/BigInt.h"
 #include "../../parser/ast_nodes/ast_nodes.h"
 
+#include <compare>
+#include <cstddef>
+#include <cstdint>
 #include <optional>
 
 /**
@@ -30,7 +32,16 @@
  * D = { * != == }
  * E = { != == }
  *
- * 以上中，数字与容器相乘的只有在数字在 int 能装下时才折叠。
+ * 以上中：
+ * - 纯数值运算（含位运算）一律用 int64_t 计算，任何一步（含操作数本身的解析）超出 int64_t
+ *   范围都不折，交给运行时用真正的任意精度整数处理；
+ * - str 的 + 拼接、* 重复，结果长度超过 kMaxStrLength 不折；
+ * - tuple/list 的 + 拼接，结果元素个数超过 kMaxContainerItems 不折；
+ * - tuple 的 * 重复，除了同样受 kMaxContainerItems 限制，还要求这个 tuple
+ *   是"深度不可变"的（递归展开后不含任何 list）——因为重复出来的每一份内部元素是共享引用
+ *   （SL.md 3.4.2），一旦其中嵌套了可变的 list，"共享 vs 独立拷贝"就变得可观察，折叠没法在
+ *   不知道以后语义怎么实现的情况下瞎猜，索性不折；纯不可变内容则无所谓，折出来大家肉眼不可辨；
+ * - list 的 * 重复恒不折（list 本身永远可变，不存在"深度不可变"这一说）。
  *
  * 除此之外，and/or/not 对于字面量均折叠。
  *
@@ -84,27 +95,62 @@ class StaticEvaler final {
      */
     [[nodiscard]] static bool is_literal_pure(const AstNode &node);
 
+    /**
+     * node 是不是"深度不可变"：递归展开后完全不含 list。
+     * None/bool/int/float/str/Ellipsis 天然是；tuple 要求每个元素递归满足；list 恒不是。
+     * 调用方保证 is_literal_pure(node)。
+     * 只用于判断 tuple 的 * 重复能不能安全折叠——重复出来的每一份内部元素是共享引用
+     * （SL.md 3.4.2），只有内容全程不可变时"共享 vs 独立拷贝"才不可区分，折叠才是安全的。
+     */
+    [[nodiscard]] static bool is_deeply_immutable(const AstNode &node);
+
     // —————————— 数值提升相关 ——————————
 
     // 是不是 bool 或 int
     [[nodiscard]] static bool is_int_family(const AstNode &node);
     // is_int_family 或 float
     [[nodiscard]] static bool is_numeric(const AstNode &node);
-    // 要求 is_int_family(node)
-    [[nodiscard]] static BigInt to_bigint(const AstNode &node);
-    // 要求 is_numeric(node)
+    // 要求 is_int_family(node)；literal 的数值超出 int64_t 范围（目前 int 字面量只有十进制数字，
+    // 解析时按十进制累加做溢出检测）时返回 nullopt
+    [[nodiscard]] static std::optional<int64_t> to_int64(const AstNode &node);
+    // 要求 is_numeric(node)；int 分支直接对十进制文本调 strtod，不需要先转成任何数值类型，
+    // 任意长度的十进制整数文本都能处理
     [[nodiscard]] static double to_double(const AstNode &node);
-    // BigInt 转 int，装不下返回 nullopt
-    [[nodiscard]] static std::optional<int> try_to_int(const BigInt &value);
+
+    // —————————— int64_t 溢出检测算术 ——————————
+    // 底层用 C23 <stdckdint.h> 的 ckd_add/ckd_sub/ckd_mul：这是标准明确定义的语义（C23
+    // §7.20.1），不是某个编译器的专有内建函数，溢出检测这种代码历史上太容易手写出细微的
+    // bug，交给标准/编译器保证比自己再判一遍更可信；溢出统一返回 nullopt
+
+    [[nodiscard]] static std::optional<int64_t> checked_neg(int64_t a);
+    [[nodiscard]] static std::optional<int64_t> checked_add(int64_t a, int64_t b);
+    [[nodiscard]] static std::optional<int64_t> checked_sub(int64_t a, int64_t b);
+    [[nodiscard]] static std::optional<int64_t> checked_mul(int64_t a, int64_t b);
+    // 非负整数次幂，快速幂循环，每一步乘法都做溢出检测
+    [[nodiscard]] static std::optional<int64_t> checked_pow(int64_t base, int64_t exponent);
+    // <<：结果只会变大，要做溢出检测；shift 不在 [0, 62] 内直接不折
+    [[nodiscard]] static std::optional<int64_t> checked_lshift(int64_t value, int64_t shift);
+    // >>：结果只会更收敛，任意非负 shift 都有确定结果（shift 很大时饱和到 0 或 -1），
+    // 不会溢出，shift 本身不用设上限；shift 为负返回 nullopt
+    [[nodiscard]] static std::optional<int64_t> arithmetic_rshift(int64_t value, int64_t shift);
+
+    // —————————— 折叠上限 ——————————
+
+    // tuple/list：+ 拼接、tuple 的 * 重复（且深度不可变），结果元素个数上限
+    static constexpr size_t nMaxContainerItems{256};
+    // str：+ 拼接、* 重复，结果字符数上限
+    static constexpr size_t nMaxStrLength{4096};
+    // 判断 base_size 重复 n 次会不会超过 cap；用除法反推，不做乘法本身，避免 size_t 先溢出
+    [[nodiscard]] static bool repeated_size_exceeds(size_t base_size, size_t n, size_t cap);
 
     // —————————— 构造折叠结果 ——————————
 
     [[nodiscard]] static AstNodePtr make_bool(Position pos, bool value);
-    [[nodiscard]] static AstNodePtr make_int(Position pos, const BigInt &value);
+    [[nodiscard]] static AstNodePtr make_int(Position pos, int64_t value);
     [[nodiscard]] static AstNodePtr make_float(Position pos, double value); // ±inf/NaN 返回 nullptr
     // 把 double 格式化成合法的 SL float 字面量文本（永远带小数点，不用科学计数法）
     [[nodiscard]] static std::string format_double(double value);
-    // 深拷贝一份字面量子树；调用方保证 is_literal(node)
+    // 深拷贝一份字面量子树；调用方保证 is_literal_pure(node)
     [[nodiscard]] static AstNodePtr clone_literal(const AstNode &node);
 
     // 三态比较结果：Unordered 表示这两个类型之间不支持大小比较（交给运行时报 TypeError）
@@ -115,6 +161,10 @@ class StaticEvaler final {
     // </<=/>/>= 用：数字按大小、str 按字典序、tuple/list
     // 按字典序逐元素比较；其余（含跨类型）不可比较
     [[nodiscard]] static CmpResult literal_compare(const AstNode &a, const AstNode &b);
+    // int 字面量（只支持十进制数字文本）按数值大小比较，不经过任何数值类型：
+    // 先去掉前导零，位数不等直接分高下，位数相等再按字典序
+    [[nodiscard]] static std::strong_ordering
+    compare_int_literals(const AstNodeLiteralInt &a, const AstNodeLiteralInt &b);
 
   public:
     // 纯工具类，静态、无状态，直接禁止实例化
