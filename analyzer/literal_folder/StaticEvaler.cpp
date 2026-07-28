@@ -13,10 +13,12 @@
 
 namespace {
 
-// a + b 是否会超过 cap；a 已经超过 cap 时不能再拿 cap - a 去减（会先下溢），单独判掉
+// a + b 是否会超过 cap；用 ckd_add 判 size_t 加法本身溢不溢出（溢出了肯定也超过 cap），
+// 不用再手写"先减后比"那套避免下溢的技巧
 bool sum_exceeds(const size_t a, const size_t b, const size_t cap) {
-    if (a > cap) return true;
-    return b > cap - a;
+    size_t sum;
+    if (ckd_add(&sum, a, b)) return true;
+    return sum > cap;
 }
 
 // bool 提升成 int：把 True/False 看成 raw_ 为 "1"/"0" 的 int 字面量，这样比较大小/相等
@@ -72,6 +74,7 @@ AstNodePtr StaticEvaler::fold_binary(AstNodeOpBinary &node) {
         return nullptr;
     }
 }
+
 AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
     using enum AstNodeCompare::OpType;
 
@@ -113,6 +116,7 @@ AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
     }
     return make_bool(node.pos_, true);
 }
+
 AstNodePtr StaticEvaler::fold_if(AstNodeIf &node) {
     size_t i{0};
     while (i < node.clauses_.size() && is_literal_pure(*node.clauses_[i].cond_) &&
@@ -494,7 +498,7 @@ bool StaticEvaler::is_numeric(const AstNode &node) {
 std::optional<int64_t> StaticEvaler::to_int64(const AstNode &node) {
     if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&node)})
         return b->value_ ? int64_t{1} : int64_t{0};
-    const auto &i{dynamic_cast<const AstNodeLiteralInt &>(node)}; // 调用方保证 is_int_family(node)
+    const auto &i{dynamic_cast<const AstNodeLiteralInt &>(node)};
 
     // raw_ 目前只有十进制数字，可能带一个前导符号（折叠结果回填时会带 '-'，源码里的字面量本身
     // 不会，SL.md 2.1.4：负数不是字面量）
@@ -594,8 +598,10 @@ std::optional<int64_t> StaticEvaler::arithmetic_rshift(const int64_t value, cons
 }
 
 bool StaticEvaler::repeated_size_exceeds(const size_t base_size, const size_t n, const size_t cap) {
-    if (base_size == 0 || n == 0) return false; // 结果是空，必然不超限
-    return n > cap / base_size; // 除法反推，不对 base_size*n 本身做乘法，避免 size_t 先溢出
+    size_t product;
+    // ckd_mul 溢出返回 true，直接判定超限，不用再拿除法反推
+    if (ckd_mul(&product, base_size, n)) return true;
+    return product > cap;
 }
 
 AstNodePtr StaticEvaler::make_bool(const Position pos, const bool value) {

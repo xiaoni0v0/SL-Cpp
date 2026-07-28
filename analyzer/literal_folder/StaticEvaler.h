@@ -3,12 +3,12 @@
 #include "../../parser/ast_nodes/ast_nodes.h"
 
 #include <compare>
-#include <cstddef>
 #include <cstdint>
 #include <optional>
 
 /**
  * 编译期静态求值器
+ * 不依赖高精度库
  * 折不动一律返回 nullptr，从不抛异常
  *
  * 折叠范围：
@@ -33,15 +33,12 @@
  * E = { != == }
  *
  * 以上中：
- * - 纯数值运算（含位运算）一律用 int64_t 计算，任何一步（含操作数本身的解析）超出 int64_t
- *   范围都不折，交给运行时用真正的任意精度整数处理；
- * - str 的 + 拼接、* 重复，结果长度超过 kMaxStrLength 不折；
- * - tuple/list 的 + 拼接，结果元素个数超过 kMaxContainerItems 不折；
+ * - 纯数值运算（含位运算）一律用 int64_t 计算，任何一步超出 int64_t 范围都不折；
+ * - str 的 + 拼接、* 重复，结果长度超过 nMaxStrLength 不折；
+ * - tuple/list 的 + 拼接，结果元素个数超过 nMaxContainerItems 不折；
  * - tuple 的 * 重复，除了同样受 kMaxContainerItems 限制，还要求这个 tuple
- *   是"深度不可变"的（递归展开后不含任何 list）——因为重复出来的每一份内部元素是共享引用
- *   （SL.md 3.4.2），一旦其中嵌套了可变的 list，"共享 vs 独立拷贝"就变得可观察，折叠没法在
- *   不知道以后语义怎么实现的情况下瞎猜，索性不折；纯不可变内容则无所谓，折出来大家肉眼不可辨；
- * - list 的 * 重复恒不折（list 本身永远可变，不存在"深度不可变"这一说）。
+ * 是"深度不可变"的（递归展开后不含任何 list）， 因为重复出来的每一份内部元素是共享引用。
+ * - list 的 * 重复恒不折（list 本身永远可变）。
  *
  * 除此之外，and/or/not 对于字面量均折叠。
  *
@@ -110,8 +107,7 @@ class StaticEvaler final {
     [[nodiscard]] static bool is_int_family(const AstNode &node);
     // is_int_family 或 float
     [[nodiscard]] static bool is_numeric(const AstNode &node);
-    // 要求 is_int_family(node)；literal 的数值超出 int64_t 范围（目前 int 字面量只有十进制数字，
-    // 解析时按十进制累加做溢出检测）时返回 nullopt
+    // 调用方保证 is_int_family(node)。超出 int64_t 范围时返回 nullopt
     [[nodiscard]] static std::optional<int64_t> to_int64(const AstNode &node);
     // 要求 is_numeric(node)；int 分支直接对十进制文本调 strtod，不需要先转成任何数值类型，
     // 任意长度的十进制整数文本都能处理
@@ -140,7 +136,7 @@ class StaticEvaler final {
     static constexpr size_t nMaxContainerItems{256};
     // str：+ 拼接、* 重复，结果字符数上限
     static constexpr size_t nMaxStrLength{4096};
-    // 判断 base_size 重复 n 次会不会超过 cap；用除法反推，不做乘法本身，避免 size_t 先溢出
+    // 判断 base_size 重复 n 次会不会超过 cap；乘法本身用 ckd_mul 做溢出检测
     [[nodiscard]] static bool repeated_size_exceeds(size_t base_size, size_t n, size_t cap);
 
     // —————————— 构造折叠结果 ——————————
