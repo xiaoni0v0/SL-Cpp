@@ -3,6 +3,7 @@
 #include "../../utils/string_utils.h"
 
 #include <algorithm>
+#include <charconv>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -13,12 +14,119 @@
 
 namespace {
 
-// a + b 是否会超过 cap；用 ckd_add 判 size_t 加法本身溢不溢出（溢出了肯定也超过 cap），
-// 不用再手写"先减后比"那套避免下溢的技巧
+// a + b 是否会超过 cap
 bool sum_exceeds(const size_t a, const size_t b, const size_t cap) {
     size_t sum;
     if (ckd_add(&sum, a, b)) return true;
     return sum > cap;
+}
+
+// base_size 重复 n 次的总大小是否超过 cap，跟 sum_exceeds 同一类"溢出即判定超限"的写法；
+// 乘法本身用 ckd_mul 做溢出检测，不用再拿除法反推
+bool repeated_size_exceeds(const size_t base_size, const size_t n, const size_t cap) {
+    size_t product;
+    if (ckd_mul(&product, base_size, n)) return true;
+    return product > cap;
+}
+
+// 以下几个 checked_* 是跟 AstNode 完全无关的纯 int64_t 算术（不是"给某个节点判断能不能
+// 折"），所以放在这里当自由函数，不进 StaticEvaler 的类接口。底层用 C23 <stdckdint.h> 的
+// ckd_add/ckd_sub/ckd_mul：这是标准明确定义的语义（C23 §7.20.1），不是某个编译器的专有
+// 内建函数，溢出检测这种代码历史上太容易手写出细微的 bug，交给标准/编译器保证比自己再判
+// 一遍更可信；溢出统一返回 nullopt
+
+std::optional<int64_t> checked_neg(const int64_t a) {
+    int64_t result;
+    if (ckd_sub(&result, int64_t{0}, a)) return std::nullopt; // 只有 a == INT64_MIN 时会溢出
+    return result;
+}
+
+std::optional<int64_t> checked_add(const int64_t a, const int64_t b) {
+    int64_t result;
+    if (ckd_add(&result, a, b)) return std::nullopt;
+    return result;
+}
+
+std::optional<int64_t> checked_sub(const int64_t a, const int64_t b) {
+    int64_t result;
+    if (ckd_sub(&result, a, b)) return std::nullopt;
+    return result;
+}
+
+std::optional<int64_t> checked_mul(const int64_t a, const int64_t b) {
+    int64_t result;
+    if (ckd_mul(&result, a, b)) return std::nullopt;
+    return result;
+}
+
+// 非负整数次幂，快速幂循环，每一步乘法都做溢出检测；调用方保证 exponent >= 0
+std::optional<int64_t> checked_pow(int64_t base, int64_t exponent) {
+    int64_t result{1};
+    while (exponent > 0) {
+        if (exponent % 2 != 0) {
+            const std::optional<int64_t> next{checked_mul(result, base)};
+            if (!next) return std::nullopt;
+            result = *next;
+        }
+        exponent /= 2;
+        if (exponent > 0) {
+            const std::optional<int64_t> next_base{checked_mul(base, base)};
+            if (!next_base) return std::nullopt;
+            base = *next_base;
+        }
+    }
+    return result;
+}
+
+// <<：结果只会变大，要做溢出检测；shift 不在 [0, 62] 内直接不折——63 那一档已经踩到符号位，
+// 1 << 63 这个"乘数"本身就不是合法的正数
+std::optional<int64_t> checked_lshift(const int64_t value, const int64_t shift) {
+    if (shift < 0 || shift >= 63) return std::nullopt;
+    return checked_mul(value, int64_t{1} << shift); // value << shift 等价于 value * 2^shift
+}
+
+// >>：结果只会更收敛，任意非负 shift 都有确定结果（shift 很大时饱和到 0 或 -1），不会
+// 溢出，shift 本身不用设上限；shift 为负返回 nullopt
+std::optional<int64_t> arithmetic_rshift(const int64_t value, const int64_t shift) {
+    if (shift < 0) return std::nullopt;
+    if (shift >= 63) return value < 0 ? int64_t{-1} : int64_t{0};
+    return value >> shift; // C++20 起对负数是良定义的算术右移
+}
+
+// 把 double 格式化成合法的 SL float 字面量文本（永远带小数点，不用科学计数法）；纯字符串
+// 格式化，跟 AstNode 无关，同样放在这里
+std::string format_double(const double value) {
+    for (int prec{0}; prec <= 17; ++prec) {
+        const int needed{std::snprintf(nullptr, 0, "%.*f", prec, value)};
+        std::string s(static_cast<size_t>(needed), '\0');
+        std::snprintf(s.data(), s.size() + 1, "%.*f", prec, value);
+        if (std::strtod(s.c_str(), nullptr) == value) {
+            if (s.find('.') == std::string::npos)
+                s += ".0"; // SL float 字面量语法要求小数点不可省略
+            return s;
+        }
+    }
+    // IEEE754 double 十进制有效位数不超过 17 位，理论上走不到这里；留一个兜底避免万一
+    const int needed{std::snprintf(nullptr, 0, "%.17f", value)};
+    std::string s(static_cast<size_t>(needed), '\0');
+    std::snprintf(s.data(), s.size() + 1, "%.17f", value);
+    return s;
+}
+
+// 解析十进制整数文本（可能带一个前导 '-'，折叠结果回填时会带，源码里的字面量本身不会，
+// SL.md 2.1.4：负数不是字面量）成 int64_t，交给 std::from_chars 做——溢出、非法字符统一
+// 通过它的返回值判断，不用再自己逐位累加、每步判溢出。这也顺带修正了手写版本的一个天然
+// 局限：手写版本先把文本转成正的"绝对值"再取负，而 INT64_MIN 的绝对值本身超出 int64_t
+// 能表示的正数范围，永远会被误判成"装不下"；from_chars 把整段文本（含符号）一次性解析，
+// 不存在这个问题
+std::optional<int64_t> parse_decimal_int64(const std::u32string &raw) {
+    const std::string text{u32_to_utf8(raw)};
+    int64_t value{};
+    const char *begin{text.data()};
+    const char *end{begin + text.size()};
+    const auto [ptr, ec]{std::from_chars(begin, end, value)};
+    if (ec != std::errc{} || ptr != end) return std::nullopt;
+    return value;
 }
 
 // bool 提升成 int：把 True/False 看成 raw_ 为 "1"/"0" 的 int 字面量，这样比较大小/相等
@@ -499,29 +607,7 @@ std::optional<int64_t> StaticEvaler::to_int64(const AstNode &node) {
     if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&node)})
         return b->value_ ? int64_t{1} : int64_t{0};
     const auto &i{dynamic_cast<const AstNodeLiteralInt &>(node)};
-
-    // raw_ 目前只有十进制数字，可能带一个前导符号（折叠结果回填时会带 '-'，源码里的字面量本身
-    // 不会，SL.md 2.1.4：负数不是字面量）
-    size_t idx{0};
-    bool negative{false};
-    if (!i.raw_.empty() && (i.raw_[0] == U'-' || i.raw_[0] == U'+')) {
-        negative = i.raw_[0] == U'-';
-        idx = 1;
-    }
-
-    int64_t magnitude{0};
-    for (; idx < i.raw_.size(); ++idx) {
-        const int digit{static_cast<int>(i.raw_[idx] - U'0')};
-        const std::optional<int64_t> scaled{checked_mul(magnitude, 10)};
-        if (!scaled) return std::nullopt;
-        const std::optional<int64_t> added{checked_add(*scaled, digit)};
-        if (!added) return std::nullopt;
-        magnitude = *added;
-    }
-    // 注意：INT64_MIN 的绝对值本身超出 int64_t 正数范围，这里会保守地判定为"装不下"而不折——
-    // 这是唯一会被误判的边界值，换取实现简单，不值得为这一个值专门再搭一套无符号累加
-    if (!negative) return magnitude;
-    return checked_neg(magnitude);
+    return parse_decimal_int64(i.raw_);
 }
 
 double StaticEvaler::to_double(const AstNode &node) {
@@ -531,77 +617,6 @@ double StaticEvaler::to_double(const AstNode &node) {
         return std::strtod(u32_to_utf8(i->raw_).c_str(), nullptr);  // 任意长度的十进制文本都能处理
     const auto &f{dynamic_cast<const AstNodeLiteralFloat &>(node)}; // 调用方保证 is_numeric(node)
     return std::strtod(u32_to_utf8(f.raw_).c_str(), nullptr);
-}
-
-// 以下几个 checked_* 用 C23 的 <stdckdint.h>（ckd_add/ckd_sub/ckd_mul）做溢出检测，不再自己手写
-// "先判断会不会溢出"的逻辑——这是标准明确定义的语义（不是某个编译器的专有内建函数），已经确认
-// 项目当前用的 Clang 工具链在 C++23 模式下也支持；溢出返回 true，同时不修改 *result（C23
-// §7.20.1）。
-std::optional<int64_t> StaticEvaler::checked_neg(const int64_t a) {
-    int64_t result;
-    if (ckd_sub(&result, int64_t{0}, a)) return std::nullopt; // 只有 a == INT64_MIN 时会溢出
-    return result;
-}
-
-std::optional<int64_t> StaticEvaler::checked_add(const int64_t a, const int64_t b) {
-    int64_t result;
-    if (ckd_add(&result, a, b)) return std::nullopt;
-    return result;
-}
-
-std::optional<int64_t> StaticEvaler::checked_sub(const int64_t a, const int64_t b) {
-    int64_t result;
-    if (ckd_sub(&result, a, b)) return std::nullopt;
-    return result;
-}
-
-std::optional<int64_t> StaticEvaler::checked_mul(const int64_t a, const int64_t b) {
-    int64_t result;
-    if (ckd_mul(&result, a, b)) return std::nullopt;
-    return result;
-}
-
-std::optional<int64_t> StaticEvaler::checked_pow(int64_t base, int64_t exponent) {
-    // 调用方保证 exponent >= 0；快速幂，每一步乘法都做溢出检测，一旦溢出立刻放弃
-    int64_t result{1};
-    while (exponent > 0) {
-        if (exponent % 2 != 0) {
-            const std::optional<int64_t> next{checked_mul(result, base)};
-            if (!next) return std::nullopt;
-            result = *next;
-        }
-        exponent /= 2;
-        if (exponent > 0) {
-            const std::optional<int64_t> next_base{checked_mul(base, base)};
-            if (!next_base) return std::nullopt;
-            base = *next_base;
-        }
-    }
-    return result;
-}
-
-std::optional<int64_t> StaticEvaler::checked_lshift(const int64_t value, const int64_t shift) {
-    // shift 本身超出 [0, 62] 就不折：63 那一档已经踩到符号位，1 << 63 这个"乘数"本身就不是
-    // 合法的正数，交给下面 checked_mul 也没意义，直接在这里拦掉
-    if (shift < 0 || shift >= 63) return std::nullopt;
-    return checked_mul(
-        value, int64_t{1} << shift
-    ); // value << shift 等价于 value * 2^shift，复用溢出检测
-}
-
-std::optional<int64_t> StaticEvaler::arithmetic_rshift(const int64_t value, const int64_t shift) {
-    if (shift < 0) return std::nullopt;
-    // 右移只会让值更收敛，shift 很大时必然饱和到 0（非负数）或 -1（负数），直接给出饱和结果，
-    // 不用像左移那样设上限，也不会有任何溢出风险
-    if (shift >= 63) return value < 0 ? int64_t{-1} : int64_t{0};
-    return value >> shift; // C++20 起对负数是良定义的算术右移
-}
-
-bool StaticEvaler::repeated_size_exceeds(const size_t base_size, const size_t n, const size_t cap) {
-    size_t product;
-    // ckd_mul 溢出返回 true，直接判定超限，不用再拿除法反推
-    if (ckd_mul(&product, base_size, n)) return true;
-    return product > cap;
 }
 
 AstNodePtr StaticEvaler::make_bool(const Position pos, const bool value) {
@@ -615,24 +630,6 @@ AstNodePtr StaticEvaler::make_int(const Position pos, const int64_t value) {
 AstNodePtr StaticEvaler::make_float(const Position pos, const double value) {
     if (!std::isfinite(value)) return nullptr; // ±inf/NaN 写不出合法的 float 字面量，交给运行时处理
     return std::make_unique<AstNodeLiteralFloat>(pos, utf8_to_u32(format_double(value)));
-}
-
-std::string StaticEvaler::format_double(const double value) {
-    for (int prec{0}; prec <= 17; ++prec) {
-        const int needed{std::snprintf(nullptr, 0, "%.*f", prec, value)};
-        std::string s(static_cast<size_t>(needed), '\0');
-        std::snprintf(s.data(), s.size() + 1, "%.*f", prec, value);
-        if (std::strtod(s.c_str(), nullptr) == value) {
-            if (s.find('.') == std::string::npos)
-                s += ".0"; // SL float 字面量语法要求小数点不可省略
-            return s;
-        }
-    }
-    // IEEE754 double 十进制有效位数不超过 17 位，理论上走不到这里；留一个兜底避免万一
-    const int needed{std::snprintf(nullptr, 0, "%.17f", value)};
-    std::string s(static_cast<size_t>(needed), '\0');
-    std::snprintf(s.data(), s.size() + 1, "%.17f", value);
-    return s;
 }
 
 AstNodePtr StaticEvaler::clone_literal(const AstNode &node) {

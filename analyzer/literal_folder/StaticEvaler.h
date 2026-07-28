@@ -76,12 +76,12 @@ class StaticEvaler final {
     // bool/int 的位运算：一元 ~，二元 & ^ | << >>
     [[nodiscard]] static AstNodePtr fold_bitwise(AstNodeOpUnary &node);
     [[nodiscard]] static AstNodePtr fold_bitwise(AstNodeOpBinary &node);
-    // and or；折叠的时候不短路
+    // and or。折叠的时候不短路
     [[nodiscard]] static AstNodePtr fold_and_or(AstNodeOpBinary &node);
 
     // —————————— 判断 ——————————
 
-    // 真值判断，要求 node 已经是字面量节点
+    // 真值，要求 node 已经是字面量节点
     [[nodiscard]] static bool truthy(const AstNode &literal);
 
     /**
@@ -107,28 +107,13 @@ class StaticEvaler final {
     [[nodiscard]] static bool is_int_family(const AstNode &node);
     // is_int_family 或 float
     [[nodiscard]] static bool is_numeric(const AstNode &node);
-    // 调用方保证 is_int_family(node)。超出 int64_t 范围时返回 nullopt
+    // 调用方保证 is_int_family(node)。底层用 std::from_chars 解析十进制文本，超出 int64_t
+    // 范围（或解析失败）时返回 nullopt——不手写"逐位累加、每步判溢出"这套历史上容易在边界
+    // 出错的逻辑，标准库本身已经把溢出检测和边界值（含 INT64_MIN）处理对了
     [[nodiscard]] static std::optional<int64_t> to_int64(const AstNode &node);
     // 要求 is_numeric(node)；int 分支直接对十进制文本调 strtod，不需要先转成任何数值类型，
     // 任意长度的十进制整数文本都能处理
     [[nodiscard]] static double to_double(const AstNode &node);
-
-    // —————————— int64_t 溢出检测算术 ——————————
-    // 底层用 C23 <stdckdint.h> 的 ckd_add/ckd_sub/ckd_mul：这是标准明确定义的语义（C23
-    // §7.20.1），不是某个编译器的专有内建函数，溢出检测这种代码历史上太容易手写出细微的
-    // bug，交给标准/编译器保证比自己再判一遍更可信；溢出统一返回 nullopt
-
-    [[nodiscard]] static std::optional<int64_t> checked_neg(int64_t a);
-    [[nodiscard]] static std::optional<int64_t> checked_add(int64_t a, int64_t b);
-    [[nodiscard]] static std::optional<int64_t> checked_sub(int64_t a, int64_t b);
-    [[nodiscard]] static std::optional<int64_t> checked_mul(int64_t a, int64_t b);
-    // 非负整数次幂，快速幂循环，每一步乘法都做溢出检测
-    [[nodiscard]] static std::optional<int64_t> checked_pow(int64_t base, int64_t exponent);
-    // <<：结果只会变大，要做溢出检测；shift 不在 [0, 62] 内直接不折
-    [[nodiscard]] static std::optional<int64_t> checked_lshift(int64_t value, int64_t shift);
-    // >>：结果只会更收敛，任意非负 shift 都有确定结果（shift 很大时饱和到 0 或 -1），
-    // 不会溢出，shift 本身不用设上限；shift 为负返回 nullopt
-    [[nodiscard]] static std::optional<int64_t> arithmetic_rshift(int64_t value, int64_t shift);
 
     // —————————— 折叠上限 ——————————
 
@@ -136,16 +121,12 @@ class StaticEvaler final {
     static constexpr size_t nMaxContainerItems{256};
     // str：+ 拼接、* 重复，结果字符数上限
     static constexpr size_t nMaxStrLength{4096};
-    // 判断 base_size 重复 n 次会不会超过 cap；乘法本身用 ckd_mul 做溢出检测
-    [[nodiscard]] static bool repeated_size_exceeds(size_t base_size, size_t n, size_t cap);
 
     // —————————— 构造折叠结果 ——————————
 
     [[nodiscard]] static AstNodePtr make_bool(Position pos, bool value);
     [[nodiscard]] static AstNodePtr make_int(Position pos, int64_t value);
     [[nodiscard]] static AstNodePtr make_float(Position pos, double value); // ±inf/NaN 返回 nullptr
-    // 把 double 格式化成合法的 SL float 字面量文本（永远带小数点，不用科学计数法）
-    [[nodiscard]] static std::string format_double(double value);
     // 深拷贝一份字面量子树；调用方保证 is_literal_pure(node)
     [[nodiscard]] static AstNodePtr clone_literal(const AstNode &node);
 
