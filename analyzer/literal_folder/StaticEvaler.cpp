@@ -3,9 +3,9 @@
 #include "../../utils/string_utils.h"
 
 #include <algorithm>
+#include <array>
 #include <charconv>
 #include <cmath>
-#include <cstdio>
 #include <cstdlib>
 #include <limits>
 #include <stdckdint.h>
@@ -91,26 +91,19 @@ std::optional<int64_t> checked_rshift(const int64_t a, const int64_t b) {
     return a >> b; // C++20 起对负数的右移是良定义的
 }
 
-// double -> string, e.g. (double) 1.2 -> "1.2"
+// double -> string。调用方保证 value 有限
 std::string double_to_string(const double value) {
-    for (int prec{0}; prec <= 17; ++prec) {
-        const int needed{std::snprintf(nullptr, 0, "%.*f", prec, value)};
-        std::string s(static_cast<size_t>(needed), '\0');
-        std::snprintf(s.data(), s.size() + 1, "%.*f", prec, value);
-        if (std::strtod(s.c_str(), nullptr) == value) {
-            if (s.find('.') == std::string::npos)
-                s += ".0"; // SL float 字面量语法要求小数点不可省略
-            return s;
-        }
-    }
-    // IEEE754 double 十进制有效位数不超过 17 位，理论上走不到这里；留一个兜底避免万一
-    const int needed{std::snprintf(nullptr, 0, "%.17f", value)};
-    std::string s(static_cast<size_t>(needed), '\0');
-    std::snprintf(s.data(), s.size() + 1, "%.17f", value);
+    constexpr size_t nBufSize{std::numeric_limits<double>::max_exponent10 + 32}; // 这个数肯定够的
+    std::array<char, nBufSize> buf{};
+    const auto [ptr, ec]{
+        std::to_chars(buf.data(), buf.data() + buf.size(), value, std::chars_format::fixed)
+    };
+    std::string s{buf.data(), ptr};
+    if (s.find('.') == std::string::npos) s += ".0"; // 没有小数点就添上
     return s;
 }
 
-// string -> int64_t（可能带一个前导 '-'，但源码里的字面量本身不会）
+// string -> int64_t（可以带一个前导 '-'，但源码里的字面量本身不会）
 std::optional<int64_t> string_to_int64(const std::u32string &raw) {
     const std::string text{u32_to_utf8(raw)};
     int64_t value{0};
@@ -188,21 +181,21 @@ AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
             const bool eq{literal_equal(a, b)};
             result = node.ops_[i] == Eq ? eq : !eq;
         } else {
-            const CmpResult cmp{literal_compare(a, b)};
-            if (cmp == CmpResult::Unordered)
+            const std::partial_ordering cmp{literal_compare(a, b)};
+            if (cmp == std::partial_ordering::unordered)
                 return nullptr; // 类型不支持比较，交给运行时报 TypeError
             switch (node.ops_[i]) {
             case Lt:
-                result = cmp == CmpResult::Less;
+                result = cmp < 0;
                 break;
             case Le:
-                result = cmp != CmpResult::Greater;
+                result = cmp <= 0;
                 break;
             case Gt:
-                result = cmp == CmpResult::Greater;
+                result = cmp > 0;
                 break;
             case Ge:
-                result = cmp != CmpResult::Less;
+                result = cmp >= 0;
                 break;
             default:
                 return nullptr; // 不可达（Eq/Ne 已经在上面处理）
@@ -318,7 +311,7 @@ AstNodePtr StaticEvaler::fold_mul(AstNodeOpBinary &node) {
     }();
 
     // 非负 int 才有定义；数量转 int64_t 都装不下的，同样交给运行时
-    const std::optional<int64_t> count{to_int64(count_node)};
+    const std::optional<int64_t> count{node_to_int64(count_node)};
     if (!count || *count < 0) return nullptr;
     const size_t n{static_cast<size_t>(*count)};
 
@@ -357,7 +350,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpUnary &node) {
 
     // int：转 int64_t 失败（超范围）或者取反溢出（-INT64_MIN）都不折
     if (is_int_family(operand)) {
-        const std::optional v{to_int64(operand)};
+        const std::optional v{node_to_int64(operand)};
         if (!v) return nullptr;
         if (node.op_ == Pos) return make_int(node.pos_, *v);
         const std::optional negated{checked_neg(*v)};
@@ -365,7 +358,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpUnary &node) {
         return make_int(node.pos_, *negated);
     }
     // float
-    const double v{to_double(operand)};
+    const double v{node_to_double(operand)};
     return make_float(node.pos_, node.op_ == Neg ? -v : v);
 }
 
@@ -379,8 +372,8 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
 
     // int 分支公用：把两个操作数都解析成 int64_t，任意一个超范围就不折
     const auto int_operands{[&]() -> std::optional<std::pair<int64_t, int64_t>> {
-        const std::optional<int64_t> lv{to_int64(l)};
-        const std::optional<int64_t> rv{to_int64(r)};
+        const std::optional<int64_t> lv{node_to_int64(l)};
+        const std::optional<int64_t> rv{node_to_int64(r)};
         if (!lv || !rv) return std::nullopt;
         return std::make_pair(*lv, *rv);
     }};
@@ -394,7 +387,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
             if (!result) return nullptr;
             return make_int(node.pos_, *result);
         }
-        return make_float(node.pos_, to_double(l) + to_double(r));
+        return make_float(node.pos_, node_to_double(l) + node_to_double(r));
 
     case Sub:
         if (is_both_int) {
@@ -404,7 +397,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
             if (!result) return nullptr;
             return make_int(node.pos_, *result);
         }
-        return make_float(node.pos_, to_double(l) - to_double(r));
+        return make_float(node.pos_, node_to_double(l) - node_to_double(r));
 
     case Mul:
         if (is_both_int) {
@@ -414,12 +407,12 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
             if (!result) return nullptr;
             return make_int(node.pos_, *result);
         }
-        return make_float(node.pos_, to_double(l) * to_double(r));
+        return make_float(node.pos_, node_to_double(l) * node_to_double(r));
 
     case Div: {
-        const double rv{to_double(r)};
+        const double rv{node_to_double(r)};
         if (rv == 0.0) return nullptr; // MathError，交给运行时
-        return make_float(node.pos_, to_double(l) / rv);
+        return make_float(node.pos_, node_to_double(l) / rv);
     }
 
     case DivFloor: {
@@ -435,9 +428,9 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
             if (lv % rv != 0 && (lv % rv < 0) != (rv < 0)) --q;
             return make_int(node.pos_, q);
         }
-        const double rv{to_double(r)};
+        const double rv{node_to_double(r)};
         if (rv == 0.0) return nullptr;
-        return make_float(node.pos_, std::floor(to_double(l) / rv));
+        return make_float(node.pos_, std::floor(node_to_double(l) / rv));
     }
 
     case Mod: {
@@ -452,9 +445,9 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
                 m += rv; // 向 rv 的符号方向调整，与 // 满足同一恒等式
             return make_int(node.pos_, m);
         }
-        const double rv{to_double(r)};
+        const double rv{node_to_double(r)};
         if (rv == 0.0) return nullptr;
-        double m{std::fmod(to_double(l), rv)};
+        double m{std::fmod(node_to_double(l), rv)};
         if (m != 0.0 && (m < 0.0) != (rv < 0.0))
             m += rv; // 向 y 的符号方向调整，与 // 满足同一恒等式
         return make_float(node.pos_, m);
@@ -475,7 +468,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
             }
             // 指数为负：这是唯一允许从"都是 int"退化成 float 结果的情况，走下面
         }
-        return make_float(node.pos_, std::pow(to_double(l), to_double(r)));
+        return make_float(node.pos_, std::pow(node_to_double(l), node_to_double(r)));
 
     default:
         return nullptr;
@@ -486,7 +479,7 @@ AstNodePtr StaticEvaler::fold_bitwise(AstNodeOpUnary &node) {
     const AstNode &operand{*node.operand_};
     if (!is_literal_pure(operand) || !is_int_family(operand)) return nullptr;
 
-    const std::optional<int64_t> v{to_int64(operand)};
+    const std::optional<int64_t> v{node_to_int64(operand)};
     if (!v) return nullptr;
     return make_int(node.pos_, ~*v); // 按位取反不会溢出，无需额外检查
 }
@@ -497,8 +490,8 @@ AstNodePtr StaticEvaler::fold_bitwise(AstNodeOpBinary &node) {
     if (!is_literal_pure(l) || !is_literal_pure(r) || !is_int_family(l) || !is_int_family(r))
         return nullptr;
 
-    const std::optional<int64_t> lv{to_int64(l)};
-    const std::optional<int64_t> rv{to_int64(r)};
+    const std::optional<int64_t> lv{node_to_int64(l)};
+    const std::optional<int64_t> rv{node_to_int64(r)};
     if (!lv || !rv) return nullptr;
 
     switch (node.op_) {
@@ -545,7 +538,7 @@ bool StaticEvaler::truthy(const AstNode &literal) {
         );
     }
     if (const auto *f{dynamic_cast<const AstNodeLiteralFloat *>(&literal)})
-        return to_double(*f) != 0.0;
+        return node_to_double(*f) != 0.0;
     if (const auto *s{dynamic_cast<const AstNodeLiteralStr *>(&literal)}) return !s->value_.empty();
     if (const auto *t{dynamic_cast<const AstNodeLiteralTuple *>(&literal)})
         return !t->items_.empty();
@@ -593,14 +586,14 @@ bool StaticEvaler::is_numeric(const AstNode &node) {
     return is_int_family(node) || dynamic_cast<const AstNodeLiteralFloat *>(&node);
 }
 
-std::optional<int64_t> StaticEvaler::to_int64(const AstNode &node) {
+std::optional<int64_t> StaticEvaler::node_to_int64(const AstNode &node) {
     if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&node)})
         return b->value_ ? int64_t{1} : int64_t{0};
     const auto &i{dynamic_cast<const AstNodeLiteralInt &>(node)};
     return string_to_int64(i.raw_);
 }
 
-double StaticEvaler::to_double(const AstNode &node) {
+double StaticEvaler::node_to_double(const AstNode &node) {
     if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&node)})
         return b->value_ ? 1.0 : 0.0;
     if (const auto *i{dynamic_cast<const AstNodeLiteralInt *>(&node)})
@@ -652,9 +645,9 @@ AstNodePtr StaticEvaler::clone_literal(const AstNode &node) {
 bool StaticEvaler::literal_equal(const AstNode &a, const AstNode &b) {
     if (is_numeric(a) && is_numeric(b)) {
         if (is_int_family(a) && is_int_family(b))
-            return compare_int_literals(promote_as_int(a), promote_as_int(b)) ==
+            return literal_compare_int(promote_as_int(a), promote_as_int(b)) ==
                    std::strong_ordering::equal;
-        return to_double(a) == to_double(b);
+        return node_to_double(a) == node_to_double(b);
     }
     if (dynamic_cast<const AstNodeLiteralNone *>(&a))
         return dynamic_cast<const AstNodeLiteralNone *>(&b) != nullptr;
@@ -681,52 +674,45 @@ bool StaticEvaler::literal_equal(const AstNode &a, const AstNode &b) {
     return false; // 剩下的（bool 已经被数字分支吃掉）不同类型之间一律不相等
 }
 
-StaticEvaler::CmpResult StaticEvaler::literal_compare(const AstNode &a, const AstNode &b) {
+std::partial_ordering StaticEvaler::literal_compare(const AstNode &a, const AstNode &b) {
     if (is_numeric(a) && is_numeric(b)) {
-        if (is_int_family(a) && is_int_family(b)) {
-            const std::strong_ordering cmp{
-                compare_int_literals(promote_as_int(a), promote_as_int(b))
-            };
-            return cmp < 0 ? CmpResult::Less : cmp > 0 ? CmpResult::Greater : CmpResult::Equal;
-        }
-        const double da{to_double(a)};
-        const double db{to_double(b)};
-        return da < db ? CmpResult::Less : da > db ? CmpResult::Greater : CmpResult::Equal;
+        if (is_int_family(a) && is_int_family(b))
+            return literal_compare_int(
+                promote_as_int(a), promote_as_int(b)
+            ); // 隐式转成 partial_ordering
+        return node_to_double(a) <=> node_to_double(b);
     }
     if (const auto *sa{dynamic_cast<const AstNodeLiteralStr *>(&a)}) {
         const auto *sb{dynamic_cast<const AstNodeLiteralStr *>(&b)};
-        if (!sb) return CmpResult::Unordered;
-        return sa->value_ < sb->value_   ? CmpResult::Less
-               : sb->value_ < sa->value_ ? CmpResult::Greater
-                                         : CmpResult::Equal;
+        if (!sb) return std::partial_ordering::unordered;
+        return sa->value_ <=> sb->value_;
     }
 
     // tuple/tuple、list/list 逐元素比较，第一个不相等的元素决定结果；一方是另一方的前缀则前缀更小
     const auto lexicographic{
-        [](const std::vector<AstNodePtr> &xa, const std::vector<AstNodePtr> &xb) -> CmpResult {
+        [](const std::vector<AstNodePtr> &xa,
+           const std::vector<AstNodePtr> &xb) -> std::partial_ordering {
             const size_t n{std::min(xa.size(), xb.size())};
             for (size_t i{0}; i < n; ++i) {
-                const CmpResult c{literal_compare(*xa[i], *xb[i])};
-                if (c != CmpResult::Equal) return c;
+                const std::partial_ordering c{literal_compare(*xa[i], *xb[i])};
+                if (c != 0) return c;
             }
-            return xa.size() < xb.size()   ? CmpResult::Less
-                   : xa.size() > xb.size() ? CmpResult::Greater
-                                           : CmpResult::Equal;
+            return xa.size() <=> xb.size();
         }
     };
     if (const auto *ta{dynamic_cast<const AstNodeLiteralTuple *>(&a)}) {
         const auto *tb{dynamic_cast<const AstNodeLiteralTuple *>(&b)};
-        return tb ? lexicographic(ta->items_, tb->items_) : CmpResult::Unordered;
+        return tb ? lexicographic(ta->items_, tb->items_) : std::partial_ordering::unordered;
     }
     if (const auto *la{dynamic_cast<const AstNodeLiteralList *>(&a)}) {
         const auto *lb{dynamic_cast<const AstNodeLiteralList *>(&b)};
-        return lb ? lexicographic(la->items_, lb->items_) : CmpResult::Unordered;
+        return lb ? lexicographic(la->items_, lb->items_) : std::partial_ordering::unordered;
     }
-    return CmpResult::Unordered; // None/dict/Ellipsis 均不支持大小比较
+    return std::partial_ordering::unordered; // None/dict/Ellipsis 均不支持大小比较
 }
 
 std::strong_ordering
-StaticEvaler::compare_int_literals(const AstNodeLiteralInt &a, const AstNodeLiteralInt &b) {
+StaticEvaler::literal_compare_int(const AstNodeLiteralInt &a, const AstNodeLiteralInt &b) {
     const bool a_neg{!a.raw_.empty() && a.raw_[0] == U'-'};
     const bool b_neg{!b.raw_.empty() && b.raw_[0] == U'-'};
     if (a_neg != b_neg) return a_neg ? std::strong_ordering::less : std::strong_ordering::greater;

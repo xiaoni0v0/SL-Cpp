@@ -115,13 +115,10 @@ class StaticEvaler final {
     [[nodiscard]] static bool is_int_family(const AstNode &node);
     // 是不是 bool 或 int 或 float
     [[nodiscard]] static bool is_numeric(const AstNode &node);
-    // 调用方保证 is_int_family(node)。底层用 std::from_chars 解析十进制文本，超出 int64_t
-    // 范围（或解析失败）时返回 nullopt——不手写"逐位累加、每步判溢出"这套历史上容易在边界
-    // 出错的逻辑，标准库本身已经把溢出检测和边界值（含 INT64_MIN）处理对了
-    [[nodiscard]] static std::optional<int64_t> to_int64(const AstNode &node);
-    // 要求 is_numeric(node)；int 分支直接对十进制文本调 strtod，不需要先转成任何数值类型，
-    // 任意长度的十进制整数文本都能处理
-    [[nodiscard]] static double to_double(const AstNode &node);
+    // node -> int64_t。调用方保证 is_int_family(node)
+    [[nodiscard]] static std::optional<int64_t> node_to_int64(const AstNode &node);
+    // node -> int64_t。调用方保证 is_numeric(node)
+    [[nodiscard]] static double node_to_double(const AstNode &node);
 
     // —————————— 折叠上限 ——————————
 
@@ -137,19 +134,13 @@ class StaticEvaler final {
     [[nodiscard]] static AstNodePtr make_float(Position pos, double value); // ±inf/NaN 返回 nullptr
     // 深拷贝一份字面量子树；调用方保证 is_literal_pure(node)
     [[nodiscard]] static AstNodePtr clone_literal(const AstNode &node);
-
-    // 三态比较结果：Unordered 表示这两个类型之间不支持大小比较（交给运行时报 TypeError）
-    enum class CmpResult { Less, Equal, Greater, Unordered };
-
-    // ==/!= 用：字面量之间的值相等（跨数字类型；str 按内容；tuple/list 逐元素；其余跨类型恒不相等）
+    // 字面量之间的值相等
     [[nodiscard]] static bool literal_equal(const AstNode &a, const AstNode &b);
-    // </<=/>/>= 用：数字按大小、str 按字典序、tuple/list
-    // 按字典序逐元素比较；其余（含跨类型）不可比较
-    [[nodiscard]] static CmpResult literal_compare(const AstNode &a, const AstNode &b);
-    // int 字面量（只支持十进制数字文本）按数值大小比较，不经过任何数值类型：
-    // 先去掉前导零，位数不等直接分高下，位数相等再按字典序
+    // 字面量之间的值比较
+    [[nodiscard]] static std::partial_ordering literal_compare(const AstNode &a, const AstNode &b);
+    // int 字面量之间的值比较
     [[nodiscard]] static std::strong_ordering
-    compare_int_literals(const AstNodeLiteralInt &a, const AstNodeLiteralInt &b);
+    literal_compare_int(const AstNodeLiteralInt &a, const AstNodeLiteralInt &b);
 
   public:
     // 纯工具类，静态、无状态，直接禁止实例化
