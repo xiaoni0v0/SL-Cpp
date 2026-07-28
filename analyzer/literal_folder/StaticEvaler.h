@@ -43,10 +43,9 @@
  * 除此之外，and/or/not 对于字面量均折叠。
  *
  * 死分支消除：
- *   cond 折成的字面量真值为 False 的 clause/循环整个消失，值退化成 SL.md 3.4.5.2/3.4.5.3
- * 规定的默认值）； if 的某个 clause 的 cond 折成的字面量真值为 True，则连同它自己在内后面的
- * clause/else 全部消失，只留这个 clause 的 body； for/while 的 cond 折成的字面量真值为 True
- * 的不折。
+ *   1. if/for/while 的 cond 折成的字面量真值为 False 的 clause/循环整个消失，值退化成默认值）。
+ *   2. if 的某个 clause 的 cond 折成的字面量真值为 True，
+ *      则连同它自己在内后面的 clause/else 全部消失，只留这个 clause 的 body；
  */
 class StaticEvaler final {
     // —————————— 一级入口 ——————————
@@ -59,23 +58,32 @@ class StaticEvaler final {
     [[nodiscard]] static AstNodePtr fold_compare(AstNodeCompare &node);
     // 死分支消除
     [[nodiscard]] static AstNodePtr fold_if(AstNodeIf &node);
-    // 死分支消除
+    // 死循环消除
     [[nodiscard]] static AstNodePtr fold_for_cond(AstNodeForCond &node);
 
     // —————————— 二级入口 ——————————
 
     // not
     [[nodiscard]] static AstNodePtr fold_not(AstNodeOpUnary &node);
-    // + ：数值相加，或 str/tuple/list 拼接
+    // + ：数值相加或 str/tuple/list 拼接
     [[nodiscard]] static AstNodePtr fold_add(AstNodeOpBinary &node);
-    // * ：数值相乘，或 str/tuple/list 重复
+    // * ：数值相乘或 str/tuple/list 重复
     [[nodiscard]] static AstNodePtr fold_mul(AstNodeOpBinary &node);
-    // 纯数值算术：一元 + -，二元 + - * / // % **；fold_add/fold_mul 数值分支也委托给二元版本
+
+    // 纯数值算术
+
+    // 一元 + -
     [[nodiscard]] static AstNodePtr fold_arithmetic(AstNodeOpUnary &node);
+    // 二元 + - * / // % **
     [[nodiscard]] static AstNodePtr fold_arithmetic(AstNodeOpBinary &node);
-    // bool/int 的位运算：一元 ~，二元 & ^ | << >>
+
+    // bool/int 的位运算
+
+    // 一元 ~
     [[nodiscard]] static AstNodePtr fold_bitwise(AstNodeOpUnary &node);
+    // 二元 & ^ | << >>
     [[nodiscard]] static AstNodePtr fold_bitwise(AstNodeOpBinary &node);
+
     // and or。折叠的时候不短路
     [[nodiscard]] static AstNodePtr fold_and_or(AstNodeOpBinary &node);
 
@@ -105,7 +113,7 @@ class StaticEvaler final {
 
     // 是不是 bool 或 int
     [[nodiscard]] static bool is_int_family(const AstNode &node);
-    // is_int_family 或 float
+    // 是不是 bool 或 int 或 float
     [[nodiscard]] static bool is_numeric(const AstNode &node);
     // 调用方保证 is_int_family(node)。底层用 std::from_chars 解析十进制文本，超出 int64_t
     // 范围（或解析失败）时返回 nullopt——不手写"逐位累加、每步判溢出"这套历史上容易在边界
@@ -117,7 +125,7 @@ class StaticEvaler final {
 
     // —————————— 折叠上限 ——————————
 
-    // tuple/list：+ 拼接、tuple 的 * 重复（且深度不可变），结果元素个数上限
+    // tuple/list：+ 拼接、tuple 的 * 重复，结果元素个数上限
     static constexpr size_t nMaxContainerItems{256};
     // str：+ 拼接、* 重复，结果字符数上限
     static constexpr size_t nMaxStrLength{4096};

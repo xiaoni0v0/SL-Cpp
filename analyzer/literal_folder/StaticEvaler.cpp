@@ -21,56 +21,56 @@ bool sum_exceeds(const size_t a, const size_t b, const size_t cap) {
     return sum > cap;
 }
 
-// base_size 重复 n 次的总大小是否超过 cap，跟 sum_exceeds 同一类"溢出即判定超限"的写法；
-// 乘法本身用 ckd_mul 做溢出检测，不用再拿除法反推
-bool repeated_size_exceeds(const size_t base_size, const size_t n, const size_t cap) {
+// a * b 是否会超过 cap
+bool mul_size_exceeds(const size_t a, const size_t b, const size_t cap) {
     size_t product;
-    if (ckd_mul(&product, base_size, n)) return true;
+    if (ckd_mul(&product, a, b)) return true;
     return product > cap;
 }
 
-// 以下几个 checked_* 是跟 AstNode 完全无关的纯 int64_t 算术（不是"给某个节点判断能不能
-// 折"），所以放在这里当自由函数，不进 StaticEvaler 的类接口。底层用 C23 <stdckdint.h> 的
-// ckd_add/ckd_sub/ckd_mul：这是标准明确定义的语义（C23 §7.20.1），不是某个编译器的专有
-// 内建函数，溢出检测这种代码历史上太容易手写出细微的 bug，交给标准/编译器保证比自己再判
-// 一遍更可信；溢出统一返回 nullopt
+// 以下几个 checked_*，溢出统一返回 nullopt
 
+// -a
 std::optional<int64_t> checked_neg(const int64_t a) {
     int64_t result;
-    if (ckd_sub(&result, int64_t{0}, a)) return std::nullopt; // 只有 a == INT64_MIN 时会溢出
+    // 事实上，只有 a == INT64_MIN 时会溢出
+    if (ckd_sub(&result, int64_t{0}, a)) return std::nullopt;
     return result;
 }
 
+// a + b
 std::optional<int64_t> checked_add(const int64_t a, const int64_t b) {
     int64_t result;
     if (ckd_add(&result, a, b)) return std::nullopt;
     return result;
 }
 
+// a - b
 std::optional<int64_t> checked_sub(const int64_t a, const int64_t b) {
     int64_t result;
     if (ckd_sub(&result, a, b)) return std::nullopt;
     return result;
 }
 
+// a * b
 std::optional<int64_t> checked_mul(const int64_t a, const int64_t b) {
     int64_t result;
     if (ckd_mul(&result, a, b)) return std::nullopt;
     return result;
 }
 
-// 非负整数次幂，快速幂循环，每一步乘法都做溢出检测；调用方保证 exponent >= 0
+// 非负整数次幂，快速幂，每一步乘法都做溢出检测。调用方保证 exponent >= 0
 std::optional<int64_t> checked_pow(int64_t base, int64_t exponent) {
     int64_t result{1};
     while (exponent > 0) {
         if (exponent % 2 != 0) {
-            const std::optional<int64_t> next{checked_mul(result, base)};
+            const std::optional next{checked_mul(result, base)};
             if (!next) return std::nullopt;
             result = *next;
         }
         exponent /= 2;
         if (exponent > 0) {
-            const std::optional<int64_t> next_base{checked_mul(base, base)};
+            const std::optional next_base{checked_mul(base, base)};
             if (!next_base) return std::nullopt;
             base = *next_base;
         }
@@ -78,24 +78,21 @@ std::optional<int64_t> checked_pow(int64_t base, int64_t exponent) {
     return result;
 }
 
-// <<：结果只会变大，要做溢出检测；shift 不在 [0, 62] 内直接不折——63 那一档已经踩到符号位，
-// 1 << 63 这个"乘数"本身就不是合法的正数
-std::optional<int64_t> checked_lshift(const int64_t value, const int64_t shift) {
-    if (shift < 0 || shift >= 63) return std::nullopt;
-    return checked_mul(value, int64_t{1} << shift); // value << shift 等价于 value * 2^shift
+// a << b
+std::optional<int64_t> checked_lshift(const int64_t a, const int64_t b) {
+    if (b < 0 || b >= 63) return std::nullopt;
+    return checked_mul(a, int64_t{1} << b); // value << shift 等价于 value * 2^shift
 }
 
-// >>：结果只会更收敛，任意非负 shift 都有确定结果（shift 很大时饱和到 0 或 -1），不会
-// 溢出，shift 本身不用设上限；shift 为负返回 nullopt
-std::optional<int64_t> arithmetic_rshift(const int64_t value, const int64_t shift) {
-    if (shift < 0) return std::nullopt;
-    if (shift >= 63) return value < 0 ? int64_t{-1} : int64_t{0};
-    return value >> shift; // C++20 起对负数是良定义的算术右移
+// a >> b
+std::optional<int64_t> checked_rshift(const int64_t a, const int64_t b) {
+    if (b < 0) return std::nullopt;
+    if (b >= 63) return a < 0 ? int64_t{-1} : int64_t{0};
+    return a >> b; // C++20 起对负数的右移是良定义的
 }
 
-// 把 double 格式化成合法的 SL float 字面量文本（永远带小数点，不用科学计数法）；纯字符串
-// 格式化，跟 AstNode 无关，同样放在这里
-std::string format_double(const double value) {
+// double -> string, e.g. (double) 1.2 -> "1.2"
+std::string double_to_string(const double value) {
     for (int prec{0}; prec <= 17; ++prec) {
         const int needed{std::snprintf(nullptr, 0, "%.*f", prec, value)};
         std::string s(static_cast<size_t>(needed), '\0');
@@ -113,27 +110,20 @@ std::string format_double(const double value) {
     return s;
 }
 
-// 解析十进制整数文本（可能带一个前导 '-'，折叠结果回填时会带，源码里的字面量本身不会，
-// SL.md 2.1.4：负数不是字面量）成 int64_t，交给 std::from_chars 做——溢出、非法字符统一
-// 通过它的返回值判断，不用再自己逐位累加、每步判溢出。这也顺带修正了手写版本的一个天然
-// 局限：手写版本先把文本转成正的"绝对值"再取负，而 INT64_MIN 的绝对值本身超出 int64_t
-// 能表示的正数范围，永远会被误判成"装不下"；from_chars 把整段文本（含符号）一次性解析，
-// 不存在这个问题
-std::optional<int64_t> parse_decimal_int64(const std::u32string &raw) {
+// string -> int64_t（可能带一个前导 '-'，但源码里的字面量本身不会）
+std::optional<int64_t> string_to_int64(const std::u32string &raw) {
     const std::string text{u32_to_utf8(raw)};
-    int64_t value{};
-    const char *begin{text.data()};
-    const char *end{begin + text.size()};
-    const auto [ptr, ec]{std::from_chars(begin, end, value)};
-    if (ec != std::errc{} || ptr != end) return std::nullopt;
+    int64_t value{0};
+    const char *begin{text.data()}, *end{begin + text.size()};
+    if (const auto [ptr, ec]{std::from_chars(begin, end, value)}; ec != std::errc{} || ptr != end)
+        return std::nullopt;
     return value;
 }
 
-// bool 提升成 int：把 True/False 看成 raw_ 为 "1"/"0" 的 int 字面量，这样比较大小/相等
-// 就能跟真正的 int 字面量走同一套纯字符串比较，不用另开一条路
-AstNodeLiteralInt as_int_literal(const AstNode &node) {
+// bool 提升成 int。调用方保证 is_int_family(node)
+AstNodeLiteralInt promote_as_int(const AstNode &node) {
     if (const auto *i{dynamic_cast<const AstNodeLiteralInt *>(&node)}) return *i;
-    const auto &b{dynamic_cast<const AstNodeLiteralBool &>(node)}; // 调用方保证 is_int_family(node)
+    const auto &b{dynamic_cast<const AstNodeLiteralBool &>(node)};
     return AstNodeLiteralInt{node.pos_, b.value_ ? U"1" : U"0"};
 }
 
@@ -335,7 +325,7 @@ AstNodePtr StaticEvaler::fold_mul(AstNodeOpBinary &node) {
     // 现在，挑出来数字 count_node，另一个 container 不知道是啥
     // 'a' * 3：str 不可变，重复几份互相独立还是共享无法区分，只受长度上限约束
     if (const auto *s{dynamic_cast<const AstNodeLiteralStr *>(&container)}) {
-        if (repeated_size_exceeds(s->value_.size(), n, nMaxStrLength)) return nullptr;
+        if (mul_size_exceeds(s->value_.size(), n, nMaxStrLength)) return nullptr;
         std::u32string value;
         value.reserve(s->value_.size() * n);
         for (size_t i{0}; i < n; ++i) value += s->value_;
@@ -345,7 +335,7 @@ AstNodePtr StaticEvaler::fold_mul(AstNodeOpBinary &node) {
     // （不含任何 list）时"共享 vs 独立拷贝"才不可区分，折叠才安全；否则不折，交给运行时
     if (const auto *t{dynamic_cast<const AstNodeLiteralTuple *>(&container)}) {
         if (!is_deeply_immutable(*t)) return nullptr;
-        if (repeated_size_exceeds(t->items_.size(), n, nMaxContainerItems)) return nullptr;
+        if (mul_size_exceeds(t->items_.size(), n, nMaxContainerItems)) return nullptr;
         std::vector<AstNodePtr> items;
         items.reserve(t->items_.size() * n);
         for (size_t i{0}; i < n; ++i) {
@@ -524,7 +514,7 @@ AstNodePtr StaticEvaler::fold_bitwise(AstNodeOpBinary &node) {
         return make_int(node.pos_, *result);
     }
     case RShift: {
-        const std::optional<int64_t> result{arithmetic_rshift(*lv, *rv)};
+        const std::optional<int64_t> result{checked_rshift(*lv, *rv)};
         if (!result) return nullptr;
         return make_int(node.pos_, *result);
     }
@@ -607,7 +597,7 @@ std::optional<int64_t> StaticEvaler::to_int64(const AstNode &node) {
     if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&node)})
         return b->value_ ? int64_t{1} : int64_t{0};
     const auto &i{dynamic_cast<const AstNodeLiteralInt &>(node)};
-    return parse_decimal_int64(i.raw_);
+    return string_to_int64(i.raw_);
 }
 
 double StaticEvaler::to_double(const AstNode &node) {
@@ -629,7 +619,7 @@ AstNodePtr StaticEvaler::make_int(const Position pos, const int64_t value) {
 
 AstNodePtr StaticEvaler::make_float(const Position pos, const double value) {
     if (!std::isfinite(value)) return nullptr; // ±inf/NaN 写不出合法的 float 字面量，交给运行时处理
-    return std::make_unique<AstNodeLiteralFloat>(pos, utf8_to_u32(format_double(value)));
+    return std::make_unique<AstNodeLiteralFloat>(pos, utf8_to_u32(double_to_string(value)));
 }
 
 AstNodePtr StaticEvaler::clone_literal(const AstNode &node) {
@@ -662,7 +652,7 @@ AstNodePtr StaticEvaler::clone_literal(const AstNode &node) {
 bool StaticEvaler::literal_equal(const AstNode &a, const AstNode &b) {
     if (is_numeric(a) && is_numeric(b)) {
         if (is_int_family(a) && is_int_family(b))
-            return compare_int_literals(as_int_literal(a), as_int_literal(b)) ==
+            return compare_int_literals(promote_as_int(a), promote_as_int(b)) ==
                    std::strong_ordering::equal;
         return to_double(a) == to_double(b);
     }
@@ -695,7 +685,7 @@ StaticEvaler::CmpResult StaticEvaler::literal_compare(const AstNode &a, const As
     if (is_numeric(a) && is_numeric(b)) {
         if (is_int_family(a) && is_int_family(b)) {
             const std::strong_ordering cmp{
-                compare_int_literals(as_int_literal(a), as_int_literal(b))
+                compare_int_literals(promote_as_int(a), promote_as_int(b))
             };
             return cmp < 0 ? CmpResult::Less : cmp > 0 ? CmpResult::Greater : CmpResult::Equal;
         }
