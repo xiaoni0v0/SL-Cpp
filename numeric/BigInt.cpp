@@ -37,10 +37,8 @@ BigInt BigInt::promoted() const {
 }
 
 BigInt BigInt::shrink(BigInt big) {
-    // big 已经是小路径就原样返回：这不只是提前退出的优化——小路径对象的 limbs_/negative_
-    // 恒为空/false（从不写入），如果不在这里挡住直接往下走，会把 big.small_ 的真实值当成 0
-    // 误读（bug：曾经真的在 divmod_floor_big 的"异号"分支——商装得进 int64_t、但由内部的
-    // operator+/operator- 提前 shrink 过一次——上被二次调用 shrink 触发过，见对应回归测试）
+    // 已经是小路径就原样返回：小路径对象的 limbs_/negative_ 恒为空/false，不挡住会把
+    // big.small_ 的真实值误读成 0
     if (big.is_small_) return big;
     // 2 个 limb（64 位）已经能覆盖 int64_t 的全部表示范围，更多 limb 的值必然装不下，直接原样返回
     if (big.limbs_.size() > 2) return big;
@@ -156,12 +154,10 @@ BigInt::shift_left_magnitude(const std::vector<uint32_t> &a, const uint64_t bits
 }
 
 // 二进制逐位长除法：从最高位到最低位，边移边比较边减，是标准手算长除法的二进制版本。
-// 不是渐进最优（Knuth Algorithm D
-// 更快），但正确性显然、不需要处理"猜商偏大要修正"这类容易出错的细节。
+// 不是渐进最优（Knuth Algorithm D 更快），但正确性显然，不用处理"猜商偏大要修正"这类细节。
 std::pair<std::vector<uint32_t>, std::vector<uint32_t>>
 BigInt::div_mod_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
-    // 调用方保证 b 不为 0（这里说的"为 0"是数值意义上的，不只是 b.empty()——这组 magnitude
-    // 辅助函数允许输入带多余的高位 0，见类里"以下均只处理大小"那条说明）
+    // 调用方保证 b 不为 0（数值意义上，不只是 b.empty()——magnitude 允许带多余高位 0）
     assert(std::ranges::any_of(b, [](const uint32_t limb) { return limb != 0; }));
 
     if (a.empty()) return {{}, {}};
@@ -362,7 +358,8 @@ BigInt BigInt::operator-() const {
     }
     BigInt result{*this};
     if (!result.limbs_.empty()) result.negative_ = !result.negative_;
-    return result;
+    // magnitude 恰好为 2^63 时，取负后就是 INT64_MIN，能装回小路径，必须过 shrink()
+    return shrink(result);
 }
 
 BigInt BigInt::operator~() const { return -(*this) - BigInt(1); }
@@ -410,9 +407,8 @@ BigInt BigInt::operator*(const BigInt &rhs) const {
 BigInt BigInt::floor_div(const BigInt &divisor) const {
     if (divisor.is_zero()) throw std::domain_error("BigInt: division by zero");
 
-    // 小路径快路径：原生截断除法 + 向负无穷取整修正，唯一的坑是 INT64_MIN / -1 会溢出（结果本该是
-    // 2^63，装不进 int64_t），这一种情况直接退回大路径，其余组合恒安全（两个 int64_t 相除/取模不会
-    // 溢出）
+    // 小路径快路径：原生截断除法 + 向负无穷取整修正，唯一的坑是 INT64_MIN / -1 会溢出（结果本该
+    // 是 2^63），这一种情况退回大路径，其余组合恒安全
     if (is_small_ && divisor.is_small_ && !(small_ == INT64_MIN && divisor.small_ == -1)) {
         int64_t q{small_ / divisor.small_};
         const int64_t r{small_ % divisor.small_};
@@ -462,10 +458,7 @@ BigInt BigInt::operator&(const BigInt &rhs) const {
     // 不需要经过 shrink
     if (is_small_ && rhs.is_small_) return BigInt(small_ & rhs.small_);
 
-    // n 按"提升到大路径之后"的 limb 数来算：走小路径的操作数提升前 limbs_ 是空的（根本没用过），
-    // 直接拿提升前的 limbs_.size() 参与 max 虽然巧合之下也不会出错（另一个操作数一定是真大数、
-    // limb 数至少是 2，max 不会被那个 0
-    // 带偏），但依赖这个不太直观的不变量没必要，按提升后的算更直接
+    // n 按提升到大路径之后的 limb 数来算，+1 留一个安全 limb（见 to_twos_complement 的注释）
     const BigInt a{promoted()};
     const BigInt b{rhs.promoted()};
     const size_t n{(a.limbs_.size() > b.limbs_.size() ? a.limbs_.size() : b.limbs_.size()) + 1};

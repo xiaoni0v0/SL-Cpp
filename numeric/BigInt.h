@@ -26,14 +26,11 @@ class BigInt {
 
     // 返回一个保证走大路径的等价值（已经是大路径就直接拷贝，是小路径则转换）
     [[nodiscard]] BigInt promoted() const;
-    // 传入任意路径的值：已经是小路径就原样返回（无条件安全，不要求调用方自己先判断）；
-    // 是大路径则若装得进 int64_t 就收缩成小路径返回，否则原样返回（仍是大路径）。除了 &/|/^
-    // （结果显然跟输入同量级，不需要）之外，所有"慢路径算完"的地方都要经过这一步，保证"能装进
-    // int64_t 就一定是小路径"这条不变量。
+    // 已经是小路径就原样返回；大路径则装得下 int64_t 就收缩，否则原样返回。除 &/|/^
+    // 外，所有慢路径算完的地方都要过这一步，保证"能装进 int64_t 就一定是小路径"这条不变量
     [[nodiscard]] static BigInt shrink(BigInt big);
-    // 用一段大小（可能带多余高位 0）+ 符号，直接构造一个走大路径的 BigInt（内部会 normalize）。
-    // 集中在这一处显式设 is_small_ = false，避免每个用到 limbs_/negative_
-    // 的地方各自手写、漏设的风险。
+    // 用一段大小（可能带多余高位 0）+ 符号构造一个大路径 BigInt（内部会 normalize）。
+    // 集中在这一处显式设 is_small_ = false，避免各处手写漏设
     [[nodiscard]] static BigInt from_magnitude(std::vector<uint32_t> limbs, bool negative);
 
     // 以下均只处理大小（不管符号），要求参数已经是"合法的 limbs_"（可能带多余高位
@@ -54,26 +51,23 @@ class BigInt {
     [[nodiscard]] static std::vector<uint32_t>
     shift_left_magnitude(const std::vector<uint32_t> &a, uint64_t bits);
 
-    // 按位运算共用：算出 *this 在"无穷位补码"视角下第 [0, limb_count) 个 32 位 limb 组成的数组
-    // （非负数高位补 0、负数高位补 1，见 SL.md 3.4.2 位运算那段说明）。
-    // 调用方保证 *this 走大路径、limb_count 严格大于 limbs_.size()（留至少一个 limb 的安全余量，
-    // 否则最高位可能碰巧已经是 1，被误读成符号位，见调用处 operator&/|/^ 的 "+1"）
+    // 按位运算共用：算出 *this 在"无穷位补码"视角下前 limb_count 个 32 位 limb（非负数高位
+    // 补 0，负数补 1）。调用方保证走大路径、limb_count > limbs_.size()
+    // （留一个安全 limb，否则全 1 的最高位可能被误读成符号位，见 operator&/|/^ 的 "+1"）
     [[nodiscard]] std::vector<uint32_t> to_twos_complement(size_t limb_count) const;
     // to_twos_complement 的逆操作：给一段补码 limb（最高位决定符号），转回符号-大小表示（大路径）
     [[nodiscard]] static BigInt from_twos_complement(std::vector<uint32_t> limbs);
 
-    // 向负无穷取整的除法+取模一起算（除法、取模只是各自只要其中一半）。
-    // 调用方保证 divisor 不为 0、*this 和 divisor 都走大路径（小路径在 floor_div/mod 里已经
-    // 单独处理，不会走到这里）
+    // 向负无穷取整的除法+取模一起算（除法、取模各自只取其中一半）。调用方保证 divisor 不为 0、
+    // *this 和 divisor 都走大路径（小路径在 floor_div/mod 里单独处理，不会走到这里）
     [[nodiscard]] std::pair<BigInt, BigInt> divmod_floor_big(const BigInt &divisor) const;
 
   public:
     BigInt() = default;
     explicit BigInt(long long value);
 
-    // 十进制字符串构造，允许前导 '-'（表示负数）/
-    // '+'，不允许除数字外的其他字符（含千分位分隔符等）。 空串或格式不对则抛
-    // std::invalid_argument。
+    // 十进制字符串构造，允许前导 '-'/'+'，不允许除数字外的其他字符（含千分位分隔符等）。
+    // 空串或格式不对则抛 std::invalid_argument
     [[nodiscard]] static BigInt from_decimal_string(const std::string &s);
 
     // 转成十进制字符串，负数带前导 '-'，恒无多余前导 0（0 本身输出 "0"）
@@ -94,14 +88,14 @@ class BigInt {
 
     [[nodiscard]] BigInt operator-() const;
     [[nodiscard]] BigInt operator+() const { return *this; }
-    // ~x == -x - 1（补码按位取反），见 SL.md 3.4.2
+    // ~x == -x - 1（补码按位取反）
     [[nodiscard]] BigInt operator~() const;
 
     [[nodiscard]] BigInt operator+(const BigInt &rhs) const;
     [[nodiscard]] BigInt operator-(const BigInt &rhs) const;
     [[nodiscard]] BigInt operator*(const BigInt &rhs) const;
 
-    // 向负无穷取整的除法/取模（SL 的 //、%，语义同 Python，见 SL.md 3.4.2）。
+    // 向负无穷取整的除法/取模（SL 的 //、%，语义同 Python）。
     // 除数为 0 则抛 std::domain_error——是否转换成 SL 的 MathError 由调用方（StaticEvaler/VM）负责，
     // BigInt 本身不知道、也不该知道 SL 的异常类型体系。
     [[nodiscard]] BigInt floor_div(const BigInt &divisor) const;
@@ -114,7 +108,7 @@ class BigInt {
     [[nodiscard]] BigInt operator&(const BigInt &rhs) const;
     [[nodiscard]] BigInt operator|(const BigInt &rhs) const;
     [[nodiscard]] BigInt operator^(const BigInt &rhs) const;
-    // x << k 恒等于 x * 2^k（对负数同样成立，见 SL.md 3.4.2 的例子）。k < 0 抛 std::domain_error
+    // x << k 恒等于 x * 2^k（对负数同样成立）。k < 0 抛 std::domain_error
     [[nodiscard]] BigInt operator<<(long long k) const;
     // x >> k 恒等于 x // 2^k（向负无穷取整右移，负数右移永远不会"变正"）。k < 0 抛
     // std::domain_error

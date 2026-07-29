@@ -2,10 +2,42 @@
 #include "../../numeric/BigInt.h"
 
 #include <doctest/doctest.h>
+
+#include <cmath>
 #include <stdexcept>
 
 namespace {
 BigInt d(const std::string &s) { return BigInt::from_decimal_string(s); }
+
+// 覆盖各种"容易出 bug"的数据，供后面的恒等式交叉验证批量使用：0/±1、int64_t 边界内外、
+// 恰好卡在 shrink() 判定边界上的值（2^63 附近）、全 1 比特的 limb（bitwise
+// 安全余量最容易翻车的地方）、多 limb 的超大数
+std::vector<BigInt> interesting_values() {
+    return {
+        d("0"),
+        d("1"),
+        d("-1"),
+        d("2"),
+        d("-2"),
+        d("100"),
+        d("-100"),
+        d("9223372036854775807"),   // INT64_MAX
+        d("9223372036854775806"),   // INT64_MAX - 1
+        d("-9223372036854775808"),  // INT64_MIN
+        d("-9223372036854775807"),  // INT64_MIN + 1
+        d("9223372036854775808"),   // 2^63 == INT64_MAX + 1，只有取负后才能装回小路径
+        d("9223372036854775809"),   // 2^63 + 1
+        d("-9223372036854775809"),  // -(2^63 + 1)
+        d("4294967295"),            // 2^32 - 1，单 limb 全 1 比特
+        d("4294967296"),            // 2^32
+        d("-4294967296"),           // -2^32
+        d("18446744073709551615"),  // 2^64 - 1，双 limb 全 1 比特
+        d("18446744073709551616"),  // 2^64
+        d("-18446744073709551616"), // -2^64
+        d("123456789012345678901234567890"),
+        d("-123456789012345678901234567890"),
+    };
+}
 } // namespace
 
 TEST_SUITE("BigInt——构造与十进制字符串往返") {
@@ -52,9 +84,35 @@ TEST_SUITE("BigInt——构造与十进制字符串往返") {
         // 这里显式 (void) 掉返回值，不然 -Werror 会把这几行当成"忽略了 nodiscard 返回值"报错
         CHECK_THROWS_AS((void) BigInt::from_decimal_string(""), std::invalid_argument);
         CHECK_THROWS_AS((void) BigInt::from_decimal_string("-"), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("+"), std::invalid_argument);
         CHECK_THROWS_AS((void) BigInt::from_decimal_string("12a"), std::invalid_argument);
         CHECK_THROWS_AS((void) BigInt::from_decimal_string("1.5"), std::invalid_argument);
         CHECK_THROWS_AS((void) BigInt::from_decimal_string(" 1"), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("1 "), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("--1"), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("1-1"), std::invalid_argument);
+    }
+
+    TEST_CASE("超长前导 0 + 符号的组合") {
+        CHECK(d("+000").to_decimal_string() == "0");
+        CHECK(d("0000000000000000000000000000001").to_decimal_string() == "1");
+        CHECK(d("-0000000000000000000000000000001").to_decimal_string() == "-1");
+    }
+
+    TEST_CASE("十进制输出的 9 位一组分块逻辑：块内部/中间的 0 不能被漏掉（只有最高位块不补零）") {
+        // 10^18 + 1：从右数第一个 9 位块应该是 "000000001"，如果分块补零漏了，会错输出成
+        // "1000000000000000001" 少了中间的 0
+        CHECK((d("1000000000000000000") + d("1")).to_decimal_string() == "1000000000000000001");
+        // 10^27 + 1：中间隔着两个完整的、全是 0 的 9 位块，最容易漏补零
+        CHECK(
+            (d("1000000000000000000000000000") + d("1")).to_decimal_string() ==
+            "1000000000000000000000000001"
+        );
+        // 同样的场景对负数也要成立
+        CHECK(
+            (d("-1000000000000000000000000000") - d("1")).to_decimal_string() ==
+            "-1000000000000000000000000001"
+        );
     }
 
     TEST_CASE("long long 构造，含边界值") {
@@ -93,10 +151,51 @@ TEST_SUITE("BigInt——符号/奇偶/绝对值") {
         CHECK_FALSE(d("0").is_odd());
     }
 
+    TEST_CASE("is_odd：大路径（超出 int64_t 范围）下同样成立，只看最低位那个 limb") {
+        CHECK(d("123456789012345678901234567891").is_odd());
+        CHECK(d("-123456789012345678901234567891").is_odd());
+        CHECK_FALSE(d("123456789012345678901234567890").is_odd());
+        CHECK_FALSE(d("-123456789012345678901234567890").is_odd());
+    }
+
     TEST_CASE("abs") {
         CHECK(d("-5").abs().to_decimal_string() == "5");
         CHECK(d("5").abs().to_decimal_string() == "5");
         CHECK(d("0").abs().to_decimal_string() == "0");
+    }
+
+    TEST_CASE("abs：大路径下（含 INT64_MIN 这种取绝对值本身会升级到大路径的情况）") {
+        CHECK(
+            d("-123456789012345678901234567890").abs().to_decimal_string() ==
+            "123456789012345678901234567890"
+        );
+        CHECK(d("-9223372036854775808").abs().to_decimal_string() == "9223372036854775808");
+        // 绝对值的绝对值应该是它自己（幂等）
+        CHECK(d("-5").abs().abs() == d("5").abs());
+    }
+}
+
+TEST_SUITE("BigInt——to_double") {
+
+    TEST_CASE("零和小数值：精确转换") {
+        CHECK(d("0").to_double() == 0.0);
+        CHECK(d("123").to_double() == 123.0);
+        CHECK(d("-123").to_double() == -123.0);
+    }
+
+    TEST_CASE("跨 limb 的大路径数值：跟手算的 2^64 对上") {
+        CHECK(d("18446744073709551616").to_double() == 18446744073709551616.0); // 2^64
+        CHECK(d("-18446744073709551616").to_double() == -18446744073709551616.0);
+    }
+
+    TEST_CASE(
+        "远超 double 表示范围（> 1.8e308）：按 IEEE 溢出语义得到 ±infinity，不抛异常、不是 NaN"
+    ) {
+        const BigInt huge{d("10").pow(d("400"))}; // 10^400，远超 DBL_MAX
+        CHECK(std::isinf(huge.to_double()));
+        CHECK(huge.to_double() > 0);
+        CHECK(std::isinf((-huge).to_double()));
+        CHECK((-huge).to_double() < 0);
     }
 }
 
@@ -220,6 +319,13 @@ TEST_SUITE("BigInt——floor_div / mod：向负无穷取整，语义与 Python 
         CHECK(d("0").mod(d("5")).to_decimal_string() == "0");
     }
 
+    TEST_CASE("被除数为 0、但除数超出 int64_t 范围（走大路径）：0 除以巨大的数还是 0") {
+        const BigInt huge{d("123456789012345678901234567890")};
+        CHECK(d("0").floor_div(huge).to_decimal_string() == "0");
+        CHECK(d("0").mod(huge).to_decimal_string() == "0");
+        CHECK(d("0").floor_div(-huge).to_decimal_string() == "0");
+    }
+
     TEST_CASE("被除数、除数都超出 int64_t 范围（走大路径），异号，但商本身装得进 int64_t") {
         // x = -(3 * 10^20 + 7)，y = 10^20：|x|/|y| = 3.00000000007，异号，
         // 向负无穷取整应该是 -4，不是 -3
@@ -228,6 +334,53 @@ TEST_SUITE("BigInt——floor_div / mod：向负无穷取整，语义与 Python 
         CHECK(x.floor_div(y).to_decimal_string() == "-4");
         CHECK(x.mod(y).to_decimal_string() == "99999999999999999993");
         CHECK((x.floor_div(y) * y + x.mod(y)) == x);
+    }
+
+    TEST_CASE(
+        "shrink() 那个 bug "
+        "的完整复现场景：大路径操作数、商恰好收缩回小路径，覆盖异号/同号/整除交叉组合"
+    ) {
+        // 除了验证恒等式，还额外验证收缩后的商能正常跟一个直接构造的小路径同值用 ==
+        // 判定相等——这正是原 bug 的真实症状：is_small_ 标志不一致导致 == 直接误判为不等，
+        // 而不是数值算错
+        struct Case {
+            std::string x, y, q, r;
+        };
+        for (const Case &c : {
+                 Case{
+                     "-300000000000000000007", "100000000000000000000", "-4", "99999999999999999993"
+                 },
+                 Case{
+                     "300000000000000000007",
+                     "-100000000000000000000",
+                     "-4",
+                     "-99999999999999999993"
+                 },
+                 Case{"-300000000000000000000", "100000000000000000000", "-3", "0"}, // 整除，异号
+                 Case{"300000000000000000000", "-100000000000000000000", "-3", "0"},
+                 Case{
+                     "-100000000000000000001", "100000000000000000000", "-2", "99999999999999999999"
+                 },
+                 Case{
+                     "100000000000000000001",
+                     "-100000000000000000000",
+                     "-2",
+                     "-99999999999999999999"
+                 },
+                 Case{
+                     "-123456789012345678901234567890", "123456789012345678901234567891", "-1", "1"
+                 },
+                 Case{"100000000000000000000", "100000000000000000000", "1", "0"}, // 同号，整除
+                 Case{"-100000000000000000000", "-100000000000000000000", "1", "0"},
+             }) {
+            const BigInt x{d(c.x)}, y{d(c.y)};
+            const BigInt q{x.floor_div(y)}, r{x.mod(y)};
+            CHECK(q.to_decimal_string() == c.q);
+            CHECK(r.to_decimal_string() == c.r);
+            CHECK((q * y + r) == x);
+            CHECK(q == d(c.q)); // 收缩后必须能跟直接构造的小路径同值相等
+            CHECK(r == d(c.r));
+        }
     }
 }
 
@@ -303,6 +456,21 @@ TEST_SUITE("BigInt——位运算：按无穷位补码语义，与 Python 一致
         CHECK((d("4294967295") | d("4294967296")).to_decimal_string() == "8589934591"); // 2^33 - 1
         CHECK((d("4294967295") & d("4294967296")).to_decimal_string() == "0"); // 高低位不重叠
     }
+
+    TEST_CASE(
+        "补码安全余量：正数的最高 limb 恰好全是 1 比特时，不能被误读成符号位（to_twos_complement "
+        "的 '+1' 余量就是为这个存在的）"
+    ) {
+        // 4294967295 == 2^32 - 1，单 limb 全 1（0xFFFFFFFF），本身是正数；如果没有那 1 个 limb
+        // 的安全余量，会被误当成 -1 的补码表示
+        CHECK((d("4294967295") & d("-1")).to_decimal_string() == "4294967295");
+        CHECK((d("4294967295") | d("0")).to_decimal_string() == "4294967295");
+        CHECK((d("4294967295") ^ d("0")).to_decimal_string() == "4294967295");
+        CHECK((d("4294967295") & d("4294967295")).to_decimal_string() == "4294967295");
+        // 18446744073709551615 == 2^64 - 1，两个 limb 都全 1，同样的坑，双 limb 版本
+        CHECK((d("18446744073709551615") & d("-1")).to_decimal_string() == "18446744073709551615");
+        CHECK((d("18446744073709551615") | d("0")).to_decimal_string() == "18446744073709551615");
+    }
 }
 
 TEST_SUITE("BigInt——小路径/大路径边界（内部按 int64_t 能不能装得下自动切换，这里专测切换点）") {
@@ -358,6 +526,23 @@ TEST_SUITE("BigInt——小路径/大路径边界（内部按 int64_t 能不能�
         ); // 结果退回到小路径范围
         CHECK((huge - huge).to_decimal_string() == "0");
     }
+
+    TEST_CASE(
+        "一元负号：+2^63 恰好是大路径下的合法值（正数装不下 int64_t），但取负后的 -2^63 == "
+        "INT64_MIN 恰好又能装回小路径——这是曾经真实存在过的 bug：operator-() 的大路径分支只翻了"
+        "符号位，没有过 shrink()，导致算出来的 -x 停留在非规范的大路径状态，跟直接构造的 "
+        "INT64_MIN 用 == 比较会被误判为不等（被后面的代数恒等式套件测出来的）"
+    ) {
+        const BigInt positive_two_pow_63{d("9223372036854775808")}; // 2^63，只能是大路径
+        const BigInt negated{-positive_two_pow_63};
+        CHECK(negated.to_decimal_string() == "-9223372036854775808");
+        CHECK(negated == d("-9223372036854775808"));          // 必须能跟直接构造的小路径同值相等
+        CHECK(negated == BigInt(-9223372036854775807LL - 1)); // 也要跟 long long 构造的相等
+        CHECK((-negated) == positive_two_pow_63);             // 再取负一次应该精确复原
+        // abs() 走的是不同的代码路径（只清 negative_，不需要 shrink，见 BigInt.cpp
+        // 里的注释），顺带交叉验证一下两条路径不会互相矛盾
+        CHECK(negated.abs() == positive_two_pow_63);
+    }
 }
 
 TEST_SUITE("BigInt——移位：<< 恒等于乘 2^k，>> 恒等于向负无穷取整除 2^k") {
@@ -393,5 +578,176 @@ TEST_SUITE("BigInt——移位：<< 恒等于乘 2^k，>> 恒等于向负无穷�
     TEST_CASE("负的移位位数抛 std::domain_error") {
         CHECK_THROWS_AS((void) (d("1") << -1), std::domain_error);
         CHECK_THROWS_AS((void) (d("1") >> -1), std::domain_error);
+    }
+}
+
+// 以下两个 TEST_SUITE 是针对 shrink() 那次 bug 的教训专门加的高强度测试：不再靠手挑几个具体案例，
+// 而是拿一批"边界值"两两、三三组合，批量验证数学上必然成立的恒等式。这类测试的好处是覆盖面是
+// 组合爆炸级的（几百上千种组合），且不需要我手算大数的期望值——期望值就是恒等式本身，只要 BigInt
+// 内部实现哪怕有一处不满足某条数学定律，几百种组合里大概率会踩中至少一种。
+TEST_SUITE("BigInt——代数恒等式交叉验证（覆盖小路径/大路径边界、多 limb、正负号组合）") {
+
+    TEST_CASE("加法：交换律、结合律、加法逆元、幺元") {
+        const auto vals{interesting_values()};
+        for (const auto &a : vals) {
+            CHECK((a + BigInt(0)) == a);
+            CHECK((a + (-a)).is_zero());
+            for (const auto &b : vals) {
+                CHECK((a + b) == (b + a));
+                CHECK((a - b) == -(b - a));
+                for (const auto &c : vals) CHECK(((a + b) + c) == (a + (b + c)));
+            }
+        }
+    }
+
+    TEST_CASE("乘法：交换律、幺元、零元、跟加法的分配律") {
+        const auto vals{interesting_values()};
+        for (const auto &a : vals) {
+            CHECK((a * BigInt(1)) == a);
+            CHECK((a * BigInt(0)).is_zero());
+            CHECK((a * BigInt(-1)) == -a);
+            for (const auto &b : vals) {
+                CHECK((a * b) == (b * a));
+                for (const auto &c : vals) CHECK((a * (b + c)) == (a * b + a * c));
+            }
+        }
+    }
+
+    TEST_CASE("floor_div / mod：恒等式 a == (a // b) * b + a % b，且非 0 余数恒跟除数同号") {
+        const auto vals{interesting_values()};
+        for (const auto &a : vals) {
+            for (const auto &b : vals) {
+                if (b.is_zero()) continue;
+                const BigInt q{a.floor_div(b)};
+                const BigInt r{a.mod(b)};
+                CHECK((q * b + r) == a);
+                if (!r.is_zero()) CHECK(r.is_negative() == b.is_negative());
+            }
+        }
+    }
+
+    TEST_CASE("位运算：交换律、补码恒等式（a&~a==0、a|~a==-1、a^~a==-1、~~a==a）、分配律") {
+        const auto vals{interesting_values()};
+        for (const auto &a : vals) {
+            CHECK((a & ~a).is_zero());
+            CHECK((a | ~a) == d("-1"));
+            CHECK((a ^ ~a) == d("-1"));
+            CHECK(~(~a) == a);
+            CHECK((a & d("-1")) == a);
+            CHECK((a | d("0")) == a);
+            CHECK((a ^ d("0")) == a);
+            CHECK((a ^ a).is_zero());
+            for (const auto &b : vals) {
+                CHECK((a & b) == (b & a));
+                CHECK((a | b) == (b | a));
+                CHECK((a ^ b) == (b ^ a));
+                // a & (b | ~b) == a & (-1) == a，所以 (a&b) | (a&~b) 应该恒等于 a
+                CHECK(((a & b) | (a & ~b)) == a);
+            }
+        }
+    }
+
+    TEST_CASE("移位：(a << k) >> k 精确恢复原值（左移是精确乘法，右移向下取整但除得尽）") {
+        const auto vals{interesting_values()};
+        for (const auto &a : vals) {
+            for (const long long k : {0LL, 1LL, 5LL, 31LL, 32LL, 33LL, 63LL, 64LL, 65LL, 100LL}) {
+                CHECK(((a << k) >> k) == a);
+            }
+        }
+    }
+
+    TEST_CASE("移位：(a << m) << n == a << (m + n)") {
+        const auto vals{interesting_values()};
+        for (const auto &a : vals) {
+            for (const long long m : {0LL, 3LL, 32LL, 64LL}) {
+                for (const long long n : {0LL, 5LL, 31LL, 33LL}) {
+                    CHECK(((a << m) << n) == (a << (m + n)));
+                }
+            }
+        }
+    }
+
+    TEST_CASE("pow：x^(m+n) == x^m * x^n，x^1 == x，x^0 == 1，覆盖正负底数、大路径底数") {
+        for (const auto &base :
+             {d("2"), d("-2"), d("3"), d("-7"), d("123456789012345678901234567890")}) {
+            CHECK(base.pow(d("1")) == base);
+            CHECK(base.pow(d("0")) == d("1"));
+            for (const auto &[m, n] :
+                 {std::pair{d("3"), d("4")},
+                  std::pair{d("0"), d("5")},
+                  std::pair{d("10"), d("10")}}) {
+                CHECK(base.pow(m + n) == (base.pow(m) * base.pow(n)));
+            }
+        }
+    }
+
+    TEST_CASE(
+        "pow：-1 的幂按奇偶交替，1 的幂恒为 1，即使指数很大也一样（验证走的是对数次幂算法）"
+    ) {
+        CHECK(d("-1").pow(d("1000000")) == d("1"));  // 偶数次幂
+        CHECK(d("-1").pow(d("1000001")) == d("-1")); // 奇数次幂
+        CHECK(d("1").pow(d("1000000")) == d("1"));
+    }
+}
+
+TEST_SUITE(
+    "BigInt——小路径/大路径规范化不变量：同一个值无论经过哪条运算路径算出来，都必须能用 == "
+    "判定相等（这正是 shrink() 那次 bug 的教训——bug 发作时数值本身没错，只是 is_small_ "
+    "标志跟别的同值对象不一致，导致 == 被误判为不等，只有专门针对这一点测才测得出来）"
+) {
+
+    TEST_CASE("恰好卡在 int64_t 边界上的一批值，分别通过好几条不同的运算路径算出来，两两都要相等") {
+        for (const std::string &target : {
+                 std::string("0"),
+                 std::string("1"),
+                 std::string("-1"),
+                 std::string("100"),
+                 std::string("-100"),
+                 std::string("9223372036854775807"),  // INT64_MAX
+                 std::string("-9223372036854775808"), // INT64_MIN
+                 std::string("9223372036854775806"),
+                 std::string("-9223372036854775807"),
+                 std::string("4294967295"),
+                 std::string("-4294967295"),
+             }) {
+            const BigInt direct{d(target)};
+
+            CHECK((direct + BigInt(1) - BigInt(1)) == direct);
+            CHECK((-(-direct)) == direct);
+            CHECK((direct * BigInt(1)) == direct);
+            CHECK((direct & d("-1")) == direct);
+            CHECK((direct | d("0")) == direct);
+            CHECK(((direct << 5) >> 5) == direct);
+            CHECK(direct.floor_div(BigInt(1)) == direct);
+            if (direct.is_negative()) CHECK((-direct.abs()) == direct);
+
+            // 不只是数值相等（==），字符串表示也要完全一致，防止出现"值相等但输出不一致"这种
+            // 更隐蔽的规范化问题
+            CHECK((direct + BigInt(1) - BigInt(1)).to_decimal_string() == target);
+            CHECK((-(-direct)).to_decimal_string() == target);
+        }
+    }
+
+    TEST_CASE(
+        "除法商恰好落在 int64_t 范围内、但被除数/除数都远超范围：异号/同号/整除交叉组合"
+        "（shrink() 那次 bug 的完整复现场景，已在 floor_div/mod 套件里更细地测过一遍，这里"
+        "重点确认收缩后能正常跟直接构造的小路径同值相等）"
+    ) {
+        struct Case {
+            std::string x, y, q;
+        };
+        for (const Case &c : {
+                 Case{"-300000000000000000007", "100000000000000000000", "-4"},
+                 Case{"300000000000000000007", "-100000000000000000000", "-4"},
+                 Case{"-300000000000000000000", "100000000000000000000", "-3"},
+                 Case{"-100000000000000000001", "100000000000000000000", "-2"},
+                 Case{"100000000000000000001", "-100000000000000000000", "-2"},
+             }) {
+            const BigInt x{d(c.x)}, y{d(c.y)}, expected_q{d(c.q)};
+            const BigInt q{x.floor_div(y)};
+            CHECK(q == expected_q);
+            CHECK_FALSE(q != expected_q); // 反过来也测一遍 !=，双保险
+            CHECK(q.to_decimal_string() == expected_q.to_decimal_string());
+        }
     }
 }
