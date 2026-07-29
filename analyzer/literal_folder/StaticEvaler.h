@@ -104,8 +104,6 @@ class StaticEvaler final {
      * node 是不是"深度不可变"：递归展开后完全不含 list。
      * None/bool/int/float/str/Ellipsis 天然是；tuple 要求每个元素递归满足；list 恒不是。
      * 调用方保证 is_literal_pure(node)。
-     * 只用于判断 tuple 的 * 重复能不能安全折叠——重复出来的每一份内部元素是共享引用
-     * （SL.md 3.4.2），只有内容全程不可变时"共享 vs 独立拷贝"才不可区分，折叠才是安全的。
      */
     [[nodiscard]] static bool is_deeply_immutable(const AstNode &node);
 
