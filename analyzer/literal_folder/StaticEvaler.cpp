@@ -594,6 +594,7 @@ bool StaticEvaler::is_literal_pure(const AstNode &node) {
         return std::ranges::all_of(l->items_, [](const AstNodePtr &item) {
             return is_literal_pure(*item);
         });
+
     return false; // dict、_G/_L、标识符等都不是
 }
 
