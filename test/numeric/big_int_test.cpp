@@ -4,6 +4,7 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <cstdlib>
 #include <stdexcept>
 
 namespace {
@@ -13,6 +14,10 @@ BigInt d(const std::string &s) { return BigInt::from_decimal_string(s); }
 // 恰好卡在 shrink() 判定边界上的值（2^63 附近）、全 1 比特的 limb（bitwise
 // 安全余量最容易翻车的地方）、多 limb 的超大数
 std::vector<BigInt> interesting_values() {
+    // 2^128-1、2^192-1 靠移位+减法现算，不手抄几十位的十进制常量（这两个运算本身已经被前面
+    // 的套件独立测过，拿来当值池的"生成器"是安全的）
+    const BigInt two_pow_128_minus_1{(BigInt(1) << 128) - BigInt(1)};
+    const BigInt two_pow_192_minus_1{(BigInt(1) << 192) - BigInt(1)};
     return {
         d("0"),
         d("1"),
@@ -21,6 +26,10 @@ std::vector<BigInt> interesting_values() {
         d("-2"),
         d("100"),
         d("-100"),
+        d("2147483647"),            // 2^31 - 1，limb 内符号位边界
+        d("2147483648"),            // 2^31
+        d("2147483649"),            // 2^31 + 1
+        d("-2147483648"),           // -2^31
         d("9223372036854775807"),   // INT64_MAX
         d("9223372036854775806"),   // INT64_MAX - 1
         d("-9223372036854775808"),  // INT64_MIN
@@ -33,7 +42,12 @@ std::vector<BigInt> interesting_values() {
         d("-4294967296"),           // -2^32
         d("18446744073709551615"),  // 2^64 - 1，双 limb 全 1 比特
         d("18446744073709551616"),  // 2^64
+        d("18446744073709551617"),  // 2^64 + 1，中间 limb 恰好是 0
         d("-18446744073709551616"), // -2^64
+        two_pow_128_minus_1,        // 2^128 - 1，四个 limb 全 1
+        -two_pow_128_minus_1,
+        two_pow_192_minus_1, // 2^192 - 1，六个 limb 全 1，进位/借位链更长
+        -two_pow_192_minus_1,
         d("123456789012345678901234567890"),
         d("-123456789012345678901234567890"),
     };
@@ -91,6 +105,31 @@ TEST_SUITE("BigInt——构造与十进制字符串往返") {
         CHECK_THROWS_AS((void) BigInt::from_decimal_string("1 "), std::invalid_argument);
         CHECK_THROWS_AS((void) BigInt::from_decimal_string("--1"), std::invalid_argument);
         CHECK_THROWS_AS((void) BigInt::from_decimal_string("1-1"), std::invalid_argument);
+    }
+
+    TEST_CASE("更多脏输入抛 std::invalid_argument") {
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("+-1"), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("1_000"), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("0x10"), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("1\n"), std::invalid_argument);
+        CHECK_THROWS_AS(
+            (void) BigInt::from_decimal_string(std::string("1\0002", 3)), std::invalid_argument
+        );
+        // 全角 "1" 的 UTF-8 编码：每个字节都不落在 ASCII '0'-'9' 范围内
+        CHECK_THROWS_AS(
+            (void) BigInt::from_decimal_string("\xef\xbc\x91"), std::invalid_argument
+        );
+    }
+
+    TEST_CASE("超长十进制字符串往返（500 位、2000 位），顺带过一遍加减法不会破坏这么长的数") {
+        for (const int len : {500, 2000}) {
+            std::string s(static_cast<size_t>(len), '0');
+            s[0] = '9';
+            for (size_t i{1}; i < s.size(); ++i) s[i] = static_cast<char>('0' + (i % 10));
+            const BigInt x{d(s)};
+            CHECK(x.to_decimal_string() == s);
+            CHECK((x + BigInt(1) - BigInt(1)) == x);
+        }
     }
 
     TEST_CASE("超长前导 0 + 符号的组合") {
@@ -173,6 +212,13 @@ TEST_SUITE("BigInt——符号/奇偶/绝对值") {
         // 绝对值的绝对值应该是它自己（幂等）
         CHECK(d("-5").abs().abs() == d("5").abs());
     }
+
+    TEST_CASE("大路径下的正数：abs()/sign()/is_negative() 不受影响（之前只测过大路径负数）") {
+        const BigInt positive_big{d("123456789012345678901234567890")};
+        CHECK(positive_big.abs() == positive_big);
+        CHECK(positive_big.sign() == 1);
+        CHECK_FALSE(positive_big.is_negative());
+    }
 }
 
 TEST_SUITE("BigInt——to_double") {
@@ -196,6 +242,48 @@ TEST_SUITE("BigInt——to_double") {
         CHECK(huge.to_double() > 0);
         CHECK(std::isinf((-huge).to_double()));
         CHECK((-huge).to_double() < 0);
+    }
+
+    TEST_CASE(
+        "跟 std::strtod 的正确舍入结果逐条对拍：覆盖位数超过 64 位、不可精确表示、需要真正"
+        "就近舍入的大数（早前逐 limb 累乘累加的实现在这类值上会错 1 ULP）"
+    ) {
+        const auto check_matches_strtod{[](const BigInt &x) {
+            const std::string s{x.to_decimal_string()};
+            CAPTURE(s);
+            CHECK(x.to_double() == std::strtod(s.c_str(), nullptr));
+        }};
+        for (const std::string &s : {
+                 std::string("10000000000000000000000000"), // 10^25
+                 std::string("99999999999999999999999999"),
+                 std::string("100000000000000000000000000"), // 10^26
+                 std::string("123456789012345678901234567890"),
+                 std::string(
+                     "999999999999999999999999999999999999999999999999999999999999"
+                 ),
+             }) {
+            check_matches_strtod(d(s));
+            check_matches_strtod(-d(s));
+        }
+        // 2^127 附近：移位构造，不手抄一个 39 位的十进制常量
+        const BigInt two_pow_127{BigInt(1) << 127};
+        check_matches_strtod(two_pow_127);
+        check_matches_strtod(two_pow_127 - BigInt(1));
+        check_matches_strtod(two_pow_127 + BigInt(1));
+        check_matches_strtod(-two_pow_127);
+    }
+
+    TEST_CASE("大范围扫描 10^k（k = 15..300）跟 std::strtod 对拍，覆盖更多可能踩中舍入边界的量级") {
+        for (int k{15}; k <= 300; k += 7) {
+            const std::string s{"1" + std::string(static_cast<size_t>(k), '0')};
+            const BigInt x{d(s)};
+            CAPTURE(s);
+            CHECK(x.to_double() == std::strtod(s.c_str(), nullptr));
+            // 同一量级里再测一个不是整十次幂的值，更容易踩中舍入边界
+            const BigInt y{x + x.floor_div(BigInt(3))};
+            const std::string y_str{y.to_decimal_string()};
+            CHECK(y.to_double() == std::strtod(y_str.c_str(), nullptr));
+        }
     }
 }
 
@@ -308,6 +396,45 @@ TEST_SUITE("BigInt——floor_div / mod：向负无穷取整，语义与 Python 
         }
     }
 
+    TEST_CASE("mod 的结果严格满足 |x % y| < |y|（不只是符号跟除数一致，量级也要卡住）") {
+        const auto vals{interesting_values()};
+        for (const auto &x : vals) {
+            for (const auto &y : vals) {
+                if (y.is_zero()) continue;
+                CHECK(x.mod(y).abs() < y.abs());
+            }
+        }
+    }
+
+    TEST_CASE(
+        "反向构造：a = q*b + r（r 与 b 同号或为 0，且 |r| < |b|），floor_div/mod 必须精确复原 "
+        "q、r——跟前面的恒等式测试正好反过来，能直接钉死商本身对不对，而不只是钉住乘回去的乘积"
+    ) {
+        const auto vals{interesting_values()};
+        for (const auto &b : vals) {
+            if (b.is_zero()) continue;
+            for (const auto &q : vals) {
+                // 三个 k 都保证落在 [0, |b|-1]：0 恒合法；|b|/2 向下取整恒 < |b|；|b|-1 是能取到的最大值
+                for (const BigInt &k :
+                     {BigInt(0), b.abs().floor_div(BigInt(2)), b.abs() - BigInt(1)}) {
+                    const BigInt r{b.is_negative() ? -k : k};
+                    const BigInt a{q * b + r};
+                    CHECK(a.floor_div(b) == q);
+                    CHECK(a.mod(b) == r);
+                }
+            }
+        }
+    }
+
+    TEST_CASE("别名：同一个对象当被除数和除数（x.floor_div(x) == 1，x.mod(x) == 0）") {
+        const auto vals{interesting_values()};
+        for (const auto &x : vals) {
+            if (x.is_zero()) continue;
+            CHECK(x.floor_div(x) == BigInt(1));
+            CHECK(x.mod(x).is_zero());
+        }
+    }
+
     TEST_CASE("除数为 0 抛 std::domain_error") {
         CHECK_THROWS_AS((void) d("1").floor_div(d("0")), std::domain_error);
         CHECK_THROWS_AS((void) d("1").mod(d("0")), std::domain_error);
@@ -413,6 +540,17 @@ TEST_SUITE("BigInt——pow") {
         "负指数抛 std::domain_error（SL 里 int ** 负数不再是 int，是 float，不归 BigInt 管）"
     ) {
         CHECK_THROWS_AS((void) d("2").pow(d("-1")), std::domain_error);
+    }
+
+    TEST_CASE("指数本身是大路径值（走 is_odd()/floor_div 的大路径分支，之前这条路径零覆盖）") {
+        CHECK(d("1").pow(d("100000000000000000000")) == d("1")); // 1 的任何次幂恒为 1
+        CHECK(d("0").pow(d("100000000000000000000")).is_zero());
+        CHECK(d("-1").pow(d("100000000000000000000")) == d("1"));  // 个位是 0，偶数
+        CHECK(d("-1").pow(d("100000000000000000001")) == d("-1")); // 个位是 1，奇数
+    }
+
+    TEST_CASE("大路径负指数同样抛 std::domain_error") {
+        CHECK_THROWS_AS((void) d("2").pow(d("-100000000000000000000")), std::domain_error);
     }
 }
 
@@ -579,6 +717,35 @@ TEST_SUITE("BigInt——移位：<< 恒等于乘 2^k，>> 恒等于向负无穷�
         CHECK_THROWS_AS((void) (d("1") << -1), std::domain_error);
         CHECK_THROWS_AS((void) (d("1") >> -1), std::domain_error);
     }
+
+    TEST_CASE(
+        "大路径操作数的超大位移：位移数超过数值本身的比特长度时必须 O(1) 短路，不能真的去构造 "
+        "2^k 这个除数（曾经的 bug：大路径分支没有这条短路，构造 2^k 这一步本身就会撑爆内存/耗时）"
+    ) {
+        const BigInt x{(BigInt(1) << 128) - BigInt(1)}; // 2^128 - 1，128 位，全 1
+        CHECK((x >> 1000).is_zero());
+        CHECK((x >> 1000000000LL).is_zero()); // 移位数十亿级，没短路的话会直接卡死/炸内存
+        CHECK((-x >> 1000).to_decimal_string() == "-1");
+        CHECK((-x >> 1000000000LL).to_decimal_string() == "-1");
+        // 恰好等于/前后 1 位的比特长度边界
+        CHECK((x >> 127).to_decimal_string() == "1"); // 还剩最高 1 位
+        CHECK((x >> 128).is_zero());
+        CHECK((x >> 129).is_zero());
+    }
+
+    TEST_CASE(
+        "直接对着定义验证，而不只是靠 << >> 互相抵消这条弱性质："
+        "a << k == a * 2^k，a >> k == a.floor_div(2^k)"
+    ) {
+        const auto vals{interesting_values()};
+        for (const auto &a : vals) {
+            for (const long long k : {0LL, 1LL, 5LL, 31LL, 32LL, 63LL, 64LL, 100LL, 200LL}) {
+                const BigInt two_pow_k{BigInt(1) << k};
+                CHECK((a << k) == (a * two_pow_k));
+                CHECK((a >> k) == a.floor_div(two_pow_k));
+            }
+        }
+    }
 }
 
 // 以下两个 TEST_SUITE 是针对 shrink() 那次 bug 的教训专门加的高强度测试：不再靠手挑几个具体案例，
@@ -687,6 +854,21 @@ TEST_SUITE("BigInt——代数恒等式交叉验证（覆盖小路径/大路径�
         CHECK(d("-1").pow(d("1000000")) == d("1"));  // 偶数次幂
         CHECK(d("-1").pow(d("1000001")) == d("-1")); // 奇数次幂
         CHECK(d("1").pow(d("1000000")) == d("1"));
+    }
+
+    TEST_CASE("比较：三分性（< / > / == 恰好一个成立）、-a > -b <=> a < b、传递性") {
+        const auto vals{interesting_values()};
+        for (const auto &a : vals) {
+            for (const auto &b : vals) {
+                const int lt{a < b ? 1 : 0}, gt{a > b ? 1 : 0}, eq{a == b ? 1 : 0};
+                CHECK(lt + gt + eq == 1);
+                CHECK((a < b) == (-a > -b));
+                CHECK((a <= b) == (b >= a));
+                for (const auto &c : vals) {
+                    if (a < b && b < c) CHECK(a < c);
+                }
+            }
+        }
     }
 }
 

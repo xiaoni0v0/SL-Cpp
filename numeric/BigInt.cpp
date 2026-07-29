@@ -1,7 +1,8 @@
 #include "BigInt.h"
 
-#include <algorithm>
+#include <bit>
 #include <cassert>
+#include <stdckdint.h>
 #include <stdexcept>
 #include <utility>
 
@@ -85,6 +86,7 @@ BigInt::add_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t
         carry = sum >> 32;
     }
     if (carry) result.push_back(static_cast<uint32_t>(carry));
+    while (!result.empty() && result.back() == 0) result.pop_back();
     return result;
 }
 
@@ -157,8 +159,7 @@ BigInt::shift_left_magnitude(const std::vector<uint32_t> &a, const uint64_t bits
 // 不是渐进最优（Knuth Algorithm D 更快），但正确性显然，不用处理"猜商偏大要修正"这类细节。
 std::pair<std::vector<uint32_t>, std::vector<uint32_t>>
 BigInt::div_mod_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
-    // 调用方保证 b 不为 0（数值意义上，不只是 b.empty()——magnitude 允许带多余高位 0）
-    assert(std::ranges::any_of(b, [](const uint32_t limb) { return limb != 0; }));
+    assert(!b.empty()); // 调用方保证 b 不为 0；参数已 normalize，非空即非零
 
     if (a.empty()) return {{}, {}};
 
@@ -287,6 +288,7 @@ BigInt BigInt::from_decimal_string(const std::string &s) {
 
 std::string BigInt::to_decimal_string() const {
     if (is_small_) return std::to_string(small_);
+    assert(!limbs_.empty()); // 大路径下不该规范化成 0（那应该走小路径），否则下面 chunks.back() 是 UB
 
     std::vector magnitude{limbs_};
     std::vector<uint32_t> chunks; // 每个 chunk 是 [0, 10^9) 内的一段十进制数字，低位在前
@@ -316,11 +318,36 @@ std::string BigInt::to_decimal_string() const {
 
 double BigInt::to_double() const {
     if (is_small_) return static_cast<double>(small_);
+    assert(!limbs_.empty()); // 同 to_decimal_string，规范化的 0 不该走到这里
 
-    double result{0.0};
-    for (size_t i{limbs_.size()}; i-- > 0;) {
-        result = result * 4294967296.0 + static_cast<double>(limbs_[i]);
+    // 真实比特长度：最高 limb 里最高位 1 的位置 + 低位 limb 占的位数
+    const size_t bit_length{
+        (limbs_.size() - 1) * 32 + static_cast<size_t>(std::bit_width(limbs_.back()))
+    };
+
+    uint64_t mantissa{0};
+    int exponent{0};
+    if (bit_length <= 64) {
+        // 64 位内装得下，直接精确取值，转 double 只经历这一次舍入
+        for (size_t i{limbs_.size()}; i-- > 0;) mantissa = (mantissa << 32) | limbs_[i];
+    } else {
+        // 逐 limb 累加、边算边舍入会导致每次都可能错 1 ULP。改成只取最高 64 位；被舍弃的低位
+        // 只要有一个非 0，就把 sticky 位 or 进最低位，让 uint64_t -> double 这一次舍入等价于
+        // 直接对整个大数就近取偶，不会因为"分段舍入"而多错一次
+        const size_t drop_bits{bit_length - 64};
+        for (size_t i{0}; i < 64; ++i) {
+            const size_t bit_index{bit_length - 1 - i};
+            mantissa = (mantissa << 1) | ((limbs_[bit_index / 32] >> (bit_index % 32)) & 1u);
+        }
+        bool sticky{false};
+        for (size_t bit_index{0}; bit_index < drop_bits && !sticky; ++bit_index)
+            if ((limbs_[bit_index / 32] >> (bit_index % 32)) & 1u) sticky = true;
+        if (sticky) mantissa |= 1u;
+        constexpr size_t kExponentClamp{100000}; // 这么大指数不管怎样都会让 double 溢出成 infinity
+        exponent = static_cast<int>(drop_bits < kExponentClamp ? drop_bits : kExponentClamp);
     }
+
+    const double result{std::ldexp(static_cast<double>(mantissa), exponent)};
     return negative_ ? -result : result;
 }
 
@@ -367,7 +394,7 @@ BigInt BigInt::operator~() const { return -(*this) - BigInt(1); }
 BigInt BigInt::operator+(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) {
         int64_t sum;
-        if (!__builtin_add_overflow(small_, rhs.small_, &sum)) {
+        if (!ckd_add(&sum, small_, rhs.small_)) {
             BigInt result;
             result.is_small_ = true;
             result.small_ = sum;
@@ -391,7 +418,7 @@ BigInt BigInt::operator-(const BigInt &rhs) const { return *this + (-rhs); }
 BigInt BigInt::operator*(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) {
         int64_t product;
-        if (!__builtin_mul_overflow(small_, rhs.small_, &product)) {
+        if (!ckd_mul(&product, small_, rhs.small_)) {
             BigInt result;
             result.is_small_ = true;
             result.small_ = product;
@@ -502,7 +529,7 @@ BigInt BigInt::operator<<(const long long k) const {
     // k <= 62 时 int64_t{1} << k 本身不会碰到符号位，可以安全地拿去做溢出检测的乘数
     if (is_small_ && k <= 62) {
         int64_t product;
-        if (!__builtin_mul_overflow(small_, int64_t{1} << k, &product)) return BigInt(product);
+        if (!ckd_mul(&product, small_, int64_t{1} << k)) return BigInt(product);
     }
 
     return shrink(from_magnitude(
@@ -520,6 +547,11 @@ BigInt BigInt::operator>>(const long long k) const {
         // C++20 起，有符号整数的算术右移是标准保证的行为，恰好等价于向负无穷取整除以 2^k
         return BigInt(small_ >> k);
     }
+
+    // 位移数超过大路径的总比特数时，跟小路径同理，结果恒为 0（非负）或 -1（负数）——不能真去
+    // floor_div(2^k)：k 一旦有几亿，2^k 本身就得先花大量时间/内存造出来，这里必须提前短路
+    if (static_cast<uint64_t>(k) >= static_cast<uint64_t>(limbs_.size()) * 32)
+        return BigInt(negative_ ? -1 : 0);
 
     // x >> k 恒等于 x // 2^k；floor_div/operator<< 自己会按需在两条路径间切换，这里直接复用即可
     return floor_div(BigInt(1) << k);

@@ -759,3 +759,54 @@ Boost.Multiprecision 的几条引入路径（`FetchBoostContent`、vcpkg、手�
 不同路径算出来的同值对象做 `==` 比较时才会因为 `is_small_` 标志不一致被误判为不等——这正是为什么
 只有专门测"同一个值靠不同运算路径过一遍再互相比较"的规范化不变量套件才测得出来，光测数值对不对
 （`to_decimal_string()`）测不出这类 bug。
+
+## 用 deepseek 交叉审查 BigInt，又挖出 2 个真实 bug + 几处契约/可移植性问题
+
+把 `numeric/BigInt` 整个丢给 deepseek 独立过一遍（它自己在 scratchpad 里编了个探针程序，用一套
+完全独立于 `to_twos_complement` 的参考实现——靠 `floor_div(2)`/`mod(2)` 逐位剥补码位——交叉验证了
+`& | ^`，核心算术/位运算判定没问题）。结论里 2 个是真 bug，都已修复并补了回归测试：
+
+- **`operator>>` 大路径没有超大位移的短路**：小路径早就有"位移 >= 63 恒为 0/-1"的短路，大路径
+  分支直接 `floor_div(BigInt(1) << k)`，`k` 上到十亿级会先老老实实把 `2^k` 这个天文数字造出来，
+  轻则内存暴涨，重则 `std::bad_alloc`（头文件契约只写了 `k < 0` 抛 `domain_error`，没提过这个）。
+  语义上 `x >> k` 在 `k` 超过 `x` 的比特长度时结果恒为 `0`/`-1`，是 O(1) 的事。修法：大路径分支开头
+  加一句，`k >= limbs_.size() * 32` 就直接返回 `BigInt(negative_ ? -1 : 0)`。
+- **`to_double()` 不是正确舍入，大数上会差 1 ULP**：原实现从最高 limb 往下逐 limb
+  `result = result * 2^32 + limb` 累加，每加一次 limb 就舍入一次，且后面的 `* 2^32`
+  会放大之前的舍入误差；`10^26` 这种量级的输入验证会差 1 ULP。改成只取整个数值最高的 64
+  位（用 `std::bit_width` 定位真实比特长度），被舍弃的低位只要有一个非 0 就把 sticky 位
+  or 进保留窗口的最低位，让 `uint64_t -> double` 这一次转换的舍入结果等价于对整个大数直接
+  就近取偶，只舍入一次。测试改用 `std::strtod` 当 oracle 逐条对拍（不再靠手算期望值），
+  另外扫了一遍 `10^k`（k=15..300）。
+
+顺带清理掉几处"注释和代码互相矛盾"的隐患（deepseek 原话是"现在打不出来，但是雷"）：
+`shrink()` 头文件注释里"除 `&`/`|`/`^` 外都要过 shrink"是错的——这三个慢路径其实都调了
+`shrink()`，注释会误导后人删掉这几个调用，已改成不再有例外；`compare_magnitude`
+所在那组 `*_magnitude` 静态函数，头文件契约写的是"允许多余高位 0"，但 `compare_magnitude`
+自己按 `size()` 直接比较根本不容忍这种输入，而 `div_mod_magnitude`
+的断言又是按"容忍"这个契约写的——查了一遍确认当前所有调用点传的都已经是 normalize
+过的值，选择把契约收紧成"调用方保证已 normalize"（而不是反过来让 `compare_magnitude`
+真的支持 padding），`div_mod_magnitude` 的断言相应简化成 `assert(!b.empty())`；顺带给
+`add_magnitude`（唯一没在结尾剥高位 0 的 `*_magnitude` 函数，风格不统一）补了一致的剥零；
+`to_decimal_string`/`to_double` 大路径分支开头加了 `assert(!limbs_.empty())`
+防"规范化的 0 不该走大路径"这条不变量被破坏时的 UB。
+
+另外把 `__builtin_add_overflow`/`__builtin_mul_overflow` 换成了 `<stdckdint.h>` 的
+`ckd_add`/`ckd_mul`——这是 `CMakeLists.txt` 里 `SL_MSVC_LIKE_FRONTEND`
+明确要支持的真·cl.exe 前端不认的编译器专有内建（clang-cl 有，纯 cl.exe 没有），跟
+[[溢出检测最终用 C++26 `<stdckdint.h>`，不是手写也不是 SafeInt]]
+里"选标准接口不选编译器专有名字，可移植性更好"的理由完全一致，只是当时漏了 `BigInt.cpp`
+这一处，这次一并补上。
+
+**没有动的一条**：`pow`/`operator<<` 对结果规模没有任何上限，`2 ** 10**9`
+会真的去算一个十亿位的数。这不是 bug（无限精度数学本身就这样，Python 也一样），而是"要不要设一个
+可配的位数上限、超了抛出去交给上层"这个设计问题；`StaticEvaler`
+目前的纯数值折叠整个改用 `int64_t`（见 [[StaticEvaler：编译期常量折叠要防"编译炸弹"，不能无节制地折]]），
+`BigInt` 实际没有调用方，等真的接到执行器上、`BigInt` 有了活的调用方时再回来定这个上限更合适，
+现在设是无的放矢。
+
+测试从 70 用例/26721 断言涨到 83 用例/84190 断言，新增的用例覆盖了 deepseek 点名的几个盲区：
+`to_double` 的 oracle 对拍、大路径超大位移、`<<`/`>>`
+直接对着定义验证（不只是靠互相抵消这条弱恒等式）、大路径指数的 `pow`、比较的三分性/传递性、
+除法的反向构造（从 `q`、`r` 反推 `a`，而不是从 `a` 反推 `q`、`r`）、`|x % y| < |y|`
+的量级边界、别名（`x.floor_div(x)`）、超长（500/2000 位）十进制往返、更多脏输入。

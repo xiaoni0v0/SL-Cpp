@@ -26,15 +26,15 @@ class BigInt {
 
     // 返回一个保证走大路径的等价值（已经是大路径就直接拷贝，是小路径则转换）
     [[nodiscard]] BigInt promoted() const;
-    // 已经是小路径就原样返回；大路径则装得下 int64_t 就收缩，否则原样返回。除 &/|/^
-    // 外，所有慢路径算完的地方都要过这一步，保证"能装进 int64_t 就一定是小路径"这条不变量
+    // 已经是小路径就原样返回；大路径则装得下 int64_t 就收缩，否则原样返回。所有慢路径算完
+    // 的地方都要过这一步（含 operator&/|/^），保证"能装进 int64_t 就一定是小路径"这条不变量
     [[nodiscard]] static BigInt shrink(BigInt big);
     // 用一段大小（可能带多余高位 0）+ 符号构造一个大路径 BigInt（内部会 normalize）。
     // 集中在这一处显式设 is_small_ = false，避免各处手写漏设
     [[nodiscard]] static BigInt from_magnitude(std::vector<uint32_t> limbs, bool negative);
 
-    // 以下均只处理大小（不管符号），要求参数已经是"合法的 limbs_"（可能带多余高位
-    // 0，内部使用不严格要求 normalize） |a| 与 |b| 的大小比较：<0/=0/>0
+    // 以下均只处理大小（不管符号），调用方保证参数已经 normalize 过（不带多余高位 0，
+    // 恒无 back() == 0，值为 0 则是空 vector）。|a| 与 |b| 的大小比较：<0/=0/>0
     [[nodiscard]] static std::strong_ordering
     compare_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b);
     [[nodiscard]] static std::vector<uint32_t>
