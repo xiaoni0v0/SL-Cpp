@@ -36,8 +36,7 @@
  * - 纯数值运算（含位运算）一律用 int64_t 计算，任何一步超出 int64_t 范围都不折；
  * - str 的 + 拼接、* 重复，结果长度超过 nMaxStrLength 不折；
  * - tuple/list 的 + 拼接，结果元素个数超过 nMaxContainerItems 不折；
- * - tuple 的 * 重复，除了同样受 kMaxContainerItems 限制，还要求这个 tuple
- * 是"深度不可变"的（递归展开后不含任何 list）， 因为重复出来的每一份内部元素是共享引用。
+ * - tuple 的 * 重复，除了同样受 nMaxContainerItems 限制，还要求这个 tuple 是“深度不可变”的。
  * - list 的 * 重复恒不折（list 本身永远可变）。
  *
  * 除此之外，and/or/not 对于字面量均折叠。

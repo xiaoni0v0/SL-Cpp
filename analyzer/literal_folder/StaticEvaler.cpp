@@ -211,23 +211,26 @@ AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
 }
 
 AstNodePtr StaticEvaler::fold_if(AstNodeIf &node) {
-    size_t i{0};
+    size_t i{0}; // 索引 i 之前的所有 clauses 都是字面量且是 False
     while (i < node.clauses_.size() && is_literal_pure(*node.clauses_[i].cond_) &&
            !truthy(*node.clauses_[i].cond_))
         ++i;
 
+    // 确定为 False* 跟着个 True
     if (i < node.clauses_.size() && is_literal_pure(*node.clauses_[i].cond_)) {
-        // 循环只有在"非字面量"或者"字面量为 True"时才会停在这个位置，能到这里说明是后者
         return std::move(node.clauses_[i].body_);
     }
-    if (i == 0) return nullptr; // 第一个 clause 就没法判定，什么都没能折
 
+    // 第一个 clause 就没法判定
+    if (i == 0) return nullptr;
+
+    // 确定为全是 True
     if (i == node.clauses_.size()) {
         if (node.else_expr_) return std::move(node.else_expr_);
         return std::make_unique<AstNodeLiteralNone>(node.pos_);
     }
 
-    // 跳过了至少一个确定为 False 的 clause，但后面接的是一个还不能判定的 cond：部分折叠
+    // 确定为 False+ 跟着个 不能确定的：部分折叠
     std::vector<AstNodeIf::AstNodeCondAndExpr> remaining;
     for (size_t j{i}; j < node.clauses_.size(); ++j)
         remaining.push_back(std::move(node.clauses_[j]));
@@ -235,6 +238,7 @@ AstNodePtr StaticEvaler::fold_if(AstNodeIf &node) {
 }
 
 AstNodePtr StaticEvaler::fold_for_cond(AstNodeForCond &node) {
+    // 空->True、无法判断、True
     if (!node.cond_ || !is_literal_pure(*node.cond_) || truthy(*node.cond_)) return nullptr;
 
     AstNodePtr result{
