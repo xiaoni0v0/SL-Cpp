@@ -1,4 +1,4 @@
-// SL.md 2.2.6 函数表达式：
+﻿// SL.md 2.2.6 函数表达式：
 // ⟦@decorator ...⟧ func ⟦identifier⟧ ⟦[ALL_CAPTURE]⟧ (ALL_PARAM) ⟦: type⟧ ⟦doc⟧ { expr1; ... }
 // 装饰器紧邻 func 的情况放在 2_2_8_decorator/decorator_test.cpp 测，这里只测 func 自身。
 // 形参在 json 里嵌套成一个 "params" 对象，依次由 4 段组成：positional（*args 之前）/ var_args /
@@ -256,6 +256,20 @@ TEST_SUITE("2.2.6 func——捕获列表") {
             CHECK(msg.find("close capture list") != std::string::npos);
             CHECK(msg.find("1:10:") != std::string::npos); // '{'
         }
+    }
+
+    TEST_CASE("捕获列表尾逗号") {
+        CHECK(
+            parse_json(U"func f[a, b,]() {}")["captures"] ==
+            nlohmann::json::array(
+                {nlohmann::json{
+                     {"capture_type", "Value"}, {"identifier", "a"}, {"value_expr", nullptr}
+                 },
+                 nlohmann::json{
+                     {"capture_type", "Value"}, {"identifier", "b"}, {"value_expr", nullptr}
+                 }}
+            )
+        );
     }
 }
 

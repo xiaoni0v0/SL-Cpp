@@ -1,4 +1,4 @@
-// SL.md 2.1.5 运算符——优先级表、结合性、后缀访问链（索引/调用/属性/?/!）。
+﻿// SL.md 2.1.5 运算符——优先级表、结合性、后缀访问链（索引/调用/属性/?/!）。
 // 链式比较、is 链、赋值/复合赋值放在同目录的 compare_is_assign_test.cpp。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
@@ -498,6 +498,29 @@ TEST_SUITE("2.1.5 索引/调用/属性访问链") {
             CHECK(msg.find("index expression") != std::string::npos);
             CHECK(msg.find("1:4:") != std::string::npos);
         }
+    }
+
+    TEST_CASE("调用参数尾逗号") {
+        CHECK(
+            parse_json(U"f(1, 2,)") ==
+            nlohmann::json{
+                {"type", "Call"},
+                {"object", {{"type", "Identifier"}, {"identifier", "f"}}},
+                {"positional_args", nlohmann::json::array({int_lit("1"), int_lit("2")})},
+                {"keyword_args", nlohmann::json::array()}
+            }
+        );
+    }
+
+    TEST_CASE("索引参数尾逗号") {
+        CHECK(
+            parse_json(U"a[1, 2,]") ==
+            nlohmann::json{
+                {"type", "Index"},
+                {"object", {{"type", "Identifier"}, {"identifier", "a"}}},
+                {"args", nlohmann::json::array({int_lit("1"), int_lit("2")})}
+            }
+        );
     }
 
     TEST_CASE("属性访问后面必须是标识符") {

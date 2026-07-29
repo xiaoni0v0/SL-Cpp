@@ -1,4 +1,4 @@
-// SL.md 2.2.7 类表达式：⟦@decorator ...⟧ class ⟦name⟧ ⟦(bases)⟧ ⟦[captures]⟧ ⟦doc⟧ { body }
+﻿// SL.md 2.2.7 类表达式：⟦@decorator ...⟧ class ⟦name⟧ ⟦(bases)⟧ ⟦[captures]⟧ ⟦doc⟧ { body }
 // 装饰器紧邻 class 的情况放在 2_2_8_decorator/decorator_test.cpp 测。
 // 捕获列表语法/语义跟 func 的完全一致（见 SL.md 2.2.6/2.2.7），细节各种组合已经在
 // 2_2_6_func/func_test.cpp 里测过一遍，这里只补类特有的：位置在基类之后、未闭合报错。
@@ -76,6 +76,16 @@ TEST_SUITE("2.2.7 class") {
                 {"doc", nullptr},
                 {"body", {{"type", "Program"}, {"exprs", nlohmann::json::array()}}}
             }
+        );
+    }
+
+    TEST_CASE("基类列表尾逗号") {
+        CHECK(
+            parse_json(U"class C(Base1, Base2,) {}")["bases"] ==
+            nlohmann::json::array(
+                {nlohmann::json{{"type", "Identifier"}, {"identifier", "Base1"}},
+                 nlohmann::json{{"type", "Identifier"}, {"identifier", "Base2"}}}
+            )
         );
     }
 
