@@ -19,9 +19,11 @@ TEST_SUITE("2.1.4 int") {
         );
     }
 
-    TEST_CASE("前导零：词法层面不特殊处理，原样当普通数字字符串") {
-        CHECK(lex_dump(U"007") == "LITERAL_INT(007)");
-        CHECK(lex_dump(U"00") == "LITERAL_INT(00)");
+    TEST_CASE("前导零不合法（单独一个 0 除外）：给以后的 0x/0o/0b 前缀预留空间，也避免误当八进制") {
+        CHECK_THROWS_AS(lex(U"007"), SyntaxError);
+        CHECK_THROWS_AS(lex(U"00"), SyntaxError);
+        CHECK_THROWS_AS(lex(U"0123"), SyntaxError);
+        CHECK(lex_dump(U"0") == "LITERAL_INT(0)"); // 单独一个 0 合法
     }
 
     TEST_CASE("数字后紧跟字母是非法的") {

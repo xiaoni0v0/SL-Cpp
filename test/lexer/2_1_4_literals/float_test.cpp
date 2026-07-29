@@ -37,6 +37,12 @@ TEST_SUITE("2.1.4 float") {
         );
     }
 
+    TEST_CASE("整数部分前导零不合法，跟 int 情形一致；小数部分没有这个限制") {
+        CHECK_THROWS_AS(lex(U"007.5"), SyntaxError);
+        CHECK_THROWS_AS(lex(U"00.5"), SyntaxError);
+        CHECK(lex_dump(U"0.05") == "LITERAL_FLOAT(0.05)"); // 小数部分的零不受限制
+    }
+
     TEST_CASE("浮点数后紧跟字母非法，跟 int 情形一致") {
         CHECK_THROWS_AS(lex(U"1.5f"), SyntaxError);
         CHECK_THROWS_AS(lex(U"1.5abc"), SyntaxError);

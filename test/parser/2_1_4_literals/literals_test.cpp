@@ -31,9 +31,11 @@ TEST_SUITE("2.1.4 基本字面量") {
     }
 
     TEST_CASE("int：Parser 原样存字符串形式，不做数值转换") {
+        // 前导零本身是否合法在词法层面拦截、已在 lexer
+        // 测试里覆盖过（2_1_4_literals/int_test.cpp）， 这里只关心合法数字文本能不能被 Parser
+        // 原样存进 raw_
         CHECK(parse_json(U"123") == nlohmann::json::parse(R"({"type":"LiteralInt","raw":"123"})"));
         CHECK(parse_json(U"0") == nlohmann::json::parse(R"({"type":"LiteralInt","raw":"0"})"));
-        CHECK(parse_json(U"007") == nlohmann::json::parse(R"({"type":"LiteralInt","raw":"007"})"));
         CHECK(
             parse_json(U"123456789012345678901234567890") ==
             nlohmann::json::parse(R"({"type":"LiteralInt","raw":"123456789012345678901234567890"})")

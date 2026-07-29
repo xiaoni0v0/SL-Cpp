@@ -127,6 +127,11 @@ Token Lexer::read_number() {
 
     while (!is_eof() && is_digit(peek())) num_literal += advance();
 
+    // 整数部分不允许前导零（单独一个 "0" 除外）
+    if (num_literal.size() > 1 && num_literal[0] == U'0') {
+        error("leading zeros in decimal literals are not permitted", start_row, start_col);
+    }
+
     // 只有小数点后紧跟数字才当作 float 的一部分；否则不消耗这个 '.'，留给下一个 token
     if (peek() == U'.' && is_digit(peek(1))) {
         is_float = true;
