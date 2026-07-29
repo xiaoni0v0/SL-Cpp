@@ -88,7 +88,7 @@ class StaticEvaler final {
 
     // —————————— 判断 ——————————
 
-    // 真值，要求 node 已经是字面量节点
+    // 真值。调用方保证 is_literal_pure(literal)
     [[nodiscard]] static bool truthy(const AstNode &literal);
 
     /**
@@ -114,7 +114,7 @@ class StaticEvaler final {
     [[nodiscard]] static bool is_numeric(const AstNode &node);
     // node -> int64_t。调用方保证 is_int_family(node)
     [[nodiscard]] static std::optional<int64_t> node_to_int64(const AstNode &node);
-    // node -> int64_t。调用方保证 is_numeric(node)
+    // node -> double。调用方保证 is_numeric(node)
     [[nodiscard]] static double node_to_double(const AstNode &node);
 
     // —————————— 折叠上限 ——————————
@@ -131,11 +131,11 @@ class StaticEvaler final {
     [[nodiscard]] static AstNodePtr make_float(Position pos, double value); // ±inf/NaN 返回 nullptr
     // 深拷贝一份字面量子树；调用方保证 is_literal_pure(node)
     [[nodiscard]] static AstNodePtr clone_literal(const AstNode &node);
-    // 字面量之间的值相等
+    // 字面量之间的值相等。调用方保证 is_literal_pure(a) 且 is_literal_pure(b)
     [[nodiscard]] static bool literal_equal(const AstNode &a, const AstNode &b);
-    // 字面量之间的值比较
+    // 字面量之间的值比较。调用方保证 is_literal_pure(a) 且 is_literal_pure(b)
     [[nodiscard]] static std::partial_ordering literal_compare(const AstNode &a, const AstNode &b);
-    // int 字面量之间的值比较
+    // int 字面量之间的值比较。调用方保证 a.raw_、b.raw_ 均非空
     [[nodiscard]] static std::strong_ordering
     literal_compare_int(const AstNodeLiteralInt &a, const AstNodeLiteralInt &b);
 

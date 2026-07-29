@@ -26,9 +26,10 @@ class BigInt {
 
     // 返回一个保证走大路径的等价值（已经是大路径就直接拷贝，是小路径则转换）
     [[nodiscard]] BigInt promoted() const;
-    // 传入一个大路径表示的值，若其实装得进 int64_t 就收缩成小路径返回，否则原样返回（仍是大路径）。
-    // 除了 &/|/^（结果显然跟输入同量级，不需要）之外，所有"慢路径算完"的地方都要经过这一步，
-    // 保证"能装进 int64_t 就一定是小路径"这条不变量。
+    // 传入任意路径的值：已经是小路径就原样返回（无条件安全，不要求调用方自己先判断）；
+    // 是大路径则若装得进 int64_t 就收缩成小路径返回，否则原样返回（仍是大路径）。除了 &/|/^
+    // （结果显然跟输入同量级，不需要）之外，所有"慢路径算完"的地方都要经过这一步，保证"能装进
+    // int64_t 就一定是小路径"这条不变量。
     [[nodiscard]] static BigInt shrink(BigInt big);
     // 用一段大小（可能带多余高位 0）+ 符号，直接构造一个走大路径的 BigInt（内部会 normalize）。
     // 集中在这一处显式设 is_small_ = false，避免每个用到 limbs_/negative_
@@ -41,12 +42,12 @@ class BigInt {
     compare_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b);
     [[nodiscard]] static std::vector<uint32_t>
     add_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b);
-    // 要求 a >= b
+    // 调用方保证 a >= b（按 compare_magnitude）
     [[nodiscard]] static std::vector<uint32_t>
     sub_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b);
     [[nodiscard]] static std::vector<uint32_t>
     mul_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b);
-    // 二进制逐位长除法：返回 (商, 余数)，要求 b 不为 0（不检查，调用方保证）
+    // 二进制逐位长除法：返回 (商, 余数)。调用方保证 b 不为 0
     [[nodiscard]] static std::pair<std::vector<uint32_t>, std::vector<uint32_t>>
     div_mod_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b);
     // 左移 bits 位（bits 可以很大，用于 * 2^bits），仅操作大小
@@ -54,13 +55,16 @@ class BigInt {
     shift_left_magnitude(const std::vector<uint32_t> &a, uint64_t bits);
 
     // 按位运算共用：算出 *this 在"无穷位补码"视角下第 [0, limb_count) 个 32 位 limb 组成的数组
-    // （非负数高位补 0、负数高位补 1，见 SL.md 3.4.2 位运算那段说明）。要求 *this 走大路径。
+    // （非负数高位补 0、负数高位补 1，见 SL.md 3.4.2 位运算那段说明）。
+    // 调用方保证 *this 走大路径、limb_count 严格大于 limbs_.size()（留至少一个 limb 的安全余量，
+    // 否则最高位可能碰巧已经是 1，被误读成符号位，见调用处 operator&/|/^ 的 "+1"）
     [[nodiscard]] std::vector<uint32_t> to_twos_complement(size_t limb_count) const;
     // to_twos_complement 的逆操作：给一段补码 limb（最高位决定符号），转回符号-大小表示（大路径）
     [[nodiscard]] static BigInt from_twos_complement(std::vector<uint32_t> limbs);
 
-    // 向负无穷取整的除法+取模一起算（除法、取模只是各自只要其中一半），要求 divisor 不为 0、
-    // 要求 *this 和 divisor 都走大路径（小路径在 floor_div/mod 里已经单独处理，不会走到这里）
+    // 向负无穷取整的除法+取模一起算（除法、取模只是各自只要其中一半）。
+    // 调用方保证 divisor 不为 0、*this 和 divisor 都走大路径（小路径在 floor_div/mod 里已经
+    // 单独处理，不会走到这里）
     [[nodiscard]] std::pair<BigInt, BigInt> divmod_floor_big(const BigInt &divisor) const;
 
   public:

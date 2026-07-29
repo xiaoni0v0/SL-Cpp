@@ -16,7 +16,7 @@ class Parser {
 
     // 往后看 token
     [[nodiscard]] const Token &peek() const;
-    // 消耗 token
+    // 消耗 token。调用方保证 pos_ < tokens_.size()
     const Token &advance();
     // 检查下一个 token 类型是否为 type
     [[nodiscard]] bool check(TokenType type) const;

@@ -219,6 +219,16 @@ TEST_SUITE("BigInt——floor_div / mod：向负无穷取整，语义与 Python 
         CHECK(d("0").floor_div(d("5")).to_decimal_string() == "0");
         CHECK(d("0").mod(d("5")).to_decimal_string() == "0");
     }
+
+    TEST_CASE("被除数、除数都超出 int64_t 范围（走大路径），异号，但商本身装得进 int64_t") {
+        // x = -(3 * 10^20 + 7)，y = 10^20：|x|/|y| = 3.00000000007，异号，
+        // 向负无穷取整应该是 -4，不是 -3
+        const BigInt x{d("-300000000000000000007")};
+        const BigInt y{d("100000000000000000000")};
+        CHECK(x.floor_div(y).to_decimal_string() == "-4");
+        CHECK(x.mod(y).to_decimal_string() == "99999999999999999993");
+        CHECK((x.floor_div(y) * y + x.mod(y)) == x);
+    }
 }
 
 TEST_SUITE("BigInt——pow") {

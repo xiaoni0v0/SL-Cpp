@@ -14,7 +14,7 @@ class Lexer {
 
     // 往后看字符
     [[nodiscard]] char32_t peek(size_t offset = 0) const;
-    // 消耗字符
+    // 消耗字符。调用方保证 pos_ < source_.size()
     char32_t advance();
     // 是否读完了
     [[nodiscard]] bool is_eof() const;
@@ -32,7 +32,7 @@ class Lexer {
     void read_comment_line();
     // 读多行注释
     void read_comment_block();
-    // 读字符串字面量。quote 为 ' 或者 "
+    // 读字符串字面量。调用方保证 quote 是 ' 或者 "
     [[nodiscard]] Token read_string(char32_t quote);
     // 读反引号原始字符串字面量：不处理转义，天然支持多行
     [[nodiscard]] Token read_raw_string();

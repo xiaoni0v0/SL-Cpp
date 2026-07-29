@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <charconv>
 #include <cmath>
 #include <cstdlib>
@@ -96,6 +97,8 @@ std::optional<int64_t> checked_rshift(const int64_t a, const int64_t b) {
 
 // double -> string。调用方保证 value 有限
 std::string double_to_string(const double value) {
+    assert(std::isfinite(value));
+
     constexpr size_t nBufSize{std::numeric_limits<double>::max_exponent10 + 32}; // 这个数肯定够的
     std::array<char, nBufSize> buf{};
     const auto [ptr, ec]{
@@ -118,6 +121,11 @@ std::optional<int64_t> string_to_int64(const std::u32string &raw) {
 
 // bool 提升成 int。调用方保证 is_int_family(node)
 AstNodeLiteralInt promote_as_int(const AstNode &node) {
+    assert(
+        dynamic_cast<const AstNodeLiteralBool *>(&node) ||
+        dynamic_cast<const AstNodeLiteralInt *>(&node)
+    );
+
     if (const auto *i{dynamic_cast<const AstNodeLiteralInt *>(&node)}) return *i;
     const auto &b{dynamic_cast<const AstNodeLiteralBool &>(node)};
     return AstNodeLiteralInt{node.pos_, b.value_ ? U"1" : U"0"};
@@ -174,7 +182,7 @@ AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
 
     // 链式比较短路（a < b < c 等价于 a<b and b<c and ...）
     size_t i{0};
-    for (; i < node.ops_.size(); ++i) {
+    while (i < node.ops_.size()) {
         const AstNode &a{*node.operands_[i]}, &b{*node.operands_[i + 1]};
         if (!is_literal_pure(a) || !is_literal_pure(b)) break; // 无法确定
 
@@ -185,7 +193,7 @@ AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
         } else {
             const std::partial_ordering cmp{literal_compare(a, b)};
             if (cmp == std::partial_ordering::unordered)
-                return nullptr; // 类型不支持比较，交给运行时报 TypeError，没法折成任何值
+                return nullptr; // 类型不支持比较，没法折成任何值
             switch (node.ops_[i]) {
             case Lt:
                 result = cmp < 0;
@@ -204,15 +212,18 @@ AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
             }
         }
 
-        // 链式比较：一旦某一环为假，整条链短路，值就是这一环的结果（恒为 False）
+        // 链式比较：一旦某一环为假就短路
         if (!result) return make_bool(node.pos_, false);
+
+        ++i;
     }
 
-    if (i == node.ops_.size()) return make_bool(node.pos_, true); // 全链都确定为 True
-    if (i == 0) return nullptr;                                   // 第一环就没法判定，整体没能折
+    // 全链都确定为 True
+    if (i == node.ops_.size()) return make_bool(node.pos_, true);
+    // 第一环就没法判定，整体没能折
+    if (i == 0) return nullptr;
 
-    // 前 i 环都是字面量且确定为 True（纯字面量、无副作用，丢掉它们不影响后面的求值和最终结果），
-    // 但接下来的一环没法判定：部分折叠，保留从第 i 个操作数开始的子链，其余原样交给运行时
+    // 前 i 环都是字面量且确定为 True 但接下来的一环没法判定：部分折叠
     std::vector<AstNodeCompare::OpType> ops;
     std::vector<AstNodePtr> operands;
     std::vector<Position> op_positions;
@@ -222,7 +233,7 @@ AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
         ops.push_back(node.ops_[j]);
         op_positions.push_back(node.op_positions_[j]);
     }
-    const Position new_pos{operands.front()->pos_}; // 新链自己的起始位置=剩下的第一个操作数
+    const Position new_pos{operands.front()->pos_}; // 新链自己的起始位置 = 剩下的第一个操作数
     return std::make_unique<AstNodeCompare>(
         new_pos, std::move(ops), std::move(operands), std::move(op_positions)
     );
@@ -545,6 +556,8 @@ AstNodePtr StaticEvaler::fold_and_or(AstNodeOpBinary &node) {
 }
 
 bool StaticEvaler::truthy(const AstNode &literal) {
+    assert(is_literal_pure(literal));
+
     if (dynamic_cast<const AstNodeLiteralNone *>(&literal)) return false;
     if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&literal)}) return b->value_;
     if (const auto *i{dynamic_cast<const AstNodeLiteralInt *>(&literal)}) {
@@ -585,6 +598,8 @@ bool StaticEvaler::is_literal_pure(const AstNode &node) {
 }
 
 bool StaticEvaler::is_deeply_immutable(const AstNode &node) {
+    assert(is_literal_pure(node));
+
     // list 恒可变
     if (dynamic_cast<const AstNodeLiteralList *>(&node)) return false;
 
@@ -607,6 +622,8 @@ bool StaticEvaler::is_numeric(const AstNode &node) {
 }
 
 std::optional<int64_t> StaticEvaler::node_to_int64(const AstNode &node) {
+    assert(is_int_family(node));
+
     // bool
     if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&node)})
         return b->value_ ? int64_t{1} : int64_t{0};
@@ -617,6 +634,8 @@ std::optional<int64_t> StaticEvaler::node_to_int64(const AstNode &node) {
 }
 
 double StaticEvaler::node_to_double(const AstNode &node) {
+    assert(is_numeric(node));
+
     // bool
     if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&node)})
         return b->value_ ? 1.0 : 0.0;
@@ -644,6 +663,8 @@ AstNodePtr StaticEvaler::make_float(const Position pos, const double value) {
 }
 
 AstNodePtr StaticEvaler::clone_literal(const AstNode &node) {
+    assert(is_literal_pure(node));
+
     // None、bool、int、float、str、ellipsis 直接再构造一份
     if (dynamic_cast<const AstNodeLiteralNone *>(&node))
         return std::make_unique<AstNodeLiteralNone>(node.pos_);
@@ -675,6 +696,8 @@ AstNodePtr StaticEvaler::clone_literal(const AstNode &node) {
 }
 
 bool StaticEvaler::literal_equal(const AstNode &a, const AstNode &b) {
+    assert(is_literal_pure(a) && is_literal_pure(b));
+
     // bool/int/float
     if (is_numeric(a) && is_numeric(b)) {
         if (is_int_family(a) && is_int_family(b)) {
@@ -726,6 +749,8 @@ bool StaticEvaler::literal_equal(const AstNode &a, const AstNode &b) {
 }
 
 std::partial_ordering StaticEvaler::literal_compare(const AstNode &a, const AstNode &b) {
+    assert(is_literal_pure(a) && is_literal_pure(b));
+
     // bool/int/float
     if (is_numeric(a) && is_numeric(b)) {
         if (is_int_family(a) && is_int_family(b)) {
@@ -775,6 +800,8 @@ std::partial_ordering StaticEvaler::literal_compare(const AstNode &a, const AstN
 
 std::strong_ordering
 StaticEvaler::literal_compare_int(const AstNodeLiteralInt &a, const AstNodeLiteralInt &b) {
+    assert(!a.raw_.empty() && !b.raw_.empty());
+
     const bool a_neg{a.raw_[0] == U'-'}, b_neg{b.raw_[0] == U'-'};
 
     // 先比符号
@@ -806,7 +833,7 @@ StaticEvaler::literal_compare_int(const AstNodeLiteralInt &a, const AstNodeLiter
 
 AstNodePtr StaticEvaler::fold(AstNode &node) {
     // 只有这几种节点才可能整体收缩成一个字面量
-    if (auto *n{dynamic_cast<AstNodeOpUnary *>(&node)}) return fold_unary(*n);
+    if (const auto *n{dynamic_cast<AstNodeOpUnary *>(&node)}) return fold_unary(*n);
     if (auto *n{dynamic_cast<AstNodeOpBinary *>(&node)}) return fold_binary(*n);
     if (auto *n{dynamic_cast<AstNodeCompare *>(&node)}) return fold_compare(*n);
     if (auto *n{dynamic_cast<AstNodeIf *>(&node)}) return fold_if(*n);

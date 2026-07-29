@@ -1,5 +1,7 @@
 #include "BigInt.h"
 
+#include <algorithm>
+#include <cassert>
 #include <stdexcept>
 #include <utility>
 
@@ -35,6 +37,11 @@ BigInt BigInt::promoted() const {
 }
 
 BigInt BigInt::shrink(BigInt big) {
+    // big 已经是小路径就原样返回：这不只是提前退出的优化——小路径对象的 limbs_/negative_
+    // 恒为空/false（从不写入），如果不在这里挡住直接往下走，会把 big.small_ 的真实值当成 0
+    // 误读（bug：曾经真的在 divmod_floor_big 的"异号"分支——商装得进 int64_t、但由内部的
+    // operator+/operator- 提前 shrink 过一次——上被二次调用 shrink 触发过，见对应回归测试）
+    if (big.is_small_) return big;
     // 2 个 limb（64 位）已经能覆盖 int64_t 的全部表示范围，更多 limb 的值必然装不下，直接原样返回
     if (big.limbs_.size() > 2) return big;
 
@@ -83,9 +90,11 @@ BigInt::add_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t
     return result;
 }
 
-// 要求 a >= b（按 compare_magnitude），否则结果无意义（调用方保证）
+// 调用方保证 a >= b（按 compare_magnitude），否则结果无意义
 std::vector<uint32_t>
 BigInt::sub_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
+    assert(compare_magnitude(a, b) >= 0);
+
     std::vector<uint32_t> result;
     result.reserve(a.size());
     int64_t borrow{0};
@@ -151,6 +160,10 @@ BigInt::shift_left_magnitude(const std::vector<uint32_t> &a, const uint64_t bits
 // 更快），但正确性显然、不需要处理"猜商偏大要修正"这类容易出错的细节。
 std::pair<std::vector<uint32_t>, std::vector<uint32_t>>
 BigInt::div_mod_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
+    // 调用方保证 b 不为 0（这里说的"为 0"是数值意义上的，不只是 b.empty()——这组 magnitude
+    // 辅助函数允许输入带多余的高位 0，见类里"以下均只处理大小"那条说明）
+    assert(std::ranges::any_of(b, [](const uint32_t limb) { return limb != 0; }));
+
     if (a.empty()) return {{}, {}};
 
     std::vector<uint32_t> quotient(a.size(), 0);
@@ -182,14 +195,16 @@ BigInt::div_mod_magnitude(const std::vector<uint32_t> &a, const std::vector<uint
 }
 
 std::vector<uint32_t> BigInt::to_twos_complement(const size_t limb_count) const {
+    assert(!is_small_);
+    assert(limb_count > limbs_.size()); // 至少留一个 limb 的安全余量，见头文件里这个函数的注释
+
     std::vector<uint32_t> result(limb_count, 0);
     if (!negative_) {
         for (size_t i{0}; i < limbs_.size() && i < limb_count; ++i) result[i] = limbs_[i];
         return result; // 非负数：高位补 0
     }
 
-    // 负数：结果 = ~magnitude + 1（在 limb_count * 32 位宽度内计算）；
-    // 调用方需要保证 limb_count 足够容纳这次运算实际需要的位数，否则结果会被截断
+    // 负数：结果 = ~magnitude + 1（在 limb_count * 32 位宽度内计算）
     uint64_t carry{1}; // "+1" 的初始进位
     for (size_t i{0}; i < limb_count; ++i) {
         const uint32_t magnitude_limb{i < limbs_.size() ? limbs_[i] : 0u};
@@ -217,7 +232,10 @@ BigInt BigInt::from_twos_complement(std::vector<uint32_t> limbs) {
 }
 
 std::pair<BigInt, BigInt> BigInt::divmod_floor_big(const BigInt &divisor) const {
-    // 要求 *this、divisor 都已经是大路径（floor_div/mod 的小路径分支处理不了才会走到这里）
+    // 调用方保证 *this、divisor 都已经是大路径（floor_div/mod 的小路径分支处理不了才会走到这里）
+    assert(!is_small_);
+    assert(!divisor.is_small_);
+
     auto [q_mag, r_mag]{div_mod_magnitude(limbs_, divisor.limbs_)};
     // q_mag = |*this| 除以 |divisor| 向零截断的商，r_mag = 对应余数，满足 0 <= r_mag < |divisor|
 

@@ -6,6 +6,7 @@
 #include "../utils/string_utils.h"
 
 #include <algorithm>
+#include <cassert>
 #include <format>
 #include <memory>
 #include <optional>
@@ -161,7 +162,11 @@ static std::optional<AstNodeOpBinary::OpType> assign_compound_to_binary(const To
 
 const Token &Parser::peek() const { return pos_ < tokens_.size() ? tokens_[pos_] : tokens_.back(); }
 
-const Token &Parser::advance() { return tokens_[pos_++]; }
+const Token &Parser::advance() {
+    assert(pos_ < tokens_.size());
+
+    return tokens_[pos_++];
+}
 
 bool Parser::check(const TokenType type) const {
     return pos_ < tokens_.size() && tokens_[pos_].type == type;

@@ -689,3 +689,38 @@ AST 才会）全都走 `error()`，跟真正的 SL 语义错误一样抛 `Syntax
 `fold_and_or`（`True and f()` 折成 `f()`，不需要 `f()` 本身可折）是同一条原则：折叠只需要保证
 "被丢弃的部分本来就不会被求值"，不需要"被丢弃的部分本身可以折成字面量"——这两者是完全不同的要求，
 之前的实现把两者混为一谈了。
+
+## 全项目"隐含前提"排查：统一改成"调用方保证 X"+ 函数开头 assert，顺带挖出 BigInt 一个真实 bug
+
+用户要求把散落各处措辞含糊的"要求 a>0"这类注释统一改成"调用方保证 a>0"（消除"这是函数自己检查的
+还是靠调用方保证的"这层歧义），并给每一个真的有这种前提的函数在开头补 `assert`。明确要求不能只靠
+grep（注释本来就不一定写全），要真的读函数语义。逐个模块过了一遍，结论：
+
+- **`numeric/BigInt`**：补了 `sub_magnitude`（要求 a>=b）、`div_mod_magnitude`（除数不为 0）、
+  `to_twos_complement`（要求走大路径、`limb_count` 留够安全余量）、`divmod_floor_big`（两个操作数
+  都要走大路径）这几个内部函数的措辞+assert。**过程中挖出一个真实的、此前完全没被测到的 bug**：
+  `shrink()` 直接读传入值的 `limbs_`/`negative_`，没考虑传入值本身就已经是小路径的情况——小路径对象
+  这两个字段恒为空/`false`（从不写入），一旦发生"已经是小路径的值又被传进 shrink"，会把非零的
+  `small_` 误读成 0。复现路径：`floor_div`/`mod` 对两个都超出 `int64_t` 范围、异号、但商本身装得进
+  `int64_t` 的操作数（比如 `-300000000000000000007 // 100000000000000000000`），`divmod_floor_big`
+  的"异号"分支内部先用 `operator+`/`operator-` 算出这个商（这一步会把结果正确 shrink 成小路径），
+  结果又被 `floor_div` 外层再 shrink 一次，二次调用触发了这个 bug，实测返回 `0` 而不是正确的 `-4`。
+  修法：`shrink()` 开头加一条"已经是小路径就直接原样返回"，把这个函数变成对任意路径输入都安全，
+  不再是只能传大路径值的窄契约。这类"表面上是防御性 assert 的活，做起来才发现是真 bug"的情况，
+  正是不能只满足于补注释、必须真的读函数体在干什么的原因。
+- **`analyzer/literal_folder/StaticEvaler`**：`truthy`/`node_to_int64`/`node_to_double`/
+  `clone_literal`/`is_deeply_immutable` 都要求 `is_literal_pure`/`is_int_family`/`is_numeric`
+  成立；`literal_equal`/`literal_compare`（原来完全没写这条前提，纯粹是读函数体recursion 才看出来
+  隐含要求两个操作数都是 `is_literal_pure`）、`literal_compare_int`（要求 `raw_` 非空，这条已经在
+  之前一轮挪去 `SyntaxChecker` 检查，这次只是把 assert 加回来）都补齐了。顺带发现
+  `node_to_double` 的文档注释一直写着"node -> int64_t"（复制 `node_to_int64` 时改漏了返回类型），
+  顺手修正。
+- **`analyzer/syntax_checker/SyntaxChecker`、`utils/string_utils`、`builtins/exceptions`**：
+  这几处**故意不加 assert**——它们的"检查"本来就是通过抛 `SyntaxError`/`InternalError`/
+  `EncodingError` 实现的，是要在 Release 构建里也生效的真实校验（`assert` 在 `NDEBUG` 下会被优化掉），
+  跟"调用方保证、不检查"这个类别是两回事，不能混着改。
+- **`parser/Parser`、`lexer/Lexer`**：两者的 `advance()` 都有"调用方保证 `pos_ <
+  tokens_.size()`/`source_.size()`"这条隐含前提（内部直接下标访问，没有 `peek()` 那样的兜底），
+  补了 assert；`Lexer::read_string(quote)` 补了"quote 是 `'` 或 `"`"这条。这两个函数此前完全没有
+  任何注释提到这条前提，是纯粹靠读调用点（每处调用前都有 `!is_eof()`/`check()` 之类的守卫）反推出来
+  的，grep 关键词根本搜不到。

@@ -3,6 +3,7 @@
 #include "../builtins/exceptions/SyntaxError.h"
 #include "../utils/string_utils.h"
 
+#include <cassert>
 #include <format>
 #include <unordered_map>
 #include <utility>
@@ -13,6 +14,8 @@ char32_t Lexer::peek(const size_t offset) const {
 }
 
 char32_t Lexer::advance() {
+    assert(pos_ < source_.size());
+
     const char32_t c{source_[pos_++]};
     if (c == U'\n') // 该换行了
         row_++, col_ = 1;
@@ -58,6 +61,8 @@ void Lexer::read_comment_block() {
 }
 
 Token Lexer::read_string(const char32_t quote) {
+    assert(quote == U'"' || quote == U'\'');
+
     // 工具：某些字符到对应转义字符的映射
     // a b f n r t v 0 \ ' "
     static const std::unordered_map<char32_t, char32_t> ESCAPE_CHAR_MAPPING{
