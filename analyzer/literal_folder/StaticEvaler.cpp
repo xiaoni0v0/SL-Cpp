@@ -529,13 +529,8 @@ bool StaticEvaler::truthy(const AstNode &literal) {
     if (dynamic_cast<const AstNodeLiteralNone *>(&literal)) return false;
     if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&literal)}) return b->value_;
     if (const auto *i{dynamic_cast<const AstNodeLiteralInt *>(&literal)}) {
-        // raw_ 除了可能的一个前导符号外全是十进制数字，跳过符号后只要有非 '0' 字符就非零
-        const size_t idx{!i->raw_.empty() && (i->raw_[0] == U'-' || i->raw_[0] == U'+') ? 1U : 0U};
-        return std::ranges::any_of(
-            i->raw_.begin() + static_cast<std::ptrdiff_t>(idx),
-            i->raw_.end(),
-            [](const char32_t c) { return c != U'0'; }
-        );
+        const std::optional v{node_to_int64(*i)};
+        return !v || *v != 0; // 太大了装不下则必然非零；或者能装下而且是非零
     }
     if (const auto *f{dynamic_cast<const AstNodeLiteralFloat *>(&literal)})
         return node_to_double(*f) != 0.0;
