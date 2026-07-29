@@ -45,75 +45,54 @@ json all_params_to_json(const AstNodeFunc::AllParams &params, const bool include
 }
 
 const char *op_str(const AstNodeOpUnary::OpType op) {
+    // clang-format off
     switch (op) {
-    case AstNodeOpUnary::OpType::Question:
-        return "?";
-    case AstNodeOpUnary::OpType::Exclaim:
-        return "!";
-    case AstNodeOpUnary::OpType::Pos:
-        return "+";
-    case AstNodeOpUnary::OpType::Neg:
-        return "-";
-    case AstNodeOpUnary::OpType::BitInvert:
-        return "~";
-    case AstNodeOpUnary::OpType::Not:
-        return "not";
+    case AstNodeOpUnary::OpType::Question:  return "?";
+    case AstNodeOpUnary::OpType::Exclaim:   return "!";
+    case AstNodeOpUnary::OpType::Pos:       return "+";
+    case AstNodeOpUnary::OpType::Neg:       return "-";
+    case AstNodeOpUnary::OpType::BitInvert: return "~";
+    case AstNodeOpUnary::OpType::Not:       return "not";
+    // clang-format on
     default:
         return "<unknown>";
     }
 }
 
 const char *op_str(const AstNodeOpBinary::OpType op) {
+    // clang-format off
     switch (op) {
-    case AstNodeOpBinary::OpType::Add:
-        return "+";
-    case AstNodeOpBinary::OpType::Sub:
-        return "-";
-    case AstNodeOpBinary::OpType::Mul:
-        return "*";
-    case AstNodeOpBinary::OpType::Div:
-        return "/";
-    case AstNodeOpBinary::OpType::DivFloor:
-        return "//";
-    case AstNodeOpBinary::OpType::Mod:
-        return "%";
-    case AstNodeOpBinary::OpType::Pow:
-        return "**";
-    case AstNodeOpBinary::OpType::BitAnd:
-        return "&";
-    case AstNodeOpBinary::OpType::BitOr:
-        return "|";
-    case AstNodeOpBinary::OpType::BitXor:
-        return "^";
-    case AstNodeOpBinary::OpType::LShift:
-        return "<<";
-    case AstNodeOpBinary::OpType::RShift:
-        return ">>";
-    case AstNodeOpBinary::OpType::And:
-        return "and";
-    case AstNodeOpBinary::OpType::Or:
-        return "or";
-    case AstNodeOpBinary::OpType::Range:
-        return "..";
+    case AstNodeOpBinary::OpType::Add:      return "+";
+    case AstNodeOpBinary::OpType::Sub:      return "-";
+    case AstNodeOpBinary::OpType::Mul:      return "*";
+    case AstNodeOpBinary::OpType::Div:      return "/";
+    case AstNodeOpBinary::OpType::DivFloor: return "//";
+    case AstNodeOpBinary::OpType::Mod:      return "%";
+    case AstNodeOpBinary::OpType::Pow:      return "**";
+    case AstNodeOpBinary::OpType::BitAnd:   return "&";
+    case AstNodeOpBinary::OpType::BitOr:    return "|";
+    case AstNodeOpBinary::OpType::BitXor:   return "^";
+    case AstNodeOpBinary::OpType::LShift:   return "<<";
+    case AstNodeOpBinary::OpType::RShift:   return ">>";
+    case AstNodeOpBinary::OpType::And:      return "and";
+    case AstNodeOpBinary::OpType::Or:       return "or";
+    case AstNodeOpBinary::OpType::Range:    return "..";
+    // clang-format on
     default:
         return "<unknown>";
     }
 }
 
 const char *op_str(const AstNodeCompare::OpType op) {
+    // clang-format off
     switch (op) {
-    case AstNodeCompare::OpType::Lt:
-        return "<";
-    case AstNodeCompare::OpType::Le:
-        return "<=";
-    case AstNodeCompare::OpType::Gt:
-        return ">";
-    case AstNodeCompare::OpType::Ge:
-        return ">=";
-    case AstNodeCompare::OpType::Eq:
-        return "==";
-    case AstNodeCompare::OpType::Ne:
-        return "!=";
+    case AstNodeCompare::OpType::Lt: return "<";
+    case AstNodeCompare::OpType::Le: return "<=";
+    case AstNodeCompare::OpType::Gt: return ">";
+    case AstNodeCompare::OpType::Ge: return ">=";
+    case AstNodeCompare::OpType::Eq: return "==";
+    case AstNodeCompare::OpType::Ne: return "!=";
+    // clang-format on
     default:
         return "<unknown>";
     }

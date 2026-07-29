@@ -209,7 +209,7 @@ TEST_SUITE("SyntaxChecker 防御性断言（畸形 AST，正常解析永远构�
 
     TEST_CASE("AstNodeLiteralInt：raw_ 是空字符串") {
         AstNodeProgramPtr program{wrap(std::make_unique<AstNodeLiteralInt>(Position{0, 0}, U""))};
-        check_throws_internal_error_with(*program, "empty raw text");
+        check_throws_internal_error_with(*program, "missing digits");
     }
 
     TEST_CASE("AstNodeLiteralInt：raw_ 含非数字字符") {
@@ -217,6 +217,49 @@ TEST_SUITE("SyntaxChecker 防御性断言（畸形 AST，正常解析永远构�
             wrap(std::make_unique<AstNodeLiteralInt>(Position{0, 0}, U"12a"))
         };
         check_throws_internal_error_with(*program, "non-digit character");
+    }
+
+    TEST_CASE("AstNodeLiteralInt：raw_ 有前导零（单独一个 \"0\" 除外，SL.md 2.1.4）") {
+        AstNodeProgramPtr program{
+            wrap(std::make_unique<AstNodeLiteralInt>(Position{0, 0}, U"007"))
+        };
+        check_throws_internal_error_with(*program, "leading zero");
+        // 单独一个 "0" 是合法的，不应该报错
+        CHECK_NOTHROW(check_ast(*wrap(std::make_unique<AstNodeLiteralInt>(Position{0, 0}, U"0"))));
+    }
+
+    TEST_CASE("AstNodeLiteralFloat：raw_ 缺少小数点") {
+        AstNodeProgramPtr program{
+            wrap(std::make_unique<AstNodeLiteralFloat>(Position{0, 0}, U"123"))
+        };
+        check_throws_internal_error_with(*program, "missing a '.'");
+    }
+
+    TEST_CASE("AstNodeLiteralFloat：raw_ 小数点两侧缺数字") {
+        check_throws_internal_error_with(
+            *wrap(std::make_unique<AstNodeLiteralFloat>(Position{0, 0}, U"1.")), "missing digits"
+        );
+        check_throws_internal_error_with(
+            *wrap(std::make_unique<AstNodeLiteralFloat>(Position{0, 0}, U".5")), "missing digits"
+        );
+    }
+
+    TEST_CASE("AstNodeLiteralFloat：raw_ 含非数字字符") {
+        AstNodeProgramPtr program{
+            wrap(std::make_unique<AstNodeLiteralFloat>(Position{0, 0}, U"1.5a"))
+        };
+        check_throws_internal_error_with(*program, "non-digit character");
+    }
+
+    TEST_CASE("AstNodeLiteralFloat：整数部分有前导零，跟 int 一致；小数部分没有这条限制") {
+        AstNodeProgramPtr program{
+            wrap(std::make_unique<AstNodeLiteralFloat>(Position{0, 0}, U"007.5"))
+        };
+        check_throws_internal_error_with(*program, "leading zero");
+        // 小数部分的零不受限制
+        CHECK_NOTHROW(
+            check_ast(*wrap(std::make_unique<AstNodeLiteralFloat>(Position{0, 0}, U"0.05")))
+        );
     }
 
     TEST_CASE(

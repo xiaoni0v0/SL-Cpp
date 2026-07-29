@@ -55,19 +55,15 @@ static std::optional<AstNodeOpBinary::OpType> token_type_to_binary_op_type(const
 // token 类型是否属于比较组（== != < <= > >=），是则转换成对应的 AstNodeCompare::OpType，否则
 // nullopt
 static std::optional<AstNodeCompare::OpType> token_type_to_compare_op_type(const TokenType t) {
+    // clang-format off
     switch (t) {
-    case TokenType::SIGN_LT:
-        return AstNodeCompare::OpType::Lt;
-    case TokenType::SIGN_LE:
-        return AstNodeCompare::OpType::Le;
-    case TokenType::SIGN_GT:
-        return AstNodeCompare::OpType::Gt;
-    case TokenType::SIGN_GE:
-        return AstNodeCompare::OpType::Ge;
-    case TokenType::SIGN_EQ:
-        return AstNodeCompare::OpType::Eq;
-    case TokenType::SIGN_NE:
-        return AstNodeCompare::OpType::Ne;
+    case TokenType::SIGN_LT: return AstNodeCompare::OpType::Lt;
+    case TokenType::SIGN_LE: return AstNodeCompare::OpType::Le;
+    case TokenType::SIGN_GT: return AstNodeCompare::OpType::Gt;
+    case TokenType::SIGN_GE: return AstNodeCompare::OpType::Ge;
+    case TokenType::SIGN_EQ: return AstNodeCompare::OpType::Eq;
+    case TokenType::SIGN_NE: return AstNodeCompare::OpType::Ne;
+    // clang-format on
     default:
         return std::nullopt;
     }

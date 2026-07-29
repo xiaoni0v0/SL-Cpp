@@ -23,13 +23,22 @@ void SyntaxChecker::require_not_null(const std::u32string &name, const Position 
     if (name.empty()) error_internal("unexpected empty name", pos);
 }
 
+void SyntaxChecker::require_digits(
+    const std::u32string &raw, const bool no_leading_zero, const Position pos
+) const {
+    if (raw.empty()) error_internal("literal raw text is missing digits", pos);
+    for (const char32_t c : raw)
+        if (!is_digit(c)) error_internal("literal raw text contains a non-digit character", pos);
+    if (no_leading_zero && raw.size() > 1 && raw[0] == U'0')
+        error_internal("literal raw text has a leading zero", pos);
+}
+
 void SyntaxChecker::check(const AstNode &node) {
     const AstNode *const p{&node}; // 变成指针再 dynamic_cast
 
 #define X(nt)                                                                                      \
     if (const auto *n{dynamic_cast<const nt *>(p)}) return check(*n);
 #include "../../parser/ast_nodes/x_ast_nodes.h"
-
 #undef X
 
     assert(!"Unknown node type");
@@ -242,13 +251,16 @@ void SyntaxChecker::check(const AstNodeLiteralBool &) {}
 void SyntaxChecker::check(const AstNodeLiteralGL &) {}
 
 void SyntaxChecker::check(const AstNodeLiteralInt &node) {
-    if (node.raw_.empty()) error_internal("int literal has empty raw text", node.pos_);
-    for (const char32_t c : node.raw_) {
-        if (!is_digit(c)) error_internal("int literal contains a non-digit character", node.pos_);
-    }
+    require_digits(node.raw_, true, node.pos_);
 }
 
-void SyntaxChecker::check(const AstNodeLiteralFloat &) {}
+void SyntaxChecker::check(const AstNodeLiteralFloat &node) {
+    const size_t dot{node.raw_.find(U'.')};
+    if (dot == std::u32string::npos)
+        error_internal("float literal raw text is missing a '.'", node.pos_);
+    require_digits(node.raw_.substr(0, dot), true, node.pos_);
+    require_digits(node.raw_.substr(dot + 1), false, node.pos_);
+}
 
 void SyntaxChecker::check(const AstNodeLiteralStr &) {}
 

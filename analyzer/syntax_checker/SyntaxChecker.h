@@ -25,6 +25,12 @@ class SyntaxChecker {
     // 名字不能是 ""（Parser 保证，触发即 InternalError）
     void require_not_null(const std::u32string &name, Position pos) const;
 
+    /**
+     * int/float 字面量 raw_（或 raw_ 按小数点拆出的一段）必须是非空的纯十进制数字串
+     * @param no_leading_zero 是否禁止前导零（单独一个 "0" 除外）
+     */
+    void require_digits(const std::u32string &raw, bool no_leading_zero, Position pos) const;
+
     // vector 元素个数不能少于 min_size（Parser 保证，触发即 InternalError）
     template <typename T>
     void
