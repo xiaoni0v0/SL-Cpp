@@ -213,9 +213,8 @@ AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
 AstNodePtr StaticEvaler::fold_if(AstNodeIf &node) {
     size_t i{0};
     while (i < node.clauses_.size() && is_literal_pure(*node.clauses_[i].cond_) &&
-           !truthy(*node.clauses_[i].cond_)) {
+           !truthy(*node.clauses_[i].cond_))
         ++i;
-    }
 
     if (i < node.clauses_.size() && is_literal_pure(*node.clauses_[i].cond_)) {
         // 循环只有在"非字面量"或者"字面量为 True"时才会停在这个位置，能到这里说明是后者
@@ -754,20 +753,20 @@ std::partial_ordering StaticEvaler::literal_compare(const AstNode &a, const AstN
 
 std::strong_ordering
 StaticEvaler::literal_compare_int(const AstNodeLiteralInt &a, const AstNodeLiteralInt &b) {
-    const bool a_neg{!a.raw_.empty() && a.raw_[0] == U'-'};
-    const bool b_neg{!b.raw_.empty() && b.raw_[0] == U'-'};
+    const bool a_neg{a.raw_[0] == U'-'}, b_neg{b.raw_[0] == U'-'};
 
     // 先比符号
     if (a_neg != b_neg) return a_neg ? std::strong_ordering::less : std::strong_ordering::greater;
 
-    // 符号相同，去掉符号和前导零后比较：位数不等，位数多的更大；位数相等再按字典序
-    const auto magnitude{[](const std::u32string &raw) {
-        size_t idx{!raw.empty() && (raw[0] == U'-' || raw[0] == U'+') ? size_t{1} : size_t{0}};
+    // 工具函数：去掉符号和前导零
+    const auto magnitude{[](const std::u32string &raw) -> std::u32string_view {
+        size_t idx{raw[0] == U'-' || raw[0] == U'+' ? size_t{1} : size_t{0}};
         while (idx + 1 < raw.size() && raw[idx] == U'0') ++idx;
         return std::u32string_view{raw}.substr(idx);
     }};
-    const std::u32string_view ma{magnitude(a.raw_)};
-    const std::u32string_view mb{magnitude(b.raw_)};
+
+    // 符号相同，去掉符号和前导零后比较：位数不等，位数多的更大；位数相等再按字典序
+    const std::u32string_view ma{magnitude(a.raw_)}, mb{magnitude(b.raw_)};
 
     std::strong_ordering magnitude_cmp{std::strong_ordering::equal};
     if (ma.size() != mb.size())
@@ -775,8 +774,9 @@ StaticEvaler::literal_compare_int(const AstNodeLiteralInt &a, const AstNodeLiter
     else if (const int c{ma.compare(mb)}; c != 0)
         magnitude_cmp = c <=> 0;
 
-    if (!a_neg) return magnitude_cmp; // 都非负，绝对值大小就是数值大小
-    // 都是负数：绝对值越大，数值越小，方向取反
+    // 都非负：绝对值大小就是数值大小
+    if (!a_neg) return magnitude_cmp;
+    // 都是负：绝对值越大，数值越小，方向取反
     if (magnitude_cmp == std::strong_ordering::less) return std::strong_ordering::greater;
     if (magnitude_cmp == std::strong_ordering::greater) return std::strong_ordering::less;
     return std::strong_ordering::equal;

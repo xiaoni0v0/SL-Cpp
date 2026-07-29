@@ -2,6 +2,7 @@
 
 #include "../../builtins/exceptions/InternalError.h"
 #include "../../builtins/exceptions/SyntaxError.h"
+#include "../../utils/string_utils.h"
 
 #include <cassert>
 #include <unordered_set>
@@ -28,6 +29,7 @@ void SyntaxChecker::check(const AstNode &node) {
 #define X(nt)                                                                                      \
     if (const auto *n{dynamic_cast<const nt *>(p)}) return check(*n);
 #include "../../parser/ast_nodes/x_ast_nodes.h"
+
 #undef X
 
     assert(!"Unknown node type");
@@ -239,7 +241,12 @@ void SyntaxChecker::check(const AstNodeLiteralBool &) {}
 
 void SyntaxChecker::check(const AstNodeLiteralGL &) {}
 
-void SyntaxChecker::check(const AstNodeLiteralInt &) {}
+void SyntaxChecker::check(const AstNodeLiteralInt &node) {
+    if (node.raw_.empty()) error_internal("int literal has empty raw text", node.pos_);
+    for (const char32_t c : node.raw_) {
+        if (!is_digit(c)) error_internal("int literal contains a non-digit character", node.pos_);
+    }
+}
 
 void SyntaxChecker::check(const AstNodeLiteralFloat &) {}
 

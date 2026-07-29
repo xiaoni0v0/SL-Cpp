@@ -207,6 +207,18 @@ TEST_SUITE("SyntaxChecker 防御性断言（畸形 AST，正常解析永远构�
         check_throws_internal_error_with(*program, "unexpected empty name");
     }
 
+    TEST_CASE("AstNodeLiteralInt：raw_ 是空字符串") {
+        AstNodeProgramPtr program{wrap(std::make_unique<AstNodeLiteralInt>(Position{0, 0}, U""))};
+        check_throws_internal_error_with(*program, "empty raw text");
+    }
+
+    TEST_CASE("AstNodeLiteralInt：raw_ 含非数字字符") {
+        AstNodeProgramPtr program{
+            wrap(std::make_unique<AstNodeLiteralInt>(Position{0, 0}, U"12a"))
+        };
+        check_throws_internal_error_with(*program, "non-digit character");
+    }
+
     TEST_CASE(
         "AstNodeTry：某个 except 子句的 exceptions_ 为空（裸 except 语法上不允许，"
         "Parser 已经保证，这里是防御性断言）"
