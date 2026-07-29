@@ -124,7 +124,7 @@ AstNodeLiteralInt promote_as_int(const AstNode &node) {
 
 } // namespace
 
-AstNodePtr StaticEvaler::fold_unary(AstNodeOpUnary &node) {
+AstNodePtr StaticEvaler::fold_unary(const AstNodeOpUnary &node) {
     using enum AstNodeOpUnary::OpType;
 
     switch (node.op_) {
@@ -168,7 +168,7 @@ AstNodePtr StaticEvaler::fold_binary(AstNodeOpBinary &node) {
     }
 }
 
-AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
+AstNodePtr StaticEvaler::fold_compare(const AstNodeCompare &node) {
     using enum AstNodeCompare::OpType;
 
     for (const auto &operand : node.operands_)
@@ -256,7 +256,7 @@ AstNodePtr StaticEvaler::fold_for_cond(AstNodeForCond &node) {
     return std::make_unique<AstNodeCompound>(node.pos_, std::move(exprs));
 }
 
-AstNodePtr StaticEvaler::fold_not(AstNodeOpUnary &node) {
+AstNodePtr StaticEvaler::fold_not(const AstNodeOpUnary &node) {
     if (!is_literal_pure(*node.operand_)) return nullptr;
 
     return make_bool(node.pos_, !truthy(*node.operand_));
@@ -349,7 +349,7 @@ AstNodePtr StaticEvaler::fold_mul(AstNodeOpBinary &node) {
     return nullptr;
 }
 
-AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpUnary &node) {
+AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpUnary &node) {
     using enum AstNodeOpUnary::OpType;
     const AstNode &operand{*node.operand_};
 
@@ -369,7 +369,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpUnary &node) {
     return make_float(node.pos_, node.op_ == Pos ? v : -v);
 }
 
-AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
+AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpBinary &node) {
     using enum AstNodeOpBinary::OpType;
     const AstNode &l{*node.left_}, &r{*node.right_};
     if (!is_literal_pure(l) || !is_literal_pure(r) || !is_numeric(l) || !is_numeric(r))
@@ -476,7 +476,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(AstNodeOpBinary &node) {
     }
 }
 
-AstNodePtr StaticEvaler::fold_bitwise(AstNodeOpUnary &node) {
+AstNodePtr StaticEvaler::fold_bitwise(const AstNodeOpUnary &node) {
     const AstNode &operand{*node.operand_};
     if (!is_literal_pure(operand) || !is_int_family(operand)) return nullptr;
 
@@ -485,7 +485,7 @@ AstNodePtr StaticEvaler::fold_bitwise(AstNodeOpUnary &node) {
     return make_int(node.pos_, ~*v); // 按位取反不会溢出，无需额外检查
 }
 
-AstNodePtr StaticEvaler::fold_bitwise(AstNodeOpBinary &node) {
+AstNodePtr StaticEvaler::fold_bitwise(const AstNodeOpBinary &node) {
     using enum AstNodeOpBinary::OpType;
     const AstNode &l{*node.left_}, &r{*node.right_};
     if (!is_literal_pure(l) || !is_literal_pure(r) || !is_int_family(l) || !is_int_family(r))

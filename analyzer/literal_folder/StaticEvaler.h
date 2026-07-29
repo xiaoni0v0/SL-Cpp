@@ -50,11 +50,11 @@ class StaticEvaler final {
     // —————————— 一级入口 ——————————
 
     // 一元
-    [[nodiscard]] static AstNodePtr fold_unary(AstNodeOpUnary &node);
+    [[nodiscard]] static AstNodePtr fold_unary(const AstNodeOpUnary &node);
     // 二元
     [[nodiscard]] static AstNodePtr fold_binary(AstNodeOpBinary &node);
     // 二元比较
-    [[nodiscard]] static AstNodePtr fold_compare(AstNodeCompare &node);
+    [[nodiscard]] static AstNodePtr fold_compare(const AstNodeCompare &node);
     // 死分支消除
     [[nodiscard]] static AstNodePtr fold_if(AstNodeIf &node);
     // 死循环消除
@@ -63,7 +63,7 @@ class StaticEvaler final {
     // —————————— 二级入口 ——————————
 
     // not
-    [[nodiscard]] static AstNodePtr fold_not(AstNodeOpUnary &node);
+    [[nodiscard]] static AstNodePtr fold_not(const AstNodeOpUnary &node);
     // + ：数值相加或 str/tuple/list 拼接
     [[nodiscard]] static AstNodePtr fold_add(AstNodeOpBinary &node);
     // * ：数值相乘或 str/tuple/list 重复
@@ -72,16 +72,16 @@ class StaticEvaler final {
     // 纯数值算术
 
     // 一元 + -
-    [[nodiscard]] static AstNodePtr fold_arithmetic(AstNodeOpUnary &node);
+    [[nodiscard]] static AstNodePtr fold_arithmetic(const AstNodeOpUnary &node);
     // 二元 + - * / // % **
-    [[nodiscard]] static AstNodePtr fold_arithmetic(AstNodeOpBinary &node);
+    [[nodiscard]] static AstNodePtr fold_arithmetic(const AstNodeOpBinary &node);
 
     // bool/int 的位运算
 
     // 一元 ~
-    [[nodiscard]] static AstNodePtr fold_bitwise(AstNodeOpUnary &node);
+    [[nodiscard]] static AstNodePtr fold_bitwise(const AstNodeOpUnary &node);
     // 二元 & ^ | << >>
-    [[nodiscard]] static AstNodePtr fold_bitwise(AstNodeOpBinary &node);
+    [[nodiscard]] static AstNodePtr fold_bitwise(const AstNodeOpBinary &node);
 
     // and or。折叠的时候不短路
     [[nodiscard]] static AstNodePtr fold_and_or(AstNodeOpBinary &node);
