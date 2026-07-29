@@ -75,6 +75,30 @@ TEST_SUITE("StaticEvaler 比较") {
         );
     }
 
+    TEST_CASE(
+        "链式比较短路折叠：前面已经确定为 False，后面的非字面量（含调用）不会被求值，直接折成 False"
+    ) {
+        // 1 < 0 < f()：短路语义等价于 (1<0) and (0<f())，第一环 1<0 就是 False，
+        // 短路之后 0<f() 根本不会被求值，f() 也就不会被调用——折叠应该能利用这一点，
+        // 不需要 f() 本身是字面量就能把整条链直接折成 False
+        CHECK(fold_json(U"1 < 0 < f()") == bool_lit(false));
+        // 同理，非字面量出现在更靠前的位置也一样：1 > 2 已经确定 False，后面的 x 不会被摸到
+        CHECK(fold_json(U"1 > 2 < x") == bool_lit(false));
+    }
+
+    TEST_CASE("链式比较部分折叠：确定为 True 的字面量前缀可以安全丢弃，只保留没法判定的子链") {
+        // 1 < 2 < x 等价于 (1<2) and (2<x)，1<2 恒为 True 且无副作用，可以丢掉，
+        // 折叠结果应该是缩短后的子链 2 < x，而不是完全不折
+        CHECK(
+            fold_json(U"1 < 2 < x") ==
+            nlohmann::json{
+                {"type", "Compare"},
+                {"operands", {int_lit("2"), {{"type", "Identifier"}, {"identifier", "x"}}}},
+                {"ops", {"<"}}
+            }
+        );
+    }
+
     TEST_CASE("is 一律不折（对象同一性没法在编译期安全预判，哪怕是 None）") {
         CHECK(
             fold_json(U"None is None") ==

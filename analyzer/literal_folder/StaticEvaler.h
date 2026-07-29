@@ -54,7 +54,7 @@ class StaticEvaler final {
     // 二元
     [[nodiscard]] static AstNodePtr fold_binary(AstNodeOpBinary &node);
     // 二元比较
-    [[nodiscard]] static AstNodePtr fold_compare(const AstNodeCompare &node);
+    [[nodiscard]] static AstNodePtr fold_compare(AstNodeCompare &node);
     // 死分支消除
     [[nodiscard]] static AstNodePtr fold_if(AstNodeIf &node);
     // 死循环消除

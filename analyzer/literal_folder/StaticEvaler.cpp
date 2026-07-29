@@ -77,6 +77,7 @@ std::optional<int64_t> checked_pow(int64_t base, int64_t exponent) {
             base = *next_base;
         }
     }
+
     return result;
 }
 
@@ -168,24 +169,23 @@ AstNodePtr StaticEvaler::fold_binary(AstNodeOpBinary &node) {
     }
 }
 
-AstNodePtr StaticEvaler::fold_compare(const AstNodeCompare &node) {
+AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
     using enum AstNodeCompare::OpType;
 
-    for (const auto &operand : node.operands_)
-        if (!is_literal_pure(*operand)) return nullptr;
+    // 链式比较短路（a < b < c 等价于 a<b and b<c and ...）
+    size_t i{0};
+    for (; i < node.ops_.size(); ++i) {
+        const AstNode &a{*node.operands_[i]}, &b{*node.operands_[i + 1]};
+        if (!is_literal_pure(a) || !is_literal_pure(b)) break; // 无法确定
 
-    for (size_t i{0}; i < node.ops_.size(); ++i) {
-        const AstNode &a{*node.operands_[i]};
-        const AstNode &b{*node.operands_[i + 1]};
         bool result;
-
         if (node.ops_[i] == Eq || node.ops_[i] == Ne) {
             const bool eq{literal_equal(a, b)};
             result = node.ops_[i] == Eq ? eq : !eq;
         } else {
             const std::partial_ordering cmp{literal_compare(a, b)};
             if (cmp == std::partial_ordering::unordered)
-                return nullptr; // 类型不支持比较，交给运行时报 TypeError
+                return nullptr; // 类型不支持比较，交给运行时报 TypeError，没法折成任何值
             switch (node.ops_[i]) {
             case Lt:
                 result = cmp < 0;
@@ -207,7 +207,25 @@ AstNodePtr StaticEvaler::fold_compare(const AstNodeCompare &node) {
         // 链式比较：一旦某一环为假，整条链短路，值就是这一环的结果（恒为 False）
         if (!result) return make_bool(node.pos_, false);
     }
-    return make_bool(node.pos_, true);
+
+    if (i == node.ops_.size()) return make_bool(node.pos_, true); // 全链都确定为 True
+    if (i == 0) return nullptr;                                   // 第一环就没法判定，整体没能折
+
+    // 前 i 环都是字面量且确定为 True（纯字面量、无副作用，丢掉它们不影响后面的求值和最终结果），
+    // 但接下来的一环没法判定：部分折叠，保留从第 i 个操作数开始的子链，其余原样交给运行时
+    std::vector<AstNodeCompare::OpType> ops;
+    std::vector<AstNodePtr> operands;
+    std::vector<Position> op_positions;
+    for (size_t j{i}; j < node.operands_.size(); ++j)
+        operands.push_back(std::move(node.operands_[j]));
+    for (size_t j{i}; j < node.ops_.size(); ++j) {
+        ops.push_back(node.ops_[j]);
+        op_positions.push_back(node.op_positions_[j]);
+    }
+    const Position new_pos{operands.front()->pos_}; // 新链自己的起始位置=剩下的第一个操作数
+    return std::make_unique<AstNodeCompare>(
+        new_pos, std::move(ops), std::move(operands), std::move(op_positions)
+    );
 }
 
 AstNodePtr StaticEvaler::fold_if(AstNodeIf &node) {
