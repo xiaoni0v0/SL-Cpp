@@ -3,9 +3,9 @@
 #include "../../parser/ast_nodes/ast_nodes.h"
 
 /**
- * 遍历 AST，字面量折叠
+ * 遍历 AST，折叠/精简表达式：常量折叠、死分支/死循环消除、复合表达式与 Program 的死语句剪枝
  */
-class LiteralFolder {
+class ExprFolder {
     AstNodeProgram &root_;
 
     /**
@@ -25,10 +25,10 @@ class LiteralFolder {
 
   public:
     /**
-     * 构造 LiteralFolder 对象
+     * 构造 ExprFolder 对象
      * @param root AST 的根节点
      */
-    explicit LiteralFolder(AstNodeProgram &root);
+    explicit ExprFolder(AstNodeProgram &root);
 
     /**
      * 入口：折整份 Program

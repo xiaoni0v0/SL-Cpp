@@ -1,6 +1,6 @@
 // SL.md 2.2.3 del 表达式——语法：del target。
 // 语法层只解析一个表达式当 target，"target 必须是标识符或属性访问"
-// 是语义层（SyntaxChecker）的校验， 不是 parser
+// 是语义层（SemanticChecker）的校验， 不是 parser
 // 的事，所以这里故意也测了几个语义上非法、但语法上能正常解析出来的 target。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"

@@ -1,9 +1,9 @@
-// SyntaxChecker：break/continue（loop_depth）、return/global（local_scope_depth）的作用域跟踪。
+// SemanticChecker：break/continue（loop_depth）、return/global（local_scope_depth）的作用域跟踪。
 #include "test_utils.h"
 
 #include <doctest/doctest.h>
 
-TEST_SUITE("SyntaxChecker 作用域跟踪") {
+TEST_SUITE("SemanticChecker 作用域跟踪") {
 
     TEST_CASE("break/continue 在循环外一律报错") {
         check_throws_with(U"break", "break outside loop");
@@ -61,7 +61,7 @@ TEST_SUITE("SyntaxChecker 作用域跟踪") {
     }
 }
 
-TEST_SUITE("SyntaxChecker del 目标合法性") {
+TEST_SUITE("SemanticChecker del 目标合法性") {
 
     TEST_CASE("del 标识符合法") { CHECK_NOTHROW(check_program(U"del x")); }
 
@@ -83,7 +83,7 @@ TEST_SUITE("SyntaxChecker del 目标合法性") {
     }
 }
 
-TEST_SUITE("SyntaxChecker try-finally") {
+TEST_SUITE("SemanticChecker try-finally") {
 
     TEST_CASE("try 只有 finally 没有 except 合法") {
         CHECK_NOTHROW(check_program(U"try a finally b"));

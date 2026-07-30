@@ -1,9 +1,9 @@
-// SyntaxChecker：字典字面量的 **/k:v 检查，调用参数里 can_star/can_double_star 上下文传递。
+// SemanticChecker：字典字面量的 **/k:v 检查，调用参数里 can_star/can_double_star 上下文传递。
 #include "test_utils.h"
 
 #include <doctest/doctest.h>
 
-TEST_SUITE("SyntaxChecker 字典字面量") {
+TEST_SUITE("SemanticChecker 字典字面量") {
 
     TEST_CASE("普通 k: v 项、** 展开项各种组合都合法") {
         CHECK_NOTHROW(check_program(U"{k: v}"));
@@ -20,7 +20,7 @@ TEST_SUITE("SyntaxChecker 字典字面量") {
     }
 }
 
-TEST_SUITE("SyntaxChecker 调用参数") {
+TEST_SUITE("SemanticChecker 调用参数") {
 
     TEST_CASE("普通位置参数、关键字参数、*/** 展开都合法") {
         CHECK_NOTHROW(check_program(U"f(1, 2)"));

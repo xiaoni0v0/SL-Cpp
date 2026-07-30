@@ -48,10 +48,10 @@ inline nlohmann::json parse_program_json(const std::u32string &source) {
     return nlohmann::json(parse_program(source)->to_json());
 }
 
-// 解析整份源码（只到 Parser 这一步，不跑 SyntaxChecker），要求抛出的 SyntaxError 消息里包含指定
+// 解析整份源码（只到 Parser 这一步，不跑 SemanticChecker），要求抛出的 SyntaxError 消息里包含指定
 // 子串（用于区分"确实是这条规则报的错"，不是恰好被别的规则先一步拦下来）。跟
-// test/analyzer/syntax_checker/test_utils.h 里同名但语义不同的 check_throws_with（那个还会跑
-// SyntaxChecker） 故意区分开名字，避免两边都被包含时产生重定义。
+// test/analyzer/semantic_checker/test_utils.h 里同名但语义不同的 check_throws_with（那个还会跑
+// SemanticChecker） 故意区分开名字，避免两边都被包含时产生重定义。
 inline void
 check_parse_throws_with(const std::u32string &source, const std::string &message_substring) {
     try {

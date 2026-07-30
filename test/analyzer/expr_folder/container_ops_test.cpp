@@ -1,4 +1,4 @@
-// StaticEvaler/LiteralFolder：str/tuple/list 的 +（拼接）/*（重复），SL.md 3.4.2。
+// StaticEvaler/ExprFolder：str/tuple/list 的 +（拼接）/*（重复），SL.md 3.4.2。
 // dict 的一切运算（含 |）不参与折叠——本质上依赖 VM 才能算，见 StaticEvaler.h 类注释。
 //
 // 两条额外的安全限制/规则（StaticEvaler.h 类注释也有记录）：

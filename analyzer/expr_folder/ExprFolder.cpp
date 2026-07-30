@@ -1,18 +1,18 @@
-#include "LiteralFolder.h"
+#include "ExprFolder.h"
 
 #include "StaticEvaler.h"
 
 #include <cassert>
 #include <utility>
 
-void LiteralFolder::visit_and_replace(AstNodePtr &node) {
+void ExprFolder::visit_and_replace(AstNodePtr &node) {
     if (!node) return;
     visit(*node);
     // 折到不动为止
     while (AstNodePtr folded{StaticEvaler::fold(*node)}) node = std::move(folded);
 }
 
-void LiteralFolder::visit(AstNode &node) {
+void ExprFolder::visit(AstNode &node) {
     AstNode *const p{&node}; // 变成指针再 dynamic_cast
 
 #define X(nt)                                                                                      \
@@ -23,7 +23,7 @@ void LiteralFolder::visit(AstNode &node) {
     assert(!"Unknown node type");
 }
 
-void LiteralFolder::visit(AstNodeClass &node) {
+void ExprFolder::visit(AstNodeClass &node) {
     for (auto &deco : node.decorators_) visit_and_replace(deco);
     for (auto &base : node.bases_) visit_and_replace(base);
     for (auto &capture : node.captures_) visit_and_replace(capture.value_expr_);
@@ -31,7 +31,7 @@ void LiteralFolder::visit(AstNodeClass &node) {
     visit(*node.body_);
 }
 
-void LiteralFolder::visit(AstNodeIf &node) {
+void ExprFolder::visit(AstNodeIf &node) {
     for (auto &clause : node.clauses_) {
         visit_and_replace(clause.cond_);
         visit_and_replace(clause.body_);
@@ -39,26 +39,26 @@ void LiteralFolder::visit(AstNodeIf &node) {
     visit_and_replace(node.else_expr_);
 }
 
-void LiteralFolder::visit(AstNodeForCond &node) {
+void ExprFolder::visit(AstNodeForCond &node) {
     visit_and_replace(node.init_);
     visit_and_replace(node.cond_);
     visit_and_replace(node.inc_);
     visit_and_replace(node.body_);
 }
 
-void LiteralFolder::visit(AstNodeForIter &node) {
+void ExprFolder::visit(AstNodeForIter &node) {
     visit_and_replace(node.target_);
     visit_and_replace(node.iterable_);
     visit_and_replace(node.body_);
 }
 
-void LiteralFolder::visit(AstNodeBreak &) {}
+void ExprFolder::visit(AstNodeBreak &) {}
 
-void LiteralFolder::visit(AstNodeContinue &) {}
+void ExprFolder::visit(AstNodeContinue &) {}
 
-void LiteralFolder::visit(AstNodeReturn &node) { visit_and_replace(node.value_); }
+void ExprFolder::visit(AstNodeReturn &node) { visit_and_replace(node.value_); }
 
-void LiteralFolder::visit(AstNodeTry &node) {
+void ExprFolder::visit(AstNodeTry &node) {
     visit_and_replace(node.try_expr_);
     for (auto &clause : node.except_clauses_) {
         for (auto &exc : clause.exceptions_) visit_and_replace(exc);
@@ -67,14 +67,14 @@ void LiteralFolder::visit(AstNodeTry &node) {
     visit_and_replace(node.finally_expr_);
 }
 
-void LiteralFolder::visit(AstNodeRaise &node) { visit_and_replace(node.value_); }
+void ExprFolder::visit(AstNodeRaise &node) { visit_and_replace(node.value_); }
 
-void LiteralFolder::visit(AstNodeDecorator &node) {
+void ExprFolder::visit(AstNodeDecorator &node) {
     visit_and_replace(node.decorator_);
     visit_and_replace(node.target_);
 }
 
-void LiteralFolder::visit(AstNodeFunc &node) {
+void ExprFolder::visit(AstNodeFunc &node) {
     for (auto &deco : node.decorators_) visit_and_replace(deco);
     for (auto &capture : node.captures_) visit_and_replace(capture.value_expr_);
     for (auto &param : node.params_.positional_) {
@@ -90,94 +90,94 @@ void LiteralFolder::visit(AstNodeFunc &node) {
     visit(*node.body_);
 }
 
-void LiteralFolder::visit(AstNodeLiteralNone &) {}
+void ExprFolder::visit(AstNodeLiteralNone &) {}
 
-void LiteralFolder::visit(AstNodeLiteralBool &) {}
+void ExprFolder::visit(AstNodeLiteralBool &) {}
 
-void LiteralFolder::visit(AstNodeLiteralGL &) {}
+void ExprFolder::visit(AstNodeLiteralGL &) {}
 
-void LiteralFolder::visit(AstNodeLiteralInt &) {}
+void ExprFolder::visit(AstNodeLiteralInt &) {}
 
-void LiteralFolder::visit(AstNodeLiteralFloat &) {}
+void ExprFolder::visit(AstNodeLiteralFloat &) {}
 
-void LiteralFolder::visit(AstNodeLiteralStr &) {}
+void ExprFolder::visit(AstNodeLiteralStr &) {}
 
-void LiteralFolder::visit(AstNodeLiteralTuple &node) {
+void ExprFolder::visit(AstNodeLiteralTuple &node) {
     for (auto &item : node.items_) visit_and_replace(item);
 }
 
-void LiteralFolder::visit(AstNodeLiteralList &node) {
+void ExprFolder::visit(AstNodeLiteralList &node) {
     for (auto &item : node.items_) visit_and_replace(item);
 }
 
-void LiteralFolder::visit(AstNodeLiteralDict &node) {
+void ExprFolder::visit(AstNodeLiteralDict &node) {
     for (auto &[key, val] : node.items_) {
         visit_and_replace(key);
         visit_and_replace(val);
     }
 }
 
-void LiteralFolder::visit(AstNodeLiteralEllipsis &) {}
+void ExprFolder::visit(AstNodeLiteralEllipsis &) {}
 
-void LiteralFolder::visit(AstNodeProgram &node) {
+void ExprFolder::visit(AstNodeProgram &node) {
     for (auto &e : node.exprs_) visit_and_replace(e);
     StaticEvaler::prune_program(node);
 }
 
-void LiteralFolder::visit(AstNodeCompound &node) {
+void ExprFolder::visit(AstNodeCompound &node) {
     for (auto &e : node.exprs_) visit_and_replace(e);
 }
 
-void LiteralFolder::visit(AstNodeStar &node) { visit_and_replace(node.operand_); }
+void ExprFolder::visit(AstNodeStar &node) { visit_and_replace(node.operand_); }
 
-void LiteralFolder::visit(AstNodeDoubleStar &node) { visit_and_replace(node.operand_); }
+void ExprFolder::visit(AstNodeDoubleStar &node) { visit_and_replace(node.operand_); }
 
-void LiteralFolder::visit(AstNodeOpUnary &node) { visit_and_replace(node.operand_); }
+void ExprFolder::visit(AstNodeOpUnary &node) { visit_and_replace(node.operand_); }
 
-void LiteralFolder::visit(AstNodeOpBinary &node) {
+void ExprFolder::visit(AstNodeOpBinary &node) {
     visit_and_replace(node.left_);
     visit_and_replace(node.right_);
 }
 
-void LiteralFolder::visit(AstNodeCompare &node) {
+void ExprFolder::visit(AstNodeCompare &node) {
     for (auto &operand : node.operands_) visit_and_replace(operand);
 }
 
-void LiteralFolder::visit(AstNodeIs &node) {
+void ExprFolder::visit(AstNodeIs &node) {
     for (auto &operand : node.operands_) visit_and_replace(operand);
 }
 
-void LiteralFolder::visit(AstNodeAssign &node) {
+void ExprFolder::visit(AstNodeAssign &node) {
     visit_and_replace(node.target_);
     visit_and_replace(node.value_);
 }
 
-void LiteralFolder::visit(AstNodeCompoundAssign &node) {
+void ExprFolder::visit(AstNodeCompoundAssign &node) {
     visit_and_replace(node.target_);
     visit_and_replace(node.value_);
 }
 
-void LiteralFolder::visit(AstNodeCall &node) {
+void ExprFolder::visit(AstNodeCall &node) {
     visit_and_replace(node.object_);
     for (auto &arg : node.positional_args_) visit_and_replace(arg);
     for (auto &kw : node.keyword_args_) visit_and_replace(kw.value_);
 }
 
-void LiteralFolder::visit(AstNodeIndex &node) {
+void ExprFolder::visit(AstNodeIndex &node) {
     visit_and_replace(node.object_);
     for (auto &arg : node.args_) visit_and_replace(arg);
 }
 
-void LiteralFolder::visit(AstNodeAttr &node) { visit_and_replace(node.object_); }
+void ExprFolder::visit(AstNodeAttr &node) { visit_and_replace(node.object_); }
 
-void LiteralFolder::visit(AstNodeIdentifier &) {}
+void ExprFolder::visit(AstNodeIdentifier &) {}
 
-void LiteralFolder::visit(AstNodeDel &node) { visit_and_replace(node.target_); }
+void ExprFolder::visit(AstNodeDel &node) { visit_and_replace(node.target_); }
 
-void LiteralFolder::visit(AstNodeGlobal &) {}
+void ExprFolder::visit(AstNodeGlobal &) {}
 
-LiteralFolder::LiteralFolder(AstNodeProgram &root) : root_{root} {}
+ExprFolder::ExprFolder(AstNodeProgram &root) : root_{root} {}
 
-void LiteralFolder::fold() const && { visit(root_); }
+void ExprFolder::fold() const && { visit(root_); }
 
-void LiteralFolder::fold_expr(AstNodePtr &node) { visit_and_replace(node); }
+void ExprFolder::fold_expr(AstNodePtr &node) { visit_and_replace(node); }

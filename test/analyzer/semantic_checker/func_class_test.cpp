@@ -1,9 +1,9 @@
-// SyntaxChecker：func/class 的捕获/形参重名检查、形参顺序规则、doc 槽位校验。
+// SemanticChecker：func/class 的捕获/形参重名检查、形参顺序规则、doc 槽位校验。
 #include "test_utils.h"
 
 #include <doctest/doctest.h>
 
-TEST_SUITE("SyntaxChecker 捕获/形参重名") {
+TEST_SUITE("SemanticChecker 捕获/形参重名") {
 
     TEST_CASE("func 捕获列表内部重名报错") {
         check_throws_with(U"func f[x, x]() {}", "duplicate name in capture/parameter list");
@@ -29,7 +29,7 @@ TEST_SUITE("SyntaxChecker 捕获/形参重名") {
     }
 }
 
-TEST_SUITE("SyntaxChecker 形参顺序（SL.md 2.2.6）") {
+TEST_SUITE("SemanticChecker 形参顺序（SL.md 2.2.6）") {
     // "至多一个 *args""**kwargs 必须最后"现在是 Parser 阶段式解析直接保证的语法错误，
     // 测试挪到了 test/parser/2_2_6_func/func_test.cpp，这里只测仍然是语义层职责的部分。
 
@@ -61,7 +61,7 @@ TEST_SUITE("SyntaxChecker 形参顺序（SL.md 2.2.6）") {
     }
 }
 
-TEST_SUITE("SyntaxChecker doc 槽位") {
+TEST_SUITE("SemanticChecker doc 槽位") {
 
     TEST_CASE("doc 为普通字符串/原始字符串字面量都合法") {
         CHECK_NOTHROW(check_program(U"func f() 'plain doc' {}"));

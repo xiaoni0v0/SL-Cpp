@@ -6,7 +6,7 @@
 // return，也没有副作用，留不留都不影响 Program 的值。`func f() { 1 }` 跟 `func f() {}`
 // 是同一个东西（调用都返回 None），这正是这条规则要处理的情况。
 //
-// 但节点本身的类型/身份不能变——LiteralFolder::root_ 是按引用持有的 AstNodeProgram&，
+// 但节点本身的类型/身份不能变——ExprFolder::root_ 是按引用持有的 AstNodeProgram&，
 // AstNodeFunc::body_/AstNodeClass::body_ 也固定要求是 AstNodeProgramPtr，不是通用的
 // AstNodePtr，没法像复合表达式那样整个节点换成别的类型。所以这里只原地精简 exprs_，
 // 哪怕精简到空也不删除/替换这个节点。

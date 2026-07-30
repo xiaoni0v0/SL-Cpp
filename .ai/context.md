@@ -241,9 +241,9 @@ C++ 调用栈不是一回事，需要解释器显式 guard（对应 `RecursionEr
 独立小节（可读性），纯内部化简。
 
 **Dumper 改用 `AstNode::to_json()` 虚函数**（原来是 X-macro + `dynamic_cast` 链式分发的自由函数）：
-`SyntaxChecker` 有跨节点遍历状态（`Context`），留在外部合理；`Dumper` 纯粹"每个节点知道怎么描述自己"，
+`SemanticChecker` 有跨节点遍历状态（`Context`），留在外部合理；`Dumper` 纯粹"每个节点知道怎么描述自己"，
 没有跨节点状态，虚函数更合适，且编译期强制补全（漏了直接编译失败），比 X-macro"忘加 case 运行时死循环
-栈溢出"安全。代价是 AST 层依赖 `nlohmann/json.hpp`，接受。`SyntaxChecker` 有意不对称，仍是外部 X-macro
+栈溢出"安全。代价是 AST 层依赖 `nlohmann/json.hpp`，接受。`SemanticChecker` 有意不对称，仍是外部 X-macro
 分发。
 
 **节点位置字段几经反复，最终版**：曾经给每个节点补完整的起止范围（Token 加 `end_row/col`、`AstNode` 加
@@ -254,7 +254,7 @@ C++ 调用栈不是一回事，需要解释器显式 guard（对应 `RecursionEr
 `dot_pos_`，`AstNodeCall`/`AstNodeIndex` 的 `paren_pos_`/`bracket_pos_`，`AstNodeFunc`/`Class` 的
 `decorator_positions_`，`Compare`/`Is` 的 `op_positions_`），用统一的 `struct Position{int row,col;}`
 （不用 `pair`，避免 `.first`/`.second` 混淆）。**`AstNode` 基类的 `row_/col_` 最终也统一改成
-`Position pos_`**（全部 ast_node_*.h、Parser.cpp、SyntaxChecker.cpp 跟着改）；`Lexer`/`SyntaxError`
+`Position pos_`**（全部 ast_node_*.h、Parser.cpp、SemanticChecker.cpp 跟着改）；`Lexer`/`SyntaxError`
 保留 `(row, col)` 两个 int 不变——lexer 那边一个 token 只有一种位置，不存在"歧义"，包一层 `Position`
 纯粹多一层访问路径，零收益。
 
@@ -454,15 +454,15 @@ int64_t 就必然走小路径"（每次产出新值后调 `shrink()`）。每个
 特判（原生除法在这里溢出）。测试上刻意不手写巨大常量当预期值，改用"指数加法律"这类恒等式反过来校验，
 避免测试 oracle 本身出错。
 
-## StaticEvaler/LiteralFolder：骨架、引用化、完整实现、范围收窄
+## StaticEvaler/ExprFolder：骨架、引用化、完整实现、范围收窄
 
-**骨架**：按运算符语义家族分组（算术/位运算/比较/逻辑/is），避免类型×运算符组合爆炸。`LiteralFolder`
+**骨架**：按运算符语义家族分组（算术/位运算/比较/逻辑/is），避免类型×运算符组合爆炸。`ExprFolder`
 管树的遍历/替换（拥有 `AstNodePtr` 槽位所有权），`StaticEvaler` 只管"给一个节点判断能不能折"，职责分开。
 
-**`Analyzer`/`SyntaxChecker`/`LiteralFolder` 的入参从裸指针改成引用**：分派函数（`check`/`visit`）内部
+**`Analyzer`/`SemanticChecker`/`ExprFolder` 的入参从裸指针改成引用**：分派函数（`check`/`visit`）内部
 试探类型时仍需要裸指针做 `dynamic_cast<T*>`（失败返回 nullptr；引用版失败是抛异常，拿异常当十几种类型
-里挨个试的正常分派流程是反模式），但对外签名可以是引用。顺带统一了"槽位可能为空"的处理：`SyntaxChecker`
-新增 `check_optional`，跟 `LiteralFolder::visit_and_replace` 一样统一在一层挡掉空指针。
+里挨个试的正常分派流程是反模式），但对外签名可以是引用。顺带统一了"槽位可能为空"的处理：`SemanticChecker`
+新增 `check_optional`，跟 `ExprFolder::visit_and_replace` 一样统一在一层挡掉空指针。
 
 **`StaticEvaler` 的入参不拥有所有权，但能移动子节点**：`fold_and_or` 直接 `std::move` 把没被选中的一侧
 原地丢弃，不需要给 `AstNode` 加 `clone()`。但 `*` 的容器重复分支（`[1,2]*3`）确实需要产出多份独立内容，
@@ -494,7 +494,7 @@ int64_t 就必然走小路径"（每次产出新值后调 `shrink()`）。每个
 写法，因为死分支消除把受限位置的东西搬到了不受限的位置，就悄悄变合法了**。结论：不换顺序。
 
 （顺带把 `doc` 规则改成纯语法检查：`doc` 必须**恰好**是字符串字面量，不再允许 `"a"+"b"`/`"x"*3` 这类
-"编译期可折叠的组合"——因为这条规则本质依赖折叠结果，硬塞进"全程不碰值"的 `SyntaxChecker` 会破坏设计；
+"编译期可折叠的组合"——因为这条规则本质依赖折叠结果，硬塞进"全程不碰值"的 `SemanticChecker` 会破坏设计；
 Python 文档字符串本来就只能是单个字面量，SL 已有反引号字符串覆盖多行/免转义的实际需求，禁掉这个语法糖
 损失很小。）
 
@@ -513,7 +513,7 @@ Python 文档字符串本来就只能是单个字面量，SL 已有反引号字�
 退出码。
 
 **`return`/`global` 允许出现在类体里，是真实的语义变更**（此前类体禁止两者，是我早前实现
-`SyntaxChecker` 时没跟 SL.md 原文逐句核对导致的既有 bug：SL.md 早就写"全局：立即退出当前文件"、"局部
+`SemanticChecker` 时没跟 SL.md 原文逐句核对导致的既有 bug：SL.md 早就写"全局：立即退出当前文件"、"局部
 作用域（函数体或类体）"两处，顶层 return、类体 global 本来就该合法）。`Context::func_depth` 改名
 `local_scope_depth`（现在唯一用途是判断 global 合不合法），`check(AstNodeClass&)` 从清零改成 `++`。
 
@@ -552,9 +552,9 @@ Python 文档字符串本来就只能是单个字面量，SL 已有反引号字�
 可用，只是跟新 import 拿到的不是同一对象（`is` 为 False），旧对象没人引用后正常回收——跟
 `eval_isolated` 的模块对象共享同一套"退出缓存后归入普通对象生命周期"规则。
 
-## SyntaxChecker 重构揪出的问题 + 全字段审计
+## SemanticChecker 重构揪出的问题 + 全字段审计
 
-用户自己重构 `SyntaxChecker` 一遍后发现 6 处遗漏，其中三条有值得记住的教训：
+用户自己重构 `SemanticChecker` 一遍后发现 6 处遗漏，其中三条有值得记住的教训：
 - 形参顺序检查逻辑本身是错的：原来"见过 `*args` 之后任何普通形参一律报错"，但 SL.md 原文这条顺序
   规则**只管 `*args` 之前的位置形参部分**，之后是仅关键字形参，彼此之间有没有默认值不受约束
   （`func f(*x, y) {}` 合法，同 Python）。
@@ -562,10 +562,10 @@ Python 文档字符串本来就只能是单个字面量，SL 已有反引号字�
   `object_`/`args_`——`a[break] = 1` 这种赋值目标内部的子表达式完全不会被检查。修法是形状判断通过后
   额外调一次完整的 `check(node)`。
 - `AstNodeCall` 的 `args_`/`kwargs_` 是两个独立 vector，解析完就丢失原始书写顺序，导致 `f(a=1, 1)`
-  这种理应报错的写法测不出来——不是 SyntaxChecker 该补的检查漏了，是 `AstNodeCall` 结构本身不足以
+  这种理应报错的写法测不出来——不是 SemanticChecker 该补的检查漏了，是 `AstNodeCall` 结构本身不足以
   表达顺序，需要结构性重做（见下一节）。
 
-新增了完整的 `SyntaxChecker` 测试套件（此前完全没有专门测试，只在主程序里被间接跑到，这也是这些问题
+新增了完整的 `SemanticChecker` 测试套件（此前完全没有专门测试，只在主程序里被间接跑到，这也是这些问题
 潜伏这么久没被发现的原因）。
 
 之后又做了一轮"每个字段都要检查"的全字段审计，揪出 5 处遗漏（`AstNodeClass.captures_` 没查空标识符、
@@ -583,12 +583,12 @@ Python 文档字符串本来就只能是单个字面量，SL 已有反引号字�
 裸 `*`/`/`（Python 风格仅位置/仅关键字分隔符）讨论后确定都不加——`*_` 已经能起到"强制后面形参仅关键字
 传参"的效果，不需要为省这点新增语法。
 
-**核心思路**：把"非法状态在数据形状层面就不可表达"，而不是在 SyntaxChecker 里用状态机扫描去挡——
+**核心思路**：把"非法状态在数据形状层面就不可表达"，而不是在 SemanticChecker 里用状态机扫描去挡——
 形参顺序那个 bug 的根源就是原来 `OneParam` 是打了 tag 的扁平 vector，`*args` 前后两个语义完全不同的
 区域混在一起靠一个布尔标志人工区分，这类状态机代码正是最容易漏边界情况的地方。改法：`AstNodeFunc`
 拆成 4 个字段对应形参列表的 4 段（`params_`、`var_args_name_`、`kw_only_params_`、`var_kwargs_name_`，
 后来又收进嵌套的 `AllParams` 结构体），Parser 按这 4 段顺序解析，"至多一个 `*args`"等约束变成解析到
-不该出现的 token 时的自然语法错误，SyntaxChecker 的顺序检查大幅简化（无默认值必须排前面只需要对
+不该出现的 token 时的自然语法错误，SemanticChecker 的顺序检查大幅简化（无默认值必须排前面只需要对
 `params_` 这一个 vector 线性扫）。
 
 `AstNodeCall` 同一个思路但拆法不同（调用实参没有形参那种"显式 token 标记区域边界"，且必须严格保留
@@ -613,9 +613,9 @@ AST 才会）全都走 `error()`，跟真正的 SL 语义错误一样抛 `Syntax
 
 ## CMake 测试目标合并
 
-`SL_Cpp_SyntaxChecker_Tests` 并入 `SL_Cpp_Analyzer_Tests`（两边测试文件的 `TEST_SUITE` 名字和目录
-结构已经足够区分归属，没必要再包一层可执行文件）；`test/syntax_checker/` 目录同步搬进
-`test/analyzer/syntax_checker/`，跟源码目录结构对称。
+`SL_Cpp_SemanticChecker_Tests` 并入 `SL_Cpp_Analyzer_Tests`（两边测试文件的 `TEST_SUITE` 名字和目录
+结构已经足够区分归属，没必要再包一层可执行文件）；`test/semantic_checker/` 目录同步搬进
+`test/analyzer/semantic_checker/`，跟源码目录结构对称。
 
 ## `to_json()` 加 `include_pos` 参数：NVI 模式，避开 clang-tidy 的"虚函数带默认参数"
 
@@ -706,14 +706,14 @@ grep（注释本来就不一定写全），要真的读函数语义。逐个模�
   修法：`shrink()` 开头加一条"已经是小路径就直接原样返回"，把这个函数变成对任意路径输入都安全，
   不再是只能传大路径值的窄契约。这类"表面上是防御性 assert 的活，做起来才发现是真 bug"的情况，
   正是不能只满足于补注释、必须真的读函数体在干什么的原因。
-- **`analyzer/literal_folder/StaticEvaler`**：`truthy`/`node_to_int64`/`node_to_double`/
+- **`analyzer/expr_folder/StaticEvaler`**：`truthy`/`node_to_int64`/`node_to_double`/
   `clone_literal`/`is_deeply_immutable` 都要求 `is_literal_pure`/`is_int_family`/`is_numeric`
   成立；`literal_equal`/`literal_compare`（原来完全没写这条前提，纯粹是读函数体recursion 才看出来
   隐含要求两个操作数都是 `is_literal_pure`）、`literal_compare_int`（要求 `raw_` 非空，这条已经在
-  之前一轮挪去 `SyntaxChecker` 检查，这次只是把 assert 加回来）都补齐了。顺带发现
+  之前一轮挪去 `SemanticChecker` 检查，这次只是把 assert 加回来）都补齐了。顺带发现
   `node_to_double` 的文档注释一直写着"node -> int64_t"（复制 `node_to_int64` 时改漏了返回类型），
   顺手修正。
-- **`analyzer/syntax_checker/SyntaxChecker`、`utils/string_utils`、`builtins/exceptions`**：
+- **`analyzer/semantic_checker/SemanticChecker`、`utils/string_utils`、`builtins/exceptions`**：
   这几处**故意不加 assert**——它们的"检查"本来就是通过抛 `SyntaxError`/`InternalError`/
   `EncodingError` 实现的，是要在 Release 构建里也生效的真实校验（`assert` 在 `NDEBUG` 下会被优化掉），
   跟"调用方保证、不检查"这个类别是两回事，不能混着改。
@@ -896,7 +896,7 @@ deepseek 拿修好的版本又复查了一轮（随机大数对拍 `strtod`、�
 
 用户发现的新折叠点：SL.md 3.4.1 规定复合表达式的值是最后一条子表达式的值、空复合表达式是
 `None`；3.10 规定 `{}` 不引入作用域。之前 `StaticEvaler::fold()` 的 dispatch 完全没有
-`AstNodeCompound` 分支（`LiteralFolder::visit(AstNodeCompound&)` 只递归折子表达式本身，没有对
+`AstNodeCompound` 分支（`ExprFolder::visit(AstNodeCompound&)` 只递归折子表达式本身，没有对
 整个 Compound 节点尝试收缩），SL.md 这条"值等于最后一条"的语义压根没在编译期体现过。
 
 补了 `StaticEvaler::fold_compound`：空复合表达式恒折成 `None`；非空时，只有当 `exprs_`
@@ -935,7 +935,7 @@ deepseek 拿修好的版本又复查了一轮（随机大数对拍 `strtod`、�
 崩溃全靠运气"的伪缺陷，写测试也测不出来（因为测试只看返回值对不对，不会去戳被污染的原节点），
 纯粹是审代码时自己反应过来的。
 
-**`visit_and_replace` 只折一次的问题**：`LiteralFolder::visit_and_replace` 原来是"visit 一次子节点、
+**`visit_and_replace` 只折一次的问题**：`ExprFolder::visit_and_replace` 原来是"visit 一次子节点、
 `fold()` 一次自己"，`fold()` 成功就替换、不会再回头检查替换出来的新节点还能不能继续折。大多数
 `fold_xxx` 没这个问题（它们拼出来的新节点，子节点要么是原树里挪过来的、早就被 visit 过了，要么是
 现造的字面量叶子，没有"还能再折"的空间）；唯二的例外是 `fold_for_cond`：它会现拼一个
@@ -962,7 +962,7 @@ deepseek 拿修好的版本又复查了一轮（随机大数对拍 `strtod`、�
 查证：`AstNodeCompound` 永远挂在通用的 `AstNodePtr` 槽位上（`left_`、`clause.body_`、
 `program.exprs_[i]`……随便什么节点类型都能塞），所以 `fold_compound` 能把整个节点换成别的类型。
 `AstNodeProgram` 不一样，有三处槽位按具体类型 `AstNodeProgram` 声明，不是通用 `AstNodePtr`：
-`LiteralFolder::root_`（`AstNodeProgram &`，引用，压根没法重新指向别的对象）、`AstNodeFunc::body_`
+`ExprFolder::root_`（`AstNodeProgram &`，引用，压根没法重新指向别的对象）、`AstNodeFunc::body_`
 和 `AstNodeClass::body_`（都是 `AstNodeProgramPtr`）。这三处（Analyzer 的作用域检查、以后
 Executor 的调用约定）都在按"函数体/类体/模块顶层就是一串语句"这个假设读，不是按"随便一个表达式"
 读，节点类型不能变。
@@ -970,17 +970,17 @@ Executor 的调用约定）都在按"函数体/类体/模块顶层就是一串�
 **结论（槽位类型这部分站得住，规则是否"统一"这部分错了，见下一条）**：机制不统一——这个不统一是
 有明确、可讲清楚的结构性原因（槽位类型），不是两套随意不同的逻辑。用户确认理解后拍板：直接实现。
 
-改法：新增 `StaticEvaler::prune_program(AstNodeProgram &node)`（公开方法，`LiteralFolder` 要跨类
+改法：新增 `StaticEvaler::prune_program(AstNodeProgram &node)`（公开方法，`ExprFolder` 要跨类
 调用），**原地精简 `node.exprs_`，不返回替换节点、不通过 `fold()`**——哪怕精简到只剩一条也不像
 `fold_compound` 那样展开成裸表达式，节点自身的地址/类型自始至终不变。因为是原地改、没有"改了发现
 不该改、还要把原节点恢复"的回退顾虑，实现比 `fold_compound` 简单：不需要先只读扫一遍判断"丢不丢
 得动"，就算一条都没丢成，把 `exprs_` 整个搬到新 vector 再搬回来也不会破坏节点（无论如何都会执行
 `node.exprs_ = std::move(kept)` 这一步收尾，不存在"提前返回、原节点被移动了一半"的路径）。
-`LiteralFolder::visit(AstNodeProgram&)` 在子表达式各自 `visit_and_replace` 完之后调一下这个方法。
+`ExprFolder::visit(AstNodeProgram&)` 在子表达式各自 `visit_and_replace` 完之后调一下这个方法。
 不需要循环/fixpoint（不像 `fold_for_cond` 那样会现拼一个从没被处理过的新节点，`prune_program`
 处理的 `exprs_` 里的元素全部已经在前一步 `visit_and_replace` 里折到位了，精简一遍就是最终结果）。
 
-测试新建 `test/analyzer/literal_folder/program_prune_test.cpp`，加了个新的测试工具函数
+测试新建 `test/analyzer/expr_folder/program_prune_test.cpp`，加了个新的测试工具函数
 `fold_program_json`（`test/analyzer/test_utils.h`，跟 `fold_json` 的区别是保留 `Program` 这一层，
 不要求恰好一条顶层表达式）。写测试时踩到一次那个老坑：`const auto j{nlohmann::json
 类型的函数返回值}` 被 `nlohmann::json` 的 `initializer_list` 构造函数截胡，当成"用这一个元素
@@ -1013,7 +1013,7 @@ Executor 的调用约定）都在按"函数体/类体/模块顶层就是一串�
 现在整个函数就是一个纯过滤，天然不会有这个问题）。
 
 这次修复暴露了一个连带问题：`test/analyzer/test_utils.h` 的 `fold_json`（几乎全部
-literal_folder 测试都在用）内部是 `LiteralFolder{*program}.fold()` 整份折——现在顶层
+expr_folder 测试都在用）内部是 `ExprFolder{*program}.fold()` 整份折——现在顶层
 `AstNodeProgram` 也会被 `prune_program`，如果测试源码是"恰好一条顶层表达式，且这条折完是纯
 字面量"（比如 `fold_json(U"1 + 2")`，`1+2` 先折成 `3`，`3` 是纯字面量），这条就会被剪空，
 `fold_json` 接着访问 `program->exprs_[0]` 直接越界（`vector subscript out of range`，
@@ -1021,11 +1021,11 @@ literal_folder 测试都在用）内部是 `LiteralFolder{*program}.fold()` 整�
 真正想测的是"这一条表达式自己怎么折"，不是"这份只有一条语句的 Program 剪不剪得动"，
 被 `prune_program` 这个新逻辑误伤了。
 
-修法：给 `LiteralFolder` 加一个新的公开静态入口 `fold_expr(AstNodePtr &node)`——只对单个
+修法：给 `ExprFolder` 加一个新的公开静态入口 `fold_expr(AstNodePtr &node)`——只对单个
 表达式节点做"visit + 折到不动为止"，不触碰 `AstNodeProgram`、不会触发 `prune_program`。
 `visit`/`visit_and_replace` 这一整组方法本来就不碰 `root_`，顺手都改成了 `static`
-（纯净的重构，行为不变）。`fold_json` 改成调 `LiteralFolder::fold_expr(program->exprs_[0])`
-而不是 `LiteralFolder{*program}.fold()`，不再经过 Program 级别的剪枝；`fold_program_json`
+（纯净的重构，行为不变）。`fold_json` 改成调 `ExprFolder::fold_expr(program->exprs_[0])`
+而不是 `ExprFolder{*program}.fold()`，不再经过 Program 级别的剪枝；`fold_program_json`
 （专门测 `prune_program` 本身的那个新工具函数）继续走原来的整份 `fold()`，两个工具函数分工
 更清楚了：一个测"表达式怎么折"，一个测"Program 语句列表怎么剪"。
 
@@ -1033,3 +1033,28 @@ literal_folder 测试都在用）内部是 `LiteralFolder{*program}.fold()` 整�
 `func f() {1;2;3}` 现在剪成空 body，不是剪成 `[3]`），新增一条最直接的回归测试：
 `fold_program_json(U"func f() { 1 }") == fold_program_json(U"func f() {}")`——
 就是这次讨论的原始例子，两边折完必须完全一样。
+
+## `SyntaxChecker` → `SemanticChecker`，`LiteralFolder` → `ExprFolder` 改名
+
+用户指出这两个名字已经名不副实：`SyntaxChecker` 检查的不只是语法（作用域规则、lvalue 合法性、
+`func`/`class` 语义约束、AST 内部结构的防御性校验……），`LiteralFolder` 折的也不只是字面量了
+（死分支/死循环消除、复合表达式和 Program 的死语句剪枝，见前面几条）。改成
+`SemanticChecker`——编译器术语里"语义分析"是紧跟在语法分析后面那一步的标准叫法，比笼统的
+`AstChecker` 更准确，跟已有的顶层 `Analyzer` 类也不会因为都叫"Ast/Analyzer"而混淆；
+`LiteralFolder` 改成 `ExprFolder`，SL"一切皆表达式"，这个类现在折的就是"表达式"这个更大的范畴。
+
+改动范围：目录 `analyzer/syntax_checker` → `analyzer/semantic_checker`、
+`analyzer/literal_folder` → `analyzer/expr_folder`（连带 `test/analyzer/` 下两个同名目录）；
+文件 `SyntaxChecker.{h,cpp}` → `SemanticChecker.{h,cpp}`、`LiteralFolder.{h,cpp}` →
+`ExprFolder.{h,cpp}`（`StaticEvaler.{h,cpp}` 只是跟着挪目录，名字不变——这次没打算动它）；
+全仓库 grep 这四个词（`SyntaxChecker`/`syntax_checker`/`LiteralFolder`/`literal_folder`）出现的
+每一处标识符、路径、注释统一替换。另外顺带更新了几处虽然不含这几个词、但用"语法检查"/"字面量
+折叠"这种描述性措辞指代这两个类自身职责的地方（`CLAUDE.md` 顶部项目管线描述、`ExprFolder.h`
+自己的类头注释、`test/analyzer/test_utils.h` 里 `fold_json`/`fold_program_json`
+的注释）——`.ai/context.md:392`（历史决策记录，讲的是"当年为什么需要独立求值器"这件事本身，
+不是在断言现在的类名）和 `:496`（"纯语法检查"是在说"这条规则只看语法形式、不折叠求值"，
+用的是"语法"本来的含义，跟类名无关）这两处故意没动。
+
+文件改名走的是 `git mv`（保留 git 的 rename 追踪），但没有 `git add`/`commit`——用户明确要求
+"不准 commit、push、reset"，改完整个工作区处于"已暂存的重命名 + 后续内容修改叠加在上面未暂存"
+这种混合状态，交给用户自己决定怎么整理提交。

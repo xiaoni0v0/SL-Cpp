@@ -1,4 +1,4 @@
-#include "SyntaxChecker.h"
+#include "SemanticChecker.h"
 
 #include "../../builtins/exceptions/InternalError.h"
 #include "../../builtins/exceptions/SyntaxError.h"
@@ -7,23 +7,23 @@
 #include <cassert>
 #include <unordered_set>
 
-void SyntaxChecker::error(const std::string &msg, const Position pos) const {
+void SemanticChecker::error(const std::string &msg, const Position pos) const {
     throw SyntaxError{file_path_, pos.row, pos.col, msg};
 }
 
-void SyntaxChecker::error_internal(const std::string &msg, const Position pos) const {
+void SemanticChecker::error_internal(const std::string &msg, const Position pos) const {
     throw InternalError{file_path_, pos.row, pos.col, msg};
 }
 
-void SyntaxChecker::require_not_null(const AstNodePtr &node, const Position pos) const {
+void SemanticChecker::require_not_null(const AstNodePtr &node, const Position pos) const {
     if (!node) error_internal("unexpected null node", pos);
 }
 
-void SyntaxChecker::require_not_null(const std::u32string &name, const Position pos) const {
+void SemanticChecker::require_not_null(const std::u32string &name, const Position pos) const {
     if (name.empty()) error_internal("unexpected empty name", pos);
 }
 
-void SyntaxChecker::require_digits(
+void SemanticChecker::require_digits(
     const std::u32string &raw, const bool no_leading_zero, const Position pos
 ) const {
     if (raw.empty()) error_internal("literal raw text is missing digits", pos);
@@ -33,7 +33,7 @@ void SyntaxChecker::require_digits(
         error_internal("literal raw text has a leading zero", pos);
 }
 
-void SyntaxChecker::check(const AstNode &node) {
+void SemanticChecker::check(const AstNode &node) {
     const AstNode *const p{&node}; // 变成指针再 dynamic_cast
 
 #define X(nt)                                                                                      \
@@ -44,7 +44,7 @@ void SyntaxChecker::check(const AstNode &node) {
     assert(!"Unknown node type");
 }
 
-void SyntaxChecker::check(const AstNodeClass &node) {
+void SemanticChecker::check(const AstNodeClass &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -73,7 +73,7 @@ void SyntaxChecker::check(const AstNodeClass &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeIf &node) {
+void SemanticChecker::check(const AstNodeIf &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -90,7 +90,7 @@ void SyntaxChecker::check(const AstNodeIf &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeForCond &node) {
+void SemanticChecker::check(const AstNodeForCond &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -106,7 +106,7 @@ void SyntaxChecker::check(const AstNodeForCond &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeForIter &node) {
+void SemanticChecker::check(const AstNodeForIter &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -121,15 +121,15 @@ void SyntaxChecker::check(const AstNodeForIter &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeBreak &node) {
+void SemanticChecker::check(const AstNodeBreak &node) {
     if (ctx_.loop_depth == 0) error("break outside loop", node.pos_);
 }
 
-void SyntaxChecker::check(const AstNodeContinue &node) {
+void SemanticChecker::check(const AstNodeContinue &node) {
     if (ctx_.loop_depth == 0) error("continue outside loop", node.pos_);
 }
 
-void SyntaxChecker::check(const AstNodeReturn &node) {
+void SemanticChecker::check(const AstNodeReturn &node) {
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -139,7 +139,7 @@ void SyntaxChecker::check(const AstNodeReturn &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeTry &node) {
+void SemanticChecker::check(const AstNodeTry &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -161,7 +161,7 @@ void SyntaxChecker::check(const AstNodeTry &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeRaise &node) {
+void SemanticChecker::check(const AstNodeRaise &node) {
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -171,7 +171,7 @@ void SyntaxChecker::check(const AstNodeRaise &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeDecorator &node) {
+void SemanticChecker::check(const AstNodeDecorator &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -184,7 +184,7 @@ void SyntaxChecker::check(const AstNodeDecorator &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeFunc &node) {
+void SemanticChecker::check(const AstNodeFunc &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -244,17 +244,17 @@ void SyntaxChecker::check(const AstNodeFunc &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeLiteralNone &) {}
+void SemanticChecker::check(const AstNodeLiteralNone &) {}
 
-void SyntaxChecker::check(const AstNodeLiteralBool &) {}
+void SemanticChecker::check(const AstNodeLiteralBool &) {}
 
-void SyntaxChecker::check(const AstNodeLiteralGL &) {}
+void SemanticChecker::check(const AstNodeLiteralGL &) {}
 
-void SyntaxChecker::check(const AstNodeLiteralInt &node) {
+void SemanticChecker::check(const AstNodeLiteralInt &node) {
     require_digits(node.raw_, true, node.pos_);
 }
 
-void SyntaxChecker::check(const AstNodeLiteralFloat &node) {
+void SemanticChecker::check(const AstNodeLiteralFloat &node) {
     const size_t dot{node.raw_.find(U'.')};
     if (dot == std::u32string::npos)
         error_internal("float literal raw text is missing a '.'", node.pos_);
@@ -262,9 +262,9 @@ void SyntaxChecker::check(const AstNodeLiteralFloat &node) {
     require_digits(node.raw_.substr(dot + 1), false, node.pos_);
 }
 
-void SyntaxChecker::check(const AstNodeLiteralStr &) {}
+void SemanticChecker::check(const AstNodeLiteralStr &) {}
 
-void SyntaxChecker::check(const AstNodeLiteralTuple &node) {
+void SemanticChecker::check(const AstNodeLiteralTuple &node) {
     const Context saved{ctx_};
     ctx_.can_star = true;
     ctx_.can_double_star = false;
@@ -274,7 +274,7 @@ void SyntaxChecker::check(const AstNodeLiteralTuple &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeLiteralList &node) {
+void SemanticChecker::check(const AstNodeLiteralList &node) {
     const Context saved{ctx_};
     ctx_.can_star = true;
     ctx_.can_double_star = false;
@@ -284,7 +284,7 @@ void SyntaxChecker::check(const AstNodeLiteralList &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeLiteralDict &node) {
+void SemanticChecker::check(const AstNodeLiteralDict &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -308,9 +308,9 @@ void SyntaxChecker::check(const AstNodeLiteralDict &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeLiteralEllipsis &) {}
+void SemanticChecker::check(const AstNodeLiteralEllipsis &) {}
 
-void SyntaxChecker::check(const AstNodeProgram &node) {
+void SemanticChecker::check(const AstNodeProgram &node) {
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -320,7 +320,7 @@ void SyntaxChecker::check(const AstNodeProgram &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeCompound &node) {
+void SemanticChecker::check(const AstNodeCompound &node) {
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -330,7 +330,7 @@ void SyntaxChecker::check(const AstNodeCompound &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeStar &node) {
+void SemanticChecker::check(const AstNodeStar &node) {
     const Position pos{node.pos_};
 
     if (!ctx_.can_star) error("* can only appear in tuple, list, or function call arguments", pos);
@@ -344,7 +344,7 @@ void SyntaxChecker::check(const AstNodeStar &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeDoubleStar &node) {
+void SemanticChecker::check(const AstNodeDoubleStar &node) {
     const Position pos{node.pos_};
 
     if (!ctx_.can_double_star)
@@ -359,7 +359,7 @@ void SyntaxChecker::check(const AstNodeDoubleStar &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeOpUnary &node) {
+void SemanticChecker::check(const AstNodeOpUnary &node) {
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -369,7 +369,7 @@ void SyntaxChecker::check(const AstNodeOpUnary &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeOpBinary &node) {
+void SemanticChecker::check(const AstNodeOpBinary &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -382,7 +382,7 @@ void SyntaxChecker::check(const AstNodeOpBinary &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeCompare &node) {
+void SemanticChecker::check(const AstNodeCompare &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -397,7 +397,7 @@ void SyntaxChecker::check(const AstNodeCompare &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeIs &node) {
+void SemanticChecker::check(const AstNodeIs &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -412,7 +412,7 @@ void SyntaxChecker::check(const AstNodeIs &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeAssign &node) {
+void SemanticChecker::check(const AstNodeAssign &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -425,7 +425,7 @@ void SyntaxChecker::check(const AstNodeAssign &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeCompoundAssign &node) {
+void SemanticChecker::check(const AstNodeCompoundAssign &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -438,7 +438,7 @@ void SyntaxChecker::check(const AstNodeCompoundAssign &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeCall &node) {
+void SemanticChecker::check(const AstNodeCall &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -464,7 +464,7 @@ void SyntaxChecker::check(const AstNodeCall &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeIndex &node) {
+void SemanticChecker::check(const AstNodeIndex &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -480,7 +480,7 @@ void SyntaxChecker::check(const AstNodeIndex &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeAttr &node) {
+void SemanticChecker::check(const AstNodeAttr &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -493,11 +493,11 @@ void SyntaxChecker::check(const AstNodeAttr &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeIdentifier &node) {
+void SemanticChecker::check(const AstNodeIdentifier &node) {
     require_not_null(node.identifier_, node.pos_);
 }
 
-void SyntaxChecker::check(const AstNodeDel &node) {
+void SemanticChecker::check(const AstNodeDel &node) {
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -512,26 +512,26 @@ void SyntaxChecker::check(const AstNodeDel &node) {
     ctx_ = saved;
 }
 
-void SyntaxChecker::check(const AstNodeGlobal &node) {
+void SemanticChecker::check(const AstNodeGlobal &node) {
     require_not_null(node.identifier_, node.pos_);
     if (ctx_.local_scope_depth == 0) error("global outside function/class body", node.pos_);
 }
 
-void SyntaxChecker::check_not_null(const AstNodePtr &node, const Position pos) {
+void SemanticChecker::check_not_null(const AstNodePtr &node, const Position pos) {
     if (!node) error_internal("unexpected null node", pos);
     check(*node);
 }
 
-void SyntaxChecker::check_not_null(const AstNodeProgramPtr &node, const Position pos) {
+void SemanticChecker::check_not_null(const AstNodeProgramPtr &node, const Position pos) {
     if (!node) error_internal("unexpected null node", pos);
     check(*node);
 }
 
-void SyntaxChecker::check_nullable(const AstNodePtr &node) {
+void SemanticChecker::check_nullable(const AstNodePtr &node) {
     if (node) check(*node);
 }
 
-void SyntaxChecker::check_lvalue(const AstNode &node) {
+void SemanticChecker::check_lvalue(const AstNode &node) {
     // a  a[ind]  a.x
     if (dynamic_cast<const AstNodeIdentifier *>(&node) ||
         dynamic_cast<const AstNodeIndex *>(&node) || dynamic_cast<const AstNodeAttr *>(&node)) {
@@ -549,7 +549,7 @@ void SyntaxChecker::check_lvalue(const AstNode &node) {
     error("lvalue expected before assignment", node.pos_);
 }
 
-void SyntaxChecker::check_lvalue_items(const std::vector<AstNodePtr> &items, const Position pos) {
+void SemanticChecker::check_lvalue_items(const std::vector<AstNodePtr> &items, const Position pos) {
     bool has_seen_star{false};
     for (const auto &item : items) {
         require_not_null(item, pos);
@@ -565,7 +565,7 @@ void SyntaxChecker::check_lvalue_items(const std::vector<AstNodePtr> &items, con
     }
 }
 
-void SyntaxChecker::check_lvalue_pure(const AstNode &node) {
+void SemanticChecker::check_lvalue_pure(const AstNode &node) {
     // a  a[ind]  a.x
     if (dynamic_cast<const AstNodeIdentifier *>(&node) ||
         dynamic_cast<const AstNodeIndex *>(&node) || dynamic_cast<const AstNodeAttr *>(&node)) {
@@ -575,12 +575,12 @@ void SyntaxChecker::check_lvalue_pure(const AstNode &node) {
     error("identifier, attribute access, or index expression expected before op=", node.pos_);
 }
 
-void SyntaxChecker::check_doc(const AstNodePtr &doc) const {
+void SemanticChecker::check_doc(const AstNodePtr &doc) const {
     if (doc && !dynamic_cast<const AstNodeLiteralStr *>(doc.get()))
         error("doc must be a string literal", doc->pos_);
 }
 
-SyntaxChecker::SyntaxChecker(const AstNodeProgram &root, std::string file_path)
+SemanticChecker::SemanticChecker(const AstNodeProgram &root, std::string file_path)
     : root_{root}, file_path_{std::move(file_path)} {}
 
-void SyntaxChecker::check() && { check(root_); }
+void SemanticChecker::check() && { check(root_); }

@@ -150,12 +150,12 @@ add_executable(SL main.cpp
         # Analyzer
         analyzer/Analyzer.cpp
         analyzer/Analyzer.h
-        analyzer/syntax_checker/SyntaxChecker.cpp
-        analyzer/syntax_checker/SyntaxChecker.h
-        analyzer/literal_folder/LiteralFolder.cpp
-        analyzer/literal_folder/LiteralFolder.h
-        analyzer/literal_folder/StaticEvaler.cpp
-        analyzer/literal_folder/StaticEvaler.h
+        analyzer/semantic_checker/SemanticChecker.cpp
+        analyzer/semantic_checker/SemanticChecker.h
+        analyzer/expr_folder/ExprFolder.cpp
+        analyzer/expr_folder/ExprFolder.h
+        analyzer/expr_folder/StaticEvaler.cpp
+        analyzer/expr_folder/StaticEvaler.h
 )
 
 # 编译选项
@@ -359,35 +359,35 @@ add_executable(SL_Cpp_Analyzer_Tests
         parser/ast_nodes/details/ast_node_postfix.h
         parser/ast_nodes/details/ast_node_var.h
         builtins/exceptions/InternalError.h
-        analyzer/literal_folder/LiteralFolder.cpp
-        analyzer/literal_folder/LiteralFolder.h
-        analyzer/literal_folder/StaticEvaler.cpp
-        analyzer/literal_folder/StaticEvaler.h
-        analyzer/syntax_checker/SyntaxChecker.cpp
-        analyzer/syntax_checker/SyntaxChecker.h
+        analyzer/expr_folder/ExprFolder.cpp
+        analyzer/expr_folder/ExprFolder.h
+        analyzer/expr_folder/StaticEvaler.cpp
+        analyzer/expr_folder/StaticEvaler.h
+        analyzer/semantic_checker/SemanticChecker.cpp
+        analyzer/semantic_checker/SemanticChecker.h
 
         # 测试工具（复用 Parser 测试的 parse_program/parse_json 等）
         test/parser/test_utils.h
         test/analyzer/test_utils.h
-        test/analyzer/syntax_checker/test_utils.h
+        test/analyzer/semantic_checker/test_utils.h
         test/analyzer/main_test.cpp
 
-        # 测试代码：literal_folder
-        test/analyzer/literal_folder/arithmetic_test.cpp
-        test/analyzer/literal_folder/bitwise_test.cpp
-        test/analyzer/literal_folder/container_ops_test.cpp
-        test/analyzer/literal_folder/compare_is_test.cpp
-        test/analyzer/literal_folder/logical_test.cpp
-        test/analyzer/literal_folder/dead_branch_test.cpp
-        test/analyzer/literal_folder/compound_test.cpp
-        test/analyzer/literal_folder/program_prune_test.cpp
+        # 测试代码：expr_folder
+        test/analyzer/expr_folder/arithmetic_test.cpp
+        test/analyzer/expr_folder/bitwise_test.cpp
+        test/analyzer/expr_folder/container_ops_test.cpp
+        test/analyzer/expr_folder/compare_is_test.cpp
+        test/analyzer/expr_folder/logical_test.cpp
+        test/analyzer/expr_folder/dead_branch_test.cpp
+        test/analyzer/expr_folder/compound_test.cpp
+        test/analyzer/expr_folder/program_prune_test.cpp
 
-        # 测试代码：syntax_checker
-        test/analyzer/syntax_checker/scope_test.cpp
-        test/analyzer/syntax_checker/func_class_test.cpp
-        test/analyzer/syntax_checker/lvalue_test.cpp
-        test/analyzer/syntax_checker/dict_call_test.cpp
-        test/analyzer/syntax_checker/defensive_test.cpp
+        # 测试代码：semantic_checker
+        test/analyzer/semantic_checker/scope_test.cpp
+        test/analyzer/semantic_checker/func_class_test.cpp
+        test/analyzer/semantic_checker/lvalue_test.cpp
+        test/analyzer/semantic_checker/dict_call_test.cpp
+        test/analyzer/semantic_checker/defensive_test.cpp
 )
 sl_apply_test_target_options(SL_Cpp_Analyzer_Tests)
 target_link_libraries(SL_Cpp_Analyzer_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)

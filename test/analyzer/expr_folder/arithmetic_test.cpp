@@ -1,4 +1,4 @@
-// StaticEvaler/LiteralFolder：数值算术折叠（+ - * / // % **，SL.md 3.4.2）。
+// StaticEvaler/ExprFolder：数值算术折叠（+ - * / // % **，SL.md 3.4.2）。
 // 容器（str/tuple/list）的 +/*、dict 的 |、str 的 % 格式化见同目录 container_ops_test.cpp。
 //
 // int 运算一律用 int64_t 计算（不再用任意精度的 BigInt）：任何一步——包括操作数本身解析成

@@ -1,6 +1,6 @@
-// SyntaxChecker：那些"只有 Parser 出 bug 才会触发"的防御性断言。
+// SemanticChecker：那些"只有 Parser 出 bug 才会触发"的防御性断言。
 // 这类畸形的 AST 没法通过解析任何合法或不合法的源码构造出来（Parser 自己的语法/结构性保证决定了
-// 这几个字段永远满足对应的形状），只能像这里一样手工搭一棵树直接喂给 SyntaxChecker，用来确认这些
+// 这几个字段永远满足对应的形状），只能像这里一样手工搭一棵树直接喂给 SemanticChecker，用来确认这些
 // 断言本身在真的遇到畸形输入时确实会正确报错，而不是静默放过或者直接崩溃。
 #include "test_utils.h"
 
@@ -16,7 +16,7 @@ AstNodeProgramPtr wrap(AstNodePtr expr) {
 }
 } // namespace
 
-TEST_SUITE("SyntaxChecker 防御性断言（畸形 AST，正常解析永远构造不出来）") {
+TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构造不出来）") {
 
     TEST_CASE("AstNodeIf::clauses_ 为空") {
         std::vector<AstNodeIf::AstNodeCondAndExpr> clauses;

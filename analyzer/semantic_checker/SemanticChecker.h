@@ -4,7 +4,7 @@
 
 #include <string>
 
-class SyntaxChecker {
+class SemanticChecker {
     const AstNodeProgram &root_;
     const std::string file_path_;
 
@@ -70,11 +70,11 @@ class SyntaxChecker {
 
   public:
     /**
-     * 构造 SyntaxChecker 对象
+     * 构造 SemanticChecker 对象
      * @param root      AST 的根节点
      * @param file_path 文件路径，默认为 "<unknown>"
      */
-    explicit SyntaxChecker(const AstNodeProgram &root, std::string file_path = "<unknown>");
+    explicit SemanticChecker(const AstNodeProgram &root, std::string file_path = "<unknown>");
 
     /**
      * 语法合法性检查

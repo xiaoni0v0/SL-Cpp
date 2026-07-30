@@ -1,9 +1,10 @@
-// SyntaxChecker：赋值/复合赋值目标的左值检查，含解构、以及左值根节点内部子表达式仍需完整 check()。
+// SemanticChecker：赋值/复合赋值目标的左值检查，含解构、以及左值根节点内部子表达式仍需完整
+// check()。
 #include "test_utils.h"
 
 #include <doctest/doctest.h>
 
-TEST_SUITE("SyntaxChecker 左值检查") {
+TEST_SUITE("SemanticChecker 左值检查") {
 
     TEST_CASE("标识符/索引/属性访问都是合法的赋值目标") {
         CHECK_NOTHROW(check_program(U"a = 1"));
@@ -58,7 +59,7 @@ TEST_SUITE("SyntaxChecker 左值检查") {
     }
 }
 
-TEST_SUITE("SyntaxChecker for 迭代目标左值检查") {
+TEST_SUITE("SemanticChecker for 迭代目标左值检查") {
 
     TEST_CASE("标识符/索引/属性访问都是合法的迭代目标") {
         CHECK_NOTHROW(check_program(U"for (x : xs) body"));
