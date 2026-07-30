@@ -116,9 +116,7 @@ TEST_SUITE("BigInt——构造与十进制字符串往返") {
             (void) BigInt::from_decimal_string(std::string("1\0002", 3)), std::invalid_argument
         );
         // 全角 "1" 的 UTF-8 编码：每个字节都不落在 ASCII '0'-'9' 范围内
-        CHECK_THROWS_AS(
-            (void) BigInt::from_decimal_string("\xef\xbc\x91"), std::invalid_argument
-        );
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("\xef\xbc\x91"), std::invalid_argument);
     }
 
     TEST_CASE("超长十进制字符串往返（500 位、2000 位），顺带过一遍加减法不会破坏这么长的数") {
@@ -258,9 +256,7 @@ TEST_SUITE("BigInt——to_double") {
                  std::string("99999999999999999999999999"),
                  std::string("100000000000000000000000000"), // 10^26
                  std::string("123456789012345678901234567890"),
-                 std::string(
-                     "999999999999999999999999999999999999999999999999999999999999"
-                 ),
+                 std::string("999999999999999999999999999999999999999999999999999999999999"),
              }) {
             check_matches_strtod(d(s));
             check_matches_strtod(-d(s));
@@ -414,7 +410,8 @@ TEST_SUITE("BigInt——floor_div / mod：向负无穷取整，语义与 Python 
         for (const auto &b : vals) {
             if (b.is_zero()) continue;
             for (const auto &q : vals) {
-                // 三个 k 都保证落在 [0, |b|-1]：0 恒合法；|b|/2 向下取整恒 < |b|；|b|-1 是能取到的最大值
+                // 三个 k 都保证落在 [0, |b|-1]：0 恒合法；|b|/2 向下取整恒 < |b|；|b|-1
+                // 是能取到的最大值
                 for (const BigInt &k :
                      {BigInt(0), b.abs().floor_div(BigInt(2)), b.abs() - BigInt(1)}) {
                     const BigInt r{b.is_negative() ? -k : k};

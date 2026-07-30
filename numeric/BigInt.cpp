@@ -2,6 +2,7 @@
 
 #include <bit>
 #include <cassert>
+#include <cmath>
 #include <stdckdint.h>
 #include <stdexcept>
 #include <utility>
@@ -288,7 +289,9 @@ BigInt BigInt::from_decimal_string(const std::string &s) {
 
 std::string BigInt::to_decimal_string() const {
     if (is_small_) return std::to_string(small_);
-    assert(!limbs_.empty()); // 大路径下不该规范化成 0（那应该走小路径），否则下面 chunks.back() 是 UB
+    assert(
+        !limbs_.empty()
+    ); // 大路径下不该规范化成 0（那应该走小路径），否则下面 chunks.back() 是 UB
 
     std::vector magnitude{limbs_};
     std::vector<uint32_t> chunks; // 每个 chunk 是 [0, 10^9) 内的一段十进制数字，低位在前
