@@ -22,6 +22,15 @@ inline nlohmann::json fold_json(const std::u32string &source) {
     return nlohmann::json(program->exprs_[0]->to_json());
 }
 
+// 解析整份源码、跑一遍字面量折叠，返回折叠后整个 Program 节点（含 exprs_）的 JSON。
+// fold_json 只看恰好一条顶层表达式折出来的样子；这个用来测多条顶层表达式之间的折叠交互
+// （比如 AstNodeProgram::prune_program 原地精简 exprs_）。
+inline nlohmann::json fold_program_json(const std::u32string &source) {
+    AstNodeProgramPtr program{parse_program(source)};
+    LiteralFolder{*program}.fold();
+    return nlohmann::json(program->to_json());
+}
+
 inline nlohmann::json int_lit(const std::string &raw) {
     return nlohmann::json{{"type", "LiteralInt"}, {"raw", raw}};
 }

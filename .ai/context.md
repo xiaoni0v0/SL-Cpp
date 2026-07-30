@@ -952,3 +952,40 @@ deepseek 拿修好的版本又复查了一轮（随机大数对拍 `strtod`、�
 `for (1; 0;) {} -> 0` 这条验证 `visit_and_replace` 循环生效的用例，另加了一条
 `for (x = 1; False; x = 2)` 的对照组（`x = 1` 有副作用，不能被继续折掉），跟
 `dead_branch_test.cpp` 里那条历史用例保持一致、确认没有回归。
+
+## `AstNodeProgram` 也要按同一条规则精简，但不能走 `fold()` 替换节点这条路
+
+用户追问：`fold_compound` 这套"丢弃非最后一条纯字面量"的规则，跟其他折叠（构造新节点、整个替换
+掉原节点）比起来不统一；`AstNodeProgram`（模块顶层/函数体/类体，跟复合表达式同构，同样"值是最后
+一条表达式的值"）要不要按同一条规则折？折的话又有问题：根节点可能变类型。
+
+查证：`AstNodeCompound` 永远挂在通用的 `AstNodePtr` 槽位上（`left_`、`clause.body_`、
+`program.exprs_[i]`……随便什么节点类型都能塞），所以 `fold_compound` 能把整个节点换成别的类型。
+`AstNodeProgram` 不一样，有三处槽位按具体类型 `AstNodeProgram` 声明，不是通用 `AstNodePtr`：
+`LiteralFolder::root_`（`AstNodeProgram &`，引用，压根没法重新指向别的对象）、`AstNodeFunc::body_`
+和 `AstNodeClass::body_`（都是 `AstNodeProgramPtr`）。这三处（Analyzer 的作用域检查、以后
+Executor 的调用约定）都在按"函数体/类体/模块顶层就是一串语句"这个假设读，不是按"随便一个表达式"
+读，节点类型不能变。
+
+**结论**：规则统一（同一条"除最后一条外丢纯字面量"），**机制不统一**——这个不统一是有明确、可讲清楚
+的结构性原因（槽位类型），不是两套随意不同的逻辑。用户确认理解后拍板：直接实现。
+
+改法：新增 `StaticEvaler::prune_program(AstNodeProgram &node)`（公开方法，`LiteralFolder` 要跨类
+调用），**原地精简 `node.exprs_`，不返回替换节点、不通过 `fold()`**——哪怕精简到只剩一条也不像
+`fold_compound` 那样展开成裸表达式，节点自身的地址/类型自始至终不变。因为是原地改、没有"改了发现
+不该改、还要把原节点恢复"的回退顾虑，实现比 `fold_compound` 简单：不需要先只读扫一遍判断"丢不丢
+得动"，就算一条都没丢成，把 `exprs_` 整个搬到新 vector 再搬回来也不会破坏节点（无论如何都会执行
+`node.exprs_ = std::move(kept)` 这一步收尾，不存在"提前返回、原节点被移动了一半"的路径）。
+`LiteralFolder::visit(AstNodeProgram&)` 在子表达式各自 `visit_and_replace` 完之后调一下这个方法。
+不需要循环/fixpoint（不像 `fold_for_cond` 那样会现拼一个从没被处理过的新节点，`prune_program`
+处理的 `exprs_` 里的元素全部已经在前一步 `visit_and_replace` 里折到位了，精简一遍就是最终结果）。
+
+测试新建 `test/analyzer/literal_folder/program_prune_test.cpp`，加了个新的测试工具函数
+`fold_program_json`（`test/analyzer/test_utils.h`，跟 `fold_json` 的区别是保留 `Program` 这一层，
+不要求恰好一条顶层表达式）。覆盖：模块顶层的字面量前缀丢弃/中间非字面量保留/全字面量精简到一条/
+带副作用不折；**关键测试**——函数体、类体全体是字面量时精简到只剩一条，`body["type"]` 依然是
+`"Program"`，没有退化成裸的 `LiteralInt`，这正是这条规则跟复合表达式折叠不一样、也是这次讨论的
+核心结论的直接验证。写测试时踩到一次那个老坑：`const auto j{nlohmann::json 类型的函数返回值}`
+被 `nlohmann::json` 的 `initializer_list` 构造函数截胡，当成"用这一个元素构造数组"，报
+`operator[] with a string argument with array`——跟 `container_ops_test.cpp`
+里注释过的坑完全同源，改成 `= ` 赋值初始化即可，顺手在新文件里也留了注释防止后人再踩。

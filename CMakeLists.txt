@@ -380,6 +380,7 @@ add_executable(SL_Cpp_Analyzer_Tests
         test/analyzer/literal_folder/logical_test.cpp
         test/analyzer/literal_folder/dead_branch_test.cpp
         test/analyzer/literal_folder/compound_test.cpp
+        test/analyzer/literal_folder/program_prune_test.cpp
 
         # 测试代码：syntax_checker
         test/analyzer/syntax_checker/scope_test.cpp

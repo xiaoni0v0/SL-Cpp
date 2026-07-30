@@ -840,3 +840,15 @@ AstNodePtr StaticEvaler::fold(AstNode &node) {
     if (auto *n{dynamic_cast<AstNodeCompound *>(&node)}) return fold_compound(*n);
     return nullptr;
 }
+
+void StaticEvaler::prune_program(AstNodeProgram &node) {
+    // 原地改 exprs_
+    if (node.exprs_.size() <= 1) return;
+
+    std::vector<AstNodePtr> kept;
+    for (size_t i{0}; i + 1 < node.exprs_.size(); ++i) {
+        if (!is_literal_pure(*node.exprs_[i])) kept.push_back(std::move(node.exprs_[i]));
+    }
+    kept.push_back(std::move(node.exprs_.back()));
+    node.exprs_ = std::move(kept);
+}

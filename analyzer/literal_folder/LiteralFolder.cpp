@@ -121,6 +121,7 @@ void LiteralFolder::visit(AstNodeLiteralEllipsis &) const {}
 
 void LiteralFolder::visit(AstNodeProgram &node) const {
     for (auto &e : node.exprs_) visit_and_replace(e);
+    StaticEvaler::prune_program(node);
 }
 
 void LiteralFolder::visit(AstNodeCompound &node) const {
