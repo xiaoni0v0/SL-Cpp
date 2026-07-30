@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <limits>
 #include <stdexcept>
 
 namespace {
@@ -280,6 +281,49 @@ TEST_SUITE("BigInt——to_double") {
             const std::string y_str{y.to_decimal_string()};
             CHECK(y.to_double() == std::strtod(y_str.c_str(), nullptr));
         }
+    }
+
+    TEST_CASE(
+        "刻意构造舍入平局（数值恰好卡在两个相邻 double 正中间），验证就近取偶 + sticky "
+        "位打破平局都对——之前的用例都是碰巧踩中舍入，没有一条是故意踩中平局的"
+    ) {
+        // m 是 53 位整数（顶满一个 double 尾数），X = (2m+1) * 2^(k-1) 恰好是 m*2^k 和
+        // (m+1)*2^k 正中间那个整数——m、m+1 这两个尾数在这个量级上正是相邻的两个可表示 double，
+        // 所以 X 是一个精确的、数学意义上的舍入平局，不依赖对 to_double 内部实现的任何假设
+        const auto build_tie{[](uint64_t m, int k) {
+            return (BigInt(static_cast<long long>(m)) * BigInt(2) + BigInt(1)) << (k - 1);
+        }};
+        for (const auto &[m, k] : {
+                 std::pair<uint64_t, int>{uint64_t{1} << 52, 100},       // 偶尾数
+                 std::pair<uint64_t, int>{(uint64_t{1} << 52) + 1, 100}, // 奇尾数
+             }) {
+            const BigInt tie{build_tie(m, k)};
+            const double down{std::ldexp(static_cast<double>(m), k)};
+            const double up{std::ldexp(static_cast<double>(m + 1), k)};
+            const double expected_tie{m % 2 == 0 ? down : up}; // 平局就近取偶
+            CHECK(tie.to_double() == expected_tie);
+            CHECK((tie + BigInt(1)).to_double() == up);   // 略过平局，sticky 位必须能打破平局向上
+            CHECK((tie - BigInt(1)).to_double() == down); // 略欠平局，明确落在下方，向下
+        }
+    }
+
+    TEST_CASE("DBL_MAX 边界：精确命中、略微超出该舍回 DBL_MAX，明显超出才溢出成 infinity") {
+        const BigInt dbl_max_int{((BigInt(1) << 53) - BigInt(1)) << 971}; // (2^53-1)*2^971==DBL_MAX
+        CHECK(dbl_max_int.to_double() == std::numeric_limits<double>::max());
+        // 只多 1（远小于半个 ULP == 2^970），就近取整应该舍回 DBL_MAX，不能因为超过 DBL_MAX
+        // 这个整数值就直接判定成溢出
+        CHECK((dbl_max_int + BigInt(1)).to_double() == std::numeric_limits<double>::max());
+        // 明显超过半个 ULP，该溢出成 infinity
+        CHECK(std::isinf((dbl_max_int + (BigInt(1) << 971)).to_double()));
+    }
+
+    TEST_CASE(
+        "kExponentClamp 那条路径：比特长度远超 double 范围时提前截断指数，仍正确得到 ±infinity"
+    ) {
+        const BigInt astronomically_huge{BigInt(1) << 500000}; // 50 万位，远超截断阈值
+        CHECK(std::isinf(astronomically_huge.to_double()));
+        CHECK(astronomically_huge.to_double() > 0);
+        CHECK(std::isinf((-astronomically_huge).to_double()));
     }
 }
 
@@ -807,6 +851,78 @@ TEST_SUITE("BigInt——代数恒等式交叉验证（覆盖小路径/大路径�
                 CHECK((a ^ b) == (b ^ a));
                 // a & (b | ~b) == a & (-1) == a，所以 (a&b) | (a&~b) 应该恒等于 a
                 CHECK(((a & b) | (a & ~b)) == a);
+                // De Morgan
+                CHECK(~(a & b) == (~a | ~b));
+                CHECK(~(a | b) == (~a & ~b));
+                // 移位对位运算的分配律：先移位再算，跟先算再移位应该一样
+                for (const long long k : {0LL, 1LL, 31LL, 32LL, 65LL}) {
+                    CHECK(((a << k) & (b << k)) == ((a & b) << k));
+                    CHECK(((a << k) | (b << k)) == ((a | b) << k));
+                    CHECK(((a << k) ^ (b << k)) == ((a ^ b) << k));
+                }
+                for (const auto &c : vals) CHECK((a & (b | c)) == ((a & b) | (a & c)));
+            }
+        }
+    }
+
+    TEST_CASE(
+        "位运算跟一个完全独立的参考实现交叉验证：靠 floor_div(2)/mod(2) 逐位剥补码位，"
+        "这条路径跟 to_twos_complement 的实现完全无关，能提供恒等式测不出来的新信息"
+    ) {
+        // 逐位剥补码位：非负数最终收敛到 0，负数（无穷位补码下全是 1）最终收敛到 -1，
+        // 之后更高位就是恒定的 0/-1，不用再继续剥
+        const auto reference_bitwise{[](BigInt a, BigInt b, const char op) {
+            BigInt result{0};
+            const BigInt two{2};
+            BigInt weight{1};
+            while (!(a.is_zero() || a == BigInt(-1)) || !(b.is_zero() || b == BigInt(-1))) {
+                const bool abit{a.mod(two) != BigInt(0)};
+                const bool bbit{b.mod(two) != BigInt(0)};
+                bool rbit;
+                switch (op) {
+                case '&':
+                    rbit = abit && bbit;
+                    break;
+                case '|':
+                    rbit = abit || bbit;
+                    break;
+                default:
+                    rbit = abit != bbit;
+                    break; // '^'
+                }
+                if (rbit) result = result + weight;
+                a = a.floor_div(two);
+                b = b.floor_div(two);
+                weight = weight * two;
+            }
+            // 剩下的高位是恒定的 0/-1，直接按同样的规则算一次，非 0（即恒为 1）就再减一个位权
+            // （无穷个 1 从这个位权往上延伸，等价于减去这个位权——补码"全 1 尾巴"的标准技巧）
+            const bool a_hi{a.is_negative()}, b_hi{b.is_negative()};
+            bool r_hi;
+            switch (op) {
+            case '&':
+                r_hi = a_hi && b_hi;
+                break;
+            case '|':
+                r_hi = a_hi || b_hi;
+                break;
+            default:
+                r_hi = a_hi != b_hi;
+                break;
+            }
+            if (r_hi) result = result - weight;
+            return result;
+        }};
+
+        const auto vals{interesting_values()};
+        const std::vector<BigInt> probes{d("0"), d("-1"), d("5"), d("-5"), d("255"), d("-256")};
+        for (const auto &a : vals) {
+            for (const auto &b : probes) {
+                CAPTURE(a.to_decimal_string());
+                CAPTURE(b.to_decimal_string());
+                CHECK((a & b) == reference_bitwise(a, b, '&'));
+                CHECK((a | b) == reference_bitwise(a, b, '|'));
+                CHECK((a ^ b) == reference_bitwise(a, b, '^'));
             }
         }
     }

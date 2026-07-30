@@ -342,9 +342,18 @@ double BigInt::to_double() const {
             const size_t bit_index{bit_length - 1 - i};
             mantissa = (mantissa << 1) | ((limbs_[bit_index / 32] >> (bit_index % 32)) & 1u);
         }
+        // 按整个 limb 判断非 0（而不是逐 bit 扫），把这一步从 O(drop_bits) 降到 O(drop_bits / 32)：
+        // 低位全 0 的输入（比如 2^k 这种）之前要一路扫到底，是最坏情况
         bool sticky{false};
-        for (size_t bit_index{0}; bit_index < drop_bits && !sticky; ++bit_index)
-            if ((limbs_[bit_index / 32] >> (bit_index % 32)) & 1u) sticky = true;
+        const size_t full_limbs{drop_bits / 32};
+        for (size_t limb_i{0}; limb_i < full_limbs && !sticky; ++limb_i)
+            if (limbs_[limb_i] != 0) sticky = true;
+        if (!sticky) {
+            if (const size_t remaining_bits{drop_bits % 32}; remaining_bits != 0) {
+                const uint32_t mask{(uint32_t{1} << remaining_bits) - 1};
+                if ((limbs_[full_limbs] & mask) != 0) sticky = true;
+            }
+        }
         if (sticky) mantissa |= 1u;
         constexpr size_t kExponentClamp{100000}; // 这么大指数不管怎样都会让 double 溢出成 infinity
         exponent = static_cast<int>(drop_bits < kExponentClamp ? drop_bits : kExponentClamp);
