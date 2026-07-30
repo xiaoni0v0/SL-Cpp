@@ -285,6 +285,32 @@ AstNodePtr StaticEvaler::fold_for_cond(AstNodeForCond &node) {
     return std::make_unique<AstNodeCompound>(node.pos_, std::move(exprs));
 }
 
+AstNodePtr StaticEvaler::fold_compound(AstNodeCompound &node) {
+    // {} -> None
+    if (node.exprs_.empty()) return std::make_unique<AstNodeLiteralNone>(node.pos_);
+
+    // { expr } -> expr，无论是否字面量
+    if (node.exprs_.size() == 1) return std::move(node.exprs_.front());
+
+    // 除最后一条外，逐条判断能不能丢。最后一条永远保留。
+    bool has_dropped_anything{false}; // 有没有剪去东西
+    for (size_t i{0}; i + 1 < node.exprs_.size(); ++i) {
+        if (is_literal_pure(*node.exprs_[i])) has_dropped_anything = true;
+    }
+    if (!has_dropped_anything) return nullptr;
+
+    std::vector<AstNodePtr> kept;
+    for (size_t i{0}; i + 1 < node.exprs_.size(); ++i) {
+        if (!is_literal_pure(*node.exprs_[i])) kept.push_back(std::move(node.exprs_[i]));
+    }
+    kept.push_back(std::move(node.exprs_.back()));
+
+    // 丢到只剩最后一条，直接展开
+    if (kept.size() == 1) return std::move(kept.front());
+    // 部分折：拼一个更短的
+    return std::make_unique<AstNodeCompound>(node.pos_, std::move(kept));
+}
+
 AstNodePtr StaticEvaler::fold_not(const AstNodeOpUnary &node) {
     if (!is_literal_pure(*node.operand_)) return nullptr;
 
@@ -811,5 +837,6 @@ AstNodePtr StaticEvaler::fold(AstNode &node) {
     if (auto *n{dynamic_cast<AstNodeCompare *>(&node)}) return fold_compare(*n);
     if (auto *n{dynamic_cast<AstNodeIf *>(&node)}) return fold_if(*n);
     if (auto *n{dynamic_cast<AstNodeForCond *>(&node)}) return fold_for_cond(*n);
+    if (auto *n{dynamic_cast<AstNodeCompound *>(&node)}) return fold_compound(*n);
     return nullptr;
 }

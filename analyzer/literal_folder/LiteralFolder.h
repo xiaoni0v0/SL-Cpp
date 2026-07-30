@@ -9,7 +9,7 @@ class LiteralFolder {
     AstNodeProgram &root_;
 
     /**
-     * 先把 node 子节点递归处理好，再把 node 自己送给 StaticEvaler，如果可折叠则直接替换掉
+     * 先把 node 子节点递归处理好，再把 node 自己反复送给 StaticEvaler 折到不能再折为止
      * @param node 可空
      */
     void visit_and_replace(AstNodePtr &node) const;

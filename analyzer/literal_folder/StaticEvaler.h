@@ -44,6 +44,14 @@
  *   1. if/for/while 的 cond 折成的字面量真值为 False 的 clause/循环整个消失，值退化成默认值）。
  *   2. if 的某个 clause 的 cond 折成的字面量真值为 True，
  *      则连同它自己在内后面的 clause/else 全部消失，只留这个 clause 的 body；
+ *
+ * 复合表达式 { expr1; expr2; ... }：值是最后一条表达式的值
+ * 规则：
+ *   1. 空复合表达式恒折成 None；
+ *   2. 只有一条，直接展开成那一条本身（不管是不是字面量）；
+ *   3. 否则，除最后一条外，逐条丢掉纯字面量的子表达式，非字面量的保留且相对顺序不变；
+ *      最后一条永远保留（它决定整个表达式的值）；
+ *      丢到只剩最后一条就直接展开，丢完还剩不止一条就拼一个更短的复合表达式，一条都没丢成就不折。
  */
 class StaticEvaler final {
     // —————————— 一级入口 ——————————
@@ -58,6 +66,8 @@ class StaticEvaler final {
     [[nodiscard]] static AstNodePtr fold_if(AstNodeIf &node);
     // 死循环消除
     [[nodiscard]] static AstNodePtr fold_for_cond(AstNodeForCond &node);
+    // 复合表达式
+    [[nodiscard]] static AstNodePtr fold_compound(AstNodeCompound &node);
 
     // —————————— 二级入口 ——————————
 
