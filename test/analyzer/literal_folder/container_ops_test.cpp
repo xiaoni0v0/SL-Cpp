@@ -1,13 +1,14 @@
 // StaticEvaler/LiteralFolder：str/tuple/list 的 +（拼接）/*（重复），SL.md 3.4.2。
 // dict 的一切运算（含 |）不参与折叠——本质上依赖 VM 才能算，见 StaticEvaler.h 类注释。
 //
-// 两条额外的安全限制（StaticEvaler.h 类注释也有记录）：
-// - 拼接/重复的结果大小超过上限（str 是 kMaxStrLength=4096，tuple/list 是
-//   kMaxContainerItems=256）不折，防止几个字符的源码在编译期就材料化出巨大的常量；
-// - tuple 的 * 重复额外要求内容"深度不可变"（递归展开后不含任何 list）——因为重复出来的
-//   每一份内部元素是共享引用（SL.md 3.4.2），一旦嵌套了可变的 list，"共享 vs 独立拷贝"
-//   就变得可观察，折叠没法在不知道以后语义怎么实现的情况下瞎猜；list 本身永远可变，* 重复
-//   恒不折。
+// 两条额外的安全限制/规则（StaticEvaler.h 类注释也有记录）：
+// - 拼接的结果大小超过上限（str 是 kMaxStrLength=4096，tuple/list 是 kMaxContainerItems=256）
+//   不折，防止几个字符的源码在编译期就材料化出巨大的常量；* 重复只有 str 会折，同样受
+//   kMaxStrLength 限制。
+// - tuple/list 的 * 重复恒不折：SL.md 3.4.2 规定重复出来的各份中，对应位置的元素是同一个
+//   引用而非独立副本，折叠只能靠深拷贝伪造出 N 份独立子树，这跟 is 恒不折是同一类顾虑
+//   （对象同一性没法在编译期安全预判），不因为内容不可变就能豁免——这也是为什么这条规则
+//   不再区分"tuple 内容是否深度不可变"：不管内容是什么，* 都不折。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
@@ -38,23 +39,12 @@ TEST_SUITE("StaticEvaler 容器运算——基本拼接/重复") {
         CHECK(fold_json(U"'x' * 0") == str_lit(""));
     }
 
-    TEST_CASE("tuple 拼接与重复（内容都是不可变的 int，深度不可变，能折）") {
+    TEST_CASE("tuple 拼接（+）能折；* 重复恒不折，见下面单独的 TEST_SUITE") {
         CHECK(
             fold_json(U"(1,) + (2, 3)") ==
             nlohmann::json{
                 {"type", "LiteralTuple"}, {"items", {int_lit("1"), int_lit("2"), int_lit("3")}}
             }
-        );
-        CHECK(
-            fold_json(U"(1, 2) * 2") ==
-            nlohmann::json{
-                {"type", "LiteralTuple"},
-                {"items", {int_lit("1"), int_lit("2"), int_lit("1"), int_lit("2")}}
-            }
-        );
-        CHECK(
-            fold_json(U"(1, 2) * 0") ==
-            nlohmann::json{{"type", "LiteralTuple"}, {"items", nlohmann::json::array()}}
         );
     }
 
@@ -124,7 +114,10 @@ TEST_SUITE("StaticEvaler 容器运算——基本拼接/重复") {
     }
 }
 
-TEST_SUITE("StaticEvaler 容器运算——list 的 * 恒不折") {
+TEST_SUITE(
+    "StaticEvaler 容器运算——tuple/list 的 * 恒不折（SL.md 3.4.2：重复出来的各份共享引用，"
+    "折叠只能靠深拷贝伪造，这跟 is 恒不折是同一类顾虑，不因内容/是否可变而有区别）"
+) {
 
     TEST_CASE("list * n 永远不折，即使内容全是不可变的 int 也一样") {
         CHECK(
@@ -146,69 +139,74 @@ TEST_SUITE("StaticEvaler 容器运算——list 的 * 恒不折") {
             }
         );
     }
-}
 
-TEST_SUITE("StaticEvaler 容器运算——tuple 的 * 要求内容深度不可变（SL.md 3.4.2 的共享引用语义）") {
-
-    TEST_CASE("纯 int/float/str/bool/None/Ellipsis 组成的 tuple：深度不可变，能折") {
+    TEST_CASE(
+        "tuple * n 恒不折：纯 int/float/str/bool/None/Ellipsis 组成也一样（以前的版本会因为"
+        "'内容深度不可变'而折，这是已经改掉的错误行为）"
+    ) {
         CHECK(
-            fold_json(U"(1, 2) * 3") == nlohmann::json{
-                                            {"type", "LiteralTuple"},
-                                            {"items",
-                                             {int_lit("1"),
-                                              int_lit("2"),
-                                              int_lit("1"),
-                                              int_lit("2"),
-                                              int_lit("1"),
-                                              int_lit("2")}}
-                                        }
+            fold_json(U"(1, 2) * 3") ==
+            nlohmann::json{
+                {"type", "OpBinary"},
+                {"op", "*"},
+                {"left", {{"type", "LiteralTuple"}, {"items", {int_lit("1"), int_lit("2")}}}},
+                {"right", int_lit("3")}
+            }
         );
         CHECK(
             fold_json(U"(1.5, 'a', True, None, ...) * 2") ==
             nlohmann::json{
-                {"type", "LiteralTuple"},
-                {"items",
-                 {float_lit("1.5"),
-                  str_lit("a"),
-                  bool_lit(true),
-                  none_lit(),
-                  nlohmann::json{{"type", "LiteralEllipsis"}},
-                  float_lit("1.5"),
-                  str_lit("a"),
-                  bool_lit(true),
-                  none_lit(),
-                  nlohmann::json{{"type", "LiteralEllipsis"}}}}
+                {"type", "OpBinary"},
+                {"op", "*"},
+                {"left",
+                 {{"type", "LiteralTuple"},
+                  {"items",
+                   {float_lit("1.5"),
+                    str_lit("a"),
+                    bool_lit(true),
+                    none_lit(),
+                    nlohmann::json{{"type", "LiteralEllipsis"}}}}}},
+                {"right", int_lit("2")}
             }
         );
     }
 
-    TEST_CASE("(...,) * 3：单元素 Ellipsis 的 tuple，Ellipsis 是不可变字面量，能折") {
+    TEST_CASE("(...,) * 3：单元素 Ellipsis 的 tuple，同样不折") {
         CHECK(
-            fold_json(U"(...,) * 3") == nlohmann::json{
-                                            {"type", "LiteralTuple"},
-                                            {"items",
-                                             {nlohmann::json{{"type", "LiteralEllipsis"}},
-                                              nlohmann::json{{"type", "LiteralEllipsis"}},
-                                              nlohmann::json{{"type", "LiteralEllipsis"}}}}
-                                        }
+            fold_json(U"(...,) * 3") ==
+            nlohmann::json{
+                {"type", "OpBinary"},
+                {"op", "*"},
+                {"left",
+                 {{"type", "LiteralTuple"},
+                  {"items", {nlohmann::json{{"type", "LiteralEllipsis"}}}}}},
+                {"right", int_lit("3")}
+            }
         );
     }
 
-    TEST_CASE("嵌套 tuple-in-tuple，只要一路都是 tuple/不可变基例，深度不可变，能折") {
+    TEST_CASE("嵌套 tuple-in-tuple，哪怕一路都是不可变基例，同样不折") {
         CHECK(
             fold_json(U"((1, 2), 3) * 2") ==
             nlohmann::json{
-                {"type", "LiteralTuple"},
-                {"items",
-                 {nlohmann::json{{"type", "LiteralTuple"}, {"items", {int_lit("1"), int_lit("2")}}},
-                  int_lit("3"),
-                  nlohmann::json{{"type", "LiteralTuple"}, {"items", {int_lit("1"), int_lit("2")}}},
-                  int_lit("3")}}
+                {"type", "OpBinary"},
+                {"op", "*"},
+                {"left",
+                 {{"type", "LiteralTuple"},
+                  {"items",
+                   {nlohmann::json{
+                        {"type", "LiteralTuple"}, {"items", {int_lit("1"), int_lit("2")}}
+                    },
+                    int_lit("3")}}}},
+                {"right", int_lit("2")}
             }
         );
     }
 
-    TEST_CASE("嵌套了 list（哪怕只有一层深）就不是深度不可变，* 不折") {
+    TEST_CASE(
+        "tuple 里嵌套了 list（不管多深）同样不折——现在这条已经不是重点：反正 tuple 本身也"
+        "恒不折，嵌不嵌 list 都一样"
+    ) {
         CHECK(
             fold_json(U"([1], 2) * 3") ==
             nlohmann::json{
@@ -222,28 +220,20 @@ TEST_SUITE("StaticEvaler 容器运算——tuple 的 * 要求内容深度不可�
         );
     }
 
-    TEST_CASE("list 藏得再深也一样：tuple 套 tuple 套 list，仍然不是深度不可变") {
+    TEST_CASE("空 tuple 也不折（跟内容无关，* 对 tuple 就是恒不折）") {
         CHECK(
-            fold_json(U"((1, [2]),) * 3") ==
+            fold_json(U"() * 100") ==
             nlohmann::json{
                 {"type", "OpBinary"},
                 {"op", "*"},
-                {"left",
-                 {{"type", "LiteralTuple"},
-                  {"items",
-                   {{{"type", "LiteralTuple"},
-                     {"items",
-                      {int_lit("1"), {{"type", "LiteralList"}, {"items", {int_lit("2")}}}}}}}}}},
-                {"right", int_lit("3")}
+                {"left", {{"type", "LiteralTuple"}, {"items", nlohmann::json::array()}}},
+                {"right", int_lit("100")}
             }
         );
     }
 
-    TEST_CASE("空 tuple 深度不可变恒成立，* 能折成空 tuple") {
-        CHECK(
-            fold_json(U"() * 100") ==
-            nlohmann::json{{"type", "LiteralTuple"}, {"items", nlohmann::json::array()}}
-        );
+    TEST_CASE("重复次数很大也不折（既然恒不折，就不存在'计算量太大'这回事，n 本身不影响结果）") {
+        CHECK(fold_json(U"(0,) * 100000")["type"] == "OpBinary");
     }
 }
 
@@ -283,16 +273,6 @@ TEST_SUITE("StaticEvaler 容器运算——大小上限（kMaxStrLength=4096, kM
             container_literal_source(129, U'(', U')')
         );
         CHECK(j257["type"] == "OpBinary"); // 257 个元素，超限不折
-    }
-
-    TEST_CASE("tuple * 恰好等于上限折，超一个元素不折（内容是 int，深度不可变，门槛能过）") {
-        const auto j256 = fold_json(container_literal_source(1, U'(', U')') + U" * 256");
-        CHECK(j256["type"] == "LiteralTuple");
-        REQUIRE(j256.contains("items"));
-        CHECK(j256["items"].size() == 256);
-
-        const auto j257 = fold_json(container_literal_source(1, U'(', U')') + U" * 257");
-        CHECK(j257["type"] == "OpBinary");
     }
 
     TEST_CASE("list + 恰好等于上限折，超一个元素不折") {

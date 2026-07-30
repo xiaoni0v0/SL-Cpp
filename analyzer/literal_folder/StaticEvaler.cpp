@@ -361,20 +361,7 @@ AstNodePtr StaticEvaler::fold_mul(AstNodeOpBinary &node) {
         return std::make_unique<AstNodeLiteralStr>(node.pos_, std::move(value));
     }
 
-    // (a, b) * 3：只有内容深度不可变时折叠才安全；否则不折，交给运行时
-    if (const auto *t{dynamic_cast<const AstNodeLiteralTuple *>(&container_node)}) {
-        if (!is_deeply_immutable(*t)) return nullptr;
-        if (mul_exceeds(t->items_.size(), n, nMaxContainerItems)) return nullptr;
-        std::vector<AstNodePtr> items;
-        items.reserve(t->items_.size() * n);
-        for (size_t i{0}; i < n; ++i) {
-            for (const auto &item : t->items_) {
-                items.push_back(clone_literal(*item));
-            }
-        }
-        return std::make_unique<AstNodeLiteralTuple>(node.pos_, std::move(items));
-    }
-
+    // (a, b) * 3、[a, b] * 3：恒不折
     return nullptr;
 }
 
@@ -596,21 +583,6 @@ bool StaticEvaler::is_literal_pure(const AstNode &node) {
         });
 
     return false; // dict、_G/_L、标识符等都不是
-}
-
-bool StaticEvaler::is_deeply_immutable(const AstNode &node) {
-    assert(is_literal_pure(node));
-
-    // list 恒可变
-    if (dynamic_cast<const AstNodeLiteralList *>(&node)) return false;
-
-    // tuple 要递归检测
-    if (const auto *t{dynamic_cast<const AstNodeLiteralTuple *>(&node)})
-        return std::ranges::all_of(t->items_, [](const AstNodePtr &item) {
-            return is_deeply_immutable(*item);
-        });
-
-    return true;
 }
 
 bool StaticEvaler::is_int_family(const AstNode &node) {

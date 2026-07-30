@@ -34,10 +34,9 @@
  *
  * 以上中：
  * - 纯数值运算（含位运算）一律用 int64_t 计算，任何一步超出 int64_t 范围都不折；
- * - str 的 + 拼接、* 重复，结果长度超过 nMaxStrLength 不折；
- * - tuple/list 的 + 拼接，结果元素个数超过 nMaxContainerItems 不折；
- * - tuple 的 * 重复，除了同样受 nMaxContainerItems 限制，还要求这个 tuple 是“深度不可变”的。
- * - list 的 * 重复恒不折（list 本身永远可变）。
+ * - str 的 + 拼接、* 重复，结果长度不超过 nMaxStrLength 时折叠；
+ * - tuple/list 的 + 拼接，结果元素个数不超过 nMaxContainerItems 时折叠；
+ * - tuple/list 的 * 重复恒不折。
  *
  * 除此之外，and/or/not 对于字面量均折叠。
  *
@@ -99,13 +98,6 @@ class StaticEvaler final {
      */
     [[nodiscard]] static bool is_literal_pure(const AstNode &node);
 
-    /**
-     * node 是不是"深度不可变"：递归展开后完全不含 list。
-     * None/bool/int/float/str/Ellipsis 天然是；tuple 要求每个元素递归满足；list 恒不是。
-     * 调用方保证 is_literal_pure(node)。
-     */
-    [[nodiscard]] static bool is_deeply_immutable(const AstNode &node);
-
     // —————————— 数值提升相关 ——————————
 
     // 是不是 bool 或 int
@@ -119,7 +111,7 @@ class StaticEvaler final {
 
     // —————————— 折叠上限 ——————————
 
-    // tuple/list：+ 拼接、tuple 的 * 重复，结果元素个数上限
+    // tuple/list：+ 拼接的结果元素个数上限
     static constexpr size_t nMaxContainerItems{256};
     // str：+ 拼接、* 重复，结果字符数上限
     static constexpr size_t nMaxStrLength{4096};
