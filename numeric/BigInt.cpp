@@ -156,6 +156,38 @@ BigInt::shift_left_magnitude(const std::vector<uint32_t> &a, const uint64_t bits
     return result;
 }
 
+std::pair<std::vector<uint32_t>, bool>
+BigInt::shift_right_magnitude(const std::vector<uint32_t> &a, const uint64_t bits) {
+    if (bits == 0) return {a, false};
+
+    const size_t limb_shift{static_cast<size_t>(bits / 32)};
+    const unsigned bit_shift{static_cast<unsigned>(bits % 32)};
+
+    // 被移出的位是否有非 0：跳过的那些整 limb，加上 limb_shift 位置那个 limb 里被移出的低
+    // bit_shift 位（按整 limb 判断非 0，而不是逐 bit 扫，跟 to_double 的 sticky 位是同一个道理）
+    bool dropped_nonzero{false};
+    for (size_t i{0}; i < limb_shift && i < a.size() && !dropped_nonzero; ++i)
+        if (a[i] != 0) dropped_nonzero = true;
+    if (!dropped_nonzero && bit_shift != 0 && limb_shift < a.size()) {
+        const uint32_t mask{(uint32_t{1} << bit_shift) - 1};
+        if ((a[limb_shift] & mask) != 0) dropped_nonzero = true;
+    }
+
+    if (limb_shift >= a.size()) return {{}, dropped_nonzero};
+
+    std::vector<uint32_t> result(a.size() - limb_shift, 0);
+    for (size_t i{0}; i < result.size(); ++i) {
+        const uint64_t low{a[i + limb_shift]};
+        const uint64_t high{i + limb_shift + 1 < a.size() ? a[i + limb_shift + 1] : 0};
+        const uint64_t combined{
+            bit_shift == 0 ? low : (low >> bit_shift) | (high << (32 - bit_shift))
+        };
+        result[i] = static_cast<uint32_t>(combined);
+    }
+    while (!result.empty() && result.back() == 0) result.pop_back();
+    return {std::move(result), dropped_nonzero};
+}
+
 // 二进制逐位长除法：从最高位到最低位，边移边比较边减，是标准手算长除法的二进制版本。
 // 不是渐进最优（Knuth Algorithm D 更快），但正确性显然，不用处理"猜商偏大要修正"这类细节。
 std::pair<std::vector<uint32_t>, std::vector<uint32_t>>
@@ -562,11 +594,14 @@ BigInt BigInt::operator>>(const long long k) const {
 
     // 位移数超过大路径的总比特数时，跟小路径同理，结果恒为 0（非负）或 -1（负数）——不能真去
     // floor_div(2^k)：k 一旦有几亿，2^k 本身就得先花大量时间/内存造出来，这里必须提前短路
-    if (static_cast<uint64_t>(k) >= static_cast<uint64_t>(limbs_.size()) * 32)
-        return BigInt(negative_ ? -1 : 0);
-
-    // x >> k 恒等于 x // 2^k；floor_div/operator<< 自己会按需在两条路径间切换，这里直接复用即可
-    return floor_div(BigInt(1) << k);
+    // 直接在大小上做右移（向零截断），再按符号决定要不要向负无穷取整修正：非负数截断即是
+    // floor；负数则只有在被移出的位里真有非 0 时，才需要把截断的商再多减 1（更负）。
+    // shift_right_magnitude 本身按整 limb 判断，不管 k 多大都是 O(limb 数)，不需要再单独
+    // 为"k 超过比特长度"这种情况短路
+    auto [truncated, dropped_nonzero]{shift_right_magnitude(limbs_, static_cast<uint64_t>(k))};
+    if (!negative_ || !dropped_nonzero)
+        return shrink(from_magnitude(std::move(truncated), negative_));
+    return -(shrink(from_magnitude(std::move(truncated), false)) + BigInt(1));
 }
 
 std::strong_ordering BigInt::operator<=>(const BigInt &rhs) const {

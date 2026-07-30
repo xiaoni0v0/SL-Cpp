@@ -50,6 +50,10 @@ class BigInt {
     // 左移 bits 位（bits 可以很大，用于 * 2^bits），仅操作大小
     [[nodiscard]] static std::vector<uint32_t>
     shift_left_magnitude(const std::vector<uint32_t> &a, uint64_t bits);
+    // 右移 bits 位（向零截断，仅操作大小）。返回截断后的大小 + 是否有被移出的位为
+    // 1（非负数右移直接就是向负无穷取整；负数则调用方按这个标志决定要不要把截断商多减 1）
+    [[nodiscard]] static std::pair<std::vector<uint32_t>, bool>
+    shift_right_magnitude(const std::vector<uint32_t> &a, uint64_t bits);
 
     // 按位运算共用：算出 *this 在"无穷位补码"视角下前 limb_count 个 32 位 limb（非负数高位
     // 补 0，负数补 1）。调用方保证走大路径、limb_count > limbs_.size()
