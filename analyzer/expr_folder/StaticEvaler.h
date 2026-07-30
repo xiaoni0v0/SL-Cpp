@@ -20,17 +20,16 @@
  *
  * 二元：
  *           bool/int   float   str   tuple   list
- * bool/int     A         B      D      D      D
+ * bool/int     A         B      D      E      E
  *  float       B         B      E      E      E
  *   str        D         E      C      E      E
- *  tuple       D         E      E      C      E
- *  list        D         E      E      E      C
+ *  tuple       E         E      E      C      E
+ *  list        E         E      E      E      C
  *
  * A = { ** * / // % + - << >> & ^ | < <= > >= != == }
  * B = { ** * / // % + - < <= > >= != == }
  * C = { + < <= > >= != == }
- * D = { * != == }，其中 * 仅对 str 有效；
- *     tuple/list 的 * 重复恒不折（见下"折叠上限"节）
+ * D = { * != == }
  * E = { != == }
  *
  * 以上中：

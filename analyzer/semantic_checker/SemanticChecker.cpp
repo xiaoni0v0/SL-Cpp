@@ -171,7 +171,6 @@ void SemanticChecker::check(const AstNodeTry &node) {
     // 保存此时的 loop_depth 作为 finally 拦截的基准
     ctx_.finally_loop_depth = ctx_.loop_depth;
     check_nullable(node.finally_expr_);
-    ctx_.finally_loop_depth = -1;
 
     ctx_ = saved;
 }
