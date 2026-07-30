@@ -967,8 +967,8 @@ deepseek 拿修好的版本又复查了一轮（随机大数对拍 `strtod`、�
 Executor 的调用约定）都在按"函数体/类体/模块顶层就是一串语句"这个假设读，不是按"随便一个表达式"
 读，节点类型不能变。
 
-**结论**：规则统一（同一条"除最后一条外丢纯字面量"），**机制不统一**——这个不统一是有明确、可讲清楚
-的结构性原因（槽位类型），不是两套随意不同的逻辑。用户确认理解后拍板：直接实现。
+**结论（槽位类型这部分站得住，规则是否"统一"这部分错了，见下一条）**：机制不统一——这个不统一是
+有明确、可讲清楚的结构性原因（槽位类型），不是两套随意不同的逻辑。用户确认理解后拍板：直接实现。
 
 改法：新增 `StaticEvaler::prune_program(AstNodeProgram &node)`（公开方法，`LiteralFolder` 要跨类
 调用），**原地精简 `node.exprs_`，不返回替换节点、不通过 `fold()`**——哪怕精简到只剩一条也不像
@@ -982,10 +982,54 @@ Executor 的调用约定）都在按"函数体/类体/模块顶层就是一串�
 
 测试新建 `test/analyzer/literal_folder/program_prune_test.cpp`，加了个新的测试工具函数
 `fold_program_json`（`test/analyzer/test_utils.h`，跟 `fold_json` 的区别是保留 `Program` 这一层，
-不要求恰好一条顶层表达式）。覆盖：模块顶层的字面量前缀丢弃/中间非字面量保留/全字面量精简到一条/
-带副作用不折；**关键测试**——函数体、类体全体是字面量时精简到只剩一条，`body["type"]` 依然是
-`"Program"`，没有退化成裸的 `LiteralInt`，这正是这条规则跟复合表达式折叠不一样、也是这次讨论的
-核心结论的直接验证。写测试时踩到一次那个老坑：`const auto j{nlohmann::json 类型的函数返回值}`
-被 `nlohmann::json` 的 `initializer_list` 构造函数截胡，当成"用这一个元素构造数组"，报
-`operator[] with a string argument with array`——跟 `container_ops_test.cpp`
+不要求恰好一条顶层表达式）。写测试时踩到一次那个老坑：`const auto j{nlohmann::json
+类型的函数返回值}` 被 `nlohmann::json` 的 `initializer_list` 构造函数截胡，当成"用这一个元素
+构造数组"，报 `operator[] with a string argument with array`——跟 `container_ops_test.cpp`
 里注释过的坑完全同源，改成 `= ` 赋值初始化即可，顺手在新文件里也留了注释防止后人再踩。
+
+**上面"规则跟复合表达式完全一样，只是机制不同"这个结论错了，下一条已经修正**，包括最后一条也要
+保留这个假设是不成立的（Program 的值跟"最后一条表达式"没关系）。
+
+## 上一条的推理错了：Program 的值不是"最后一条"，是 return（或 None），所以纯字面量不管在哪都能丢
+
+用户追问一个具体例子：`prune_program` 为什么要"保留最后一条"？`func f() {1}` 跟 `func f() {}`
+按理说应该是同一个东西吧，为什么不把这唯一一条也剪掉？——问住了，去翻 SL.md 才发现我把 Program
+的取值规则想当然地类比成了复合表达式的规则，两者其实完全不是一回事：
+
+- **复合表达式**（SL.md 3.4.1 第 489 行）：值是"块中最后一条表达式的值"——这条没错，
+  `fold_compound` 保留最后一条是对的。
+- **Program**（同一节第 490-492 行）：值完全由 `return` 决定——"一旦某个表达式的求值触发了
+  `return`，立即以该 `return` 的值作为整个 Program 的值……若始终没有触发 `return`，则 Program
+  的值为 `None`"，**跟最后一条表达式的值没有任何关系**。3.4.6 第 785 行对函数体又重申了一遍：
+  "函数内需要显式使用 `return` 语句返回值，否则函数运行完毕后自动 `return None`"。
+
+`func f() {1}` 里的 `1` 只是一条普通表达式，求值完不触发 `return`，函数照样返回 `None`，
+跟 `func f() {}` 确实是同一个东西——用户是对的。
+
+**修法**：`prune_program` 不再特殊保留最后一条，改成对 `exprs_` 里**每一个**位置（含最后一条）
+统一判断：纯字面量（`is_literal_pure`）就丢，非字面量（可能含 `return`、可能有副作用）就留、
+相对顺序不变。实现反而更简单了——不用再单独处理"最后一条"、不再需要 `.back()`、不再需要
+`size() <= 1` 的提前返回（原来这个提前返回一部分是为了避免空 vector 上调用 `.back()` 的 UB，
+现在整个函数就是一个纯过滤，天然不会有这个问题）。
+
+这次修复暴露了一个连带问题：`test/analyzer/test_utils.h` 的 `fold_json`（几乎全部
+literal_folder 测试都在用）内部是 `LiteralFolder{*program}.fold()` 整份折——现在顶层
+`AstNodeProgram` 也会被 `prune_program`，如果测试源码是"恰好一条顶层表达式，且这条折完是纯
+字面量"（比如 `fold_json(U"1 + 2")`，`1+2` 先折成 `3`，`3` 是纯字面量），这条就会被剪空，
+`fold_json` 接着访问 `program->exprs_[0]` 直接越界（`vector subscript out of range`，
+实测导致 `SL_Cpp_Analyzer_Tests` 从第一个用例就崩溃）。根子在于 `fold_json`
+真正想测的是"这一条表达式自己怎么折"，不是"这份只有一条语句的 Program 剪不剪得动"，
+被 `prune_program` 这个新逻辑误伤了。
+
+修法：给 `LiteralFolder` 加一个新的公开静态入口 `fold_expr(AstNodePtr &node)`——只对单个
+表达式节点做"visit + 折到不动为止"，不触碰 `AstNodeProgram`、不会触发 `prune_program`。
+`visit`/`visit_and_replace` 这一整组方法本来就不碰 `root_`，顺手都改成了 `static`
+（纯净的重构，行为不变）。`fold_json` 改成调 `LiteralFolder::fold_expr(program->exprs_[0])`
+而不是 `LiteralFolder{*program}.fold()`，不再经过 Program 级别的剪枝；`fold_program_json`
+（专门测 `prune_program` 本身的那个新工具函数）继续走原来的整份 `fold()`，两个工具函数分工
+更清楚了：一个测"表达式怎么折"，一个测"Program 语句列表怎么剪"。
+
+`program_prune_test.cpp` 里所有假设"最后一条被保留"的用例全部改了期望值（比如
+`func f() {1;2;3}` 现在剪成空 body，不是剪成 `[3]`），新增一条最直接的回归测试：
+`fold_program_json(U"func f() { 1 }") == fold_program_json(U"func f() {}")`——
+就是这次讨论的原始例子，两边折完必须完全一样。

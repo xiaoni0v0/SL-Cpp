@@ -53,11 +53,7 @@
  *      最后一条永远保留（它决定整个表达式的值）；
  *      丢到只剩最后一条就直接展开，丢完还剩不止一条就拼一个更短的复合表达式，一条都没丢成就不折。
  *
- * AstNodeProgram（模块顶层/函数体/类体，跟复合表达式同构，也是"值为最后一条表达式的值"）：
- * 丢弃规则完全一样，但**不通过 fold() 替换整个节点**——root_/函数体/类体的字段类型都固定要求
- * 是 AstNodeProgram 本身，不是可以塞任何节点的通用 AstNodePtr，没法像复合表达式那样换成别的
- * 类型。因此改成 prune_program()，原地精简 exprs_，节点自身的身份/类型永远不变，哪怕最后只
- * 剩一条也不展开成裸表达式。
+ * AstNodeProgram 原地精简 exprs_，丢掉全部纯字面量子表达式
  */
 class StaticEvaler final {
     // —————————— 一级入口 ——————————
@@ -159,8 +155,6 @@ class StaticEvaler final {
     // 尝试把 node 折成一个字面量节点；不递归，返回 nullptr 表示折不动
     [[nodiscard]] static AstNodePtr fold(AstNode &node);
 
-    // 原地精简 AstNodeProgram 的 exprs_：跟复合表达式同一条"丢弃非最后一条的纯字面量子表达式"
-    // 规则（类头注释），但节点本身的类型/身份不能变，只精简 exprs_ 这个 vector，不做整个节点
-    // 替换
+    // 原地精简 AstNodeProgram 的 exprs_
     static void prune_program(AstNodeProgram &node);
 };

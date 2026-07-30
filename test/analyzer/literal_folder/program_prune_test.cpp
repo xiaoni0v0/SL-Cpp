@@ -1,9 +1,15 @@
-// StaticEvaler::prune_program：AstNodeProgram（模块顶层/函数体/类体）跟复合表达式同一条
-// "丢弃非最后一条的纯字面量子表达式"规则（SL.md 3.4.1），但节点本身的类型/身份不能变——
-// LiteralFolder::root_ 是按引用持有的 AstNodeProgram&，AstNodeFunc::body_/AstNodeClass::body_
-// 也固定要求是 AstNodeProgramPtr，不是通用的 AstNodePtr，没法像复合表达式那样整个节点换成
-// 别的类型。所以这里只原地精简 exprs_，哪怕最后只剩一条也不展开成裸表达式，见
-// StaticEvaler.h 类头注释。
+// StaticEvaler::prune_program：AstNodeProgram（模块顶层/函数体/类体）的剪枝规则。
+//
+// 关键点：Program 的值跟复合表达式不一样——不是"最后一条表达式的值"，而是完全由 return 决定：
+// 触发了 return 就是那个值，从头到尾没触发就恒为 None（SL.md 3.4.1/3.4.6）。所以纯字面量
+// （is_literal_pure）不管出现在 exprs_ 的哪个位置——包括最后一条——都能安全丢掉：它既不含
+// return，也没有副作用，留不留都不影响 Program 的值。`func f() { 1 }` 跟 `func f() {}`
+// 是同一个东西（调用都返回 None），这正是这条规则要处理的情况。
+//
+// 但节点本身的类型/身份不能变——LiteralFolder::root_ 是按引用持有的 AstNodeProgram&，
+// AstNodeFunc::body_/AstNodeClass::body_ 也固定要求是 AstNodeProgramPtr，不是通用的
+// AstNodePtr，没法像复合表达式那样整个节点换成别的类型。所以这里只原地精简 exprs_，
+// 哪怕精简到空也不删除/替换这个节点。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
@@ -28,30 +34,32 @@ TEST_SUITE("StaticEvaler AstNodeProgram 剪枝") {
         CHECK(fold_program_json(U"") == program(nlohmann::json::array()));
     }
 
-    TEST_CASE("只有一条顶层表达式：不剪，也不展开——哪怕就是个字面量，Program 这层不会消失") {
-        CHECK(fold_program_json(U"5") == program(nlohmann::json::array({int_lit("5")})));
+    TEST_CASE("只有一条顶层表达式、且是纯字面量：整条剪掉，Program 这层本身不消失") {
+        // 5 求值不触发 return，Program 的值恒为 None，留着这条纯字面量没有任何意义
+        CHECK(fold_program_json(U"5") == program(nlohmann::json::array()));
     }
 
     TEST_CASE("字面量前缀被丢弃，非字面量的最后一条保留") {
         CHECK(fold_program_json(U"1; 2; x") == program(nlohmann::json::array({ident("x")})));
     }
 
-    TEST_CASE("非字面量夹在中间：字面量丢，非字面量留，相对顺序不变") {
-        // x 在最后一条之前，不是字面量，留着；1 是字面量，丢掉；2 是最后一条，永远留着
-        CHECK(
-            fold_program_json(U"x; 1; 2") ==
-            program(nlohmann::json::array({ident("x"), int_lit("2")}))
-        );
+    TEST_CASE("非字面量夹在中间：字面量全丢（含最后一条），非字面量留，相对顺序不变") {
+        // x 不是字面量，留着；1、2 都是字面量——包括最后一条的 2——统统丢掉，
+        // 不像复合表达式那样得保留最后一条
+        CHECK(fold_program_json(U"x; 1; 2") == program(nlohmann::json::array({ident("x")})));
     }
 
-    TEST_CASE("全体都是字面量：剪到只剩最后一条，但依然是被 Program 包着的一条，不展开") {
-        CHECK(fold_program_json(U"1; 2; 3") == program(nlohmann::json::array({int_lit("3")})));
+    TEST_CASE("全体都是字面量：全部剪空") {
+        CHECK(fold_program_json(U"1; 2; 3") == program(nlohmann::json::array()));
     }
 
-    TEST_CASE("带真实副作用（赋值）的子表达式，不能因为最后一条是字面量就被剪掉") {
+    TEST_CASE(
+        "带真实副作用（赋值）的子表达式必须留着；后面纯字面量的尾巴照样丢，不因为"
+        "它是最后一条就特殊对待"
+    ) {
         CHECK(
             fold_program_json(U"x = 1; 2") ==
-            program(nlohmann::json::array({assign("x", int_lit("1")), int_lit("2")}))
+            program(nlohmann::json::array({assign("x", int_lit("1"))}))
         );
     }
 
@@ -66,13 +74,18 @@ TEST_SUITE("StaticEvaler AstNodeProgram 剪枝") {
     }
 
     TEST_CASE(
-        "函数体全体都是字面量：body 依然是 Program（只剩一条也不会退化成裸的 LiteralInt），"
+        "函数体全体都是字面量：整个剪空，但 body 依然是 Program（不会退化成裸表达式）——"
+        "func f() { 1; 2; 3 } 跟 func f() {} 是同一个东西，调用都返回 None，"
         "这正是这条规则跟复合表达式折叠不一样的地方"
     ) {
         const auto result = fold_program_json(U"func f() { 1; 2; 3 }");
         const auto body = result["exprs"][0]["body"];
         CHECK(body["type"] == "Program");
-        CHECK(body["exprs"] == nlohmann::json::array({int_lit("3")}));
+        CHECK(body["exprs"] == nlohmann::json::array());
+    }
+
+    TEST_CASE("func f() { 1 } 折完跟 func f() {} 长得一模一样（这次讨论的原始例子）") {
+        CHECK(fold_program_json(U"func f() { 1 }") == fold_program_json(U"func f() {}"));
     }
 
     TEST_CASE("类体同样会被剪枝") {
