@@ -96,4 +96,57 @@ TEST_SUITE("SemanticChecker try-finally") {
     TEST_CASE("try 既无 except 也无 finally 报错") {
         check_throws_with(U"try a", "try must have at least one except or finally");
     }
+
+    TEST_CASE("return 在 finally 顶层报错") {
+        check_throws_with(U"try a finally return 1", "return inside finally is not allowed");
+        check_throws_with(
+            U"try a except (E) b finally return 1", "return inside finally is not allowed"
+        );
+    }
+
+    TEST_CASE("break 在 finally 顶层报错（即使外面有循环）") {
+        check_throws_with(
+            U"while (True) { try a finally break }", "break inside finally is not allowed"
+        );
+    }
+
+    TEST_CASE("continue 在 finally 顶层报错（即使外面有循环）") {
+        check_throws_with(
+            U"while (True) { try a finally continue }", "continue inside finally is not allowed"
+        );
+    }
+
+    TEST_CASE(
+        "多层嵌套循环外 + finally 内的 break/continue：以 finally 入口处的 loop_depth 为拦截基准"
+    ) {
+        check_throws_with(
+            U"while (True) { while (True) { try a finally break } }",
+            "break inside finally is not allowed"
+        );
+        check_throws_with(
+            U"while (True) { while (True) { try a finally continue } }",
+            "continue inside finally is not allowed"
+        );
+    }
+
+    TEST_CASE(
+        "finally 内部定义的循环里的 break/continue 合法（只跳出内层循环，不跨 finally 边界）"
+    ) {
+        CHECK_NOTHROW(check_program(U"try a finally { for (;;) { break } }"));
+        CHECK_NOTHROW(check_program(U"try a finally { while (True) { continue } }"));
+    }
+
+    TEST_CASE("finally 内部定义的函数里的 return 合法（函数自己的 return，不是 finally 的）") {
+        CHECK_NOTHROW(check_program(U"try a finally { func f() { return 1 } }"));
+    }
+
+    TEST_CASE("finally 内部定义的类体里的 return 同样合法（类体自己的 return，不是 finally 的）") {
+        CHECK_NOTHROW(check_program(U"try a finally { class C { return None } }"));
+    }
+
+    TEST_CASE("finally 内部的复合表达式里的 return 同样拦截（复合表达式不引入新作用域）") {
+        check_throws_with(
+            U"try a finally { { return 1 } }", "return inside finally is not allowed"
+        );
+    }
 }

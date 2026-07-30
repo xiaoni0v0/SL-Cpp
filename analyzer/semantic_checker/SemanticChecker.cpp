@@ -68,6 +68,7 @@ void SemanticChecker::check(const AstNodeClass &node) {
 
     ctx_.local_scope_depth++;
     ctx_.loop_depth = 0;
+    ctx_.finally_loop_depth = -1;
     check_not_null(node.body_, pos);
 
     ctx_ = saved;
@@ -123,13 +124,22 @@ void SemanticChecker::check(const AstNodeForIter &node) {
 
 void SemanticChecker::check(const AstNodeBreak &node) {
     if (ctx_.loop_depth == 0) error("break outside loop", node.pos_);
+    // finally 体内禁止 break 跳出 finally 范围
+    if (ctx_.finally_loop_depth >= 0 && ctx_.loop_depth == ctx_.finally_loop_depth)
+        error("break inside finally is not allowed", node.pos_);
 }
 
 void SemanticChecker::check(const AstNodeContinue &node) {
     if (ctx_.loop_depth == 0) error("continue outside loop", node.pos_);
+    // finally 体内禁止 continue 跳出 finally 范围
+    if (ctx_.finally_loop_depth >= 0 && ctx_.loop_depth == ctx_.finally_loop_depth)
+        error("continue inside finally is not allowed", node.pos_);
 }
 
 void SemanticChecker::check(const AstNodeReturn &node) {
+    // finally 体内禁止 return
+    if (ctx_.finally_loop_depth >= 0) error("return inside finally is not allowed", node.pos_);
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -156,7 +166,12 @@ void SemanticChecker::check(const AstNodeTry &node) {
         for (const auto &exc : clause.exceptions_) check_not_null(exc, pos);
         check_not_null(clause.body_, pos);
     }
+
+    // finally 体内拦截 return/break/continue
+    // 保存此时的 loop_depth 作为 finally 拦截的基准
+    ctx_.finally_loop_depth = ctx_.loop_depth;
     check_nullable(node.finally_expr_);
+    ctx_.finally_loop_depth = -1;
 
     ctx_ = saved;
 }
@@ -239,6 +254,7 @@ void SemanticChecker::check(const AstNodeFunc &node) {
 
     ctx_.local_scope_depth++;
     ctx_.loop_depth = 0;
+    ctx_.finally_loop_depth = -1;
     check(*node.body_);
 
     ctx_ = saved;
@@ -333,7 +349,8 @@ void SemanticChecker::check(const AstNodeCompound &node) {
 void SemanticChecker::check(const AstNodeStar &node) {
     const Position pos{node.pos_};
 
-    if (!ctx_.can_star) error("* can only appear in tuple, list, or function call arguments", pos);
+    if (!ctx_.can_star)
+        error("* can only appear in tuple, list, index, or function call arguments", pos);
 
     const Context saved{ctx_};
     ctx_.can_star = false;

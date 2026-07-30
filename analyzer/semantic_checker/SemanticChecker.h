@@ -9,8 +9,9 @@ class SemanticChecker {
     const std::string file_path_;
 
     struct Context {
-        int local_scope_depth{0}; // 是否身处 func 体或 class 体的局部作用域内
-        int loop_depth{0};        // for、while 共用
+        int local_scope_depth{0};   // 是否身处 func 体或 class 体的局部作用域内
+        int loop_depth{0};          // for、while 共用
+        int finally_loop_depth{-1}; // 身处 finally 体时的外层 loop_depth（-1 表示不在 finally 内）
         bool can_star{false};
         bool can_double_star{false};
     } ctx_;
@@ -50,6 +51,7 @@ class SemanticChecker {
 
 #define X(nt) void check(const nt &node);
 #include "../../parser/ast_nodes/x_ast_nodes.h"
+
 #undef X
 
     // 检查节点，node 不可空

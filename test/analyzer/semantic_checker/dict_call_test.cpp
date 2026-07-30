@@ -47,7 +47,7 @@ TEST_SUITE("SemanticChecker 调用参数") {
         "位置组/关键字组自己的展开语法上，不能是某个关键字的值）"
     ) {
         check_throws_with(
-            U"f(a=*b)", "* can only appear in tuple, list, or function call arguments"
+            U"f(a=*b)", "* can only appear in tuple, list, index, or function call arguments"
         );
         check_throws_with(
             U"f(a=**b)", "** can only appear in dict literal or function call arguments"
