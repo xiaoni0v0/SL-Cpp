@@ -5,7 +5,7 @@ cd E:\Programs\SL-Cpp
 
 echo ===== 开始同步项目 =====
 echo.
-cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang -G Ninja -S . -B cmake-build-debug
+cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=ninja -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -G Ninja -S . -B cmake-build-debug
 
 if %errorlevel% neq 0 (
     echo.

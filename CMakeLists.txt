@@ -13,11 +13,16 @@ endif ()
 
 # ------------------------------------------------------------
 # 前端识别
-#   - GCC:      CMAKE_CXX_COMPILER_ID = "GNU"，无 FRONTEND_VARIANT
-#   - Clang:    CMAKE_CXX_COMPILER_ID = "Clang"，FRONTEND_VARIANT = "GNU" 或空
-#   - clang-cl: CMAKE_CXX_COMPILER_ID = "Clang"，FRONTEND_VARIANT = "MSVC"
-#   - MSVC:     CMAKE_CXX_COMPILER_ID = "MSVC"，无 FRONTEND_VARIANT
+#   - GCC:           CMAKE_CXX_COMPILER_ID = "GNU",   FRONTEND_VARIANT = ""
+#   - Clang:         CMAKE_CXX_COMPILER_ID = "Clang", FRONTEND_VARIANT = "GNU" 或 ""
+#   - clang-cl:      CMAKE_CXX_COMPILER_ID = "Clang", FRONTEND_VARIANT = "MSVC"
+#   - MSVC（不支持）: CMAKE_CXX_COMPILER_ID = "MSVC",  FRONTEND_VARIANT = ""
 # ------------------------------------------------------------
+if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    message(FATAL_ERROR
+            "不支持的编译器 CMAKE_CXX_COMPILER_ID=\"${CMAKE_CXX_COMPILER_ID}\"，目前只支持 GCC / Clang / clang-cl")
+endif ()
+
 if (NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "" AND
         NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU" AND
         NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
@@ -25,9 +30,9 @@ if (NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "" AND
             "不支持的编译器前端命令行风格 CMAKE_CXX_COMPILER_FRONTEND_VARIANT=\"${CMAKE_CXX_COMPILER_FRONTEND_VARIANT}\"")
 endif ()
 
-# 是否为 MSVC 命令行风格（cl.exe 或 clang-cl）
+# 是否为 MSVC 命令行风格。上面已经把 cl.exe 挡掉了，所以这里为真只可能是 clang-cl
 set(SL_MSVC_LIKE_FRONTEND FALSE)
-if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC" OR CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+if (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     set(SL_MSVC_LIKE_FRONTEND TRUE)
     add_compile_options(/utf-8 /bigobj)
 endif ()
@@ -43,10 +48,10 @@ endif ()
 #   /EHsc 是 MSVC 下开启标准 C++ 异常处理语义所必需的。
 # ------------------------------------------------------------
 
-function(sl_apply_main_target_warnings target)
+function(sl_apply_main_target_options target)
     if (SL_MSVC_LIKE_FRONTEND)
         target_compile_options(${target} PRIVATE
-                /W4 /permissive- /EHsc
+                /W4 /permissive- /EHsc -Wshadow
                 $<$<CONFIG:Debug>:/WX>
                 $<$<CONFIG:Debug>:/Zi>
                 $<$<CONFIG:Debug>:/Od>
@@ -63,9 +68,9 @@ function(sl_apply_main_target_warnings target)
     endif ()
 endfunction()
 
-function(sl_apply_test_target_warnings target)
+function(sl_apply_test_target_options target)
     if (SL_MSVC_LIKE_FRONTEND)
-        target_compile_options(${target} PRIVATE /W4 /permissive- /EHsc /WX /Od)
+        target_compile_options(${target} PRIVATE /W4 /permissive- /EHsc -Wshadow /WX /Od)
     else ()
         target_compile_options(${target} PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0)
     endif ()
@@ -154,7 +159,7 @@ add_executable(SL main.cpp
 )
 
 # 编译选项
-sl_apply_main_target_warnings(SL)
+sl_apply_main_target_options(SL)
 
 # 链接选项
 if (SL_MSVC_LIKE_FRONTEND)
@@ -204,7 +209,7 @@ add_executable(SL_Cpp_Numeric_Tests
         # 测试代码
         test/numeric/big_int_test.cpp
 )
-sl_apply_test_target_warnings(SL_Cpp_Numeric_Tests)
+sl_apply_test_target_options(SL_Cpp_Numeric_Tests)
 target_link_libraries(SL_Cpp_Numeric_Tests PRIVATE doctest::doctest)
 add_test(NAME SL_Cpp_Numeric_Tests COMMAND SL_Cpp_Numeric_Tests)
 
@@ -246,7 +251,7 @@ add_executable(SL_Cpp_Lexer_Tests
         test/lexer/common/position_tracking_test.cpp
         test/lexer/common/error_handling_test.cpp
 )
-sl_apply_test_target_warnings(SL_Cpp_Lexer_Tests)
+sl_apply_test_target_options(SL_Cpp_Lexer_Tests)
 target_link_libraries(SL_Cpp_Lexer_Tests PRIVATE doctest::doctest)
 target_precompile_headers(SL_Cpp_Lexer_Tests PRIVATE
         <doctest/doctest.h>
@@ -317,7 +322,7 @@ add_executable(SL_Cpp_Parser_Tests
         test/parser/common/error_handling_test.cpp
         test/parser/common/combination_test.cpp
 )
-sl_apply_test_target_warnings(SL_Cpp_Parser_Tests)
+sl_apply_test_target_options(SL_Cpp_Parser_Tests)
 target_link_libraries(SL_Cpp_Parser_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
 target_precompile_headers(SL_Cpp_Parser_Tests PRIVATE
         <nlohmann/json.hpp>
@@ -382,7 +387,7 @@ add_executable(SL_Cpp_Analyzer_Tests
         test/analyzer/syntax_checker/dict_call_test.cpp
         test/analyzer/syntax_checker/defensive_test.cpp
 )
-sl_apply_test_target_warnings(SL_Cpp_Analyzer_Tests)
+sl_apply_test_target_options(SL_Cpp_Analyzer_Tests)
 target_link_libraries(SL_Cpp_Analyzer_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
 target_precompile_headers(SL_Cpp_Analyzer_Tests PRIVATE
         <nlohmann/json.hpp>
