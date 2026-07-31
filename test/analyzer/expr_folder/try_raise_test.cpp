@@ -15,13 +15,11 @@ TEST_SUITE("ExprFolder try/raise 子表达式折叠") {
                 {"type", "Try"},
                 {"try_expr", int_lit("2")},
                 {"except_clauses",
-                 nlohmann::json::array(
-                     {nlohmann::json{
-                         {"exceptions", nlohmann::json::array({{{"type", "Identifier"},
-                                                                 {"identifier", "E"}}})},
-                         {"body", {{"type", "Identifier"}, {"identifier", "b"}}}
-                     }}
-                 )},
+                 nlohmann::json::array({nlohmann::json{
+                     {"exceptions",
+                      nlohmann::json::array({{{"type", "Identifier"}, {"identifier", "E"}}})},
+                     {"body", {{"type", "Identifier"}, {"identifier", "b"}}}
+                 }})},
                 {"finally_expr", nullptr}
             }
         );
@@ -59,7 +57,10 @@ TEST_SUITE("ExprFolder try/raise 子表达式折叠") {
     }
 
     TEST_CASE("raise 的 value_ 会被折叠") {
-        CHECK(fold_json(U"raise (1 + 1)") == nlohmann::json{{"type", "Raise"}, {"value", int_lit("2")}});
+        CHECK(
+            fold_json(U"raise (1 + 1)") ==
+            nlohmann::json{{"type", "Raise"}, {"value", int_lit("2")}}
+        );
     }
 
     TEST_CASE("含变量/调用的子表达式不折，只递归折内部能折的部分") {

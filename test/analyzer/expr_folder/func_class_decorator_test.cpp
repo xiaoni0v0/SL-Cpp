@@ -59,10 +59,12 @@ TEST_SUITE("ExprFolder func 各槽位折叠") {
 TEST_SUITE("ExprFolder class 各槽位折叠") {
 
     TEST_CASE("bases_ 里每个基类表达式都会被折叠") {
-        CHECK(fold_json(U"class C(1 + 1, 2 + 2) {}")["bases"] == nlohmann::json::array({
-                                                                       int_lit("2"),
-                                                                       int_lit("4"),
-                                                                   }));
+        CHECK(
+            fold_json(U"class C(1 + 1, 2 + 2) {}")["bases"] == nlohmann::json::array({
+                                                                   int_lit("2"),
+                                                                   int_lit("4"),
+                                                               })
+        );
     }
 
     TEST_CASE("捕获列表的 value_expr_ 会被折叠") {
