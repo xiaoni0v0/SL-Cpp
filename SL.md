@@ -488,7 +488,8 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
    再各基类从前到后逐个求值；
    若有捕获，在新建类体自己的局部帧之后、执行类体之前，从前到后处理 `ALL_CAPTURE` 中各项（具体规则见 3.10.4）；
    若有文档字符串，对其求值；
-9. 对 `except`，各异常类从前到后逐个求值。
+9. 对 `except`，各异常类从前到后逐个求值；
+10. 对 `import`，见 3.4.5 所述。
 
 ### 3.4 表达式的值
 
@@ -596,14 +597,34 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 
 #### 3.4.5 `import` 表达式的值
 
-`import` 表达式的值是导入得到的模块对象。加载流程：
+`import` 表达式的值是导入得到的模块对象。
+
+沿用 Python 的 module/package 概念：
+
+- **module** 对应一个源文件；
+- **package** 对应一个目录，导入 package 时执行的是该目录下的 `__init__.sl`；
+  该文件不存在时，等价为视为该目录下有一份空的 `__init__.sl`，建立一个空壳模块对象。
+
+这两个概念只在“源文件从哪来”这层有区别，导入后产生的都是同一种模块对象。
+
+单段名字（`module_name` 不含 `.`）的加载流程：
 
 1. 若 `force` 为 `False`，先在模块缓存中查找 `module_name`，若有，则直接返回缓存的模块对象；
-2. 若无缓存或 `force` 为 `True`，按 `module_name` 找到一份 SL 源文件。
-   若找不到，则在内置模块名里找；
-3. 若找到了 SL 源文件：新建一个模块对象，新建帧、压栈，把源文件内容当作 Program 执行，
-   弹出帧（帧不死亡，其 `_G` 直接作为 `attrs(模块对象)`），Program 的值记入模块对象的 `__return__` 属性；
+2. 若无缓存或 `force` 为 `True`：
+   按 `module_name` 找同名的源文件（module）或同名目录（package）；
+   都找不到则在内置模块名里找，仍找不到则抛 `ImportError`；
+   若同名的源文件和目录同时存在，视为有歧义，抛出 `ImportError`；
+3. 新建一个模块对象，新建帧、压栈，把源文件内容（module 是该文件本身，package 是目录下的 `__init__.sl`）
+   当作 Program 执行，弹出帧（帧不死亡，其 `_G` 直接作为 `attrs(模块对象)`），
+   Program 的值记入模块对象的 `__return__` 属性；
 4. 缓存并返回模块对象。
+
+多段名字（`module_name` 形如 `a.b. ... .z`）：
+从左到右逐段导入，每一段都按上述单段流程处理（含缓存、`ImportError`）；
+`a` 直接按单段流程导入；从第二段起，要求上一段是 package，在其目录下找这一段对应的源文件/目录继续导入，
+若上一段不是 package（是普通 module，没有对应目录），抛 `ImportError`。
+每导入完一段，都把这一段的模块对象设为上一段模块对象的同名属性（如 `os.path = <path 模块对象>`）。
+整个 `module_name` 对应的 `import()` 调用，其返回值是最后一段的模块对象。
 
 调用形态：
 `import(name: str, lazy: bool = False, force: bool = False)`
@@ -613,14 +634,13 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 1. `lazy`使加载延迟到首次取属性时；
 2. `force`丢弃缓存旧模块、强制重新加载。
 
-关键字形态：
-`import math` 等价于 `math = import('math')`。
+关键字形态（`lazy`、`force` 均取默认值 `False`）：
 
-多段形式 `import a.b.c ...` 不是字面代换：
-只对第一段调用 `import` 并绑定到当前作用域（`a = import('a')`），后续每一段都是普通的属性访问，不参与 `import` 语义。
-`import()` 把传入的 `name` 当成不透明整串，不解析其中的点号。
-因此 `a.b`、`a.b.c` 之后能不能访问到，取决于 `a` 这个模块自己有没有这些属性
-（比如 `a` 的源码里自己写 `b = import('a.b')` 把子模块挂成自己的属性）。
+- 单段 `import a` 等价于 `(a = import('a'))`。
+- 多段 `import a.b.c ...` 绑定到当前作用域、同时作为整个表达式的值的，
+  是第一段 `a` 的模块对象，而不是调用形态本该返回的最后一段（`z`），这是关键字形态和调用形态在多段情形下唯一不同的地方。
+
+暂不支持相对导入等更复杂的机制。
 
 **易错提醒**：模块源文件里定义的 `__op_call__` 只是模块的一个普通属性，不会让模块对象本身变得可调用
 （调用 `x(...)` 查的是 `type(x)` 的 `__op_call__`，见 3.8）。
@@ -1619,7 +1639,8 @@ BaseException
     ├── MathError      - 数学运算错误（除以零、负数开偶次方根、对非正数取对数、对[-1, 1]以外的数取反三角等）
     ├── DispatchError  - 函数调用时参数不匹配
     ├── RecursionError - 递归/调用嵌套过深
-    └── IOError        - 输入输出失败
+    ├── IOError        - 输入输出失败
+    └── ImportError    - 模块导入失败（找不到模块/包，或名字有歧义）
 ```
 
 #### 4.2.24 TypeVar
