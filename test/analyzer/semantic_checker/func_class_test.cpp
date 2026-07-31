@@ -86,3 +86,31 @@ TEST_SUITE("SemanticChecker doc 槽位") {
         check_throws_with(U"class C x {}", "doc must be a string literal");
     }
 }
+
+// 装饰器（SL.md 2.2.8）之前完全没有语义检查层面的正面用例覆盖，只有 defensive_test.cpp
+// 里针对畸形 AST（decorators_/decorator_positions_ 数量对不上）的防御性断言。
+TEST_SUITE("SemanticChecker 装饰器") {
+
+    TEST_CASE("紧邻 func/class 的装饰器合法，含多个、含调用形式") {
+        CHECK_NOTHROW(check_program(U"@dec func f() {}"));
+        CHECK_NOTHROW(check_program(U"@dec1 @dec2 func f() {}"));
+        CHECK_NOTHROW(check_program(U"@dec class C {}"));
+        CHECK_NOTHROW(check_program(U"@dec(1, 2) func f() {}"));
+    }
+
+    TEST_CASE("紧邻 func/class 的装饰器表达式子树仍会被递归检查") {
+        check_throws_with(U"@break func f() {}", "break outside loop");
+        check_throws_with(U"@dec(break) func f() {}", "break outside loop");
+    }
+
+    TEST_CASE("通用形式（包裹的不是紧邻的 func/class）合法，含多层嵌套") {
+        CHECK_NOTHROW(check_program(U"@dec x"));
+        CHECK_NOTHROW(check_program(U"@d1 @d2 x"));
+        CHECK_NOTHROW(check_program(U"@dec x = 1"));
+    }
+
+    TEST_CASE("通用形式的 decorator_/target_ 子树都会被递归检查") {
+        check_throws_with(U"@break x", "break outside loop");
+        check_throws_with(U"@dec break", "break outside loop");
+    }
+}

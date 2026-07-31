@@ -1058,3 +1058,85 @@ expr_folder 测试都在用）内部是 `ExprFolder{*program}.fold()` 整份折�
 文件改名走的是 `git mv`（保留 git 的 rename 追踪），但没有 `git add`/`commit`——用户明确要求
 "不准 commit、push、reset"，改完整个工作区处于"已暂存的重命名 + 后续内容修改叠加在上面未暂存"
 这种混合状态，交给用户自己决定怎么整理提交。
+
+## `finally` 内 return/break/continue 拦截：deepseek 补的实现，review 后接受
+
+用户提到用另一个工具（deepseek）发现 3.4.5.7 定的"`finally` 体内拦截跳出该范围的
+`return`/`break`/`continue`"这条规则当年设计完之后压根没写实现，deepseek 补上了，要求先
+`git diff` review 一遍再决定要不要。核心实现是 `SemanticChecker::Context` 加一个
+`finally_loop_depth`（进入 `finally` 时记下的 `loop_depth`，`-1` 表示不在 `finally` 内）：
+`return` 只要 `finally_loop_depth >= 0` 就拦；`break`/`continue` 要求 `loop_depth ==
+finally_loop_depth`（相等说明这层循环是 `finally` 外面的，不相等说明是 `finally` 内部自己新开的
+循环，不该拦）；`func`/`class` 各自的 body 是新 Program，进入时都要把 `finally_loop_depth`
+重置成 `-1`（跟 `loop_depth` 重置成 `0` 是同一个道理），不然 `finally { func f() { return 1 } }`
+会被误杀。手动推了几种嵌套（多层循环外 + `finally`、`finally` 内部自己的循环/函数/类体、`try`
+自己套 `try`）都对得上，全量测试也过，判定为正确实现，接受。
+
+Review 时顺带发现两处小问题，都是"无害但值得清理"级别，不是这条规则本身的 bug：
+
+1. `check(AstNodeTry)` 里 `ctx_.finally_loop_depth = -1;` 紧接着下一行就是 `ctx_ = saved;`
+   （`saved` 是函数最开头存的整个 `ctx_`），前者的效果立刻被后者覆盖，是死代码——已删除。
+2. deepseek 顺手把 `*` 的报错信息从"tuple, list, or function call arguments"改成加了
+   "index"（`check(AstNodeIndex)` 早就有 `can_star = true` 但报错文案一直没同步），这处修正是对的，
+   保留。
+
+`StaticEvaler.h` 类头那张二元折叠范围表也有一处遗留：`D = { * != == }` 这一档原本同时标在
+`(bool/int, str)`/`(bool/int, tuple)`/`(bool/int, list)` 三格，是 tuple/list 的 `*` 还没改成
+恒不折之前的老结论；deepseek 在那之后往 `D` 的定义里加了句"其中 `*` 仅对 str 有效"的补丁式说明，
+读起来别扭。跟用户讨论后发现根本不需要新字母：既然 tuple/list 的 `*` 现在恒不折，
+`(bool/int, tuple)`/`(bool/int, list)` 这两格实际能折的运算符集合就是 `{ != == }`，跟 `E`
+的定义完全一样——直接把这两格从 `D` 改标成 `E`，`D` 的定义恢复成干净的一句话，比新增字母更准确、
+改动也更小。
+
+## `SemanticChecker`/`ExprFolder` 全面审查：2 个真 bug + 1 处死代码 + 大量测试空白
+
+用户要求把这两个类（含 `ExprFolder` 内部用的 `StaticEvaler`）连同配套测试从头到尾仔细审查一遍，
+发现 bug 就修、发现测试空白就补。逐函数对照 SL.md 过了一遍所有 `check(AstNodeXxx)`/
+`visit(AstNodeXxx)`/`fold_xxx`，结论：
+
+**真 bug 1：`check_lvalue_items` 的 `*` 目标限制**。SL.md 2.1.5 原文"其中至多一个纯左值可以带
+`*` 前缀"，明确写的是"纯左值"（标识符/属性/索引），不是"左值"（左值还包括嵌套的 tuple/list
+解构）。但原实现里 `*` 分支调用的是 `check_lvalue`（允许嵌套解构），导致 `(a, *(b, c)) = x`
+这种"星号后面接嵌套解构"的非法写法被放过了。跟 Python 的真实语法一致（Python 里 `*` 后面
+同样只能是单个 name/attribute/subscript，不能是嵌套 `(...)`/`[...]`），确认是遗漏而不是设计
+分歧。修法：把 `check_lvalue_pure` 从"只服务 `+=` 等复合赋值"改成可传入上下文文案的通用版本
+（`check_lvalue_pure(node, context)`，`context` 拼进报错消息，`+=` 那边传
+`"before op="`（消息文本不变），星号解构这边传新的 `"after * in destructuring"`），
+`check_lvalue_items` 的星号分支换成调用它。
+
+**真 bug 2：`fold_compare` 链式比较遇到类型不可比时丢弃已确定的前缀**。链式比较
+`a<b<c<...` 折叠时按环（pair）扫描，扫到某一环没法确定就该停下来、把前面已经确定为 True 的
+环安全丢掉、只留下没法判定的这一截（这个"部分折叠"逻辑本来就有，`1 < 2 < x` 会折成 `2 < x`）。
+但原实现里"没法确定"分两种情况处理不一致：操作数不是字面量（`!is_literal_pure`）会 `break`
+走部分折叠；操作数都是字面量但类型压根不可比（`literal_compare` 返回 `unordered`，比如
+`1 < 2 < 'a'` 里的 `2 < 'a'`）却是直接 `return nullptr`，把整条链的折叠全部放弃，连前面
+`1 < 2` 那条已经证明为 True、丢了也不影响语义的前缀都保不住。两种"没法确定"的根本原因不同，
+但对折叠逻辑而言应该一视同仁——改成同样 `break`，复用已有的部分折叠代码路径。`1 < 2 < 'a'`
+现在正确折成 `2 < 'a'`（等价于短路语义 `(1<2) and (2<'a')`，`1<2` 是纯字面量、无副作用，丢了
+安全）。
+
+**死代码**：`StaticEvaler::clone_literal`（深拷贝一份字面量子树）在更早前 tuple `*`
+改成恒不折那次改动里失去了唯一的外部调用点（原来 `fold_mul` 靠它伪造 tuple 重复的"深拷贝当共享"），
+现在只剩自身递归调用，是私有静态方法，彻底没人用了——删除声明和实现。
+
+**测试空白**（都是"代码本身没问题、但缺回归测试锁定"）：
+
+- `SemanticChecker`：装饰器（`@dec`/通用形式）此前只有 `defensive_test.cpp`
+  里针对畸形 AST 的防御性断言，没有任何正面用例；`AstNodeIndex` 参数里 `*` 合法（`a[*b]`）、
+  `**` 非法（`a[**b]`）没测过；`finally_loop_depth` 有两处非平凡的继承行为完全没覆盖——
+  同一个 `try` 自己的 `except` 子句不受自己 `finally` 影响（两者不是嵌套关系，`except` 先于
+  `finally` 求值）、嵌套在外层 `finally` 里的另一个 `try` 的 `try_expr_`/`except` body
+  照样要被外层拦截（`try`/`except` 不像 `func`/`class` 那样开新 Program，不能豁免）。
+  都补进了 `func_class_test.cpp`/`dict_call_test.cpp`/`scope_test.cpp`。
+- `ExprFolder`：`AstNodeTry`/`AstNodeRaise`（`try_expr_`/`except` 的
+  `exceptions_`/`body_`/`finally_expr_`/`raise` 的 `value_`）、`AstNodeFunc`/`AstNodeClass`/
+  `AstNodeDecorator` 的各个子槽位（形参默认值/类型注解、返回类型注解、捕获列表
+  `value_expr_`、`decorators_`/`bases_`、装饰器自己的 `decorator_`/`target_`）、
+  `AstNodeCall`/`AstNodeIndex`/`AstNodeAttr`/`AstNodeAssign`/`AstNodeCompoundAssign`
+  的各参数/目标/值、dict 字面量的 key/value（dict 本身恒不折，但每一项的子表达式该折照折）——
+  这些位置的 `visit()` 实现本身都是对的（逐一读代码核对过），但此前没有任何测试直接验证过它们
+  会递归折叠，新增 `try_raise_test.cpp`、`func_class_decorator_test.cpp`、
+  `call_index_attr_assign_test.cpp` 三个文件，外加 `container_ops_test.cpp` 里补了 dict
+  key/value 折叠的用例。
+
+全部改动过一遍 `run_test.bat`，4 个可执行文件全绿（Analyzer 测试从 171 个用例涨到 217 个）。

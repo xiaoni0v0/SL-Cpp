@@ -32,6 +32,24 @@ TEST_SUITE("SemanticChecker 左值检查") {
         check_throws_with(U"[*a, *b] = x", "at most one starred lvalue allowed in destructuring");
     }
 
+    TEST_CASE(
+        "* 后面必须是纯左值（标识符/索引/属性），不能再是嵌套的 tuple/list 解构（SL.md 2.1.5：\n"
+        "“其中至多一个纯左值可以带 * 前缀”，措辞明确是纯左值，跟外层元素允许嵌套左值不是一回事）"
+    ) {
+        check_throws_with(
+            U"(a, *(b, c)) = x",
+            "identifier, attribute access, or index expression expected after * in destructuring"
+        );
+        check_throws_with(
+            U"(a, *[b, c]) = x",
+            "identifier, attribute access, or index expression expected after * in destructuring"
+        );
+        // * 后面是纯左值（标识符/索引/属性）都合法
+        CHECK_NOTHROW(check_program(U"(a, *b) = x"));
+        CHECK_NOTHROW(check_program(U"(a, *b[0]) = x"));
+        CHECK_NOTHROW(check_program(U"(a, *b.c) = x"));
+    }
+
     TEST_CASE("复合赋值只允许简单左值（标识符/索引/属性），不允许解构") {
         CHECK_NOTHROW(check_program(U"a += 1"));
         CHECK_NOTHROW(check_program(U"a[0] += 1"));

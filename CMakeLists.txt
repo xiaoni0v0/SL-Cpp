@@ -381,6 +381,9 @@ add_executable(SL_Cpp_Analyzer_Tests
         test/analyzer/expr_folder/dead_branch_test.cpp
         test/analyzer/expr_folder/compound_test.cpp
         test/analyzer/expr_folder/program_prune_test.cpp
+        test/analyzer/expr_folder/try_raise_test.cpp
+        test/analyzer/expr_folder/func_class_decorator_test.cpp
+        test/analyzer/expr_folder/call_index_attr_assign_test.cpp
 
         # 测试代码：semantic_checker
         test/analyzer/semantic_checker/scope_test.cpp

@@ -149,4 +149,44 @@ TEST_SUITE("SemanticChecker try-finally") {
             U"try a finally { { return 1 } }", "return inside finally is not allowed"
         );
     }
+
+    TEST_CASE(
+        "同一个 try 自己的 except 子句不受自己 finally 的拦截影响——except 求值在 finally "
+        "之前，两者不是嵌套关系"
+    ) {
+        CHECK_NOTHROW(check_program(U"try a except (E) { return 1 } finally c"));
+        // break 得在循环里才合法，这里额外套一层循环，专门验证 except 里的 break 不受同一个
+        // try 自己的 finally 影响（如果被误判成"身处 finally"，即使在循环里也会被拦截）
+        CHECK_NOTHROW(check_program(U"while (True) { try a except (E) { break } finally c }"));
+    }
+
+    TEST_CASE(
+        "嵌套在外层 finally 内部的另一个 try：它自己的 try_expr_/except 也算在外层 finally 的"
+        "求值范围内（try/except 不像 func/class 那样开新的 Program，不能豁免），同样要拦截"
+    ) {
+        check_throws_with(
+            U"try a finally { try b except (E) { return 1 } }",
+            "return inside finally is not allowed"
+        );
+        check_throws_with(
+            U"try a finally { try { return 1 } except (E) b }",
+            "return inside finally is not allowed"
+        );
+        // 内层 try 自己也带 finally：同样被外层拦截（不因为内层自己也是个 try-finally 就豁免）
+        check_throws_with(
+            U"try a finally { try b except (E) c finally { return 1 } }",
+            "return inside finally is not allowed"
+        );
+    }
+
+    TEST_CASE("finally 内部 raise 合法（拦截列表里只有 return/break/continue，raise 不受限）") {
+        CHECK_NOTHROW(check_program(U"try a finally { raise E() }"));
+    }
+
+    TEST_CASE("for-iter 形式的循环跟 for-cond 形式一样受 finally 边界规则约束") {
+        check_throws_with(
+            U"for (x : xs) { try a finally break }", "break inside finally is not allowed"
+        );
+        CHECK_NOTHROW(check_program(U"try a finally { for (x : xs) { break } }"));
+    }
 }

@@ -192,8 +192,8 @@ AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
             result = node.ops_[i] == Eq ? eq : !eq;
         } else {
             const std::partial_ordering cmp{literal_compare(a, b)};
-            if (cmp == std::partial_ordering::unordered)
-                return nullptr; // 类型不支持比较，没法折成任何值
+            // 类型不支持比较，没法折
+            if (cmp == std::partial_ordering::unordered) break;
             switch (node.ops_[i]) {
             case Lt:
                 result = cmp < 0;
@@ -659,39 +659,6 @@ AstNodePtr StaticEvaler::make_int(const Position pos, const int64_t value) {
 AstNodePtr StaticEvaler::make_float(const Position pos, const double value) {
     if (!std::isfinite(value)) return nullptr; // ±inf/NaN 写不出合法的 float 字面量，交给运行时处理
     return std::make_unique<AstNodeLiteralFloat>(pos, utf8_to_u32(double_to_string(value)));
-}
-
-AstNodePtr StaticEvaler::clone_literal(const AstNode &node) {
-    assert(is_literal_pure(node));
-
-    // None、bool、int、float、str、ellipsis 直接再构造一份
-    if (dynamic_cast<const AstNodeLiteralNone *>(&node))
-        return std::make_unique<AstNodeLiteralNone>(node.pos_);
-    if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&node)})
-        return std::make_unique<AstNodeLiteralBool>(node.pos_, b->value_);
-    if (const auto *i{dynamic_cast<const AstNodeLiteralInt *>(&node)})
-        return std::make_unique<AstNodeLiteralInt>(node.pos_, i->raw_);
-    if (const auto *f{dynamic_cast<const AstNodeLiteralFloat *>(&node)})
-        return std::make_unique<AstNodeLiteralFloat>(node.pos_, f->raw_);
-    if (const auto *s{dynamic_cast<const AstNodeLiteralStr *>(&node)})
-        return std::make_unique<AstNodeLiteralStr>(node.pos_, s->value_);
-    if (dynamic_cast<const AstNodeLiteralEllipsis *>(&node))
-        return std::make_unique<AstNodeLiteralEllipsis>(node.pos_);
-
-    // tuple
-    if (const auto *t{dynamic_cast<const AstNodeLiteralTuple *>(&node)}) {
-        std::vector<AstNodePtr> items;
-        items.reserve(t->items_.size());
-        for (const auto &item : t->items_) items.push_back(clone_literal(*item));
-        return std::make_unique<AstNodeLiteralTuple>(node.pos_, std::move(items));
-    }
-
-    // list
-    const auto &l{dynamic_cast<const AstNodeLiteralList &>(node)};
-    std::vector<AstNodePtr> items;
-    items.reserve(l.items_.size());
-    for (const auto &item : l.items_) items.push_back(clone_literal(*item));
-    return std::make_unique<AstNodeLiteralList>(node.pos_, std::move(items));
 }
 
 bool StaticEvaler::literal_equal(const AstNode &a, const AstNode &b) {

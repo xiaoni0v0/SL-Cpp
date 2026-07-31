@@ -57,6 +57,29 @@ TEST_SUITE("StaticEvaler 比较") {
         CHECK(fold_json(U"None == 0") == bool_lit(false));
     }
 
+    TEST_CASE(
+        "链式比较里某一环类型不可比：跟含变量的情况一样部分折叠，前面已确定 True 的前缀照样丢"
+    ) {
+        // 1 < 2 < 'a' 等价于 (1<2) and (2<'a')，1<2 恒为 True 且无副作用可以安全丢掉；
+        // 2 < 'a' 没法在编译期判定（不是不知道，是这俩类型压根不可比），折叠应该止步于此，
+        // 而不是因为最后一环不可比就放弃整条链的折叠
+        CHECK(
+            fold_json(U"1 < 2 < 'a'") ==
+            nlohmann::json{
+                {"type", "Compare"}, {"operands", {int_lit("2"), str_lit("a")}}, {"ops", {"<"}}
+            }
+        );
+        // 第一环就不可比，没有已确定的前缀可丢，整体不折（跟单环 1 < 'a' 不折是同一个道理）
+        CHECK(
+            fold_json(U"1 < 'a' < 2") ==
+            nlohmann::json{
+                {"type", "Compare"},
+                {"operands", {int_lit("1"), str_lit("a"), int_lit("2")}},
+                {"ops", {"<", "<"}}
+            }
+        );
+    }
+
     TEST_CASE("链式比较：全部为真才是 True，中间有一环为假整条链为 False") {
         CHECK(fold_json(U"1 < 2 < 3") == bool_lit(true));
         CHECK(fold_json(U"1 < 2 > 3") == bool_lit(false));

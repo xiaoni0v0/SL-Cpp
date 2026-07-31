@@ -112,6 +112,32 @@ TEST_SUITE("StaticEvaler 容器运算——基本拼接/重复") {
             }
         );
     }
+
+    TEST_CASE("dict 自身恒不折，但每一项的 key/value 子表达式仍然各自照常递归折叠") {
+        CHECK(
+            fold_json(U"{1 + 1: 2 + 2}") ==
+            nlohmann::json{
+                {"type", "LiteralDict"},
+                {"items", {nlohmann::json{{"key", int_lit("2")}, {"value", int_lit("4")}}}}
+            }
+        );
+        // **展开项：key 是 DoubleStar 节点，value 恒为 null；跟普通 k: v 项混在一起，
+        // 各自独立折叠、互不影响
+        CHECK(
+            fold_json(U"{**d, 1 + 1: 2 + 2}") ==
+            nlohmann::json{
+                {"type", "LiteralDict"},
+                {"items",
+                 {nlohmann::json{
+                      {"key",
+                       {{"type", "DoubleStar"},
+                        {"operand", {{"type", "Identifier"}, {"identifier", "d"}}}}},
+                      {"value", nullptr}
+                  },
+                  nlohmann::json{{"key", int_lit("2")}, {"value", int_lit("4")}}}}
+            }
+        );
+    }
 }
 
 TEST_SUITE(

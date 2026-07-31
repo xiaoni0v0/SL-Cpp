@@ -133,8 +133,6 @@ class StaticEvaler final {
     [[nodiscard]] static AstNodePtr make_bool(Position pos, bool value);
     [[nodiscard]] static AstNodePtr make_int(Position pos, int64_t value);
     [[nodiscard]] static AstNodePtr make_float(Position pos, double value); // ±inf/NaN 返回 nullptr
-    // 深拷贝一份字面量子树；调用方保证 is_literal_pure(node)
-    [[nodiscard]] static AstNodePtr clone_literal(const AstNode &node);
     // 字面量之间的值相等。调用方保证 is_literal_pure(a) 且 is_literal_pure(b)
     [[nodiscard]] static bool literal_equal(const AstNode &a, const AstNode &b);
     // 字面量之间的值比较。调用方保证 is_literal_pure(a) 且 is_literal_pure(b)

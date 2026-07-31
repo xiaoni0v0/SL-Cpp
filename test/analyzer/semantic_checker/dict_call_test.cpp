@@ -58,4 +58,12 @@ TEST_SUITE("SemanticChecker 调用参数") {
         check_throws_with(U"a[break]", "break outside loop");
         check_throws_with(U"(break).b", "break outside loop");
     }
+
+    TEST_CASE("索引参数里 * 合法（跟位置组一样，用于展开），** 不合法（索引没有关键字组）") {
+        CHECK_NOTHROW(check_program(U"a[*b]"));
+        CHECK_NOTHROW(check_program(U"a[1, *b]"));
+        check_throws_with(
+            U"a[**b]", "** can only appear in dict literal or function call arguments"
+        );
+    }
 }
