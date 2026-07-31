@@ -51,7 +51,6 @@ class SemanticChecker {
 
 #define X(nt) void check(const nt &node);
 #include "../../parser/ast_nodes/x_ast_nodes.h"
-
 #undef X
 
     // 检查节点，node 不可空
