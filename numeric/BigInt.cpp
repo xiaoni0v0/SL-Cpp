@@ -64,6 +64,13 @@ BigInt BigInt::shrink(BigInt big) {
     return result;
 }
 
+void BigInt::check_invariant() const {
+    if (is_small_) return;
+    assert(limbs_.empty() || limbs_.back() != 0); // 无多余最高位 0
+    assert(!limbs_.empty() || !negative_);        // 值为 0 时不该带负号
+    assert(!shrink(*this).is_small_);             // 大路径的量级不该是能收缩回小路径的
+}
+
 std::strong_ordering
 BigInt::compare_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
     if (a.size() != b.size()) return a.size() <=> b.size();
@@ -321,9 +328,7 @@ BigInt BigInt::from_decimal_string(const std::string &s) {
 
 std::string BigInt::to_decimal_string() const {
     if (is_small_) return std::to_string(small_);
-    assert(
-        !limbs_.empty()
-    ); // 大路径下不该规范化成 0（那应该走小路径），否则下面 chunks.back() 是 UB
+    check_invariant(); // 大路径下不该规范化成 0（那应该走小路径），否则下面 chunks.back() 是 UB
 
     std::vector magnitude{limbs_};
     std::vector<uint32_t> chunks; // 每个 chunk 是 [0, 10^9) 内的一段十进制数字，低位在前
@@ -353,7 +358,7 @@ std::string BigInt::to_decimal_string() const {
 
 double BigInt::to_double() const {
     if (is_small_) return static_cast<double>(small_);
-    assert(!limbs_.empty()); // 同 to_decimal_string，规范化的 0 不该走到这里
+    check_invariant(); // 同 to_decimal_string，规范化的 0 不该走到这里
 
     // 真实比特长度：最高 limb 里最高位 1 的位置 + 低位 limb 占的位数
     const size_t bit_length{
@@ -429,8 +434,9 @@ BigInt BigInt::operator-() const {
     }
     BigInt result{*this};
     if (!result.limbs_.empty()) result.negative_ = !result.negative_;
-    // magnitude 恰好为 2^63 时，取负后就是 INT64_MIN，能装回小路径，必须过 shrink()
-    return shrink(result);
+    // magnitude 恰好为 2^63 时，取负后就是 INT64_MIN，能装回小路径，必须过 shrink()；
+    // result 后面不再用到，move 过去省一份 limbs_ 的拷贝
+    return shrink(std::move(result));
 }
 
 BigInt BigInt::operator~() const { return -(*this) - BigInt(1); }
@@ -511,15 +517,18 @@ BigInt BigInt::mod(const BigInt &divisor) const {
 BigInt BigInt::pow(const BigInt &exponent) const {
     if (exponent.is_negative()) throw std::domain_error("BigInt::pow: negative exponent");
 
-    // 逐位快速幂：base/result 会随着乘法自然地按需从小路径升级到大路径，这里不用单独处理
+    // 逐位快速幂：base/result 会随着乘法自然地按需从小路径升级到大路径，这里不用单独处理。
+    // exp 非负，>> 1 直接等价于 floor_div(2)（BigInt.h 里 >> 的契约本就是 x // 2^k），
+    // 比走一遍 floor_div 的除法逻辑更直接；exp 归零后不再需要平方——否则最后一轮会白算一次
+    // 全程最贵的平方（规模是最终结果的 2 倍，按等比数列估算约占全部平方运算量的 3/4）
     BigInt result{1};
     BigInt base{*this};
     BigInt exp{exponent};
-    const BigInt two{2};
     while (!exp.is_zero()) {
         if (exp.is_odd()) result = result * base;
+        exp = exp >> 1;
+        if (exp.is_zero()) break;
         base = base * base;
-        exp = exp.floor_div(two); // exp 非负，等价于普通右移一位
     }
     return result;
 }
@@ -607,17 +616,31 @@ BigInt BigInt::operator>>(const long long k) const {
 std::strong_ordering BigInt::operator<=>(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) return small_ <=> rhs.small_;
 
-    const BigInt a{promoted()};
-    const BigInt b{rhs.promoted()};
-    if (a.negative_ != b.negative_)
-        return a.negative_ ? std::strong_ordering::less : std::strong_ordering::greater;
-    // 同号：非负直接比大小；同为负数时，量级越大值越小，反过来比较参数顺序即可拿到正确结果
-    return a.negative_ ? compare_magnitude(b.limbs_, a.limbs_)
-                       : compare_magnitude(a.limbs_, b.limbs_);
+    // 不 promoted() 拷贝，直接按符号/路径分情况短路，大部分分支完全不用碰 limbs_：
+    // 符号不同直接出结果；符号相同、一方小路径一方大路径时，大路径那方的量级按不变量
+    // 必然更大（能装进 int64_t 就一定是小路径），同样不用比较 limbs_；只有两边都是大路径
+    // 才需要真正 compare_magnitude，而且直接传 limbs_，不需要任何拷贝
+    const bool a_neg{is_negative()}, b_neg{rhs.is_negative()};
+    if (a_neg != b_neg) return a_neg ? std::strong_ordering::less : std::strong_ordering::greater;
+
+    if (is_small_ != rhs.is_small_) {
+        const bool this_is_bigger_magnitude{!is_small_};
+        // 同为非负：量级越大值越大；同为负数：量级越大值越小，方向取反
+        if (a_neg)
+            return this_is_bigger_magnitude ? std::strong_ordering::less
+                                            : std::strong_ordering::greater;
+        return this_is_bigger_magnitude ? std::strong_ordering::greater
+                                        : std::strong_ordering::less;
+    }
+
+    // 都是大路径、同号：非负直接比大小；同为负数时，量级越大值越小，反过来比较参数顺序即可
+    return a_neg ? compare_magnitude(rhs.limbs_, limbs_) : compare_magnitude(limbs_, rhs.limbs_);
 }
 
 bool BigInt::operator==(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) return small_ == rhs.small_;
+    check_invariant();
+    rhs.check_invariant();
     if (is_small_ != rhs.is_small_)
         return false; // 按不变量，能装进 int64_t 的值必然走小路径，不用再比较
     return negative_ == rhs.negative_ && limbs_ == rhs.limbs_;
