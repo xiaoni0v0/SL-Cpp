@@ -141,7 +141,7 @@ TEST_SUITE("StaticEvaler 容器运算——基本拼接/重复") {
 }
 
 TEST_SUITE(
-    "StaticEvaler 容器运算——tuple/list 的 * 恒不折（SL.md 3.4.2：重复出来的各份共享引用，"
+    "StaticEvaler 容器运算——tuple/list 的 * 恒不折（重复出来的各份共享引用，"
     "折叠只能靠深拷贝伪造，这跟 is 恒不折是同一类顾虑，不因内容/是否可变而有区别）"
 ) {
 

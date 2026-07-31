@@ -1,6 +1,6 @@
 ﻿// SL.md 2.2.7 类表达式：⟦@decorator ...⟧ class ⟦name⟧ ⟦(bases)⟧ ⟦[captures]⟧ ⟦doc⟧ { body }
 // 装饰器紧邻 class 的情况放在 2_2_8_decorator/decorator_test.cpp 测。
-// 捕获列表语法/语义跟 func 的完全一致（见 SL.md 2.2.6/2.2.7），细节各种组合已经在
+// 捕获列表语法/语义跟 func 的完全一致（见 SL.md 函数定义 / 类定义），细节各种组合已经在
 // 2_2_6_func/func_test.cpp 里测过一遍，这里只补类特有的：位置在基类之后、未闭合报错。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"

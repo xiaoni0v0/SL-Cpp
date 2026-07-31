@@ -1,4 +1,4 @@
-// BigInt：任意精度有符号整数。语义细节（// 向负无穷取整、位运算按无穷位补码）见 SL.md 3.4.2。
+// BigInt：任意精度有符号整数。语义细节（// 向负无穷取整、位运算按无穷位补码）见 SL.md 运算符语义。
 #include "../../numeric/BigInt.h"
 
 #include <doctest/doctest.h>

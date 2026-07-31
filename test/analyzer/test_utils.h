@@ -12,8 +12,8 @@
 // 解析恰好一条顶层表达式，对它单独跑一遍表达式折叠（ExprFolder::fold_expr，不是
 // ExprFolder{...}.fold()），返回折叠后的 JSON。故意不走整份 Program 的折叠入口：
 // AstNodeProgram 级别还会做 StaticEvaler::prune_program 那步剪枝（哪怕只有一条、折成纯字面量
-// 也会被剪掉，因为 Program 的值只看 return，见 SL.md 3.4.1/3.4.6，不看最后一条表达式的值），
-// 这里只关心"这一条表达式本身折成了什么"，不想被剪掉。
+// 也会被剪掉，因为 Program 的值只看 return（见 SL.md 程序与函数体的值由 return
+// 决定），不看最后一条表达式的值）， 这里只关心"这一条表达式本身折成了什么"，不想被剪掉。
 inline nlohmann::json fold_json(const std::u32string &source) {
     AstNodeProgramPtr program{parse_program(source)};
     if (program->exprs_.size() != 1) {

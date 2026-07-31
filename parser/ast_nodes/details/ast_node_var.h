@@ -16,7 +16,7 @@ struct AstNodeIdentifier : AstNode {
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
-// del target（target 语法上是表达式，2.2.3 限定只能是标识符或属性访问，由语义层校验具体形状）
+// del target（target 语法上是表达式，限定只能是标识符或属性访问，由语义层校验具体形状）
 struct AstNodeDel : AstNode {
     AstNodePtr target_;
 
@@ -27,7 +27,7 @@ struct AstNodeDel : AstNode {
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
-// global identifier（语法本身就是标识符，2.2.4，不是表达式，解析时直接 expect(IDENTIFIER)）
+// global identifier（语法本身就是标识符，不是表达式，解析时直接 expect(IDENTIFIER)）
 struct AstNodeGlobal : AstNode {
     std::u32string identifier_;
 

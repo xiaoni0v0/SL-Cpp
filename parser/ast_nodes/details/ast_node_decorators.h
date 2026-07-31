@@ -8,7 +8,7 @@
 // 装饰器
 // ============================================================
 
-// @decorator expr（通用形式，2.2.8）
+// @decorator expr（通用形式）
 struct AstNodeDecorator : AstNode {
     AstNodePtr decorator_;
     AstNodePtr target_;
