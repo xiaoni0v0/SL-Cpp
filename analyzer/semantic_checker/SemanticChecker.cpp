@@ -39,6 +39,7 @@ void SemanticChecker::check(const AstNode &node) {
 #define X(nt)                                                                                      \
     if (const auto *n{dynamic_cast<const nt *>(p)}) return check(*n);
 #include "../../parser/ast_nodes/x_ast_nodes.h"
+
 #undef X
 
     assert(!"Unknown node type");
@@ -574,7 +575,18 @@ void SemanticChecker::check_lvalue_items(const std::vector<AstNodePtr> &items, c
             if (has_seen_star)
                 error("at most one starred lvalue allowed in destructuring", star->pos_);
             has_seen_star = true;
-            require_not_null(star->operand_, pos), check_lvalue(*star->operand_);
+            require_not_null(star->operand_, pos);
+            // 星号操作数必须是纯左值，不能再是嵌套的 tuple/list 解构
+            const AstNode &operand{*star->operand_};
+            if (!dynamic_cast<const AstNodeIdentifier *>(&operand) &&
+                !dynamic_cast<const AstNodeIndex *>(&operand) &&
+                !dynamic_cast<const AstNodeAttr *>(&operand))
+                error(
+                    "identifier, attribute access, or index expression expected after * in "
+                    "destructuring",
+                    operand.pos_
+                );
+            check(operand);
         } else {
             check_lvalue(*item);
         }

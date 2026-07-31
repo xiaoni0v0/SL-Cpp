@@ -1099,10 +1099,13 @@ Review 时顺带发现两处小问题，都是"无害但值得清理"级别，�
 解构）。但原实现里 `*` 分支调用的是 `check_lvalue`（允许嵌套解构），导致 `(a, *(b, c)) = x`
 这种"星号后面接嵌套解构"的非法写法被放过了。跟 Python 的真实语法一致（Python 里 `*` 后面
 同样只能是单个 name/attribute/subscript，不能是嵌套 `(...)`/`[...]`），确认是遗漏而不是设计
-分歧。修法：把 `check_lvalue_pure` 从"只服务 `+=` 等复合赋值"改成可传入上下文文案的通用版本
-（`check_lvalue_pure(node, context)`，`context` 拼进报错消息，`+=` 那边传
-`"before op="`（消息文本不变），星号解构这边传新的 `"after * in destructuring"`），
-`check_lvalue_items` 的星号分支换成调用它。
+分歧。修法：一开始想把 `check_lvalue_pure` 改成可传入上下文文案的通用版本
+（`check_lvalue_pure(node, context)`），但用户指出这跟文件里其他 `check_xxx` helper
+"每处调用点自己硬编码一条消息"的风格不一致——`check_lvalue`/`check_lvalue_pure`
+本来就已经各自重复了一遍同样的三选一 `dynamic_cast`，只是报错文案不同，这才是这份代码里
+一直在用的写法。改成维持 `check_lvalue_pure(node)` 原样不动，在 `check_lvalue_items`
+的星号分支里直接内联同样的三选一判断、配一条新消息
+`"identifier, attribute access, or index expression expected after * in destructuring"`。
 
 **真 bug 2：`fold_compare` 链式比较遇到类型不可比时丢弃已确定的前缀**。链式比较
 `a<b<c<...` 折叠时按环（pair）扫描，扫到某一环没法确定就该停下来、把前面已经确定为 True 的
