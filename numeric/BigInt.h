@@ -10,11 +10,9 @@
 // 乘法是朴素 O(n*m) 竖式乘法，除法是二进制逐位长除法（不是更快的 Knuth Algorithm D）。
 class BigInt {
     // 小路径：is_small_ 为 true 时，值就是 small_ 本身，limbs_/negative_ 不使用。
-    // 大路径：is_small_ 为 false 时，值是符号-大小表示，small_ 不使用。
-    //   大小端：limbs_[0] 是最低 32 位；除了值恰好为 0（此时 limbs_
-    //   为空）之外，不允许有多余的最高位 0， 即 limbs_.back() 恒不为 0（内部不变量，靠 normalize()
-    //   维护）。负数只在大路径下由 negative_ 表示，值为 0 时恒为
-    //   false（大路径下没有"负零"；小路径下 0 也走小路径，同理没有负零）。
+    // 大路径：符号-大小表示，small_ 不使用。limbs_[0] 是最低 32 位，恒无多余最高位 0
+    // （值为 0 时 limbs_ 为空，靠 normalize() 维护）；负数只在大路径下由 negative_
+    // 表示，值为 0 时恒为 false（不存在"负零"）。
     bool is_small_{true};
     int64_t small_{0};
     std::vector<uint32_t> limbs_;
@@ -27,16 +25,12 @@ class BigInt {
     // 返回一个保证走大路径的等价值（已经是大路径就直接拷贝，是小路径则转换）
     [[nodiscard]] BigInt promoted() const;
     // 已经是小路径就原样返回；大路径则装得下 int64_t 就收缩，否则原样返回。所有慢路径算完
-    // 的地方都要过这一步（含 operator&/|/^），保证"能装进 int64_t 就一定是小路径"这条不变量。
-    // 唯一的例外是 abs()：大路径分支不过这一步，因为大路径的量级本就严格大于 int64_t
-    // 能表示的最大绝对值（负数大路径要求量级 > 2^63，正数大路径要求量级 > INT64_MAX），
-    // 取正后量级不变，必然仍然装不下，shrink() 在那里恒是空转
+    // 的地方都要过这一步，保证"能装进 int64_t 就一定是小路径"这条不变量（abs()
+    // 的大路径分支例外：量级本就严格超出 int64_t 表示范围，取正后不变，这里恒是空转）
     [[nodiscard]] static BigInt shrink(BigInt big);
-    // Debug 断言：核实内部不变量——能装进 int64_t 的值必须是小路径、大路径下无多余高位 0、
-    // 无负零。历史上两次真实 bug 都是这条不变量被"该调 shrink() 没调"静默破坏，在几处直接
-    // 依赖它做隐式假设的地方（operator==、to_decimal_string、to_double）入口调用；不在
-    // shrink() 自己内部调用（会跟内部用 shrink(*this) 校验的实现方式互相递归）。Release 下
-    // 完全不产生开销
+    // Debug 断言：核实"能装进 int64_t 就必然是小路径"等内部不变量（历史上两次真实 bug 都是
+    // 它被静默破坏）。只在依赖它的入口调用，不放进 shrink() 内部——会跟里面用来验证的
+    // shrink(*this) 互相递归
     void check_invariant() const;
     // 用一段大小（可能带多余高位 0）+ 符号构造一个大路径 BigInt（内部会 normalize）。
     // 集中在这一处显式设 is_small_ = false，避免各处手写漏设
@@ -115,15 +109,14 @@ class BigInt {
     [[nodiscard]] BigInt mod(const BigInt &divisor) const;
 
     // 要求 exponent >= 0（SL 里 int ** 负数不再是 int，是 float，不归 BigInt 管），否则抛
-    // std::domain_error。结果规模随 exponent 指数级增长，exponent 很大时可能抛
-    // std::bad_alloc/std::length_error（不设上限是有意的取舍，见 .ai/context.md）
+    // std::domain_error；结果指数级增长，exponent 很大时可能抛 std::bad_alloc（不设上限）
     [[nodiscard]] BigInt pow(const BigInt &exponent) const;
 
     [[nodiscard]] BigInt operator&(const BigInt &rhs) const;
     [[nodiscard]] BigInt operator|(const BigInt &rhs) const;
     [[nodiscard]] BigInt operator^(const BigInt &rhs) const;
-    // x << k 恒等于 x * 2^k（对负数同样成立）。k < 0 抛 std::domain_error；k 很大时结果规模
-    // 同样很大（不像 >> 那样能靠"结果收敛"提前短路），可能抛 std::bad_alloc/std::length_error
+    // x << k 恒等于 x * 2^k（对负数同样成立）。k < 0 抛 std::domain_error；
+    // k 很大时结果同样很大（不像 >> 能靠"结果收敛"短路），可能抛 std::bad_alloc
     [[nodiscard]] BigInt operator<<(long long k) const;
     // x >> k 恒等于 x // 2^k（向负无穷取整右移，负数右移永远不会"变正"）。k < 0 抛
     // std::domain_error

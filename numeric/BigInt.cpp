@@ -433,8 +433,7 @@ BigInt BigInt::operator-() const {
     }
     BigInt result{*this};
     if (!result.limbs_.empty()) result.negative_ = !result.negative_;
-    // magnitude 恰好为 2^63 时，取负后就是 INT64_MIN，能装回小路径，必须过 shrink()；
-    // result 后面不再用到，move 过去省一份 limbs_ 的拷贝
+    // magnitude 恰好为 2^63 时取负后是 INT64_MIN，能装回小路径，必须过 shrink()
     return shrink(std::move(result));
 }
 
@@ -516,10 +515,8 @@ BigInt BigInt::mod(const BigInt &divisor) const {
 BigInt BigInt::pow(const BigInt &exponent) const {
     if (exponent.is_negative()) throw std::domain_error("BigInt::pow: negative exponent");
 
-    // 逐位快速幂：base/result 会随着乘法自然地按需从小路径升级到大路径，这里不用单独处理。
-    // exp 非负，>> 1 直接等价于 floor_div(2)（BigInt.h 里 >> 的契约本就是 x // 2^k），
-    // 比走一遍 floor_div 的除法逻辑更直接；exp 归零后不再需要平方——否则最后一轮会白算一次
-    // 全程最贵的平方（规模是最终结果的 2 倍，按等比数列估算约占全部平方运算量的 3/4）
+    // 逐位快速幂：base/result 随乘法自然按需升级到大路径。>> 1 等价于 floor_div(2) 但走大路径
+    // 更快；exp 归零后不再平方——否则最后一轮会白算一次全程最贵的平方（规模是最终结果的 2 倍）
     BigInt result{1};
     BigInt base{*this};
     BigInt exp{exponent};
@@ -615,10 +612,8 @@ BigInt BigInt::operator>>(const long long k) const {
 std::strong_ordering BigInt::operator<=>(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) return small_ <=> rhs.small_;
 
-    // 不 promoted() 拷贝，直接按符号/路径分情况短路，大部分分支完全不用碰 limbs_：
-    // 符号不同直接出结果；符号相同、一方小路径一方大路径时，大路径那方的量级按不变量
-    // 必然更大（能装进 int64_t 就一定是小路径），同样不用比较 limbs_；只有两边都是大路径
-    // 才需要真正 compare_magnitude，而且直接传 limbs_，不需要任何拷贝
+    // 不 promoted() 拷贝：先比符号；符号相同、一方大路径时按不变量它的量级必然更大，不用比较；
+    // 两边都是大路径才 compare_magnitude，直接传 limbs_，不拷贝
     const bool a_neg{is_negative()}, b_neg{rhs.is_negative()};
     if (a_neg != b_neg) return a_neg ? std::strong_ordering::less : std::strong_ordering::greater;
 

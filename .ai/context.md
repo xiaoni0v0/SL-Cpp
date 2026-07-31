@@ -740,8 +740,7 @@ Boost.Multiprecision 的几条引入路径（`FetchBoostContent`、vcpkg、手�
 判定边界上的 `2^63` 附近、全 1 比特的 limb）两两/三三组合，批量验证数学上必然成立的恒等式
 （加法交换律/结合律、乘法分配律、`a == (a//b)*b + a%b`、位运算的补码恒等式 `a&~a==0` 等、
 `(a<<k)>>k==a`、`pow` 的指数加法律），外加专门的"规范化不变量"套件（同一个值走不同运算路径算出来
-必须能用 `==` 判定相等）——这套方法论直接命中了第二个真实 bug，见下一条。测试从 49 用例/156 断言
-涨到 70 用例/26721 断言。
+必须能用 `==` 判定相等）——这套方法论直接命中了第二个真实 bug，见下一条。
 
 ## 一元 `operator-()` 的第二个"没过 shrink()"bug：`+2^63` 取负后应该收缩成 `INT64_MIN`
 
@@ -803,11 +802,11 @@ Boost.Multiprecision 的几条引入路径（`FetchBoostContent`、vcpkg、手�
 `BigInt` 实际没有调用方，等真的接到执行器上、`BigInt` 有了活的调用方时再回来定这个上限更合适，
 现在设是无的放矢。
 
-测试从 70 用例/26721 断言涨到 83 用例/84190 断言，新增的用例覆盖了 deepseek 点名的几个盲区：
-`to_double` 的 oracle 对拍、大路径超大位移、`<<`/`>>`
-直接对着定义验证（不只是靠互相抵消这条弱恒等式）、大路径指数的 `pow`、比较的三分性/传递性、
-除法的反向构造（从 `q`、`r` 反推 `a`，而不是从 `a` 反推 `q`、`r`）、`|x % y| < |y|`
-的量级边界、别名（`x.floor_div(x)`）、超长（500/2000 位）十进制往返、更多脏输入。
+新增的用例覆盖了 deepseek 点名的几个盲区：`to_double` 的 oracle 对拍、大路径超大位移、
+`<<`/`>>` 直接对着定义验证（不只是靠互相抵消这条弱恒等式）、大路径指数的 `pow`、比较的
+三分性/传递性、除法的反向构造（从 `q`、`r` 反推 `a`，而不是从 `a` 反推 `q`、`r`）、
+`|x % y| < |y|` 的量级边界、别名（`x.floor_div(x)`）、超长（500/2000 位）十进制往返、
+更多脏输入。
 
 deepseek 拿修好的版本又复查了一轮（随机大数对拍 `strtod`、刻意构造舍入平局、ASan/UBSan、
 `-Wconversion -Wsign-conversion` 零告警等），确认这两个 bug 修对了、没有回归，又提了 4 点，
@@ -835,8 +834,6 @@ deepseek 拿修好的版本又复查了一轮（随机大数对拍 `strtod`、�
   （非负数剥到 0、负数剥到 -1 收敛为止，高位按 `is_negative()` 统一处理，逻辑上等价于"无穷位
   补码"本身的定义），另外顺带补了 De Morgan（`~(a&b)==~a|~b` 等）、`a&(b|c)` 三元分配律、
   移位对位运算的分配律（`(a<<k)&(b<<k)==(a&b)<<k`）几条纯代数恒等式。
-
-测试涨到 87 用例/130888 断言（2.6s），全过。
 
 ## `operator>>` 大路径改成直接右移 limb + floor 修正，不再委托给除法
 
@@ -1036,166 +1033,90 @@ expr_folder 测试都在用）内部是 `ExprFolder{*program}.fold()` 整份折�
 
 ## `SyntaxChecker` → `SemanticChecker`，`LiteralFolder` → `ExprFolder` 改名
 
-用户指出这两个名字已经名不副实：`SyntaxChecker` 检查的不只是语法（作用域规则、lvalue 合法性、
-`func`/`class` 语义约束、AST 内部结构的防御性校验……），`LiteralFolder` 折的也不只是字面量了
-（死分支/死循环消除、复合表达式和 Program 的死语句剪枝，见前面几条）。改成
-`SemanticChecker`——编译器术语里"语义分析"是紧跟在语法分析后面那一步的标准叫法，比笼统的
-`AstChecker` 更准确，跟已有的顶层 `Analyzer` 类也不会因为都叫"Ast/Analyzer"而混淆；
-`LiteralFolder` 改成 `ExprFolder`，SL"一切皆表达式"，这个类现在折的就是"表达式"这个更大的范畴。
+两个类名都已名不副实：前者检查的不只是语法（作用域规则、lvalue 合法性、func/class 语义约束、
+AST 防御性校验），后者折的也不只是字面量（死分支/死循环消除、Compound/Program 剪枝）。改成
+`SemanticChecker`（跟已有的 `Analyzer` 不会混淆，比笼统的 `AstChecker` 准确）和 `ExprFolder`
+（呼应 SL"一切皆表达式"）。全仓库替换了标识符/路径/注释，含几处不含旧类名、但用"语法检查"/
+"字面量折叠"描述这两个类职责的散落措辞；历史决策记录里同词但含义无关的提法故意没动。
 
-改动范围：目录 `analyzer/syntax_checker` → `analyzer/semantic_checker`、
-`analyzer/literal_folder` → `analyzer/expr_folder`（连带 `test/analyzer/` 下两个同名目录）；
-文件 `SyntaxChecker.{h,cpp}` → `SemanticChecker.{h,cpp}`、`LiteralFolder.{h,cpp}` →
-`ExprFolder.{h,cpp}`（`StaticEvaler.{h,cpp}` 只是跟着挪目录，名字不变——这次没打算动它）；
-全仓库 grep 这四个词（`SyntaxChecker`/`syntax_checker`/`LiteralFolder`/`literal_folder`）出现的
-每一处标识符、路径、注释统一替换。另外顺带更新了几处虽然不含这几个词、但用"语法检查"/"字面量
-折叠"这种描述性措辞指代这两个类自身职责的地方（`CLAUDE.md` 顶部项目管线描述、`ExprFolder.h`
-自己的类头注释、`test/analyzer/test_utils.h` 里 `fold_json`/`fold_program_json`
-的注释）——`.ai/context.md:392`（历史决策记录，讲的是"当年为什么需要独立求值器"这件事本身，
-不是在断言现在的类名）和 `:496`（"纯语法检查"是在说"这条规则只看语法形式、不折叠求值"，
-用的是"语法"本来的含义，跟类名无关）这两处故意没动。
-
-文件改名走的是 `git mv`（保留 git 的 rename 追踪），但没有 `git add`/`commit`——用户明确要求
-"不准 commit、push、reset"，改完整个工作区处于"已暂存的重命名 + 后续内容修改叠加在上面未暂存"
-这种混合状态，交给用户自己决定怎么整理提交。
+文件改名走 `git mv`（保留 rename 追踪），未 `git add`/`commit`——按用户明确要求不做这两步，
+改完是"已暂存重命名 + 后续修改叠加在上面未暂存"的混合状态，交给用户自己整理提交。
 
 ## `finally` 内 return/break/continue 拦截：deepseek 补的实现，review 后接受
 
-用户提到用另一个工具（deepseek）发现 3.4.5.7 定的"`finally` 体内拦截跳出该范围的
-`return`/`break`/`continue`"这条规则当年设计完之后压根没写实现，deepseek 补上了，要求先
-`git diff` review 一遍再决定要不要。核心实现是 `SemanticChecker::Context` 加一个
-`finally_loop_depth`（进入 `finally` 时记下的 `loop_depth`，`-1` 表示不在 `finally` 内）：
-`return` 只要 `finally_loop_depth >= 0` 就拦；`break`/`continue` 要求 `loop_depth ==
-finally_loop_depth`（相等说明这层循环是 `finally` 外面的，不相等说明是 `finally` 内部自己新开的
-循环，不该拦）；`func`/`class` 各自的 body 是新 Program，进入时都要把 `finally_loop_depth`
-重置成 `-1`（跟 `loop_depth` 重置成 `0` 是同一个道理），不然 `finally { func f() { return 1 } }`
-会被误杀。手动推了几种嵌套（多层循环外 + `finally`、`finally` 内部自己的循环/函数/类体、`try`
-自己套 `try`）都对得上，全量测试也过，判定为正确实现，接受。
+3.4.5.7 定的"`finally` 体内拦截跳出该范围的 return/break/continue"这条规则设计完之后一直
+没写实现，用户拿 deepseek 补上、要求 review。机制：`SemanticChecker::Context` 加
+`finally_loop_depth`（进入 finally 时记下的 loop_depth，-1 表示不在 finally 内）：return
+只要它 >= 0 就拦；break/continue 要求 loop_depth == finally_loop_depth（相等说明这层循环在
+finally 外面，不相等说明是 finally 内部自己新开的循环，不该拦）；func/class 各自的 body 是新
+Program，进入时都要把它重置成 -1（否则 finally 内定义的函数体自己的 return 会被误杀）。手动
+推演过多种嵌套场景，判定实现正确，接受。
 
-Review 时顺带发现两处小问题，都是"无害但值得清理"级别，不是这条规则本身的 bug：
+顺带清理：`check(AstNodeTry)` 里一行 `finally_loop_depth = -1` 紧跟着就被 `ctx_ = saved`
+覆盖，是死代码，删除；deepseek 顺手把 `*` 的报错信息同步补上了 index 上下文（`can_star`
+早就对 index 生效，报错文案一直没跟上），保留。
 
-1. `check(AstNodeTry)` 里 `ctx_.finally_loop_depth = -1;` 紧接着下一行就是 `ctx_ = saved;`
-   （`saved` 是函数最开头存的整个 `ctx_`），前者的效果立刻被后者覆盖，是死代码——已删除。
-2. deepseek 顺手把 `*` 的报错信息从"tuple, list, or function call arguments"改成加了
-   "index"（`check(AstNodeIndex)` 早就有 `can_star = true` 但报错文案一直没同步），这处修正是对的，
-   保留。
-
-`StaticEvaler.h` 类头那张二元折叠范围表也有一处遗留：`D = { * != == }` 这一档原本同时标在
-`(bool/int, str)`/`(bool/int, tuple)`/`(bool/int, list)` 三格，是 tuple/list 的 `*` 还没改成
-恒不折之前的老结论；deepseek 在那之后往 `D` 的定义里加了句"其中 `*` 仅对 str 有效"的补丁式说明，
-读起来别扭。跟用户讨论后发现根本不需要新字母：既然 tuple/list 的 `*` 现在恒不折，
-`(bool/int, tuple)`/`(bool/int, list)` 这两格实际能折的运算符集合就是 `{ != == }`，跟 `E`
-的定义完全一样——直接把这两格从 `D` 改标成 `E`，`D` 的定义恢复成干净的一句话，比新增字母更准确、
-改动也更小。
+`StaticEvaler.h` 折叠范围表也有一处遗留：`D` 这一档原本同时标在 `(bool/int, str)` 跟
+`(bool/int, tuple/list)`，是 tuple/list 的 `*` 还没改成恒不折之前的老结论。改法不是加新字母
+（deepseek 的建议），而是把 `(bool/int, tuple/list)` 直接改标成 `E`——tuple/list 的 `*`
+现在恒不折之后，这两格能折的运算符集合本来就跟 `E` 完全一样。
 
 ## `SemanticChecker`/`ExprFolder` 全面审查：2 个真 bug + 1 处死代码 + 大量测试空白
 
-用户要求把这两个类（含 `ExprFolder` 内部用的 `StaticEvaler`）连同配套测试从头到尾仔细审查一遍，
-发现 bug 就修、发现测试空白就补。逐函数对照 SL.md 过了一遍所有 `check(AstNodeXxx)`/
-`visit(AstNodeXxx)`/`fold_xxx`，结论：
+逐函数对照 SL.md 过了一遍 SemanticChecker/ExprFolder（含 StaticEvaler）全部
+check(AstNodeXxx)/visit(AstNodeXxx)/fold_xxx。
 
-**真 bug 1：`check_lvalue_items` 的 `*` 目标限制**。SL.md 2.1.5 原文"其中至多一个纯左值可以带
-`*` 前缀"，明确写的是"纯左值"（标识符/属性/索引），不是"左值"（左值还包括嵌套的 tuple/list
-解构）。但原实现里 `*` 分支调用的是 `check_lvalue`（允许嵌套解构），导致 `(a, *(b, c)) = x`
-这种"星号后面接嵌套解构"的非法写法被放过了。跟 Python 的真实语法一致（Python 里 `*` 后面
-同样只能是单个 name/attribute/subscript，不能是嵌套 `(...)`/`[...]`），确认是遗漏而不是设计
-分歧。修法：一开始想把 `check_lvalue_pure` 改成可传入上下文文案的通用版本
-（`check_lvalue_pure(node, context)`），但用户指出这跟文件里其他 `check_xxx` helper
-"每处调用点自己硬编码一条消息"的风格不一致——`check_lvalue`/`check_lvalue_pure`
-本来就已经各自重复了一遍同样的三选一 `dynamic_cast`，只是报错文案不同，这才是这份代码里
-一直在用的写法。改成维持 `check_lvalue_pure(node)` 原样不动，在 `check_lvalue_items`
-的星号分支里直接内联同样的三选一判断、配一条新消息
-`"identifier, attribute access, or index expression expected after * in destructuring"`。
+**真 bug 1**：解构赋值里 `*` 后面允许接嵌套 tuple/list 解构（`(a, *(b, c)) = x` 未被拦截）。
+SL.md 2.1.5 原文写的是"至多一个**纯左值**可以带 `*` 前缀"（标识符/属性/索引），不是"左值"，
+跟 Python 真实语法一致，是遗漏不是设计分歧。`check_lvalue_items` 的星号分支原来调用了允许
+嵌套的 `check_lvalue`，改成内联同样的三选一判断（没有引入带上下文参数的通用 helper——这跟
+文件里"每处调用点自己硬编码消息"的既有风格不一致）。
 
-**真 bug 2：`fold_compare` 链式比较遇到类型不可比时丢弃已确定的前缀**。链式比较
-`a<b<c<...` 折叠时按环（pair）扫描，扫到某一环没法确定就该停下来、把前面已经确定为 True 的
-环安全丢掉、只留下没法判定的这一截（这个"部分折叠"逻辑本来就有，`1 < 2 < x` 会折成 `2 < x`）。
-但原实现里"没法确定"分两种情况处理不一致：操作数不是字面量（`!is_literal_pure`）会 `break`
-走部分折叠；操作数都是字面量但类型压根不可比（`literal_compare` 返回 `unordered`，比如
-`1 < 2 < 'a'` 里的 `2 < 'a'`）却是直接 `return nullptr`，把整条链的折叠全部放弃，连前面
-`1 < 2` 那条已经证明为 True、丢了也不影响语义的前缀都保不住。两种"没法确定"的根本原因不同，
-但对折叠逻辑而言应该一视同仁——改成同样 `break`，复用已有的部分折叠代码路径。`1 < 2 < 'a'`
-现在正确折成 `2 < 'a'`（等价于短路语义 `(1<2) and (2<'a')`，`1<2` 是纯字面量、无副作用，丢了
-安全）。
+**真 bug 2**：链式比较 `fold_compare` 遇到"操作数都是字面量但类型不可比"（比如
+`1 < 2 < 'a'` 里的 `2 < 'a'`）时直接放弃整条链的折叠，没有像"操作数非字面量"那样走部分折叠、
+保留已经安全证明为 True 的前缀。两种"没法确定"处理不一致，统一成都走部分折叠，
+`1 < 2 < 'a'` 现在能正确折成 `2 < 'a'`。
 
-**死代码**：`StaticEvaler::clone_literal`（深拷贝一份字面量子树）在更早前 tuple `*`
-改成恒不折那次改动里失去了唯一的外部调用点（原来 `fold_mul` 靠它伪造 tuple 重复的"深拷贝当共享"），
-现在只剩自身递归调用，是私有静态方法，彻底没人用了——删除声明和实现。
+**死代码**：`StaticEvaler::clone_literal` 在更早前 tuple `*` 恒不折那次改动后失去了唯一
+调用点，删除。
 
-**测试空白**（都是"代码本身没问题、但缺回归测试锁定"）：
+**测试空白**：装饰器在 SemanticChecker 里此前只有针对畸形 AST 的防御性断言，没有任何正面
+用例；`a[*b]` 合法/`a[**b]` 非法没测过；`finally_loop_depth` 两处非平凡的继承行为（同一个
+try 的 except 不受自己 finally 影响；嵌套在外层 finally 里的内层 try 的
+try_expr_/except body 照样要被拦截）零覆盖。ExprFolder 这边 Try/Raise、Func/Class/
+Decorator 的各子槽位、Call/Index/Attr/Assign 的参数折叠、dict 的 key/value
+折叠，这些位置的实现本身都是对的，但此前没有任何测试验证过递归折叠会发生。都补齐了测试。
 
-- `SemanticChecker`：装饰器（`@dec`/通用形式）此前只有 `defensive_test.cpp`
-  里针对畸形 AST 的防御性断言，没有任何正面用例；`AstNodeIndex` 参数里 `*` 合法（`a[*b]`）、
-  `**` 非法（`a[**b]`）没测过；`finally_loop_depth` 有两处非平凡的继承行为完全没覆盖——
-  同一个 `try` 自己的 `except` 子句不受自己 `finally` 影响（两者不是嵌套关系，`except` 先于
-  `finally` 求值）、嵌套在外层 `finally` 里的另一个 `try` 的 `try_expr_`/`except` body
-  照样要被外层拦截（`try`/`except` 不像 `func`/`class` 那样开新 Program，不能豁免）。
-  都补进了 `func_class_test.cpp`/`dict_call_test.cpp`/`scope_test.cpp`。
-- `ExprFolder`：`AstNodeTry`/`AstNodeRaise`（`try_expr_`/`except` 的
-  `exceptions_`/`body_`/`finally_expr_`/`raise` 的 `value_`）、`AstNodeFunc`/`AstNodeClass`/
-  `AstNodeDecorator` 的各个子槽位（形参默认值/类型注解、返回类型注解、捕获列表
-  `value_expr_`、`decorators_`/`bases_`、装饰器自己的 `decorator_`/`target_`）、
-  `AstNodeCall`/`AstNodeIndex`/`AstNodeAttr`/`AstNodeAssign`/`AstNodeCompoundAssign`
-  的各参数/目标/值、dict 字面量的 key/value（dict 本身恒不折，但每一项的子表达式该折照折）——
-  这些位置的 `visit()` 实现本身都是对的（逐一读代码核对过），但此前没有任何测试直接验证过它们
-  会递归折叠，新增 `try_raise_test.cpp`、`func_class_decorator_test.cpp`、
-  `call_index_attr_assign_test.cpp` 三个文件，外加 `container_ops_test.cpp` 里补了 dict
-  key/value 折叠的用例。
+## 又换一个模型审查 `BigInt`：4 条同意（性能/防御性）+ 2 条拒绝
 
-全部改动过一遍 `run_test.bat`，4 个可执行文件全绿（Analyzer 测试从 171 个用例涨到 217 个）。
+第 4 轮独立审查，报告存在 `.ai/report.tmp.txt`。结论仍是"没找到正确性 bug"，这次挑的都是
+性能/防御性/文档层面。逐条过：
 
-## 又换一个模型审查 `BigInt`：4 条同意（性能/防御性）+ 2 条拒绝/部分拒绝
+同意并已修：
+1. `pow` 最后一轮会多算一次全程最贵的白平方（`exp` 归零前那轮的 `base=base*base`
+   已经没用了，规模是最终结果的 2 倍，按等比数列估算约占全部平方运算量的 3/4）——归零就
+   break；顺带 `exp.floor_div(two)` 换成语义完全等价、大路径下更快的 `exp >> 1`。
+2. `operator<=>` 原来两边无条件 `promoted()`（哪怕已经是大路径也拷贝一份）——改成先比符号，
+   符号相同时按不变量能推断出哪方量级更大就不用比较，只有两边都是大路径才
+   `compare_magnitude`，全程不拷贝。
+3. `operator-()` 的 `shrink(result)` 传左值白拷一次，改 `std::move`。
+4. `operator==`/`to_decimal_string`/`to_double` 三处都隐式依赖"能装进 int64_t 就一定是
+   小路径"这条不变量，历史上两次真实 bug 都是它被静默破坏。加了私有 `check_invariant()`，
+   在这三处入口调用——**没有**照报告建议放进 `shrink()` 内部：`check_invariant()` 靠
+   `shrink(*this)` 当 oracle，放 `shrink()` 自己里面调会变成递归调自己；而且历史上两次 bug
+   的模式正是"shrink() 整个没被调用"，放 shrink() 内部反而抓不到。
+5. 两处文档：`shrink()` 注释补了 abs() 大路径分支不过 shrink 的例外说明（大路径量级本就严格
+   超出 int64_t 范围，取正后不变，这里恒是空转，之前的绝对化措辞正是当年 operator-() 那个
+   bug 的推理起点）；`<<`/`pow` 契约补了"参数很大可能 bad_alloc"（不设上限本身不变，只是
+   写进契约）。
 
-用户用另一个模型对 `BigInt` 又做了一轮审查（第 4 轮了），报告存在 `.ai/report.tmp.txt`。这次结论是
-"没找到正确性 bug"——跟 `.ai/notes/` 里此前 3 轮审查的结论一致，`BigInt` 本身的算法/边界条件已经
-相当扎实。这轮找到的都是性能/防御性/文档层面的东西，逐条过：
-
-**同意并已修的**：
-
-1. **`pow` 最后一轮多算一次白squaring**（`BigInt.cpp:pow`）。`base=base*base` 在 `exp` 归零前的
-   最后一轮已经没用了（`result` 在这轮已经算出最终答案），但原代码照样算了——这次平方是整个
-   `pow` 里最大的一次朴素乘法，规模是最终结果的 2 倍，按等比数列估算白占约 3/4 的平方运算量，
-   内存峰值也翻倍。改成 `exp` 归零就 `break`，不再平方；顺带 `exp.floor_div(two)` 换成
-   `exp >> 1`——`BigInt.h` 自己就写了 `>>` 恒等于 `// 2^k`，这俩在语义上是同一个操作，但
-   `floor_div` 走大路径时是完整的二进制长除法，`>>` 是本会话前面刚优化过的 O(limb 数)，直接用
-   `>>` 更快。
-2. **`operator<=>` 为比较而拷贝两个完整大数**。原来两边都无条件 `promoted()`（大路径直接
-   `return *this` 也是一次拷贝），改成先比符号（不用碰 limbs_）；符号相同但一方小路径一方大路径时，
-   走大路径那方的量级按不变量必然更大，同样不用比较；只有两边都是大路径才需要
-   `compare_magnitude`，而且直接传 `limbs_`，不需要拷贝。`std::map<BigInt,...>`、排序这类场景
-   受益明显。
-3. **`operator-()` 的 `shrink(result)` 传左值白拷一次**——`shrink` 按值收参，`result`
-   后面不再用，改成 `shrink(std::move(result))`。
-4. **不变量在 Release 下完全无防护**：`operator==`/`to_decimal_string`/`to_double` 三处都
-   直接假设"能装进 int64_t 就一定是小路径、大路径下无多余高位 0、无负零"，历史上两次真实 bug
-   （`shrink()` 该调没调）都是这条不变量被静默破坏。加了私有的 `check_invariant()`，在这三处
-   入口调用。**没有照报告建议的那样在 `shrink()` 内部也调**——`check_invariant()` 内部靠
-   `shrink(*this)` 当 oracle 验证"大路径的量级不该收缩回小路径"，如果放进 `shrink()`
-   自己内部调用会变成递归调用自己，属于报告没考虑到的一个真实风险；放在"消费不变量"的三个
-   入口足够，而且历史上那两次 bug 的模式恰恰是"`shrink()` 整个没被调用"，放在 `shrink()`
-   内部反而抓不到这种情况，抓不变量被破坏就该在真正依赖它的地方抓。全量跑了一遍
-   `run_test.bat`（Debug 构建，assert 有效），13 万+条断言全过，`check_invariant()`
-   一次没触发。
-5. **两处文档措辞**：`BigInt.h` 里 `shrink()` 的注释原来说"所有慢路径算完的地方都要过这一步"，
-   但 `abs()` 的大路径分支没过——这是对的（大路径负数量级严格 > 2^63，正数大路径量级严格
-   > INT64_MAX，取正后量级不变，`shrink` 必然空转），但绝对化的措辞容易让人以为是漏洞，
-   正是当年 `operator-()` 那个 bug 的推理起点，补了一句例外说明。`operator<<`/`pow`
-   的契约补了一句"参数很大时结果规模同样很大，可能抛 `bad_alloc`/`length_error`"——不设上限
-   本身是早就拍板过的取舍（不动），只是把这个后果写进契约，省得以后调用方踩坑。
-
-**不同意、没动的**：
-
-- **`div_mod_magnitude` 每轮 2 次堆分配，改成原地移位/减法**。分析本身是对的（`shift_left_
-  magnitude`/`sub_magnitude` 按值返回新 vector，循环跑 `a.size()*32` 轮，确实是 O(总比特数)
-  次分配），但 `BigInt.h` 类头注释原话就是"大数算法暂不考虑渐进最优（假设内存足够），只保证
-  正确性"——这是早就定好的范围，朴素 O(n²) 乘法、二进制逐位长除法（不是 Knuth Algorithm D）
-  都是同一个取舍下的产物。这条严格说不是"渐进最优"（时间复杂度类不变，只是常数因子），但要
-  在一个已经被 4 轮审查反复揉过、目前正确性full green 的高精度核心热路径里手写新的原地移位/
-  减法逐 bit 操作，风险（改错一个进位就是静默算错）跟收益（SL 脚本里用到几千位大数除法的场景
-  本就罕见）不成比例，不做。真要重视 BigInt 性能，应该先讨论要不要放开"渐进最优"这条既定
-  范围，而不是挑着改一处。
-- **`add_magnitude` 结尾的剥零循环是死代码**：验证是对的（两个已规范化的 magnitude 相加，
-  结果的最高 limb 不可能是 0），报告自己也说"留着也行"。跟其他几个 `*_magnitude` 函数
-  （`sub_magnitude`/`mul_magnitude`/`div_mod_magnitude`/`shift_*_magnitude`）风格保持一致
-  更重要——这几个里有的剥零循环是真需要（比如减法），单独抠掉这一处反而破坏"所有 magnitude
-  helper 结尾都统一剥零"这条一目了然的读码预期，不改。
+不同意：
+- `div_mod_magnitude` 每轮走 `shift_left_magnitude`/`sub_magnitude` 各分配一个新 vector，
+  改原地操作能省掉这些分配——分析没错，但 `BigInt.h` 类头注释白纸黑字写着"大数算法暂不考虑
+  渐进最优，只保证正确性"，朴素乘法/长除法都是同一取舍下的产物；在一个已经 4 轮审查过的高
+  精度核心热路径手写新的原地移位/借位逻辑，风险（改错一个进位就是静默算错）跟收益（几千位
+  大数除法在 SL 脚本里本就罕见）不成比例。真要重视这块性能应该先讨论要不要放开这条既定范围，
+  不是挑一处改。
+- `add_magnitude` 结尾的剥零循环技术上是死代码（两个已规范化的量相加，结果最高 limb 不可能
+  是 0），报告自己也说"留着也行"——跟其他 `*_magnitude` 函数保持"结尾统一剥零"的一致写法
+  更重要，不改。
