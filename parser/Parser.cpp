@@ -669,12 +669,16 @@ AstNodePtr Parser::parse_import() {
         return finish_call(std::make_unique<AstNodeIdentifier>(start_pos, U"import"), start_pos);
     }
 
-    // 关键字形态 import a.b.c ...：各段都是标识符 token，不是表达式，点号在这里一路吃干净，
+    // 关键字形态 import a.b.c ...：各段都是标识符 token，不是表达式，
+    // 点号在这里一路吃干净，换行规则跟属性访问 x.y 完全一致
     skip_newline();
     std::vector segments{expect(TokenType::IDENTIFIER).lexeme}; // 消耗标识符
+    skip_paren_newline();
     while (check(TokenType::SIGN_DOT)) {
-        expect(TokenType::SIGN_DOT);                              // 消耗 '.'
+        expect(TokenType::SIGN_DOT); // 消耗 '.'
+        skip_newline();
         segments.push_back(expect(TokenType::IDENTIFIER).lexeme); // 消耗标识符
+        skip_paren_newline();
     }
 
     return std::make_unique<AstNodeImport>(start_pos, std::move(segments));

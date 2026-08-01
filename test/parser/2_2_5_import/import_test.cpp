@@ -55,6 +55,19 @@ TEST_SUITE("2.2.5 import 关键字形态") {
         CHECK(parse_json(U"import\nmath") == import_node(nlohmann::json::array({"math"})));
     }
 
+    TEST_CASE("'.' 前后的换行规则跟属性访问 x.y 一致：'.' 后无条件允许换行") {
+        CHECK(parse_json(U"import a.\nb") == import_node(nlohmann::json::array({"a", "b"})));
+        CHECK(
+            parse_json(U"import a.\n\nb.\nc") == import_node(nlohmann::json::array({"a", "b", "c"}))
+        );
+    }
+
+    TEST_CASE("'.' 前只在括号内允许换行（顶层换行就是表达式结束，同 x\\n.y）") {
+        CHECK(parse_json(U"(import a\n.b)") == import_node(nlohmann::json::array({"a", "b"})));
+        // 顶层：import a 到此为止，下一行的 .b 单独成句，是语法错误
+        CHECK_THROWS_AS(parse_program(U"import a\n.b"), SyntaxError);
+    }
+
     TEST_CASE("import a 整体和其他基本表达式一样参与后缀运算符链（点号除外，被段名吃掉了）") {
         CHECK(
             parse_json(U"import a[0]") ==
