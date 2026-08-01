@@ -13,6 +13,8 @@ X(AstNodeDecorator)
 
 X(AstNodeFunc)
 
+X(AstNodeImport)
+
 X(AstNodeLiteralNone)
 X(AstNodeLiteralBool)
 X(AstNodeLiteralGL)

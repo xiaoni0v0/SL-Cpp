@@ -34,6 +34,7 @@ TEST_SUITE("2.1.2 关键字") {
         CHECK(lex_dump(U"except") == "KW_EXCEPT");
         CHECK(lex_dump(U"finally") == "KW_FINALLY");
         CHECK(lex_dump(U"class") == "KW_CLASS");
+        CHECK(lex_dump(U"import") == "KW_IMPORT");
     }
 
     TEST_CASE("关键字区分大小写：大小写变体一律是普通标识符") {
@@ -42,6 +43,7 @@ TEST_SUITE("2.1.2 关键字") {
         CHECK(lex_dump(U"NONE") == "IDENTIFIER(NONE)");
         CHECK(lex_dump(U"While") == "IDENTIFIER(While)");
         CHECK(lex_dump(U"Class") == "IDENTIFIER(Class)");
+        CHECK(lex_dump(U"Import") == "IDENTIFIER(Import)");
     }
 
     TEST_CASE("最长匹配：关键字前缀/超集不会被误认成关键字（标识符要整个扫完才判断）") {
@@ -51,6 +53,8 @@ TEST_SUITE("2.1.2 关键字") {
         CHECK(lex_dump(U"classroom") == "IDENTIFIER(classroom)");
         CHECK(lex_dump(U"notify") == "IDENTIFIER(notify)");
         CHECK(lex_dump(U"whiley") == "IDENTIFIER(whiley)");
+        CHECK(lex_dump(U"important") == "IDENTIFIER(important)");
+        CHECK(lex_dump(U"importer") == "IDENTIFIER(importer)");
         CHECK(lex_dump(U"_G2") == "IDENTIFIER(_G2)");
         CHECK(lex_dump(U"_Lx") == "IDENTIFIER(_Lx)");
         CHECK(lex_dump(U"__G") == "IDENTIFIER(__G)");

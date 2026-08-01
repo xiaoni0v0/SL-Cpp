@@ -97,6 +97,8 @@ class Parser {
     [[nodiscard]] AstNodePtr parse_del();
     // global
     [[nodiscard]] AstNodePtr parse_global();
+    // import（关键字形态出 AstNodeImport，调用形态出普通的 AstNodeCall）
+    [[nodiscard]] AstNodePtr parse_import();
     // if-elif-else
     [[nodiscard]] AstNodePtr parse_if();
     // for

@@ -140,6 +140,7 @@ add_executable(SL main.cpp
         parser/ast_nodes/details/ast_node_control_flows.h
         parser/ast_nodes/details/ast_node_decorators.h
         parser/ast_nodes/details/ast_node_func.h
+        parser/ast_nodes/details/ast_node_import.h
         parser/ast_nodes/details/ast_node_literals.h
         parser/ast_nodes/details/ast_node_multi_exprs.h
         parser/ast_nodes/details/ast_node_operators.h
@@ -279,6 +280,7 @@ add_executable(SL_Cpp_Parser_Tests
         parser/ast_nodes/details/ast_node_control_flows.h
         parser/ast_nodes/details/ast_node_decorators.h
         parser/ast_nodes/details/ast_node_func.h
+        parser/ast_nodes/details/ast_node_import.h
         parser/ast_nodes/details/ast_node_literals.h
         parser/ast_nodes/details/ast_node_multi_exprs.h
         parser/ast_nodes/details/ast_node_operators.h
@@ -303,6 +305,8 @@ add_executable(SL_Cpp_Parser_Tests
         test/parser/2_2_3_del/del_test.cpp
         # 2.2.4 global
         test/parser/2_2_4_global/global_test.cpp
+        # 2.2.5 import
+        test/parser/2_2_5_import/import_test.cpp
         # 2.2.5 控制流
         test/parser/2_2_5_control_flow/if_test.cpp
         test/parser/2_2_5_control_flow/for_test.cpp
@@ -353,6 +357,7 @@ add_executable(SL_Cpp_Analyzer_Tests
         parser/ast_nodes/details/ast_node_control_flows.h
         parser/ast_nodes/details/ast_node_decorators.h
         parser/ast_nodes/details/ast_node_func.h
+        parser/ast_nodes/details/ast_node_import.h
         parser/ast_nodes/details/ast_node_literals.h
         parser/ast_nodes/details/ast_node_multi_exprs.h
         parser/ast_nodes/details/ast_node_operators.h
@@ -384,12 +389,14 @@ add_executable(SL_Cpp_Analyzer_Tests
         test/analyzer/expr_folder/try_raise_test.cpp
         test/analyzer/expr_folder/func_class_decorator_test.cpp
         test/analyzer/expr_folder/call_index_attr_assign_test.cpp
+        test/analyzer/expr_folder/import_test.cpp
 
         # 测试代码：semantic_checker
         test/analyzer/semantic_checker/scope_test.cpp
         test/analyzer/semantic_checker/func_class_test.cpp
         test/analyzer/semantic_checker/lvalue_test.cpp
         test/analyzer/semantic_checker/dict_call_test.cpp
+        test/analyzer/semantic_checker/import_test.cpp
         test/analyzer/semantic_checker/defensive_test.cpp
 )
 sl_apply_test_target_options(SL_Cpp_Analyzer_Tests)

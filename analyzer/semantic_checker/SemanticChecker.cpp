@@ -259,6 +259,11 @@ void SemanticChecker::check(const AstNodeFunc &node) {
     ctx_ = saved;
 }
 
+void SemanticChecker::check(const AstNodeImport &node) {
+    require_not_null(node.segments_, 1, node.pos_);
+    for (const auto &segment : node.segments_) require_not_null(segment, node.pos_);
+}
+
 void SemanticChecker::check(const AstNodeLiteralNone &) {}
 
 void SemanticChecker::check(const AstNodeLiteralBool &) {}

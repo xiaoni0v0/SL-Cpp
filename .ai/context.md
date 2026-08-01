@@ -1141,3 +1141,26 @@ Decorator 的各子槽位、Call/Index/Attr/Assign 的参数折叠、dict 的 ke
 `ImportError`。
 
 搜索路径（名字怎么定位到具体文件系统位置）、循环 import、相对导入仍未设计，故意搁置。
+
+## `import` 的 AST 表示：只加一个节点，调用形态直接复用 `AstNodeCall`
+
+两种语法形态**不**塞进一个节点里用 variant 分叉：仓库处理"同一关键字两种形状"的既定做法是拆成
+两个节点类型（`AstNodeForCond`/`AstNodeForIter`），X 宏分发本来就一个类型一个重载，塞 variant
+等于在下面再手写一层全代码库独一份的分发；何况两种形态字段交集为空。
+
+调用形态干脆不新增节点：它跟普通函数调用完全一致（任意实参、`*`/`**` 展开都要支持），自己开结构
+就得把 `AstNodeCall::OneKwArg` 那套位置组/关键字组连同 SemanticChecker 里 `*`/`**` 的位置规则、
+ExprFolder 的实参递归全抄一遍。直接 `finish_call` 出 `AstNodeCall`，下游零改动。被调对象一度想
+专门加个零字段标记节点（类比 `_G`/`_L` 用的 `AstNodeLiteralGL`，避免 AST 里出现一个查不到的假
+标识符），用户认为多余，定为 `AstNodeIdentifier{U"import"}`——`import` 是关键字、用户永远遮蔽
+不了，运行时按名字查内置 `import` 是安全的。
+
+关键字形态存 `std::vector<std::u32string>`，不存 `AstNodeAttr` 链：`import os.path` 根本没对
+`os` 做属性访问（它是两次导入 + 一次 `os.path = <模块对象>` 赋值），存成属性链会让泛型递归
+`AstNodeAttr` 的消费者把被绑定的 `os` 当成一次读取，语义反了。而且文法只允许点号连接的裸标识符，
+parser 用 `expect(IDENTIFIER)` 当场就能保证形状，不需要像 `del` 那样留通用表达式给语义层反查
+（`del a[i]` 才真的需要通用表达式，这里不需要）——直接照搬 `AstNodeGlobal` 存裸字符串的做法。
+逐段位置暂不存：`ImportError` 是运行期错误，节点自身 `pos_` 够用。
+
+`(` 的换行规则跟普通函数调用对齐（只在括号内允许跨行），不跟 `global`/`del` 那种无条件
+`skip_newline` 对齐——因为调用形态本来就该"表现得像个普通函数"。

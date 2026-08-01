@@ -484,11 +484,13 @@ AstNodePtr Parser::parse_non_op() {
             pos, AstNodeOpUnary::OpType::Not, parse_expr_pratt(40), pos
         );
 
-    // del / global
+    // del / global / import
     case TokenType::KW_DEL:
         return parse_del();
     case TokenType::KW_GLOBAL:
         return parse_global();
+    case TokenType::KW_IMPORT:
+        return parse_import();
 
     // 控制流
     case TokenType::KW_IF:
@@ -655,6 +657,27 @@ AstNodePtr Parser::parse_global() {
     return std::make_unique<AstNodeGlobal>(
         start_pos, expect(TokenType::IDENTIFIER).lexeme
     ); // 消耗标识符
+}
+
+AstNodePtr Parser::parse_import() {
+    const Position start_pos{peek().row, peek().col};
+    expect(TokenType::KW_IMPORT); // 消耗 'import'
+
+    // 调用形态 import(...)：跟普通函数调用完全一致
+    skip_paren_newline();
+    if (check(TokenType::SIGN_LPAREN)) {
+        return finish_call(std::make_unique<AstNodeIdentifier>(start_pos, U"import"), start_pos);
+    }
+
+    // 关键字形态 import a.b.c ...：各段都是标识符 token，不是表达式，点号在这里一路吃干净，
+    skip_newline();
+    std::vector segments{expect(TokenType::IDENTIFIER).lexeme}; // 消耗标识符
+    while (check(TokenType::SIGN_DOT)) {
+        expect(TokenType::SIGN_DOT);                              // 消耗 '.'
+        segments.push_back(expect(TokenType::IDENTIFIER).lexeme); // 消耗标识符
+    }
+
+    return std::make_unique<AstNodeImport>(start_pos, std::move(segments));
 }
 
 AstNodePtr Parser::parse_if() {

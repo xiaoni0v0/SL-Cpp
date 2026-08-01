@@ -289,6 +289,17 @@ json AstNodeFunc::to_json_impl(const bool include_pos) const {
     };
 }
 
+json AstNodeImport::to_json_impl(const bool include_pos) const {
+    auto segments = json::array();
+    for (const auto &segment : segments_) segments.push_back(u32_to_utf8(segment));
+
+    if (include_pos)
+        return json{
+            {"type", "Import"}, {"pos", pos_to_json(pos_)}, {"segments", std::move(segments)}
+        };
+    return json{{"type", "Import"}, {"segments", std::move(segments)}};
+}
+
 json AstNodeLiteralNone::to_json_impl(const bool include_pos) const {
     if (include_pos) return json{{"type", "LiteralNone"}, {"pos", pos_to_json(pos_)}};
     return json{{"type", "LiteralNone"}};

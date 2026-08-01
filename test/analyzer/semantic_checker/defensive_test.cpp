@@ -84,6 +84,20 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
         check_throws_internal_error_with(*program, "** dict-spread entry must not have a value");
     }
 
+    TEST_CASE("AstNodeImport：segments_ 为空（关键字形态至少有一段）") {
+        AstNodeProgramPtr program{
+            wrap(std::make_unique<AstNodeImport>(Position{0, 0}, std::vector<std::u32string>{}))
+        };
+        check_throws_internal_error_with(*program, "too few elements");
+    }
+
+    TEST_CASE("AstNodeImport：某一段是空字符串") {
+        AstNodeProgramPtr program{wrap(
+            std::make_unique<AstNodeImport>(Position{0, 0}, std::vector<std::u32string>{U"os", U""})
+        )};
+        check_throws_internal_error_with(*program, "unexpected empty name");
+    }
+
     TEST_CASE("AstNodeFunc/AstNodeClass：name_ 是空字符串（应该要么 nullopt 要么有内容）") {
         AstNodeProgramPtr func_program{wrap(
             std::make_unique<AstNodeFunc>(

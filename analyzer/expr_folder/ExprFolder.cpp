@@ -176,6 +176,8 @@ void ExprFolder::visit(AstNodeDel &node) { visit_and_replace(node.target_); }
 
 void ExprFolder::visit(AstNodeGlobal &) {}
 
+void ExprFolder::visit(AstNodeImport &) {}
+
 ExprFolder::ExprFolder(AstNodeProgram &root) : root_{root} {}
 
 void ExprFolder::fold() const && { visit(root_); }
