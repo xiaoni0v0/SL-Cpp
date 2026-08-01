@@ -1162,11 +1162,17 @@ SL.md 4.1 内置函数列表里根本没有 `import`（它早已从 4.1 挪进 2
 最终：`AstNodeImportCall` 只有实参两组 + `paren_pos_`，**没有被调对象槽位**——`import` 是运算符
 本身，不是能被取到的对象，所以根本不产生这个中间值。代价是 SemanticChecker 里位置组/关键字组那
 十来行跟 `check(AstNodeCall)` 重复，按本文件既有风格（`check_lvalue`/`check_lvalue_pure` 本来就
-各写各的）照抄即可，不抽公共函数。解析层则不重复：`finish_call` 的实参解析部分抽成
-`finish_call_args`，两边共用（一度想过"先 `finish_call` 再把孩子偷出来"，但那会短暂造出一个
-`object_` 为空的 `AstNodeCall`，违反下游 `check_not_null(object_)` 的前提，不值得）。
-`OneKwArg` 顺势从 `AstNodeCall` 里提出来变成自由结构体（`ast_node_kwarg.h`），照 `OneCapture`
-被 func/class 共用时的先例办。
+各写各的）照抄即可，不抽公共函数。
+
+解析层则**不**为此拆函数：`parse_import` 直接 `finish_call(nullptr, ...)`，再把实参从返回的
+`AstNodeCall` 里拆出来重装成 `AstNodeImportCall`。曾把实参解析抽成 `finish_call_args` 出参版
+供两边共用，理由是不想造出 `object_` 为空的临时节点；用户否决，理由是只留一个入口更统一，而且
+`finish_*` 一族其余成员都是按值返回、没有出参风格。那个空 `object_` 的 `AstNodeCall` 只活两行、
+就地拆完销毁，进不了 SemanticChecker，不构成实际风险。`finish_call` 返回类型顺势从 `AstNodePtr`
+改成 `std::unique_ptr<AstNodeCall>`，拆孩子不用 `dynamic_cast`。
+
+`OneKwArg` 从 `AstNodeCall` 里提出来变成自由结构体（`ast_node_kwarg.h`），照 `OneCapture` 被
+func/class 共用时的先例办。
 
 关键字形态存 `std::vector<std::u32string>`，不存 `AstNodeAttr` 链：`import os.path` 根本没对
 `os` 做属性访问（它是两次导入 + 一次 `os.path = <模块对象>` 赋值），存成属性链会让泛型递归

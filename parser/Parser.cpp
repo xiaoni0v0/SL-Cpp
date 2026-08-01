@@ -663,21 +663,20 @@ AstNodePtr Parser::parse_import() {
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_IMPORT); // 消耗 'import'
 
-    // import 后面允许换行（跟 global/del 一致）；两种形态靠这之后是不是 '(' 区分
     skip_newline();
 
-    // 调用形态 import(...)：实参解析规则跟普通函数调用完全一致，只是包成 AstNodeImportCall
+    // 调用形态 import(...)
     if (check(TokenType::SIGN_LPAREN)) {
-        const Position paren_pos{peek().row, peek().col};
-        std::vector<AstNodePtr> positional_args;
-        std::vector<OneKwArg> keyword_args;
-        finish_call_args(positional_args, keyword_args); // 消耗 '(' ... ')'
+        const std::unique_ptr call{finish_call(nullptr, start_pos)}; // 消耗 '(' ... ')'
         return std::make_unique<AstNodeImportCall>(
-            start_pos, std::move(positional_args), std::move(keyword_args), paren_pos
+            start_pos,
+            std::move(call->positional_args_),
+            std::move(call->keyword_args_),
+            call->paren_pos_
         );
     }
 
-    // 关键字形态 import a.b.c ...：各段都是标识符 token，不是表达式，
+    // 关键字形态 import a.b.c
     // 点号在这里一路吃干净，换行规则跟属性访问 x.y 完全一致
     std::vector segments{expect(TokenType::IDENTIFIER).lexeme}; // 消耗标识符
     skip_paren_newline();
@@ -1204,10 +1203,13 @@ std::vector<OneCapture> Parser::finish_captures() {
     return captures;
 }
 
-void Parser::finish_call_args(
-    std::vector<AstNodePtr> &positional_args, std::vector<OneKwArg> &keyword_args
-) {
+std::unique_ptr<AstNodeCall> Parser::finish_call(AstNodePtr obj, const Position start_pos) {
+    const Position paren_pos{peek().row, peek().col};
     expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
+
+    // 实参
+    std::vector<AstNodePtr> positional_args;
+    std::vector<OneKwArg> keyword_args;
 
     // 传参分：位置组（位置传参、*expr 展开）、关键字组（关键字传参、**expr 展开）两阶段
     enum class ArgsGroup { Positional, Keyword } group{ArgsGroup::Positional};
@@ -1239,14 +1241,6 @@ void Parser::finish_call_args(
 
     if (!check(TokenType::SIGN_RPAREN)) error("expected ')' to close function call");
     expect(TokenType::SIGN_RPAREN), paren_depth_--; // 消耗 ')'
-}
-
-AstNodePtr Parser::finish_call(AstNodePtr obj, const Position start_pos) {
-    const Position paren_pos{peek().row, peek().col};
-
-    std::vector<AstNodePtr> positional_args;
-    std::vector<OneKwArg> keyword_args;
-    finish_call_args(positional_args, keyword_args); // 消耗 '(' ... ')'
 
     return std::make_unique<AstNodeCall>(
         start_pos, std::move(obj), std::move(positional_args), std::move(keyword_args), paren_pos
