@@ -48,8 +48,7 @@ struct AstNodeOpUnary : AstNode {
 
     OpType op_;
     AstNodePtr operand_;
-    // 运算符自己的位置
-    Position op_pos_;
+    Position op_pos_; // 运算符自己的位置
 
     explicit AstNodeOpUnary(
         const Position pos, const OpType op, AstNodePtr operand, const Position op_pos
@@ -86,8 +85,7 @@ struct AstNodeOpBinary : AstNode {
 
     OpType op_;
     AstNodePtr left_, right_;
-    // 运算符自己的位置
-    Position op_pos_;
+    Position op_pos_; // 运算符自己的位置
 
     explicit AstNodeOpBinary(
         const Position pos, const OpType op, AstNodePtr left, AstNodePtr right,
