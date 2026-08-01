@@ -135,14 +135,13 @@ add_executable(SL main.cpp
         parser/ast_nodes/ast_nodes.h
         parser/ast_nodes/x_ast_nodes.h
         parser/ast_nodes/details/ast_node.h
-        parser/ast_nodes/details/ast_node_capture.h
         parser/ast_nodes/details/ast_node_class.h
         parser/ast_nodes/details/ast_node_control_flows.h
         parser/ast_nodes/details/ast_node_decorators.h
         parser/ast_nodes/details/ast_node_func.h
         parser/ast_nodes/details/ast_node_import.h
-        parser/ast_nodes/details/ast_node_kwarg.h
         parser/ast_nodes/details/ast_node_literals.h
+        parser/ast_nodes/details/ast_node_misc.h
         parser/ast_nodes/details/ast_node_multi_exprs.h
         parser/ast_nodes/details/ast_node_operators.h
         parser/ast_nodes/details/ast_node_postfix.h
@@ -282,8 +281,8 @@ add_executable(SL_Cpp_Parser_Tests
         parser/ast_nodes/details/ast_node_decorators.h
         parser/ast_nodes/details/ast_node_func.h
         parser/ast_nodes/details/ast_node_import.h
-        parser/ast_nodes/details/ast_node_kwarg.h
         parser/ast_nodes/details/ast_node_literals.h
+        parser/ast_nodes/details/ast_node_misc.h
         parser/ast_nodes/details/ast_node_multi_exprs.h
         parser/ast_nodes/details/ast_node_operators.h
         parser/ast_nodes/details/ast_node_postfix.h
@@ -360,8 +359,8 @@ add_executable(SL_Cpp_Analyzer_Tests
         parser/ast_nodes/details/ast_node_decorators.h
         parser/ast_nodes/details/ast_node_func.h
         parser/ast_nodes/details/ast_node_import.h
-        parser/ast_nodes/details/ast_node_kwarg.h
         parser/ast_nodes/details/ast_node_literals.h
+        parser/ast_nodes/details/ast_node_misc.h
         parser/ast_nodes/details/ast_node_multi_exprs.h
         parser/ast_nodes/details/ast_node_operators.h
         parser/ast_nodes/details/ast_node_postfix.h

@@ -87,6 +87,33 @@ class Parser {
 
     // 解析 if / for 中间槽 / while 的条件表达式
     [[nodiscard]] AstNodePtr parse_expr_as_cond();
+
+    // 类
+    [[nodiscard]] AstNodePtr parse_class(
+        std::vector<AstNodePtr> decorators = {}, std::vector<Position> decorator_positions = {},
+        Position deco_pos = {}
+    );
+    // if-elif-else
+    [[nodiscard]] AstNodePtr parse_if();
+    // for（步进模式出 AstNodeForCond，迭代模式出 AstNodeForIter）
+    [[nodiscard]] AstNodePtr parse_for();
+    // while（出 AstNodeForCond，只是 init/inc 恒空）
+    [[nodiscard]] AstNodePtr parse_while();
+    // return
+    [[nodiscard]] AstNodePtr parse_return();
+    // try-except-finally
+    [[nodiscard]] AstNodePtr parse_try();
+    // raise
+    [[nodiscard]] AstNodePtr parse_raise();
+    // 装饰器表达式 / 函数 / 类
+    [[nodiscard]] AstNodePtr parse_decorator();
+    // 函数
+    [[nodiscard]] AstNodePtr parse_func(
+        std::vector<AstNodePtr> decorators = {}, std::vector<Position> decorator_positions = {},
+        Position deco_pos = {}
+    );
+    // import（关键字形态出 AstNodeImportKw，调用形态出 AstNodeImportCall）
+    [[nodiscard]] AstNodePtr parse_import();
     // 分组 (expr) 或者元组 (expr1, expr2)
     [[nodiscard]] AstNodePtr parse_paren_or_tuple();
     // 列表 [expr1, expr2]
@@ -97,32 +124,6 @@ class Parser {
     [[nodiscard]] AstNodePtr parse_del();
     // global
     [[nodiscard]] AstNodePtr parse_global();
-    // import（关键字形态出 AstNodeImport，调用形态出普通的 AstNodeCall）
-    [[nodiscard]] AstNodePtr parse_import();
-    // if-elif-else
-    [[nodiscard]] AstNodePtr parse_if();
-    // for
-    [[nodiscard]] AstNodePtr parse_for();
-    // while
-    [[nodiscard]] AstNodePtr parse_while();
-    // return
-    [[nodiscard]] AstNodePtr parse_return();
-    // try-except-finally
-    [[nodiscard]] AstNodePtr parse_try();
-    // raise
-    [[nodiscard]] AstNodePtr parse_raise();
-    // 函数
-    [[nodiscard]] AstNodePtr parse_func(
-        std::vector<AstNodePtr> decorators = {}, std::vector<Position> decorator_positions = {},
-        Position deco_pos = {}
-    );
-    // 类
-    [[nodiscard]] AstNodePtr parse_class(
-        std::vector<AstNodePtr> decorators = {}, std::vector<Position> decorator_positions = {},
-        Position deco_pos = {}
-    );
-    // 装饰器表达式 / 函数 / 类
-    [[nodiscard]] AstNodePtr parse_decorator();
 
     /**
      * 完成一堆逗号连成的一串的剩余部分，可能空。不消耗括号、不涉及 paren_depth_。
@@ -132,12 +133,15 @@ class Parser {
      * @return           是否真的消耗过至少一个 ','
      */
     bool finish_comma_batch(TokenType close, const std::function<void()> &parse_item);
-    // 完成字典剩余部分。当前已被判为字典、第一项已解析为 first。不消耗括号、不涉及 paren_depth_
-    [[nodiscard]] AstNodePtr finish_dict(Position start_pos, AstNodePtr first);
-    // 完成解析形参列表。消耗括号、管理 paren_depth_
-    [[nodiscard]] AstNodeFunc::AllParams finish_func_params();
+
+    // 以下 finish_* 同样按 x_ast_nodes.h 的先后排列
+
     // 完成解析捕获列表。消耗括号、管理 paren_depth_
     [[nodiscard]] std::vector<OneCapture> finish_captures();
+    // 完成解析形参列表。消耗括号、管理 paren_depth_
+    [[nodiscard]] AstNodeFunc::AllParams finish_func_params();
+    // 完成字典剩余部分。当前已被判为字典、第一项已解析为 first。不消耗括号、不涉及 paren_depth_
+    [[nodiscard]] AstNodePtr finish_dict(Position start_pos, AstNodePtr first);
     // 完成函数调用 f(...)。消耗括号、管理 paren_depth_
     [[nodiscard]] std::unique_ptr<AstNodeCall> finish_call(AstNodePtr obj, Position start_pos);
     // 完成索引 x[...]。消耗括号、管理 paren_depth_

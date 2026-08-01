@@ -1171,8 +1171,9 @@ SL.md 4.1 内置函数列表里根本没有 `import`（它早已从 4.1 挪进 2
 就地拆完销毁，进不了 SemanticChecker，不构成实际风险。`finish_call` 返回类型顺势从 `AstNodePtr`
 改成 `std::unique_ptr<AstNodeCall>`，拆孩子不用 `dynamic_cast`。
 
-`OneKwArg` 从 `AstNodeCall` 里提出来变成自由结构体（`ast_node_kwarg.h`），照 `OneCapture` 被
-func/class 共用时的先例办。
+`OneKwArg` 从 `AstNodeCall` 里提出来变成自由结构体，照 `OneCapture` 被 func/class 共用时的先例
+办；两者随后合并进 `ast_node_misc.h`，收录标准是"本身不是 AstNode、但被多个节点类型共用的小
+聚合体"（写进文件头注释，免得变成杂物间）。
 
 关键字形态存 `std::vector<std::u32string>`，不存 `AstNodeAttr` 链：`import os.path` 根本没对
 `os` 做属性访问（它是两次导入 + 一次 `os.path = <模块对象>` 赋值），存成属性链会让泛型递归
