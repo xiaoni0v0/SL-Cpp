@@ -621,8 +621,8 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 
 算法的返回值是最后一段的模块对象。
 
-调用形态：`import(name: str, lazy: bool = False, force: bool = False)`，按上述算法执行并返回
-其结果。`lazy` 使加载延迟到首次取属性时；`force` 丢弃缓存旧模块、强制重新加载。
+调用形态：`import(name: str, lazy: bool = False, force: bool = False)`，按上述算法执行并返回其结果。
+`lazy` 使加载延迟到首次取属性时；`force` 丢弃缓存旧模块、强制重新加载。
 
 关键字形态（`lazy`、`force` 均取默认值 `False`）：
 单段 `import a` 等价于 `(a = import('a'))`；
