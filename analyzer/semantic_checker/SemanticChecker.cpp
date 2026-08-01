@@ -259,9 +259,31 @@ void SemanticChecker::check(const AstNodeFunc &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeImport &node) {
+void SemanticChecker::check(const AstNodeImportKw &node) {
     require_not_null(node.segments_, 1, node.pos_);
     for (const auto &segment : node.segments_) require_not_null(segment, node.pos_);
+}
+
+void SemanticChecker::check(const AstNodeImportCall &node) {
+    const Position pos{node.pos_};
+
+    const Context saved{ctx_};
+
+    // 位置组：位置传参、*expr
+    ctx_.can_star = true;
+    ctx_.can_double_star = false;
+    for (const auto &arg : node.positional_args_) check_not_null(arg, pos);
+
+    // 关键字组：关键字实参、**expr
+    for (const auto &kw : node.keyword_args_) {
+        if (kw.kind_ == OneKwArg::Kind::Keyword) require_not_null(kw.keyword_, pos);
+
+        ctx_.can_star = false;
+        ctx_.can_double_star = kw.kind_ == OneKwArg::Kind::DoubleStar;
+        check_not_null(kw.value_, pos);
+    }
+
+    ctx_ = saved;
 }
 
 void SemanticChecker::check(const AstNodeLiteralNone &) {}
@@ -475,10 +497,10 @@ void SemanticChecker::check(const AstNodeCall &node) {
 
     // 关键字组：关键字实参、**expr
     for (const auto &kw : node.keyword_args_) {
-        if (kw.kind_ == AstNodeCall::OneKwArg::Kind::Keyword) require_not_null(kw.keyword_, pos);
+        if (kw.kind_ == OneKwArg::Kind::Keyword) require_not_null(kw.keyword_, pos);
 
         ctx_.can_star = false;
-        ctx_.can_double_star = kw.kind_ == AstNodeCall::OneKwArg::Kind::DoubleStar;
+        ctx_.can_double_star = kw.kind_ == OneKwArg::Kind::DoubleStar;
         check_not_null(kw.value_, pos);
     }
 

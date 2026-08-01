@@ -138,6 +138,12 @@ class Parser {
     [[nodiscard]] AstNodeFunc::AllParams finish_func_params();
     // 完成解析捕获列表。消耗括号、管理 paren_depth_
     [[nodiscard]] std::vector<OneCapture> finish_captures();
+    /**
+     * 完成解析实参列表 (...)，填两个出参。消耗括号、管理 paren_depth_。
+     * 普通函数调用和 import 调用形态共用这一段（两者实参规则完全一致，只是包成的节点不同）
+     */
+    void
+    finish_call_args(std::vector<AstNodePtr> &positional_args, std::vector<OneKwArg> &keyword_args);
     // 完成函数调用 f(...)。消耗括号、管理 paren_depth_
     [[nodiscard]] AstNodePtr finish_call(AstNodePtr obj, Position start_pos);
     // 完成索引 x[...]。消耗括号、管理 paren_depth_

@@ -13,7 +13,8 @@ X(AstNodeDecorator)
 
 X(AstNodeFunc)
 
-X(AstNodeImport)
+X(AstNodeImportKw)
+X(AstNodeImportCall)
 
 X(AstNodeLiteralNone)
 X(AstNodeLiteralBool)

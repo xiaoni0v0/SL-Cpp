@@ -84,18 +84,42 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
         check_throws_internal_error_with(*program, "** dict-spread entry must not have a value");
     }
 
-    TEST_CASE("AstNodeImport：segments_ 为空（关键字形态至少有一段）") {
+    TEST_CASE("AstNodeImportKw：segments_ 为空（关键字形态至少有一段）") {
         AstNodeProgramPtr program{
-            wrap(std::make_unique<AstNodeImport>(Position{0, 0}, std::vector<std::u32string>{}))
+            wrap(std::make_unique<AstNodeImportKw>(Position{0, 0}, std::vector<std::u32string>{}))
         };
         check_throws_internal_error_with(*program, "too few elements");
     }
 
-    TEST_CASE("AstNodeImport：某一段是空字符串") {
+    TEST_CASE("AstNodeImportKw：某一段是空字符串") {
         AstNodeProgramPtr program{wrap(
-            std::make_unique<AstNodeImport>(Position{0, 0}, std::vector<std::u32string>{U"os", U""})
+            std::make_unique<AstNodeImportKw>(
+                Position{0, 0}, std::vector<std::u32string>{U"os", U""}
+            )
         )};
         check_throws_internal_error_with(*program, "unexpected empty name");
+    }
+
+    TEST_CASE("AstNodeImportCall：关键字实参的 keyword_ 是空字符串") {
+        std::vector<OneKwArg> keyword_args;
+        keyword_args.push_back({OneKwArg::Kind::Keyword, U"", int_lit()});
+        AstNodeProgramPtr program{wrap(
+            std::make_unique<AstNodeImportCall>(
+                Position{0, 0}, std::vector<AstNodePtr>{}, std::move(keyword_args), Position{0, 0}
+            )
+        )};
+        check_throws_internal_error_with(*program, "unexpected empty name");
+    }
+
+    TEST_CASE("AstNodeImportCall：位置实参里有空指针") {
+        std::vector<AstNodePtr> positional_args;
+        positional_args.push_back(nullptr);
+        AstNodeProgramPtr program{wrap(
+            std::make_unique<AstNodeImportCall>(
+                Position{0, 0}, std::move(positional_args), std::vector<OneKwArg>{}, Position{0, 0}
+            )
+        )};
+        check_throws_internal_error_with(*program, "unexpected null node");
     }
 
     TEST_CASE("AstNodeFunc/AstNodeClass：name_ 是空字符串（应该要么 nullopt 要么有内容）") {

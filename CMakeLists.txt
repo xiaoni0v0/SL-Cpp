@@ -141,6 +141,7 @@ add_executable(SL main.cpp
         parser/ast_nodes/details/ast_node_decorators.h
         parser/ast_nodes/details/ast_node_func.h
         parser/ast_nodes/details/ast_node_import.h
+        parser/ast_nodes/details/ast_node_kwarg.h
         parser/ast_nodes/details/ast_node_literals.h
         parser/ast_nodes/details/ast_node_multi_exprs.h
         parser/ast_nodes/details/ast_node_operators.h
@@ -281,6 +282,7 @@ add_executable(SL_Cpp_Parser_Tests
         parser/ast_nodes/details/ast_node_decorators.h
         parser/ast_nodes/details/ast_node_func.h
         parser/ast_nodes/details/ast_node_import.h
+        parser/ast_nodes/details/ast_node_kwarg.h
         parser/ast_nodes/details/ast_node_literals.h
         parser/ast_nodes/details/ast_node_multi_exprs.h
         parser/ast_nodes/details/ast_node_operators.h
@@ -358,6 +360,7 @@ add_executable(SL_Cpp_Analyzer_Tests
         parser/ast_nodes/details/ast_node_decorators.h
         parser/ast_nodes/details/ast_node_func.h
         parser/ast_nodes/details/ast_node_import.h
+        parser/ast_nodes/details/ast_node_kwarg.h
         parser/ast_nodes/details/ast_node_literals.h
         parser/ast_nodes/details/ast_node_multi_exprs.h
         parser/ast_nodes/details/ast_node_operators.h

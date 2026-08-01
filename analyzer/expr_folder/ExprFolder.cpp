@@ -176,7 +176,12 @@ void ExprFolder::visit(AstNodeDel &node) { visit_and_replace(node.target_); }
 
 void ExprFolder::visit(AstNodeGlobal &) {}
 
-void ExprFolder::visit(AstNodeImport &) {}
+void ExprFolder::visit(AstNodeImportKw &) {}
+
+void ExprFolder::visit(AstNodeImportCall &node) {
+    for (auto &arg : node.positional_args_) visit_and_replace(arg);
+    for (auto &kw : node.keyword_args_) visit_and_replace(kw.value_);
+}
 
 ExprFolder::ExprFolder(AstNodeProgram &root) : root_{root} {}
 

@@ -5,6 +5,17 @@ namespace {
 
 json pos_to_json(const Position pos) { return json{{"row", pos.row}, {"col", pos.col}}; }
 
+json kwargs_to_json(const std::vector<OneKwArg> &kwargs, const bool include_pos) {
+    auto result = json::array();
+    for (const auto &kw : kwargs)
+        result.push_back(
+            {{"keyword",
+              kw.kind_ == OneKwArg::Kind::Keyword ? json(u32_to_utf8(kw.keyword_)) : json(nullptr)},
+             {"value", kw.value_->to_json(include_pos)}}
+        );
+    return result;
+}
+
 json captures_to_json(const std::vector<OneCapture> &captures, const bool include_pos) {
     auto result = json::array();
     for (const auto &c : captures)
@@ -289,15 +300,35 @@ json AstNodeFunc::to_json_impl(const bool include_pos) const {
     };
 }
 
-json AstNodeImport::to_json_impl(const bool include_pos) const {
+json AstNodeImportKw::to_json_impl(const bool include_pos) const {
     auto segments = json::array();
     for (const auto &segment : segments_) segments.push_back(u32_to_utf8(segment));
 
     if (include_pos)
         return json{
-            {"type", "Import"}, {"pos", pos_to_json(pos_)}, {"segments", std::move(segments)}
+            {"type", "ImportKw"}, {"pos", pos_to_json(pos_)}, {"segments", std::move(segments)}
         };
-    return json{{"type", "Import"}, {"segments", std::move(segments)}};
+    return json{{"type", "ImportKw"}, {"segments", std::move(segments)}};
+}
+
+json AstNodeImportCall::to_json_impl(const bool include_pos) const {
+    auto positional_args = json::array();
+    for (const auto &arg : positional_args_) positional_args.push_back(arg->to_json(include_pos));
+    // 必须用 = 拷贝初始化，不能用 {}——见 .ai/notes/json-test-brace-init-trap.md
+    auto keyword_args = kwargs_to_json(keyword_args_, include_pos);
+
+    if (include_pos)
+        return json{
+            {"type", "ImportCall"},
+            {"pos", pos_to_json(pos_)},
+            {"positional_args", std::move(positional_args)},
+            {"keyword_args", std::move(keyword_args)}
+        };
+    return json{
+        {"type", "ImportCall"},
+        {"positional_args", std::move(positional_args)},
+        {"keyword_args", std::move(keyword_args)}
+    };
 }
 
 json AstNodeLiteralNone::to_json_impl(const bool include_pos) const {
@@ -513,13 +544,8 @@ json AstNodeCompoundAssign::to_json_impl(const bool include_pos) const {
 json AstNodeCall::to_json_impl(const bool include_pos) const {
     auto positional_args = json::array();
     for (const auto &arg : positional_args_) positional_args.push_back(arg->to_json(include_pos));
-    auto keyword_args = json::array();
-    for (const auto &kw : keyword_args_)
-        keyword_args.push_back(
-            {{"keyword",
-              kw.kind_ == OneKwArg::Kind::Keyword ? json(u32_to_utf8(kw.keyword_)) : json(nullptr)},
-             {"value", kw.value_->to_json(include_pos)}}
-        );
+    // 必须用 = 拷贝初始化，不能用 {}——见 .ai/notes/json-test-brace-init-trap.md
+    auto keyword_args = kwargs_to_json(keyword_args_, include_pos);
 
     if (include_pos)
         return json{

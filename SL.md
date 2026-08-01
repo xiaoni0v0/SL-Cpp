@@ -238,7 +238,11 @@ else x = 200
 1. 关键字形态 `import identifier` 或 `import identifier.identifier ...`；
 2. 调用形态 `import(expr, kwarg=v, ...)`。
 
-其中 `identifier` 是标识符。调用形态时与普通函数调用一致。
+其中 `identifier` 是标识符。调用形态的实参规则与普通函数调用一致（任意表达式、`*`/`**` 展开都允许，
+参数个数与类型对不对留到运行期判定）。
+
+`import` 是关键字、不是内置函数名，两种形态都不涉及按名字查找一个 `import` 对象——因此它也不可能被
+`_G`/`_L` 里的同名项遮蔽。相应地，`import` 本身不能作为值使用（写不出 `f = import`）。
 
 #### 2.2.6 控制流表达式
 

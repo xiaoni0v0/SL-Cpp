@@ -1,9 +1,9 @@
 # Parser.cpp：finish_* 函数的 paren_depth_ 管理约定
 
-Parser.cpp 里所有处理 `()`/`[]` 配对的 `finish_*` 函数（`finish_call`、`finish_index`、
-`finish_func_params`、`finish_func_captures`）统一约定：
+Parser.cpp 里所有处理 `()`/`[]` 配对的 `finish_*` 函数（`finish_call_args`、`finish_index`、
+`finish_func_params`、`finish_captures`）统一约定：
 
-1. **起始括号永远由调用方消耗**，`finish_*` 函数从"起始括号已经被消耗"这个状态开始执行；
+1. **起始括号和收尾括号都由 `finish_*` 函数自己消耗**，调用方只负责判断"当前是不是起始括号"；
 2. **`paren_depth_` 的增减完全由 `finish_*` 函数自己管理**——函数一进来就 `paren_depth_++`，收尾前
    `paren_depth_--`，调用方不用也不该碰 `paren_depth_`；
 3. **收尾时永远是"先消耗收尾括号、再减 `paren_depth_`"**（`expect(close); paren_depth_--;`），跟
@@ -27,5 +27,9 @@ Parser.cpp 里所有处理 `()`/`[]` 配对的 `finish_*` 函数（`finish_call`
 
 ## how to apply
 
-以后往 Parser.cpp 加新的、处理括号配对的 `finish_*` 函数，直接照抄这个约定：调用方只消耗起始括号，
-函数自己管 `paren_depth_` 的加减，收尾顺序是"先 `expect(close)` 再 `--`"。
+以后往 Parser.cpp 加新的、处理括号配对的 `finish_*` 函数，直接照抄这个约定：起始/收尾括号和
+`paren_depth_` 的加减全部由函数自己管，收尾顺序是"先 `expect(close)` 再 `--`"。
+
+`finish_call` 是个特例：它自己不碰括号，只是转调 `finish_call_args` 再把结果包成 `AstNodeCall`
+（`import` 的调用形态复用同一个 `finish_call_args`，包成 `AstNodeImportCall`）——真正管括号的是
+`finish_call_args`，命名上照样归入 `finish_*` 一族。

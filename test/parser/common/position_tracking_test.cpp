@@ -95,6 +95,21 @@ TEST_SUITE("位置追踪——运算符自己的位置") {
         CHECK(call->paren_pos_.col == 2); // '('
     }
 
+    TEST_CASE("import 调用形态 paren_pos_ 是 '(' 自己的位置，pos_ 是 'import' 的位置") {
+        const AstNodePtr node{parse_single(U"import('math')")};
+        const auto *call{dynamic_cast<AstNodeImportCall *>(node.get())};
+        REQUIRE(call != nullptr);
+        CHECK(call->pos_.col == 1);       // 'import'
+        CHECK(call->paren_pos_.col == 7); // '('
+    }
+
+    TEST_CASE("import 关键字形态 pos_ 是 'import' 的位置，不是第一段名字的位置") {
+        const AstNodePtr node{parse_single(U"  import os.path")};
+        const auto *kw{dynamic_cast<AstNodeImportKw *>(node.get())};
+        REQUIRE(kw != nullptr);
+        CHECK(kw->pos_.col == 3); // 'import'
+    }
+
     TEST_CASE("索引 bracket_pos_ 是 '[' 自己的位置") {
         const AstNodePtr node{parse_single(U"a[0]")};
         const auto *index{dynamic_cast<AstNodeIndex *>(node.get())};

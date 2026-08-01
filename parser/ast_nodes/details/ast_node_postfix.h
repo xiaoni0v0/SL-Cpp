@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast_node.h"
+#include "ast_node_kwarg.h"
 
 #include <string>
 #include <utility>
@@ -12,14 +13,6 @@
 
 // f(arg1, arg2, kw=val, ...)
 struct AstNodeCall : AstNode {
-    // 关键字组的一项：identifier = expr（Keyword）或 **expr（DoubleStar）
-    struct OneKwArg {
-        enum class Kind { Keyword, DoubleStar } kind_;
-
-        std::u32string keyword_; // 仅 Kind::Keyword 时有意义
-        AstNodePtr value_;
-    };
-
     AstNodePtr object_;
     std::vector<AstNodePtr> positional_args_; // 位置组：位置实参、*expr 展开，按书写顺序
     std::vector<OneKwArg> keyword_args_;      // 关键字组：关键字实参、**expr 展开，按书写顺序

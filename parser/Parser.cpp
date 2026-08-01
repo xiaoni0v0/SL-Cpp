@@ -663,15 +663,22 @@ AstNodePtr Parser::parse_import() {
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_IMPORT); // 消耗 'import'
 
-    // 调用形态 import(...)：跟普通函数调用完全一致
-    skip_paren_newline();
+    // import 后面允许换行（跟 global/del 一致）；两种形态靠这之后是不是 '(' 区分
+    skip_newline();
+
+    // 调用形态 import(...)：实参解析规则跟普通函数调用完全一致，只是包成 AstNodeImportCall
     if (check(TokenType::SIGN_LPAREN)) {
-        return finish_call(std::make_unique<AstNodeIdentifier>(start_pos, U"import"), start_pos);
+        const Position paren_pos{peek().row, peek().col};
+        std::vector<AstNodePtr> positional_args;
+        std::vector<OneKwArg> keyword_args;
+        finish_call_args(positional_args, keyword_args); // 消耗 '(' ... ')'
+        return std::make_unique<AstNodeImportCall>(
+            start_pos, std::move(positional_args), std::move(keyword_args), paren_pos
+        );
     }
 
     // 关键字形态 import a.b.c ...：各段都是标识符 token，不是表达式，
     // 点号在这里一路吃干净，换行规则跟属性访问 x.y 完全一致
-    skip_newline();
     std::vector segments{expect(TokenType::IDENTIFIER).lexeme}; // 消耗标识符
     skip_paren_newline();
     while (check(TokenType::SIGN_DOT)) {
@@ -681,7 +688,7 @@ AstNodePtr Parser::parse_import() {
         skip_paren_newline();
     }
 
-    return std::make_unique<AstNodeImport>(start_pos, std::move(segments));
+    return std::make_unique<AstNodeImportKw>(start_pos, std::move(segments));
 }
 
 AstNodePtr Parser::parse_if() {
@@ -1197,13 +1204,10 @@ std::vector<OneCapture> Parser::finish_captures() {
     return captures;
 }
 
-AstNodePtr Parser::finish_call(AstNodePtr obj, const Position start_pos) {
-    const Position paren_pos{peek().row, peek().col};
+void Parser::finish_call_args(
+    std::vector<AstNodePtr> &positional_args, std::vector<OneKwArg> &keyword_args
+) {
     expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
-
-    // 实参
-    std::vector<AstNodePtr> positional_args;
-    std::vector<AstNodeCall::OneKwArg> keyword_args;
 
     // 传参分：位置组（位置传参、*expr 展开）、关键字组（关键字传参、**expr 展开）两阶段
     enum class ArgsGroup { Positional, Keyword } group{ArgsGroup::Positional};
@@ -1215,9 +1219,7 @@ AstNodePtr Parser::finish_call(AstNodePtr obj, const Position start_pos) {
             skip_newline();
             expect(TokenType::SIGN_ASSIGN); // 消耗 '='
             skip_newline();
-            keyword_args.push_back(
-                {AstNodeCall::OneKwArg::Kind::Keyword, std::move(name), parse_expr()}
-            );
+            keyword_args.push_back({OneKwArg::Kind::Keyword, std::move(name), parse_expr()});
             return;
         }
 
@@ -1226,9 +1228,7 @@ AstNodePtr Parser::finish_call(AstNodePtr obj, const Position start_pos) {
         // **expr
         if (dynamic_cast<AstNodeDoubleStar *>(value.get())) {
             group = ArgsGroup::Keyword;
-            keyword_args.push_back(
-                {AstNodeCall::OneKwArg::Kind::DoubleStar, U"", std::move(value)}
-            );
+            keyword_args.push_back({OneKwArg::Kind::DoubleStar, U"", std::move(value)});
             return;
         }
         // 位置参数 / *expr
@@ -1239,6 +1239,14 @@ AstNodePtr Parser::finish_call(AstNodePtr obj, const Position start_pos) {
 
     if (!check(TokenType::SIGN_RPAREN)) error("expected ')' to close function call");
     expect(TokenType::SIGN_RPAREN), paren_depth_--; // 消耗 ')'
+}
+
+AstNodePtr Parser::finish_call(AstNodePtr obj, const Position start_pos) {
+    const Position paren_pos{peek().row, peek().col};
+
+    std::vector<AstNodePtr> positional_args;
+    std::vector<OneKwArg> keyword_args;
+    finish_call_args(positional_args, keyword_args); // 消耗 '(' ... ')'
 
     return std::make_unique<AstNodeCall>(
         start_pos, std::move(obj), std::move(positional_args), std::move(keyword_args), paren_pos

@@ -1142,18 +1142,31 @@ Decorator 的各子槽位、Call/Index/Attr/Assign 的参数折叠、dict 的 ke
 
 搜索路径（名字怎么定位到具体文件系统位置）、循环 import、相对导入仍未设计，故意搁置。
 
-## `import` 的 AST 表示：只加一个节点，调用形态直接复用 `AstNodeCall`
+## `import` 的 AST 表示：`AstNodeImportKw` + `AstNodeImportCall` 两个节点
 
 两种语法形态**不**塞进一个节点里用 variant 分叉：仓库处理"同一关键字两种形状"的既定做法是拆成
 两个节点类型（`AstNodeForCond`/`AstNodeForIter`），X 宏分发本来就一个类型一个重载，塞 variant
 等于在下面再手写一层全代码库独一份的分发；何况两种形态字段交集为空。
 
-调用形态干脆不新增节点：它跟普通函数调用完全一致（任意实参、`*`/`**` 展开都要支持），自己开结构
-就得把 `AstNodeCall::OneKwArg` 那套位置组/关键字组连同 SemanticChecker 里 `*`/`**` 的位置规则、
-ExprFolder 的实参递归全抄一遍。直接 `finish_call` 出 `AstNodeCall`，下游零改动。被调对象一度想
-专门加个零字段标记节点（类比 `_G`/`_L` 用的 `AstNodeLiteralGL`，避免 AST 里出现一个查不到的假
-标识符），用户认为多余，定为 `AstNodeIdentifier{U"import"}`——`import` 是关键字、用户永远遮蔽
-不了，运行时按名字查内置 `import` 是安全的。
+调用形态一度打算复用 `AstNodeCall`，被调对象填 `AstNodeIdentifier{U"import"}`——理由是零下游
+改动。**否决**，因为这条路要求运行期真的按名字查到一个 `import` 对象，而这带来两个问题：一是
+SL.md 4.1 内置函数列表里根本没有 `import`（它早已从 4.1 挪进 2.2.5/3.4.5 成为语言构造），按
+3.10.3 的解析规则（只查 `_L`→`_G`→NameError，无 builtins 兜底）这个标识符压根查不到，得专门为它
+现造一层机制；二是造出来之后 `_G['import'] = print` 就能把调用形态劫持掉，而关键字形态不查名字、
+不受影响——同一个语言构造两种写法一个能被劫持一个不能，这个分叉比劫持本身更坑。
+
+也考虑过给被调对象加个零字段标记节点（类比 `_G`/`_L` 的 `AstNodeLiteralGL`）。同样否决：在"一切
+皆表达式"的语言里，这个节点求值必须产出**某个值**，也就是一个 4.1 里不存在的"import 函数对象"；
+要么把它加回 4.1（绕回劫持问题），要么规定"这个节点只能出现在被调位置"（开特例）。
+
+最终：`AstNodeImportCall` 只有实参两组 + `paren_pos_`，**没有被调对象槽位**——`import` 是运算符
+本身，不是能被取到的对象，所以根本不产生这个中间值。代价是 SemanticChecker 里位置组/关键字组那
+十来行跟 `check(AstNodeCall)` 重复，按本文件既有风格（`check_lvalue`/`check_lvalue_pure` 本来就
+各写各的）照抄即可，不抽公共函数。解析层则不重复：`finish_call` 的实参解析部分抽成
+`finish_call_args`，两边共用（一度想过"先 `finish_call` 再把孩子偷出来"，但那会短暂造出一个
+`object_` 为空的 `AstNodeCall`，违反下游 `check_not_null(object_)` 的前提，不值得）。
+`OneKwArg` 顺势从 `AstNodeCall` 里提出来变成自由结构体（`ast_node_kwarg.h`），照 `OneCapture`
+被 func/class 共用时的先例办。
 
 关键字形态存 `std::vector<std::u32string>`，不存 `AstNodeAttr` 链：`import os.path` 根本没对
 `os` 做属性访问（它是两次导入 + 一次 `os.path = <模块对象>` 赋值），存成属性链会让泛型递归
@@ -1162,5 +1175,7 @@ parser 用 `expect(IDENTIFIER)` 当场就能保证形状，不需要像 `del` �
 （`del a[i]` 才真的需要通用表达式，这里不需要）——直接照搬 `AstNodeGlobal` 存裸字符串的做法。
 逐段位置暂不存：`ImportError` 是运行期错误，节点自身 `pos_` 够用。
 
-`(` 的换行规则跟普通函数调用对齐（只在括号内允许跨行），不跟 `global`/`del` 那种无条件
-`skip_newline` 对齐——因为调用形态本来就该"表现得像个普通函数"。
+换行规则：`import` 后无条件允许换行（跟 `global`/`del` 一致），两种形态一视同仁；段名之间的 `.`
+跟属性访问 `x.y` 逐字对齐——`.` 后无条件允许换行，`.` 前只在括号内允许。曾按"调用形态的 `(` 该像
+普通调用那样绑定"把 `import\n(...)` 判成错误，被用户否决：拆成独立节点之后 `(` 不再是"接在某个
+被调表达式后面的后缀"，而是 `import(...)` 这个整体的一部分，没有理由比 `global`/`del` 更严格。
