@@ -14,14 +14,17 @@
 
 // token 类型转换为一元运算符类型
 static std::optional<AstNodeOpUnary::OpType> token_type_to_unary_op_type(const TokenType t) {
+    using enum TokenType;
+    using enum AstNodeOpUnary::OpType;
+
     // clang-format off
     switch (t) {
-    case TokenType::SIGN_PLUS:     return AstNodeOpUnary::OpType::Pos;
-    case TokenType::SIGN_MINUS:    return AstNodeOpUnary::OpType::Neg;
-    case TokenType::SIGN_TILDE:    return AstNodeOpUnary::OpType::BitInvert;
-    case TokenType::KW_NOT:        return AstNodeOpUnary::OpType::Not;
-    case TokenType::SIGN_QUESTION: return AstNodeOpUnary::OpType::Question;
-    case TokenType::SIGN_EXCLAIM:  return AstNodeOpUnary::OpType::Exclaim;
+    case SIGN_PLUS:     return Pos;
+    case SIGN_MINUS:    return Neg;
+    case SIGN_TILDE:    return BitInvert;
+    case KW_NOT:        return Not;
+    case SIGN_QUESTION: return Question;
+    case SIGN_EXCLAIM:  return Exclaim;
     // clang-format on
     default:
         return std::nullopt;
@@ -30,23 +33,26 @@ static std::optional<AstNodeOpUnary::OpType> token_type_to_unary_op_type(const T
 
 // token 类型转换为二元运算符类型（不含比较运算符）
 static std::optional<AstNodeOpBinary::OpType> token_type_to_binary_op_type(const TokenType t) {
+    using enum TokenType;
+    using enum AstNodeOpBinary::OpType;
+
     // clang-format off
     switch (t) {
-    case TokenType::SIGN_PLUS:        return AstNodeOpBinary::OpType::Add;
-    case TokenType::SIGN_MINUS:       return AstNodeOpBinary::OpType::Sub;
-    case TokenType::SIGN_STAR:        return AstNodeOpBinary::OpType::Mul;
-    case TokenType::SIGN_SLASH:       return AstNodeOpBinary::OpType::Div;
-    case TokenType::SIGN_DOUBLESLASH: return AstNodeOpBinary::OpType::DivFloor;
-    case TokenType::SIGN_PERCENT:     return AstNodeOpBinary::OpType::Mod;
-    case TokenType::SIGN_DOUBLESTAR:  return AstNodeOpBinary::OpType::Pow;
-    case TokenType::SIGN_AMPERSAND:   return AstNodeOpBinary::OpType::BitAnd;
-    case TokenType::SIGN_PIPE:        return AstNodeOpBinary::OpType::BitOr;
-    case TokenType::SIGN_CARET:       return AstNodeOpBinary::OpType::BitXor;
-    case TokenType::SIGN_LSHIFT:      return AstNodeOpBinary::OpType::LShift;
-    case TokenType::SIGN_RSHIFT:      return AstNodeOpBinary::OpType::RShift;
-    case TokenType::KW_AND:           return AstNodeOpBinary::OpType::And;
-    case TokenType::KW_OR:            return AstNodeOpBinary::OpType::Or;
-    case TokenType::SIGN_DOTDOT:      return AstNodeOpBinary::OpType::Range;
+    case SIGN_PLUS:        return Add;
+    case SIGN_MINUS:       return Sub;
+    case SIGN_STAR:        return Mul;
+    case SIGN_SLASH:       return Div;
+    case SIGN_DOUBLESLASH: return DivFloor;
+    case SIGN_PERCENT:     return Mod;
+    case SIGN_DOUBLESTAR:  return Pow;
+    case SIGN_AMPERSAND:   return BitAnd;
+    case SIGN_PIPE:        return BitOr;
+    case SIGN_CARET:       return BitXor;
+    case SIGN_LSHIFT:      return LShift;
+    case SIGN_RSHIFT:      return RShift;
+    case KW_AND:           return And;
+    case KW_OR:            return Or;
+    case SIGN_DOTDOT:      return Range;
     // clang-format on
     default:
         return std::nullopt;
@@ -56,14 +62,17 @@ static std::optional<AstNodeOpBinary::OpType> token_type_to_binary_op_type(const
 // token 类型是否属于比较组（== != < <= > >=），是则转换成对应的 AstNodeCompare::OpType，否则
 // nullopt
 static std::optional<AstNodeCompare::OpType> token_type_to_compare_op_type(const TokenType t) {
+    using enum TokenType;
+    using enum AstNodeCompare::OpType;
+
     // clang-format off
     switch (t) {
-    case TokenType::SIGN_LT: return AstNodeCompare::OpType::Lt;
-    case TokenType::SIGN_LE: return AstNodeCompare::OpType::Le;
-    case TokenType::SIGN_GT: return AstNodeCompare::OpType::Gt;
-    case TokenType::SIGN_GE: return AstNodeCompare::OpType::Ge;
-    case TokenType::SIGN_EQ: return AstNodeCompare::OpType::Eq;
-    case TokenType::SIGN_NE: return AstNodeCompare::OpType::Ne;
+    case SIGN_LT: return Lt;
+    case SIGN_LE: return Le;
+    case SIGN_GT: return Gt;
+    case SIGN_GE: return Ge;
+    case SIGN_EQ: return Eq;
+    case SIGN_NE: return Ne;
     // clang-format on
     default:
         return std::nullopt;
@@ -74,64 +83,66 @@ static std::optional<AstNodeCompare::OpType> token_type_to_compare_op_type(const
 // 对中缀/后缀运算符，返回 {lbp, rbp}
 // {-1,-1} 表示不是中缀/后缀运算符
 static std::pair<int, int> infix_bp(const TokenType type) {
+    using enum TokenType;
+
     switch (type) {
-    case TokenType::SIGN_DOT:
+    case SIGN_DOT:
         return {170, 170};
-    case TokenType::SIGN_LPAREN:
-    case TokenType::SIGN_LBRACKET:
+    case SIGN_LPAREN:
+    case SIGN_LBRACKET:
         return {170, -1}; // 函数调用、索引
-    case TokenType::SIGN_QUESTION:
-    case TokenType::SIGN_EXCLAIM:
+    case SIGN_QUESTION:
+    case SIGN_EXCLAIM:
         return {160, -1}; // ? !
-    case TokenType::SIGN_DOUBLESTAR:
+    case SIGN_DOUBLESTAR:
         return {150, 149}; // **（右结合）
-    case TokenType::SIGN_STAR:
-    case TokenType::SIGN_SLASH:
-    case TokenType::SIGN_DOUBLESLASH:
-    case TokenType::SIGN_PERCENT:
+    case SIGN_STAR:
+    case SIGN_SLASH:
+    case SIGN_DOUBLESLASH:
+    case SIGN_PERCENT:
         return {130, 131}; // * / // %
-    case TokenType::SIGN_PLUS:
-    case TokenType::SIGN_MINUS:
+    case SIGN_PLUS:
+    case SIGN_MINUS:
         return {120, 121}; // + -
-    case TokenType::SIGN_DOTDOT:
+    case SIGN_DOTDOT:
         return {110, 111}; // ..
-    case TokenType::SIGN_LSHIFT:
-    case TokenType::SIGN_RSHIFT:
+    case SIGN_LSHIFT:
+    case SIGN_RSHIFT:
         return {100, 101}; // << >>
-    case TokenType::SIGN_AMPERSAND:
+    case SIGN_AMPERSAND:
         return {90, 91}; // &
-    case TokenType::SIGN_CARET:
+    case SIGN_CARET:
         return {80, 81}; // ^
-    case TokenType::SIGN_PIPE:
+    case SIGN_PIPE:
         return {70, 71}; // |
     // < <= > >= == !=（链式比较；rbp 未被使用，链内自行控制操作数的 min_bp）
-    case TokenType::SIGN_LT:
-    case TokenType::SIGN_LE:
-    case TokenType::SIGN_GT:
-    case TokenType::SIGN_GE:
-    case TokenType::SIGN_EQ:
-    case TokenType::SIGN_NE:
+    case SIGN_LT:
+    case SIGN_LE:
+    case SIGN_GT:
+    case SIGN_GE:
+    case SIGN_EQ:
+    case SIGN_NE:
         return {60, 61};
-    case TokenType::KW_IS:
+    case KW_IS:
         return {50, 51}; // is（自成一组的链式比较，不与上面 6 者混链）
-    case TokenType::KW_AND:
+    case KW_AND:
         return {30, 31}; // and
-    case TokenType::KW_OR:
+    case KW_OR:
         return {20, 21}; // or
     // 赋值（右结合）
-    case TokenType::SIGN_ASSIGN:
-    case TokenType::SIGN_PLUS_ASSIGN:
-    case TokenType::SIGN_MINUS_ASSIGN:
-    case TokenType::SIGN_STAR_ASSIGN:
-    case TokenType::SIGN_DOUBLESTAR_ASSIGN:
-    case TokenType::SIGN_SLASH_ASSIGN:
-    case TokenType::SIGN_DOUBLESLASH_ASSIGN:
-    case TokenType::SIGN_PERCENT_ASSIGN:
-    case TokenType::SIGN_AMPERSAND_ASSIGN:
-    case TokenType::SIGN_PIPE_ASSIGN:
-    case TokenType::SIGN_CARET_ASSIGN:
-    case TokenType::SIGN_LSHIFT_ASSIGN:
-    case TokenType::SIGN_RSHIFT_ASSIGN:
+    case SIGN_ASSIGN:
+    case SIGN_PLUS_ASSIGN:
+    case SIGN_MINUS_ASSIGN:
+    case SIGN_STAR_ASSIGN:
+    case SIGN_DOUBLESTAR_ASSIGN:
+    case SIGN_SLASH_ASSIGN:
+    case SIGN_DOUBLESLASH_ASSIGN:
+    case SIGN_PERCENT_ASSIGN:
+    case SIGN_AMPERSAND_ASSIGN:
+    case SIGN_PIPE_ASSIGN:
+    case SIGN_CARET_ASSIGN:
+    case SIGN_LSHIFT_ASSIGN:
+    case SIGN_RSHIFT_ASSIGN:
         return {10, 9};
     default:
         return {-1, -1};
@@ -140,20 +151,23 @@ static std::pair<int, int> infix_bp(const TokenType type) {
 
 // token 类型是否是复合赋值 op=，是则转换成对应的二元运算符，否则 nullopt
 static std::optional<AstNodeOpBinary::OpType> assign_compound_to_binary(const TokenType op) {
+    using enum TokenType;
+    using enum AstNodeOpBinary::OpType;
+
     // clang-format off
     switch (op) {
-    case TokenType::SIGN_PLUS_ASSIGN:        return AstNodeOpBinary::OpType::Add;
-    case TokenType::SIGN_MINUS_ASSIGN:       return AstNodeOpBinary::OpType::Sub;
-    case TokenType::SIGN_STAR_ASSIGN:        return AstNodeOpBinary::OpType::Mul;
-    case TokenType::SIGN_DOUBLESTAR_ASSIGN:  return AstNodeOpBinary::OpType::Pow;
-    case TokenType::SIGN_SLASH_ASSIGN:       return AstNodeOpBinary::OpType::Div;
-    case TokenType::SIGN_DOUBLESLASH_ASSIGN: return AstNodeOpBinary::OpType::DivFloor;
-    case TokenType::SIGN_PERCENT_ASSIGN:     return AstNodeOpBinary::OpType::Mod;
-    case TokenType::SIGN_AMPERSAND_ASSIGN:   return AstNodeOpBinary::OpType::BitAnd;
-    case TokenType::SIGN_PIPE_ASSIGN:        return AstNodeOpBinary::OpType::BitOr;
-    case TokenType::SIGN_CARET_ASSIGN:       return AstNodeOpBinary::OpType::BitXor;
-    case TokenType::SIGN_LSHIFT_ASSIGN:      return AstNodeOpBinary::OpType::LShift;
-    case TokenType::SIGN_RSHIFT_ASSIGN:      return AstNodeOpBinary::OpType::RShift;
+    case SIGN_PLUS_ASSIGN:        return Add;
+    case SIGN_MINUS_ASSIGN:       return Sub;
+    case SIGN_STAR_ASSIGN:        return Mul;
+    case SIGN_DOUBLESTAR_ASSIGN:  return Pow;
+    case SIGN_SLASH_ASSIGN:       return Div;
+    case SIGN_DOUBLESLASH_ASSIGN: return DivFloor;
+    case SIGN_PERCENT_ASSIGN:     return Mod;
+    case SIGN_AMPERSAND_ASSIGN:   return BitAnd;
+    case SIGN_PIPE_ASSIGN:        return BitOr;
+    case SIGN_CARET_ASSIGN:       return BitXor;
+    case SIGN_LSHIFT_ASSIGN:      return LShift;
+    case SIGN_RSHIFT_ASSIGN:      return RShift;
     // clang-format on
     default:
         return std::nullopt;
@@ -400,6 +414,8 @@ Parser::parse_chain_is(AstNodePtr left, const Position start_pos, const Position
 }
 
 AstNodePtr Parser::parse_non_op() {
+    using enum TokenType;
+
     // 跳过前导换行
     skip_newline();
     const auto &[type, row, col, lexeme]{peek()};
@@ -407,124 +423,124 @@ AstNodePtr Parser::parse_non_op() {
 
     switch (type) {
     // 字面量
-    case TokenType::LITERAL_NONE:
+    case LITERAL_NONE:
         // None
-        expect(TokenType::LITERAL_NONE); // 消耗 'None'
+        expect(LITERAL_NONE); // 消耗 'None'
         return std::make_unique<AstNodeLiteralNone>(pos);
-    case TokenType::LITERAL_TRUE:
+    case LITERAL_TRUE:
         // True
-        expect(TokenType::LITERAL_TRUE); // 消耗 'True'
+        expect(LITERAL_TRUE); // 消耗 'True'
         return std::make_unique<AstNodeLiteralBool>(pos, true);
-    case TokenType::LITERAL_FALSE:
+    case LITERAL_FALSE:
         // False
-        expect(TokenType::LITERAL_FALSE); // 消耗 'False'
+        expect(LITERAL_FALSE); // 消耗 'False'
         return std::make_unique<AstNodeLiteralBool>(pos, false);
-    case TokenType::LITERAL_G:
+    case LITERAL_G:
         // _G
-        expect(TokenType::LITERAL_G); // 消耗 '_G'
+        expect(LITERAL_G); // 消耗 '_G'
         return std::make_unique<AstNodeLiteralGL>(pos, AstNodeLiteralGL::GLType::G);
-    case TokenType::LITERAL_L:
+    case LITERAL_L:
         // _L
-        expect(TokenType::LITERAL_L); // 消耗 '_L'
+        expect(LITERAL_L); // 消耗 '_L'
         return std::make_unique<AstNodeLiteralGL>(pos, AstNodeLiteralGL::GLType::L);
-    case TokenType::LITERAL_ELLIPSIS:
+    case LITERAL_ELLIPSIS:
         // ...
-        expect(TokenType::LITERAL_ELLIPSIS); // 消耗 '...'
+        expect(LITERAL_ELLIPSIS); // 消耗 '...'
         return std::make_unique<AstNodeLiteralEllipsis>(pos);
-    case TokenType::LITERAL_INT:
+    case LITERAL_INT:
         // int
-        expect(TokenType::LITERAL_INT); // 消耗整数字面量
+        expect(LITERAL_INT); // 消耗整数字面量
         return std::make_unique<AstNodeLiteralInt>(pos, lexeme);
-    case TokenType::LITERAL_FLOAT:
+    case LITERAL_FLOAT:
         // float
-        expect(TokenType::LITERAL_FLOAT); // 消耗浮点数字面量
+        expect(LITERAL_FLOAT); // 消耗浮点数字面量
         return std::make_unique<AstNodeLiteralFloat>(pos, lexeme);
-    case TokenType::LITERAL_STR:
+    case LITERAL_STR:
         // str
-        expect(TokenType::LITERAL_STR); // 消耗字符串字面量
+        expect(LITERAL_STR); // 消耗字符串字面量
         return std::make_unique<AstNodeLiteralStr>(pos, lexeme);
 
     // 分组、元组
-    case TokenType::SIGN_LPAREN:
+    case SIGN_LPAREN:
         return parse_paren_or_tuple();
     // 列表
-    case TokenType::SIGN_LBRACKET:
+    case SIGN_LBRACKET:
         return parse_list();
     // 字典、复合表达式
-    case TokenType::SIGN_LBRACE:
+    case SIGN_LBRACE:
         return parse_brace();
 
     // 标识符
-    case TokenType::IDENTIFIER:
-        return std::make_unique<AstNodeIdentifier>(pos, expect(TokenType::IDENTIFIER).lexeme);
+    case IDENTIFIER:
+        return std::make_unique<AstNodeIdentifier>(pos, expect(IDENTIFIER).lexeme);
 
     // 解包 / 展开（操作数按“单目运算符”那一档的优先级 140 解析，与 +x/-x/~x 一致）
-    case TokenType::SIGN_STAR:
+    case SIGN_STAR:
         // *obj
-        expect(TokenType::SIGN_STAR); // 消耗 '*'
+        expect(SIGN_STAR); // 消耗 '*'
         return std::make_unique<AstNodeStar>(pos, parse_expr_pratt(140));
-    case TokenType::SIGN_DOUBLESTAR:
+    case SIGN_DOUBLESTAR:
         // **obj
-        expect(TokenType::SIGN_DOUBLESTAR); // 消耗 '**'
+        expect(SIGN_DOUBLESTAR); // 消耗 '**'
         return std::make_unique<AstNodeDoubleStar>(pos, parse_expr_pratt(140));
 
     // 前缀运算符
-    case TokenType::SIGN_PLUS:
-    case TokenType::SIGN_MINUS:
-    case TokenType::SIGN_TILDE:
+    case SIGN_PLUS:
+    case SIGN_MINUS:
+    case SIGN_TILDE:
         // 单目优先级 140
         advance(); // 消耗 '+' 或 '-' 或 '~'
         return std::make_unique<AstNodeOpUnary>(
             pos, *token_type_to_unary_op_type(type), parse_expr_pratt(140), pos
         );
-    case TokenType::KW_NOT:
+    case KW_NOT:
         // not 优先级 40
-        expect(TokenType::KW_NOT); // 消耗 'not'
+        expect(KW_NOT); // 消耗 'not'
         return std::make_unique<AstNodeOpUnary>(
             pos, AstNodeOpUnary::OpType::Not, parse_expr_pratt(40), pos
         );
 
     // del / global / import
-    case TokenType::KW_DEL:
+    case KW_DEL:
         return parse_del();
-    case TokenType::KW_GLOBAL:
+    case KW_GLOBAL:
         return parse_global();
-    case TokenType::KW_IMPORT:
+    case KW_IMPORT:
         return parse_import();
 
     // 控制流
-    case TokenType::KW_IF:
+    case KW_IF:
         return parse_if();
-    case TokenType::KW_FOR:
+    case KW_FOR:
         return parse_for();
-    case TokenType::KW_WHILE:
+    case KW_WHILE:
         return parse_while();
-    case TokenType::KW_BREAK:
+    case KW_BREAK:
         // break
-        expect(TokenType::KW_BREAK); // 消耗 'break'
+        expect(KW_BREAK); // 消耗 'break'
         return std::make_unique<AstNodeBreak>(pos);
-    case TokenType::KW_CONTINUE:
+    case KW_CONTINUE:
         // continue
-        expect(TokenType::KW_CONTINUE); // 消耗 'continue'
+        expect(KW_CONTINUE); // 消耗 'continue'
         return std::make_unique<AstNodeContinue>(pos);
-    case TokenType::KW_RETURN:
+    case KW_RETURN:
         return parse_return();
-    case TokenType::KW_TRY:
+    case KW_TRY:
         return parse_try();
-    case TokenType::KW_RAISE:
+    case KW_RAISE:
         return parse_raise();
 
     // 函数
-    case TokenType::KW_FUNC:
+    case KW_FUNC:
         return parse_func();
     // 类
-    case TokenType::KW_CLASS:
+    case KW_CLASS:
         return parse_class();
     // 装饰器
-    case TokenType::SIGN_AT:
+    case SIGN_AT:
         return parse_decorator();
 
-    case TokenType::END_OF_FILE:
+    case END_OF_FILE:
         // 括号内多半是没闭合
         if (paren_depth_ > 0) error("unexpected end of file (unclosed bracket)");
         // 否则是缺了表达式
