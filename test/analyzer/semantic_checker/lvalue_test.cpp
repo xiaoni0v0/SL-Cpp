@@ -33,7 +33,7 @@ TEST_SUITE("SemanticChecker 左值检查") {
     }
 
     TEST_CASE(
-        "* 后面必须是纯左值（标识符/索引/属性），不能再是嵌套的 tuple/list 解构（SL.md 2.1.5：\n"
+        "* 后面必须是纯左值（标识符/索引/属性），不能再是嵌套的 tuple/list 解构（SL.md：\n"
         "“其中至多一个纯左值可以带 * 前缀”，措辞明确是纯左值，跟外层元素允许嵌套左值不是一回事）"
     ) {
         check_throws_with(

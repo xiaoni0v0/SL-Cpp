@@ -32,7 +32,7 @@ TEST_SUITE("SemanticChecker 调用参数") {
 
     // "位置组不能出现在关键字组之后"现在由 Parser
     // 阶段式解析直接保证（是语法错误，不是语义层检查）， 测试见
-    // test/parser/2_1_5_operators/precedence_test.cpp。
+    // test/parser/02_operators/precedence_test.cpp。
 
     TEST_CASE("调用的 object_/各参数子表达式都会被递归检查") {
         check_throws_with(U"(break)()", "break outside loop");

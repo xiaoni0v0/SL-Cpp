@@ -1,4 +1,4 @@
-// StaticEvaler/ExprFolder：位运算折叠（& ^ | << >>，只对 bool/int 有意义，SL.md 3.4.2）。
+// StaticEvaler/ExprFolder：位运算折叠（& ^ | << >>，只对 bool/int 有意义）。
 // dict 的 | 合并见 container_ops_test.cpp（跟 int 的 | 是同一个运算符，按左操作数类型分派）。
 //
 // int 运算一律用 int64_t 计算（不再用任意精度的 BigInt）。& ^ | 两个定宽整数直接算，恒不溢出；
@@ -16,9 +16,7 @@ TEST_SUITE("StaticEvaler 位运算") {
         CHECK(fold_json(U"6 | 3") == int_lit("7"));
     }
 
-    TEST_CASE(
-        "按无穷位补码语义（SL.md 3.4.2 原例，本项目 int 字面量目前只支持十进制，255 即 0xff）"
-    ) {
+    TEST_CASE("按无穷位补码语义（SL.md 原例，本项目 int 字面量目前只支持十进制，255 即 0xff）") {
         CHECK(fold_json(U"-1 & 255") == int_lit("255"));
         CHECK(fold_json(U"~5") == int_lit("-6"));
     }

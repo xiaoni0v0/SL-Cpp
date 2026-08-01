@@ -29,9 +29,9 @@ TEST_SUITE("SemanticChecker 捕获/形参重名") {
     }
 }
 
-TEST_SUITE("SemanticChecker 形参顺序（SL.md 2.2.6）") {
+TEST_SUITE("SemanticChecker 形参顺序") {
     // "至多一个 *args""**kwargs 必须最后"现在是 Parser 阶段式解析直接保证的语法错误，
-    // 测试挪到了 test/parser/2_2_6_func/func_test.cpp，这里只测仍然是语义层职责的部分。
+    // 测试挪到了 test/parser/09_func/func_test.cpp，这里只测仍然是语义层职责的部分。
 
     TEST_CASE("*args 之后的普通形参是仅关键字形参，有没有默认值、彼此顺序都不受限制") {
         CHECK_NOTHROW(check_program(U"func f(*x, y) {}"));
@@ -87,7 +87,7 @@ TEST_SUITE("SemanticChecker doc 槽位") {
     }
 }
 
-// 装饰器（SL.md 2.2.8）之前完全没有语义检查层面的正面用例覆盖，只有 defensive_test.cpp
+// 装饰器之前完全没有语义检查层面的正面用例覆盖，只有 defensive_test.cpp
 // 里针对畸形 AST（decorators_/decorator_positions_ 数量对不上）的防御性断言。
 TEST_SUITE("SemanticChecker 装饰器") {
 

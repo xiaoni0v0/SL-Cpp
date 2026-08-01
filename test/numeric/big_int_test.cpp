@@ -399,7 +399,7 @@ TEST_SUITE("BigInt——加减乘（含跨 limb 进位/借位）") {
 
 TEST_SUITE("BigInt——floor_div / mod：向负无穷取整，语义与 Python 一致") {
 
-    TEST_CASE("SL.md 3.4.2 原文举的例子：-7 // 2 == -4，-7 % 2 == 1") {
+    TEST_CASE("SL.md 原文举的例子：-7 // 2 == -4，-7 % 2 == 1") {
         CHECK(d("-7").floor_div(d("2")).to_decimal_string() == "-4");
         CHECK(d("-7").mod(d("2")).to_decimal_string() == "1");
     }
@@ -597,7 +597,7 @@ TEST_SUITE("BigInt——pow") {
 
 TEST_SUITE("BigInt——位运算：按无穷位补码语义，与 Python 一致") {
 
-    TEST_CASE("SL.md 3.4.2 原文举的例子") {
+    TEST_CASE("SL.md 原文举的例子") {
         CHECK((~d("5")).to_decimal_string() == "-6");
         CHECK((d("-1") & d("255")).to_decimal_string() == "255"); // -1 的所有位都是 1
         CHECK((d("-1") >> 100).to_decimal_string() == "-1");      // 无论右移多少位，结果恒为 -1
@@ -733,7 +733,7 @@ TEST_SUITE("BigInt——移位：<< 恒等于乘 2^k，>> 恒等于向负无穷�
         CHECK((d("5") >> 0).to_decimal_string() == "5");
     }
 
-    TEST_CASE("负数右移恒为 -1（SL.md 3.4.2 原文例子）") {
+    TEST_CASE("负数右移恒为 -1（SL.md 原文例子）") {
         CHECK((d("-1") >> 100).to_decimal_string() == "-1");
         CHECK((d("-1") >> 1).to_decimal_string() == "-1");
         CHECK((d("-1") >> 0).to_decimal_string() == "-1");

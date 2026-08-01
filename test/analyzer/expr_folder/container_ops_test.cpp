@@ -1,11 +1,11 @@
-// StaticEvaler/ExprFolder：str/tuple/list 的 +（拼接）/*（重复），SL.md 3.4.2。
+// StaticEvaler/ExprFolder：str/tuple/list 的 +（拼接）/*（重复）。
 // dict 的一切运算（含 |）不参与折叠——本质上依赖 VM 才能算，见 StaticEvaler.h 类注释。
 //
 // 两条额外的安全限制/规则（StaticEvaler.h 类注释也有记录）：
 // - 拼接的结果大小超过上限（str 是 kMaxStrLength=4096，tuple/list 是 kMaxContainerItems=256）
 //   不折，防止几个字符的源码在编译期就材料化出巨大的常量；* 重复只有 str 会折，同样受
 //   kMaxStrLength 限制。
-// - tuple/list 的 * 重复恒不折：SL.md 3.4.2 规定重复出来的各份中，对应位置的元素是同一个
+// - tuple/list 的 * 重复恒不折：SL.md 规定重复出来的各份中，对应位置的元素是同一个
 //   引用而非独立副本，折叠只能靠深拷贝伪造出 N 份独立子树，这跟 is 恒不折是同一类顾虑
 //   （对象同一性没法在编译期安全预判），不因为内容不可变就能豁免——这也是为什么这条规则
 //   不再区分"tuple 内容是否深度不可变"：不管内容是什么，* 都不折。

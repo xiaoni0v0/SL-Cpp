@@ -1,6 +1,6 @@
-// StaticEvaler：if/elif/else、for/while 的死分支消除。SL.md 3.4.5.1/3.4.5.2/3.4.5.3。
+// StaticEvaler：if/elif/else、for/while 的死分支消除。
 // while 内部复用 AstNodeForCond（init_/inc_ 皆为 nullptr），见
-// test/parser/2_2_5_control_flow/while_test.cpp。
+// test/parser/08_control_flow/while_test.cpp。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
@@ -53,9 +53,7 @@ TEST_SUITE("StaticEvaler 死分支消除") {
         );
     }
 
-    TEST_CASE(
-        "while(False) 一次都不会跑，值退化成 SL.md 3.4.5.2/3.4.5.3 的默认值：不收集是 0，收集是 []"
-    ) {
+    TEST_CASE("while(False) 一次都不会跑，值退化成 SL.md 的默认值：不收集是 0，收集是 []") {
         CHECK(fold_json(U"while (False) 1") == int_lit("0"));
         CHECK(
             fold_json(U"while $ (False) 1") ==

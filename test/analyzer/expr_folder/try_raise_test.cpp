@@ -1,4 +1,4 @@
-// ExprFolder：AstNodeTry/AstNodeRaise 各子槽位的子表达式折叠（SL.md 3.4.5.7/3.4.5.8）。
+// ExprFolder：AstNodeTry/AstNodeRaise 各子槽位的子表达式折叠。
 // try/raise 本身永远不参与整体折叠（不在 StaticEvaler::fold 的分发范围内，运行期才能确定异常
 // 是否发生），这里只关心：try_expr_、except 的 exceptions_/body_、finally_expr_、raise 的
 // value_，这些子槽位各自的表达式该折还是照样会被递归折叠。

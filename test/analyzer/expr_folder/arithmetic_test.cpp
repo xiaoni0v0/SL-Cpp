@@ -1,4 +1,4 @@
-// StaticEvaler/ExprFolder：数值算术折叠（+ - * / // % **，SL.md 3.4.2）。
+// StaticEvaler/ExprFolder：数值算术折叠（+ - * / // % **）。
 // 容器（str/tuple/list）的 +/*、dict 的 |、str 的 % 格式化见同目录 container_ops_test.cpp。
 //
 // int 运算一律用 int64_t 计算（不再用任意精度的 BigInt）：任何一步——包括操作数本身解析成
@@ -29,7 +29,7 @@ TEST_SUITE("StaticEvaler 数值算术") {
         CHECK(fold_json(U"6 / 2") == float_lit("3.0"));
     }
 
-    TEST_CASE("// 和 % 都是 int 时恒产出 int，向负无穷取整（SL.md 3.4.2 原例）") {
+    TEST_CASE("// 和 % 都是 int 时恒产出 int，向负无穷取整（SL.md 原例）") {
         CHECK(fold_json(U"-7 // 2") == int_lit("-4"));
         CHECK(fold_json(U"-7 % 2") == int_lit("1"));
         CHECK(fold_json(U"7 // -2") == int_lit("-4"));
@@ -174,9 +174,7 @@ TEST_SUITE("StaticEvaler 数值算术——int64_t 边界") {
         );
     }
 
-    TEST_CASE(
-        "** 指数非负但结果溢出：不折，不能退化成 float（SL.md 3.4.2 规定这种情况结果必须是 int）"
-    ) {
+    TEST_CASE("** 指数非负但结果溢出：不折，不能退化成 float（SL.md 规定这种情况结果必须是 int）") {
         CHECK(
             fold_json(U"10 ** 100") == nlohmann::json{
                                            {"type", "OpBinary"},

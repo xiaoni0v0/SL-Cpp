@@ -69,7 +69,7 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
     TEST_CASE(
         "AstNodeLiteralDict：key 是 ** 展开，但 val 不是空指针（真正的 Parser "
         "永远不会产出这种组合，"
-        "见 test/parser/2_2_2_basic_exprs/compound_dict_test.cpp 里 {**d: v} 直接是 SyntaxError）"
+        "见 test/parser/04_basic_exprs/compound_dict_test.cpp 里 {**d: v} 直接是 SyntaxError）"
     ) {
         std::vector<std::pair<AstNodePtr, AstNodePtr>> items;
         items.emplace_back(
@@ -257,7 +257,7 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
         check_throws_internal_error_with(*program, "non-digit character");
     }
 
-    TEST_CASE("AstNodeLiteralInt：raw_ 有前导零（单独一个 \"0\" 除外，SL.md 2.1.4）") {
+    TEST_CASE("AstNodeLiteralInt：raw_ 有前导零（单独一个 \"0\" 除外）") {
         AstNodeProgramPtr program{
             wrap(std::make_unique<AstNodeLiteralInt>(Position{0, 0}, U"007"))
         };

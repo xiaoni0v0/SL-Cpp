@@ -44,8 +44,10 @@
 
 ## 测试
 
-`test/parser/**`、`test/lexer/**` 下的测试文件按 SL.md 章节号组织成目录（`2_1_4_literals`、
-`2_2_5_control_flow` 等），每个目录一个或几个 `*_test.cpp`，用 doctest 的 `TEST_SUITE`/`TEST_CASE`。
+`test/parser/**`、`test/lexer/**` 下的测试文件按主题分组成目录，目录名用自己那套独立编号
+（`01_literals`、`08_control_flow` 等，**不跟 SL.md 章节号绑定**，见
+[no-section-numbers.md](no-section-numbers.md)），每个目录一个或几个 `*_test.cpp`，用 doctest 的
+`TEST_SUITE`/`TEST_CASE`。
 新增测试文件要记得同步加进 `CMakeLists.txt` 里对应的 `add_executable(SL_Cpp_Parser_Tests ...)` /
 `SL_Cpp_Lexer_Tests` 列表（这两个列表是手写的文件清单，不是 glob，漏加不会报错、只会静默不编译）。
 

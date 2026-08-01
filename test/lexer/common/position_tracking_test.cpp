@@ -1,4 +1,4 @@
-// 跨章节：token 的行/列追踪是否正确（报错定位靠这个，2.1 各节都间接依赖它）
+// 跨分组：token 的行/列追踪是否正确（报错定位靠这个，词法各分组都间接依赖它）
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

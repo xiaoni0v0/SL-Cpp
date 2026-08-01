@@ -1,4 +1,4 @@
-// StaticEvaler/ExprFolder：比较运算（含链式），SL.md 3.4.2、3.3。is 不参与折叠（对象同一性没法
+// StaticEvaler/ExprFolder：比较运算（含链式）。is 不参与折叠（对象同一性没法
 // 在编译期安全预判，见 StaticEvaler.h 类注释），dict 的一切运算同理不折。
 #include "../test_utils.h"
 

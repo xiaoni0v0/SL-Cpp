@@ -230,25 +230,25 @@ add_executable(SL_Cpp_Lexer_Tests
         test/lexer/main_test.cpp
 
         # 测试代码
-        # 2.1.1 注释
-        test/lexer/2_1_1_comments/comments_test.cpp
-        # 2.1.2 关键字与保留字
-        test/lexer/2_1_2_keywords_reserved/keywords_test.cpp
-        test/lexer/2_1_2_keywords_reserved/reserved_words_test.cpp
-        # 2.1.3 标识符
-        test/lexer/2_1_3_identifiers/identifiers_test.cpp
-        # 2.1.4 字面量
-        test/lexer/2_1_4_literals/none_bool_g_l_ellipsis_test.cpp
-        test/lexer/2_1_4_literals/int_test.cpp
-        test/lexer/2_1_4_literals/float_test.cpp
-        test/lexer/2_1_4_literals/string_test.cpp
-        test/lexer/2_1_4_literals/raw_string_test.cpp
-        # 2.1.5 运算符与符号
-        test/lexer/2_1_5_operators/symbols_test.cpp
-        test/lexer/2_1_5_operators/dot_disambiguation_test.cpp
-        # 2.1.6 空白字符
-        test/lexer/2_1_6_whitespace/whitespace_test.cpp
-        # 跨章节：位置追踪、报错
+        # 注释
+        test/lexer/01_comments/comments_test.cpp
+        # 关键字与保留字
+        test/lexer/02_keywords_reserved/keywords_test.cpp
+        test/lexer/02_keywords_reserved/reserved_words_test.cpp
+        # 标识符
+        test/lexer/03_identifiers/identifiers_test.cpp
+        # 字面量
+        test/lexer/04_literals/none_bool_g_l_ellipsis_test.cpp
+        test/lexer/04_literals/int_test.cpp
+        test/lexer/04_literals/float_test.cpp
+        test/lexer/04_literals/string_test.cpp
+        test/lexer/04_literals/raw_string_test.cpp
+        # 运算符与符号
+        test/lexer/05_operators/symbols_test.cpp
+        test/lexer/05_operators/dot_disambiguation_test.cpp
+        # 空白字符
+        test/lexer/06_whitespace/whitespace_test.cpp
+        # 跨分组：位置追踪、报错
         test/lexer/common/position_tracking_test.cpp
         test/lexer/common/error_handling_test.cpp
 )
@@ -293,36 +293,36 @@ add_executable(SL_Cpp_Parser_Tests
         test/parser/main_test.cpp
 
         # 测试代码
-        # 2.1.4 字面量
-        test/parser/2_1_4_literals/literals_test.cpp
-        # 2.1.5 运算符
-        test/parser/2_1_5_operators/precedence_test.cpp
-        test/parser/2_1_5_operators/compare_is_assign_test.cpp
-        # 2.2.1 表达式分隔符
-        test/parser/2_2_1_separators/separator_test.cpp
-        # 2.2.2 基本表达式（{} 判别规则）
-        test/parser/2_2_2_basic_exprs/compound_dict_test.cpp
-        # 2.2.3 del
-        test/parser/2_2_3_del/del_test.cpp
-        # 2.2.4 global
-        test/parser/2_2_4_global/global_test.cpp
-        # 2.2.5 import
-        test/parser/2_2_5_import/import_test.cpp
-        # 2.2.5 控制流
-        test/parser/2_2_5_control_flow/if_test.cpp
-        test/parser/2_2_5_control_flow/for_test.cpp
-        test/parser/2_2_5_control_flow/while_test.cpp
-        test/parser/2_2_5_control_flow/break_continue_test.cpp
-        test/parser/2_2_5_control_flow/return_test.cpp
-        test/parser/2_2_5_control_flow/try_test.cpp
-        test/parser/2_2_5_control_flow/raise_test.cpp
-        # 2.2.6 函数
-        test/parser/2_2_6_func/func_test.cpp
-        # 2.2.7 类
-        test/parser/2_2_7_class/class_test.cpp
-        # 2.2.8 装饰器
-        test/parser/2_2_8_decorator/decorator_test.cpp
-        # 跨章节：位置追踪、报错
+        # 字面量
+        test/parser/01_literals/literals_test.cpp
+        # 运算符
+        test/parser/02_operators/precedence_test.cpp
+        test/parser/02_operators/compare_is_assign_test.cpp
+        # 表达式分隔符
+        test/parser/03_separators/separator_test.cpp
+        # 基本表达式（{} 判别规则）
+        test/parser/04_basic_exprs/compound_dict_test.cpp
+        # del
+        test/parser/05_del/del_test.cpp
+        # global
+        test/parser/06_global/global_test.cpp
+        # import
+        test/parser/07_import/import_test.cpp
+        # 控制流
+        test/parser/08_control_flow/if_test.cpp
+        test/parser/08_control_flow/for_test.cpp
+        test/parser/08_control_flow/while_test.cpp
+        test/parser/08_control_flow/break_continue_test.cpp
+        test/parser/08_control_flow/return_test.cpp
+        test/parser/08_control_flow/try_test.cpp
+        test/parser/08_control_flow/raise_test.cpp
+        # 函数
+        test/parser/09_func/func_test.cpp
+        # 类
+        test/parser/10_class/class_test.cpp
+        # 装饰器
+        test/parser/11_decorator/decorator_test.cpp
+        # 跨分组：位置追踪、报错
         test/parser/common/position_tracking_test.cpp
         test/parser/common/error_handling_test.cpp
         test/parser/common/combination_test.cpp
