@@ -33,18 +33,23 @@ struct AstNodeIf : AstNode {
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
-// for [$] (init cond inc) body
-// while [$] (cond) body 等价于 init_/inc_ 均为空的这种形式，语法层直接复用本节点
+// 收集模式记号 $ / $ * / $$ / $$ **，两个 for 节点共用
+struct CollectMark {
+    enum class Container { None, List, Dict } container_; // 无 / $ 出 list / $$ 出 dict
+    bool spread_; // 是否带 * / **（把每轮的值摊开）；container_ 为 None 时无意义
+};
+
+// for [collect] (init cond inc) body
 struct AstNodeForCond : AstNode {
-    bool collect_;    // true 表示 for $ 收集模式
+    CollectMark collect_;
     AstNodePtr init_; // nullptr 表示空
     AstNodePtr cond_; // nullptr 无条件，解释器会视为 True
     AstNodePtr inc_;  // nullptr 表示空
     AstNodePtr body_;
 
     explicit AstNodeForCond(
-        const Position pos, const bool collect, AstNodePtr init, AstNodePtr cond, AstNodePtr inc,
-        AstNodePtr body
+        const Position pos, const CollectMark collect, AstNodePtr init, AstNodePtr cond,
+        AstNodePtr inc, AstNodePtr body
     )
         : AstNode{pos}, collect_{collect}, init_{std::move(init)}, cond_{std::move(cond)},
           inc_{std::move(inc)}, body_{std::move(body)} {}
@@ -53,16 +58,16 @@ struct AstNodeForCond : AstNode {
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
-// for [$] (target : iterable) body（迭代模式）
+// for [collect] (target : iterable) body（迭代模式）
 // target 必须是左值（标识符/属性访问/元素访问/解构元组或列表），由语义层校验（复用 check_lvalue）
 struct AstNodeForIter : AstNode {
-    bool collect_; // true 表示 for $ 收集模式
+    CollectMark collect_;
     AstNodePtr target_;
     AstNodePtr iterable_;
     AstNodePtr body_;
 
     explicit AstNodeForIter(
-        const Position pos, const bool collect, AstNodePtr target, AstNodePtr iterable,
+        const Position pos, const CollectMark collect, AstNodePtr target, AstNodePtr iterable,
         AstNodePtr body
     )
         : AstNode{pos}, collect_{collect}, target_{std::move(target)},

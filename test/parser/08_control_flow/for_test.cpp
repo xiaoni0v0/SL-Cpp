@@ -1,5 +1,6 @@
 ﻿// SL.md for 表达式：
-//   步进模式 for [$] (init cond inc) expr；迭代模式 for [$] (lvalue : iterable) expr。
+//   步进模式 for [收集模式记号] (init cond inc) expr；迭代模式 for [收集模式记号] (lvalue :
+//   iterable) expr。 记号本身（$ / $ * / $$ / $$ **）单独在 collect_mark_test.cpp 里覆盖。
 // 这里重点覆盖：
 //   1. "裸单表达式当条件" for (cond) body 不是 SL.md 授权的语法，必须报错；
 //   2. 中间 cond 槽禁止裸的普通赋值 =（init/inc 不受限）；
@@ -26,7 +27,7 @@ TEST_SUITE("for——步进模式") {
             parse_json(U"for (i = 0; i < 10; i += 1) body") ==
             nlohmann::json{
                 {"type", "ForCond"},
-                {"collect", false},
+                {"collect", "none"},
                 {"init", {{"type", "Assign"}, {"target", ident("i")}, {"value", int_lit("0")}}},
                 {"cond",
                  {{"type", "Compare"},
@@ -46,7 +47,7 @@ TEST_SUITE("for——步进模式") {
         CHECK(
             parse_json(U"for (;;) body") == nlohmann::json{
                                                 {"type", "ForCond"},
-                                                {"collect", false},
+                                                {"collect", "none"},
                                                 {"init", nullptr},
                                                 {"cond", nullptr},
                                                 {"inc", nullptr},
@@ -59,7 +60,7 @@ TEST_SUITE("for——步进模式") {
         CHECK(
             parse_json(U"for (; c ;) body") == nlohmann::json{
                                                    {"type", "ForCond"},
-                                                   {"collect", false},
+                                                   {"collect", "none"},
                                                    {"init", nullptr},
                                                    {"cond", ident("c")},
                                                    {"inc", nullptr},
@@ -73,7 +74,7 @@ TEST_SUITE("for——步进模式") {
             parse_json(U"for (i = 0;;) body") ==
             nlohmann::json{
                 {"type", "ForCond"},
-                {"collect", false},
+                {"collect", "none"},
                 {"init", {{"type", "Assign"}, {"target", ident("i")}, {"value", int_lit("0")}}},
                 {"cond", nullptr},
                 {"inc", nullptr},
@@ -86,7 +87,7 @@ TEST_SUITE("for——步进模式") {
         CHECK(
             parse_json(U"for (;; i += 1) body") == nlohmann::json{
                                                        {"type", "ForCond"},
-                                                       {"collect", false},
+                                                       {"collect", "none"},
                                                        {"init", nullptr},
                                                        {"cond", nullptr},
                                                        {"inc",
@@ -104,7 +105,7 @@ TEST_SUITE("for——步进模式") {
             parse_json(U"for (i = 0\ni < 10\ni += 1) body") ==
             nlohmann::json{
                 {"type", "ForCond"},
-                {"collect", false},
+                {"collect", "none"},
                 {"init", {{"type", "Assign"}, {"target", ident("i")}, {"value", int_lit("0")}}},
                 {"cond",
                  {{"type", "Compare"},
@@ -125,7 +126,7 @@ TEST_SUITE("for——步进模式") {
             parse_json(U"for $ (i = 0; i < 10; i += 1) body") ==
             nlohmann::json{
                 {"type", "ForCond"},
-                {"collect", true},
+                {"collect", "$"},
                 {"init", {{"type", "Assign"}, {"target", ident("i")}, {"value", int_lit("0")}}},
                 {"cond",
                  {{"type", "Compare"},
@@ -176,7 +177,7 @@ TEST_SUITE("for——步进模式") {
         CHECK(
             parse_json(U"for (a\nb\n;) body") == nlohmann::json{
                                                      {"type", "ForCond"},
-                                                     {"collect", false},
+                                                     {"collect", "none"},
                                                      {"init", ident("a")},
                                                      {"cond", ident("b")},
                                                      {"inc", nullptr},
@@ -190,7 +191,7 @@ TEST_SUITE("for——步进模式") {
             parse_json(U"for (\ni = 0; i < 10; i += 1) body") ==
             nlohmann::json{
                 {"type", "ForCond"},
-                {"collect", false},
+                {"collect", "none"},
                 {"init", {{"type", "Assign"}, {"target", ident("i")}, {"value", int_lit("0")}}},
                 {"cond",
                  {{"type", "Compare"},
@@ -210,7 +211,7 @@ TEST_SUITE("for——步进模式") {
         CHECK(
             parse_json(U"for (a\n\n\nb\n\n\nc) body") == nlohmann::json{
                                                              {"type", "ForCond"},
-                                                             {"collect", false},
+                                                             {"collect", "none"},
                                                              {"init", ident("a")},
                                                              {"cond", ident("b")},
                                                              {"inc", ident("c")},
@@ -239,7 +240,7 @@ TEST_SUITE("for——迭代模式") {
         CHECK(
             parse_json(U"for (x : xs) body") == nlohmann::json{
                                                     {"type", "ForIter"},
-                                                    {"collect", false},
+                                                    {"collect", "none"},
                                                     {"target", ident("x")},
                                                     {"iterable", ident("xs")},
                                                     {"body", ident("body")}
@@ -251,7 +252,7 @@ TEST_SUITE("for——迭代模式") {
         CHECK(
             parse_json(U"for $ (x : xs) body") == nlohmann::json{
                                                       {"type", "ForIter"},
-                                                      {"collect", true},
+                                                      {"collect", "$"},
                                                       {"target", ident("x")},
                                                       {"iterable", ident("xs")},
                                                       {"body", ident("body")}
@@ -264,7 +265,7 @@ TEST_SUITE("for——迭代模式") {
             parse_json(U"for ((a, b) : pairs) body") ==
             nlohmann::json{
                 {"type", "ForIter"},
-                {"collect", false},
+                {"collect", "none"},
                 {"target",
                  {{"type", "LiteralTuple"},
                   {"items", nlohmann::json::array({ident("a"), ident("b")})}}},
@@ -276,7 +277,7 @@ TEST_SUITE("for——迭代模式") {
             parse_json(U"for ([a, *b] : xs) body") ==
             nlohmann::json{
                 {"type", "ForIter"},
-                {"collect", false},
+                {"collect", "none"},
                 {"target",
                  {{"type", "LiteralList"},
                   {"items",
@@ -309,7 +310,7 @@ TEST_SUITE("for——cond 槽禁止裸的普通赋值（init/inc 不受限）") 
         CHECK(
             parse_json(U"for (; x += 1;) body") == nlohmann::json{
                                                        {"type", "ForCond"},
-                                                       {"collect", false},
+                                                       {"collect", "none"},
                                                        {"init", nullptr},
                                                        {"cond",
                                                         {{"type", "CompoundAssign"},
@@ -327,7 +328,7 @@ TEST_SUITE("for——cond 槽禁止裸的普通赋值（init/inc 不受限）") 
             parse_json(U"for (; (x = 1);) body") ==
             nlohmann::json{
                 {"type", "ForCond"},
-                {"collect", false},
+                {"collect", "none"},
                 {"init", nullptr},
                 {"cond", {{"type", "Assign"}, {"target", ident("x")}, {"value", int_lit("1")}}},
                 {"inc", nullptr},
@@ -348,7 +349,7 @@ TEST_SUITE("for——$ 与 for 之间不需要空白（SL.md）") {
             parse_json(U"for$(i = 0; i < 10; i += 1) body") ==
             nlohmann::json{
                 {"type", "ForCond"},
-                {"collect", true},
+                {"collect", "$"},
                 {"init", {{"type", "Assign"}, {"target", ident("i")}, {"value", int_lit("0")}}},
                 {"cond",
                  {{"type", "Compare"},
@@ -368,7 +369,7 @@ TEST_SUITE("for——$ 与 for 之间不需要空白（SL.md）") {
         CHECK(
             parse_json(U"for$(x : xs) body") == nlohmann::json{
                                                     {"type", "ForIter"},
-                                                    {"collect", true},
+                                                    {"collect", "$"},
                                                     {"target", ident("x")},
                                                     {"iterable", ident("xs")},
                                                     {"body", ident("body")}
@@ -383,7 +384,7 @@ TEST_SUITE("for——迭代模式 : 前允许换行") {
         CHECK(
             parse_json(U"for (x\n: xs) body") == nlohmann::json{
                                                      {"type", "ForIter"},
-                                                     {"collect", false},
+                                                     {"collect", "none"},
                                                      {"target", ident("x")},
                                                      {"iterable", ident("xs")},
                                                      {"body", ident("body")}
@@ -395,7 +396,7 @@ TEST_SUITE("for——迭代模式 : 前允许换行") {
         CHECK(
             parse_json(U"for (x\n\n\n: xs) body") == nlohmann::json{
                                                          {"type", "ForIter"},
-                                                         {"collect", false},
+                                                         {"collect", "none"},
                                                          {"target", ident("x")},
                                                          {"iterable", ident("xs")},
                                                          {"body", ident("body")}

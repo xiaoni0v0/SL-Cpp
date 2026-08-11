@@ -65,7 +65,7 @@ TEST_SUITE("跨分组组合——装饰器/类/函数/for/try/字典展开/is �
 
         const auto &for_node{func_body[1]};
         CHECK(for_node["type"] == "ForIter");
-        CHECK(for_node["collect"] == true);
+        CHECK(for_node["collect"] == "$");
         CHECK(for_node["target"] == ident("item"));
         CHECK(for_node["iterable"] == ident("items"));
 

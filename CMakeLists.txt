@@ -312,6 +312,7 @@ add_executable(SL_Cpp_Parser_Tests
         test/parser/08_control_flow/if_test.cpp
         test/parser/08_control_flow/for_test.cpp
         test/parser/08_control_flow/while_test.cpp
+        test/parser/08_control_flow/collect_mark_test.cpp
         test/parser/08_control_flow/break_continue_test.cpp
         test/parser/08_control_flow/return_test.cpp
         test/parser/08_control_flow/try_test.cpp

@@ -82,7 +82,7 @@ TEST_SUITE("StaticEvaler 死分支消除") {
         CHECK(
             fold_json(U"while (True) 1") == nlohmann::json{
                                                 {"type", "ForCond"},
-                                                {"collect", false},
+                                                {"collect", "none"},
                                                 {"init", nullptr},
                                                 {"cond", bool_lit(true)},
                                                 {"inc", nullptr},
@@ -95,7 +95,7 @@ TEST_SUITE("StaticEvaler 死分支消除") {
         CHECK(
             fold_json(U"while (x) 1") == nlohmann::json{
                                              {"type", "ForCond"},
-                                             {"collect", false},
+                                             {"collect", "none"},
                                              {"init", nullptr},
                                              {"cond", ident("x")},
                                              {"inc", nullptr},
@@ -105,7 +105,7 @@ TEST_SUITE("StaticEvaler 死分支消除") {
         CHECK(
             fold_json(U"for (;;) 1") == nlohmann::json{
                                             {"type", "ForCond"},
-                                            {"collect", false},
+                                            {"collect", "none"},
                                             {"init", nullptr},
                                             {"cond", nullptr},
                                             {"inc", nullptr},

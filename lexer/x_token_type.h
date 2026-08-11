@@ -60,11 +60,12 @@ X(SIGN_LBRACE)   // {
 X(SIGN_RBRACE)   // }
 
 // 符号：分隔符
-X(SIGN_COMMA)     // ,
-X(SIGN_SEMICOLON) // ;
-X(SIGN_COLON)     // :
-X(SIGN_AT)        // @
-X(SIGN_DOLLAR)    // $
+X(SIGN_COMMA)        // ,
+X(SIGN_SEMICOLON)    // ;
+X(SIGN_COLON)        // :
+X(SIGN_AT)           // @
+X(SIGN_DOLLAR)       // $
+X(SIGN_DOUBLEDOLLAR) // $$
 
 // 符号：算术运算符
 X(SIGN_PLUS)        // +

@@ -1,4 +1,4 @@
-// SL.md while 表达式：while [$] (cond) expr
+// SL.md while 表达式：while [收集模式记号] (cond) expr。记号本身单独在 collect_mark_test.cpp 里覆盖
 // 内部复用 AstNodeForCond（init_/inc_ 皆为 nullptr），不单独建节点类型，但对外观察到的 JSON 形状
 // 就是按 ForCond 来的，这里直接按 ForCond 的字段断言。
 #include "../../../builtins/exceptions/SyntaxError.h"
@@ -22,7 +22,7 @@ TEST_SUITE("while") {
         CHECK(
             parse_json(U"while (c) body") == nlohmann::json{
                                                  {"type", "ForCond"},
-                                                 {"collect", false},
+                                                 {"collect", "none"},
                                                  {"init", nullptr},
                                                  {"cond", ident("c")},
                                                  {"inc", nullptr},
@@ -35,7 +35,7 @@ TEST_SUITE("while") {
         CHECK(
             parse_json(U"while $ (c) body") == nlohmann::json{
                                                    {"type", "ForCond"},
-                                                   {"collect", true},
+                                                   {"collect", "$"},
                                                    {"init", nullptr},
                                                    {"cond", ident("c")},
                                                    {"inc", nullptr},
@@ -49,7 +49,7 @@ TEST_SUITE("while") {
             parse_json(U"while (x < 10) body") ==
             nlohmann::json{
                 {"type", "ForCond"},
-                {"collect", false},
+                {"collect", "none"},
                 {"init", nullptr},
                 {"cond",
                  {{"type", "Compare"},
@@ -76,7 +76,7 @@ TEST_SUITE("while——cond 禁止裸的普通赋值") {
         CHECK(
             parse_json(U"while (x += 1) body") == nlohmann::json{
                                                       {"type", "ForCond"},
-                                                      {"collect", false},
+                                                      {"collect", "none"},
                                                       {"init", nullptr},
                                                       {"cond",
                                                        {{"type", "CompoundAssign"},
@@ -94,7 +94,7 @@ TEST_SUITE("while——cond 禁止裸的普通赋值") {
             parse_json(U"while ((x = 1)) body") ==
             nlohmann::json{
                 {"type", "ForCond"},
-                {"collect", false},
+                {"collect", "none"},
                 {"init", nullptr},
                 {"cond", {{"type", "Assign"}, {"target", ident("x")}, {"value", int_lit("1")}}},
                 {"inc", nullptr},
@@ -110,7 +110,7 @@ TEST_SUITE("while——$ 与 while 之间不需要空白（SL.md）") {
         CHECK(
             parse_json(U"while$(c) body") == nlohmann::json{
                                                  {"type", "ForCond"},
-                                                 {"collect", true},
+                                                 {"collect", "$"},
                                                  {"init", nullptr},
                                                  {"cond", ident("c")},
                                                  {"inc", nullptr},
@@ -124,7 +124,7 @@ TEST_SUITE("while——$ 与 while 之间不需要空白（SL.md）") {
             parse_json(U"while$(x < 10) body") ==
             nlohmann::json{
                 {"type", "ForCond"},
-                {"collect", true},
+                {"collect", "$"},
                 {"init", nullptr},
                 {"cond",
                  {{"type", "Compare"},

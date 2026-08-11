@@ -20,7 +20,6 @@ TEST_SUITE("符号：严格单字符") {
         CHECK(lex_dump(U";") == "SIGN_SEMICOLON");
         CHECK(lex_dump(U":") == "SIGN_COLON");
         CHECK(lex_dump(U"@") == "SIGN_AT");
-        CHECK(lex_dump(U"$") == "SIGN_DOLLAR");
     }
 
     TEST_CASE("永远只有单字符形式的几个") {
@@ -51,6 +50,15 @@ TEST_SUITE("符号：贪婪最长匹配（多字符优先于短的）") {
         CHECK(lex_dump(U"*=") == "SIGN_STAR_ASSIGN");
         CHECK(lex_dump(U"**=") == "SIGN_DOUBLESTAR_ASSIGN");
         CHECK(lex_dump(U"***") == "SIGN_DOUBLESTAR SIGN_STAR");
+    }
+
+    TEST_CASE("$ 系列：$ / $$") {
+        CHECK(lex_dump(U"$") == "SIGN_DOLLAR");
+        CHECK(lex_dump(U"$$") == "SIGN_DOUBLEDOLLAR");
+        CHECK(lex_dump(U"$$$") == "SIGN_DOUBLEDOLLAR SIGN_DOLLAR");
+        CHECK(lex_dump(U"$$$$") == "SIGN_DOUBLEDOLLAR SIGN_DOUBLEDOLLAR");
+        // 中间隔开就是两个单字符的，$$ 必须连写
+        CHECK(lex_dump(U"$ $") == "SIGN_DOLLAR SIGN_DOLLAR");
     }
 
     TEST_CASE("/ 系列：/ / // / /= / //=") {

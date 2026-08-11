@@ -88,6 +88,9 @@ class Parser {
     // 解析 if / for 中间槽 / while 的条件表达式
     [[nodiscard]] AstNodePtr parse_expr_as_cond();
 
+    // 解析 for / while 紧跟在关键字之后的收集模式记号（可以没有）
+    [[nodiscard]] CollectMark parse_collect_mark();
+
     // 类
     [[nodiscard]] AstNodePtr parse_class(
         std::vector<AstNodePtr> decorators = {}, std::vector<Position> decorator_positions = {},

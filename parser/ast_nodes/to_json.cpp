@@ -16,6 +16,19 @@ json kwargs_to_json(const std::vector<OneKwArg> &kwargs, const bool include_pos)
     return result;
 }
 
+// 收集模式记号原样序列化成它在源码里的写法
+const char *collect_to_json(const CollectMark mark) {
+    switch (mark.container_) {
+    case CollectMark::Container::None:
+        return "none";
+    case CollectMark::Container::List:
+        return mark.spread_ ? "$*" : "$";
+    case CollectMark::Container::Dict:
+        return mark.spread_ ? "$$**" : "$$";
+    }
+    return "none";
+}
+
 json captures_to_json(const std::vector<OneCapture> &captures, const bool include_pos) {
     auto result = json::array();
     for (const auto &c : captures)
@@ -166,7 +179,7 @@ json AstNodeForCond::to_json_impl(const bool include_pos) const {
         return json{
             {"type", "ForCond"},
             {"pos", pos_to_json(pos_)},
-            {"collect", collect_},
+            {"collect", collect_to_json(collect_)},
             {"init", init_ ? init_->to_json(include_pos) : json(nullptr)},
             {"cond", cond_ ? cond_->to_json(include_pos) : json(nullptr)},
             {"inc", inc_ ? inc_->to_json(include_pos) : json(nullptr)},
@@ -174,7 +187,7 @@ json AstNodeForCond::to_json_impl(const bool include_pos) const {
         };
     return json{
         {"type", "ForCond"},
-        {"collect", collect_},
+        {"collect", collect_to_json(collect_)},
         {"init", init_ ? init_->to_json(include_pos) : json(nullptr)},
         {"cond", cond_ ? cond_->to_json(include_pos) : json(nullptr)},
         {"inc", inc_ ? inc_->to_json(include_pos) : json(nullptr)},
@@ -187,14 +200,14 @@ json AstNodeForIter::to_json_impl(const bool include_pos) const {
         return json{
             {"type", "ForIter"},
             {"pos", pos_to_json(pos_)},
-            {"collect", collect_},
+            {"collect", collect_to_json(collect_)},
             {"target", target_->to_json(include_pos)},
             {"iterable", iterable_->to_json(include_pos)},
             {"body", body_->to_json(include_pos)}
         };
     return json{
         {"type", "ForIter"},
-        {"collect", collect_},
+        {"collect", collect_to_json(collect_)},
         {"target", target_->to_json(include_pos)},
         {"iterable", iterable_->to_json(include_pos)},
         {"body", body_->to_json(include_pos)}

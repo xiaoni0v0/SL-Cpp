@@ -1316,3 +1316,21 @@ parser 用 `expect(IDENTIFIER)` 当场就能保证形状，不需要像 `del` �
 
 唯一真实代价是可读性（`for $$ (i : 0..10) (i, str(i))` 不如 `{i: str(i) for i in range(10)}` 自解释），
 但这笔账在选择用 `$` 代替推导式语法时就付过了；给字典再造一套不一样的机制更糟。
+
+实现（Lexer + Parser 已完成，Checker 不需要改）：
+
+- Lexer 加 `SIGN_DOUBLEDOLLAR`，`$` 从"严格单字符"那组挪进多字符组走贪婪最长匹配。
+- 节点上原来的 `bool collect_` 换成 `CollectMark collect_`（`Container{None,List,Dict}` + `bool spread_`），
+  声明在 `ast_node_control_flows.h` 顶部、两个 for 节点上方。没放进 `ast_node_misc.h`：那里的收录标准虽然
+  也对得上（非 AstNode、被多个节点类型共用），但两个使用者就在同一个头文件里，搬过去只会让 misc 往杂物间
+  滑。两个字段捆成一个结构体而不是节点上两个平行字段，是为了让 `parse_collect_mark()` 能按值返回整块。
+- Parser 加 `parse_collect_mark()`，for/while 共用；四种非法组合在这里就地报错。
+- `to_json` 里 `"collect"` 从 bool 改成字符串，直接写它在源码里的样子：`"none"`/`"$"`/`"$*"`/`"$$"`/`"$$**"`。
+  比拆成 `container`+`spread` 两个键改动小得多（31 处旧断言机械替换即可），读起来也更像源码。
+- `StaticEvaler::fold_for_cond` 补一条：`$$` 不折。它原本把 `for $ (init False inc) body` 折成空列表字面量，
+  但 `$$` 一轮没跑的值是空 dict，而空 dict 写不出字面量（`{}` 是空复合表达式、值为 `None`），折不出等价节点。
+  `$ *` 仍然照折，容器还是 list。
+- SemanticChecker 没有可加的检查：`$ *` 要可迭代、`$$` 要 2 元素、`$$ **` 要映射，全是运行期的事。
+
+已知的一个可表达但无意义的状态：`container_ == None && spread_ == true`。Parser 造不出来，消费方也一律先看
+`container_`，所以它是惰性的，没为它加防御检查。

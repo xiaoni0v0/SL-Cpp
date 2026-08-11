@@ -581,6 +581,43 @@ AstNodePtr Parser::parse_expr_as_cond() {
     return left;
 }
 
+CollectMark Parser::parse_collect_mark() {
+    // 第一位：$ 出 list、$$ 出 dict，都没有就是计数模式
+    CollectMark mark{CollectMark::Container::None, false};
+
+    if (check(TokenType::SIGN_DOLLAR)) {
+        expect(TokenType::SIGN_DOLLAR); // 消耗 '$'
+        mark.container_ = CollectMark::Container::List;
+    } else if (check(TokenType::SIGN_DOUBLEDOLLAR)) {
+        expect(TokenType::SIGN_DOUBLEDOLLAR); // 消耗 '$$'
+        mark.container_ = CollectMark::Container::Dict;
+    }
+    skip_newline();
+
+    // 第二位：摊开记号，必须与第一位的容器种类匹配（$ 配 *、$$ 配 **）
+    const TokenType wanted{
+        mark.container_ == CollectMark::Container::Dict ? TokenType::SIGN_DOUBLESTAR
+                                                        : TokenType::SIGN_STAR
+    };
+    if (check(TokenType::SIGN_STAR) || check(TokenType::SIGN_DOUBLESTAR)) {
+        if (mark.container_ == CollectMark::Container::None) {
+            error("'*'/'**' here must follow a collect mark ('$ *' or '$$ **')");
+        }
+        if (!check(wanted)) {
+            error(
+                mark.container_ == CollectMark::Container::List
+                    ? "'$' collects into a list, so it pairs with '*', not '**'"
+                    : "'$$' collects into a dict, so it pairs with '**', not '*'"
+            );
+        }
+        expect(wanted); // 消耗 '*' 或 '**'
+        mark.spread_ = true;
+        skip_newline();
+    }
+
+    return mark;
+}
+
 AstNodePtr Parser::parse_class(
     std::vector<AstNodePtr> decorators, std::vector<Position> decorator_positions,
     const Position deco_pos
@@ -684,9 +721,7 @@ AstNodePtr Parser::parse_for() {
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_FOR); // 消耗 'for'
     skip_newline();
-    const bool collect{check(TokenType::SIGN_DOLLAR)};
-    if (collect) expect(TokenType::SIGN_DOLLAR); // 消耗 '$'
-    skip_newline();
+    const CollectMark collect{parse_collect_mark()};
     expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
     skip_newline();
 
@@ -764,9 +799,7 @@ AstNodePtr Parser::parse_while() {
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_WHILE); // 消耗 'while'
     skip_newline();
-    const bool collect{check(TokenType::SIGN_DOLLAR)};
-    if (collect) expect(TokenType::SIGN_DOLLAR); // 消耗 '$'
-    skip_newline();
+    const CollectMark collect{parse_collect_mark()};
     expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
     AstNodePtr cond{parse_expr_as_cond()};
     expect(TokenType::SIGN_RPAREN), paren_depth_--; // 消耗 ')'

@@ -22,7 +22,7 @@ TEST_SUITE("break / continue") {
             parse_json(U"while (c) break") ==
             nlohmann::json{
                 {"type", "ForCond"},
-                {"collect", false},
+                {"collect", "none"},
                 {"init", nullptr},
                 {"cond", {{"type", "Identifier"}, {"identifier", "c"}}},
                 {"inc", nullptr},

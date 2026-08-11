@@ -270,8 +270,11 @@ AstNodePtr StaticEvaler::fold_for_cond(AstNodeForCond &node) {
     // 空->True、无法判断、True
     if (!node.cond_ || !is_literal_pure(*node.cond_) || truthy(*node.cond_)) return nullptr;
 
+    // $$ 一轮没跑的值是个空 dict，不折
+    if (node.collect_.container_ == CollectMark::Container::Dict) return nullptr;
+
     AstNodePtr result{
-        node.collect_
+        node.collect_.container_ == CollectMark::Container::List
             ? static_cast<AstNodePtr>(
                   std::make_unique<AstNodeLiteralList>(node.pos_, std::vector<AstNodePtr>{})
               )

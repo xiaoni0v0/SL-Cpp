@@ -164,6 +164,7 @@ Token Lexer::read_identifier_keyword_reservedword() {
     static const std::unordered_map<std::u32string, TokenType> KEYWORDS_MAPPING{
 #define X(a, b) {U"" #a, TokenType::b},
 #include "x_keyword.h"
+
 #undef X
     };
 
@@ -171,6 +172,7 @@ Token Lexer::read_identifier_keyword_reservedword() {
     static const std::unordered_map<std::u32string, TokenType> RESERVEDWORDS_MAPPING{
 #define X(a, b) {U"" #a, TokenType::b},
 #include "x_reservedword.h"
+
 #undef X
     };
 
@@ -216,8 +218,6 @@ Token Lexer::read_symbol() {
         return {TokenType::SIGN_COLON, start_row, start_col, U":"};
     case U'@':
         return {TokenType::SIGN_AT, start_row, start_col, U"@"};
-    case U'$':
-        return {TokenType::SIGN_DOLLAR, start_row, start_col, U"$"};
     case U'~':
         return {TokenType::SIGN_TILDE, start_row, start_col, U"~"};
     case U'?':
@@ -340,6 +340,13 @@ Token Lexer::read_symbol() {
         }
         return {TokenType::SIGN_EXCLAIM, start_row, start_col, U"!"};
 
+    case U'$':
+        if (peek() == U'$') {
+            advance();
+            return {TokenType::SIGN_DOUBLEDOLLAR, start_row, start_col, U"$$"};
+        }
+        return {TokenType::SIGN_DOLLAR, start_row, start_col, U"$"};
+
     case U'.': {
         // 贪婪匹配：尽可能多吃连续的点，最多 3 个
         // 别忘了此时已经消耗了第一个点
@@ -424,6 +431,7 @@ std::string Lexer::get_typename_by_tokentype(const TokenType type) {
     static constexpr const char *const TOKEN_TYPE_MAPPING[]{
 #define X(name) #name,
 #include "x_token_type.h"
+
 #undef X
     };
 
@@ -494,6 +502,7 @@ std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
     case TokenType::SIGN_COLON:              return "':'";
     case TokenType::SIGN_AT:                 return "'@'";
     case TokenType::SIGN_DOLLAR:             return "'$'";
+    case TokenType::SIGN_DOUBLEDOLLAR:       return "'$$'";
 
     case TokenType::SIGN_PLUS:               return "'+'";
     case TokenType::SIGN_MINUS:              return "'-'";
