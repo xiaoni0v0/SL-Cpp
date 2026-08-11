@@ -837,7 +837,7 @@ deco( func () {} )
 若确实需要对着某个类型（包括类自身尚未定义完毕、无法写成普通注解的自引用场景）做运行时类型检查，
 直接在函数体内手动 `isinstance` 检查即可。
 
-类型注解是 `TypeVar`（表达多个形参/返回值位置的类型必须彼此一致）时，调用时的一致性检查规则见 4.2.24。
+类型注解是 `TypeVar`（表达多个形参/返回值位置的类型必须彼此一致）时，调用时的一致性检查规则见 4.2.25。
 
 以上涉及函数定义时检查的地方，都在整个函数表达式的捕获、全部形参的注解与默认值、返回类型全部求值完毕之后统一进行。
 
@@ -984,7 +984,7 @@ f(*args, x=1, **extra) # 调用时展开
 
 SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Function Group）对象实现运行时 dispatch，而非通过同名函数定义。
 
-详见 4.2.22 所述。
+详见 4.2.23 所述。
 
 ### 3.8 运算符重载
 
@@ -1095,10 +1095,11 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 
 即：描述器表整体优先于属性表，同名时属性表里那一份永远读不到，是个死项。
 
-**属性表**不通过任何属性名暴露，唯一的取得方式是内置函数 `attrs(obj)`（见 4.1.8）。属性表本身是 `dict`，可读可写。
+两张表都不通过任何属性名暴露，唯一的取得方式是内置函数 `attrs`（见 4.1.8）。
 
-**描述器表**则既不通过属性名暴露，`attrs` 也取不到；上述规则读到的永远是 `get` 的结果而不是描述器对象本身
-（`property` 例外，它的 `get` 在经由类访问时故意返回自己，供内省，见 4.2.17）。
+因此绕开属性协议直接写属性表（如 `attrs(int)['__op_add__'] = ...`）改不动任何类的既有行为。
+上述规则本身读到的也永远是 `get` 的结果而不是描述器对象本身
+（`property` 例外，它的 `get` 在经由类访问时故意返回自己，供内省，见 4.2.18）。
 
 **注意**：对象对其他对象的引用不止属性表这一种。
 解释器内部还会维护一些不通过属性机制暴露的引用，SL 层均访问不到，纯属 C++ 实现细节。但它们是真实的引用，垃圾回收照样要遍历到。
@@ -1403,11 +1404,15 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 等价于 `getattr(obj, name)` 不抛 `AttributeError` 则 `True`，否则 `False`。
 
-#### 4.1.8 `attrs(obj)`
+#### 4.1.8 `attrs(obj, table: str = 'attributes')`
 
-返回 `obj` 的自身属性表（见 3.9.1.2），为实时视图，可读可改内容。
+返回 `obj` 的自身某张表（见 3.9.1.2）。`table` 只接受两个值，其余抛出 `ValueError`：
 
-`obj` 是类时，返回的同样只是它的属性表，不含描述器表——即拿不到方法、`property`、`classmethod`。
+- `'attributes'`：返回属性表，类型为 `dict`，是实时视图，可读可改内容；
+- `'descriptors'`：返回描述器表，类型为 `frozendict`，只可读。
+  只有类有这张表，`obj` 不是类时返回空 `frozendict`。
+
+即：类的方法、`property`、`classmethod` 都不在 `attrs(cls)` 里，要取得须显式写 `attrs(cls, 'descriptors')`。
 
 #### 4.1.9 `finalclass(cls)`
 
@@ -1460,7 +1465,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.1.15 `exit(code=0)`
 
-抛出 `SystemExit(code)`（见 4.2.23）。一路传播到解释器顶层无人捕获时，解释器终止，退出码为 `code`。
+抛出 `SystemExit(code)`（见 4.2.24）。一路传播到解释器顶层无人捕获时，解释器终止，退出码为 `code`。
 
 要求 `code` 为 int 或 `None`，其中 `None` 被视为 0。
 
@@ -1545,11 +1550,19 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 除不保证遍历顺序外，与 `dict` 接口一致。满足映射协议。
 
-#### 4.2.13 set
+#### 4.2.13 frozendict
+
+不可变的 `dict`，建立后不能增删改其中的项，其余接口与 `dict` 一致，遍历按插入序。
+满足映射协议。若其中每个键值对均可哈希则是 `Hashable`（见 4.3.2），此时可作 `dict` 的键、`set` 的元素。
+
+`frozendict(m)` 由一个映射对象建立；`frozendict()` 建立空的冻结字典。
+注意不可变的只是这张表本身，其中的值若是可变对象，该对象照样能被改。
+
+#### 4.2.14 set
 
 容器类，可变，可迭代。
 
-#### 4.2.14 range
+#### 4.2.15 range
 
 可迭代。
 
@@ -1557,7 +1570,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 2. `range(start, stop)`
 3. `range(start, stop, step)`
 
-#### 4.2.15 SingletonType
+#### 4.2.16 SingletonType
 
 包含了 SL 中的部分“单例”：
 
@@ -1565,7 +1578,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 - NotImplemented
 - StopIteration
 
-#### 4.2.16 CompoundType
+#### 4.2.17 CompoundType
 
 用 `|`, `!`, `?`, `[]` 可以创建**复合类**。
 
@@ -1595,28 +1608,28 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 以上检查均有短路性，但请不要依赖于此，因为检查的顺序不确定，
 例如 `int | str?` 的实际实现*可能*为 `None | int | str` 而非 `int | str | None`。
 
-#### 4.2.17 property
+#### 4.2.18 property
 
 `property(func_get, func_set=None, func_del=None)`，`Descriptor` 的子类。
 `func_set`、`func_del` 为 `None` 时对应操作按 `Descriptor` 默认行为抛 `AttributeError`。
 `get(self, obj)`：若 `isinstance(obj, type)` 返回 `self`（供内省），否则返回 `func_get(obj)`。
 
-#### 4.2.18 staticmethod
+#### 4.2.19 staticmethod
 
 `staticmethod(func)`，`self.func = func`。纯标签，不是描述器，仅在类体收集属性时取出 `v.func` 使用，
 本身不会成为类属性。
 
-#### 4.2.19 classmethod
+#### 4.2.20 classmethod
 
 `classmethod(func)`，`Descriptor` 的子类。
 `get(self, obj)`：令 `cls = obj if isinstance(obj, type) else type(obj)`，
 返回把 `cls` 绑定为第一参数的可调用对象。
 
-#### 4.2.20 Function
+#### 4.2.21 Function
 
 `func` 表达式建立的对象的类。实现 `__op_call__`。
 
-#### 4.2.21 super
+#### 4.2.22 super
 
 `super(cls, obj)`。
 
@@ -1627,7 +1640,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 在属性表中找到则原样返回；
 全部找不到则 `AttributeError`。
 
-#### 4.2.22 FuncGroup(*functions, name=None)
+#### 4.2.23 FuncGroup(*functions, name=None)
 
 一个例子足以说明 FuncGroup 的用法：
 
@@ -1645,7 +1658,7 @@ f(1, 2) # 输出 4
 f(1.0)  # 抛出 DispatchError
 ```
 
-#### 4.2.23 异常类
+#### 4.2.24 异常类
 
 只列全局的一批常用异常，其余更细分的见 4.3.3 `exceptions` 模块。
 
@@ -1667,7 +1680,7 @@ BaseException
     └── ImportError    - 模块导入失败（找不到模块/包，或名字有歧义）
 ```
 
-#### 4.2.24 TypeVar
+#### 4.2.25 TypeVar
 
 `TypeVar(bound=None)`。用作类型注解，见 3.4.7。
 
@@ -1717,7 +1730,8 @@ BaseException
 默认按对象身份（同 `is`）计算；可重载 `__hash__(self)` 与 `__op_eq__` 改为按值比较，两者需保持一致
 （相等的对象哈希值必须相等）。
 
-`list`、`dict`、`set`、`unordered_dict` 不是 `Hashable`。
+`list`、`dict`、`set`、`unordered_dict` 不是 `Hashable`；`tuple` 是；
+`frozendict` 在每个键值对均可哈希时可哈希。
 
 ##### 4.3.2.4 Iterable
 
@@ -1737,7 +1751,7 @@ BaseException
 2. `isinstance(obj, Indexable)`；
 3. `type(obj)` 的 MRO 上有 `__items__`（未被标记 `__is_unsupported__`）。
 
-`dict`、`unordered_dict` 满足。
+`dict`、`unordered_dict`、`frozendict` 满足。
 
 #### 4.3.3 `exceptions`
 
@@ -1763,8 +1777,9 @@ $$
 \text{FuncGroup} \\
 \text{CompoundType} \\
 \text{Descriptor}\left\{\begin{array}{l}\text{property} \\ \text{classmethod} \end{array}\right. \\
-\text{str} \\ \text{tuple} \\ \text{list} \\ \text{set} \\ \text{range} \\
-\text{dict} \\ \text{unordered_dict} \\
+\text{str} \\ \text{tuple} \\ \text{list} \\ \text{range} \\
+\text{dict} \\ \text{unordered_dict} \\ \text{frozendict} \\
+\text{set} \\ \text{frozenset} \\
 \text{numbers.Number}\left\{\begin{array}{l}
 \text{complex} \\
 \text{numbers.Real}\left\{\begin{array}{l}\text{float} \\ \text{int}\left\{\text{bool}\right.\end{array}\right.
@@ -1774,6 +1789,7 @@ $$
 \text{Exception}\left\{\begin{array}{l}
 \text{SyntaxError} \\ \text{TypeError} \\ \text{ValueError} \\ \text{NameError} \\ \text{AttributeError} \\
 \text{IndexError} \\ \text{MathError} \\ \text{DispatchError} \\ \text{RecursionError} \\
+\text{ImportError} \\
 \text{IOError} \to \text{exceptions.EncodingError}
 \end{array}\right.
 \end{array}\right.
@@ -1785,7 +1801,7 @@ $$
 ### 5.1 较近目标
 
 assert、字面量改进（包括整数允许_分割，整数允许2、8、16进制字面量，浮点数允许科学计数法，字符串允许更多的转义，复数字面量）、
-二元运算符 in、更细分的异常、raw_int、`$$`、`$*`、`$$*`。
+二元运算符 in、更细分的异常、raw_int。
 
 ### 5.2 较远目标
 

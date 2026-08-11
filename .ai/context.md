@@ -1263,3 +1263,32 @@ parser 用 `expect(IDENTIFIER)` 当场就能保证形状，不需要像 `del` �
 
 实例侧不分两张表：查找规则只查 `type(o)` 的 MRO，实例属性表里放个描述器对象就只是个普通值。这个不对称
 是有理由的、不是随意——实例属性表里没有任何解释器依赖的不变量，被旁路写也只会写出个被描述器遮蔽的死项。
+
+## 描述器表的开放方式：`attrs(obj, table=...)` + 新增内置类 `frozendict`
+
+不新开一个 `descriptors()` 内置函数——使用频率极低却要在内置名字里长期占一格。也不做成 `cls.__descriptors__`：
+任何类只要在类体里定义同名的东西就会遮蔽它（读规则第 1 条先查 `o` 自己的 MRO），跟 `__attrs__` 一个毛病。
+最终改成给 `attrs` 加一个参数，两张表由同一个入口给出——配对是精确的（都是"属性协议够不着的原始存储"），
+而且文档上必然挨着，否则描述器表极容易被整个忘掉。
+
+参数用字符串枚举 `table='attributes'|'descriptors'`（非法值 `ValueError`），不用布尔标志：调用点
+`attrs(int, 'descriptors')` 自解释，且以后真有第三张表也不用叠第二个布尔。参数名取 `table` 而不是 `type_`，
+跟正文术语"属性表/描述器表"对齐，也避开 `type` 这个已经很忙的名字。
+
+**`attrs` 保持自由函数，不做成 `obj.__attrs__()`，也不给它配 `__attrs__` 钩子**：`attrs` 的全部价值在于它是
+唯一一扇不经过属性协议的窗，做成方法就等于放回它本该绕开的机制里（`__getattr__` 能拦、子类能重载撒谎、
+代理能替换）。`__bool__`/`__hash__` 做成方法是对的，因为它们**就是**协议钩子、天生该让对象自己定义；`attrs`
+恰好相反，必须不可重载。Python 的 `vars()` 虽是自由函数，底层却读 `__dict__` 这个属性，正是后者给了
+`attrs(int)` 这类问题入口，不该重复。
+
+描述器表返回 `frozendict`——顺势补上这个一直漏掉的内置类（可哈希，能当 dict 键/set 元素）。但要注意
+**frozendict 只冻表、不冻值**：拿到 `MethodDescriptor` 之后 `attrs(它)['func'] = evil` 照样能改 `int` 的行为。
+故补一条：内置描述器（`MethodDescriptor`/`property`/`classmethod`）持有的函数不放进自己的属性表，走解释器
+内部引用（属性协议那节末尾"对象的引用不止属性表这一种"早就给这种做法留好了位置）。`staticmethod` 不在此列，
+它不是描述器，`v.func` 是货真价实的属性。
+
+顺带补了两处一直缺的：继承图里 `Descriptor` 下漏了 `MethodDescriptor`、`Exception` 下漏了 `ImportError`。
+
+遗留：`MethodDescriptor.get` 在 `obj` 是类时（`C.method`）按现定义返回"把类 `C` 绑成第一参数"的可调用对象，
+明显不对，应当像 `property`/`classmethod` 那样判 `isinstance(obj, type)` 并返回底层 `func`。已确认是既有 bug，
+但不再卡开放方案（本体现在可以安全地整张交出去），单独修。
