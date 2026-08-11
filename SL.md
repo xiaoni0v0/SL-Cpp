@@ -875,13 +875,15 @@ deco( func () {} )
    其值被丢弃，不影响下一步；
 5. 类体执行完毕（或被 `return` 提前中止）后弹出该帧，其局部字典中收集到的每个变量 `v`
    （不管是正常执行到末尾收集到的，还是被 `return` 提前中止前已经收集到的），按下列规则存为类的**属性**：
-    1. 若 `isinstance(v, property)`，直接存入（属性行为由 `property` 自己的 `get`、`set`、`delete` 负责）；
-    2. 否则若 `isinstance(v, staticmethod)`，将 `v.func` 存入（纯标签，不是描述器，不参与绑定）；
-    3. 否则若 `isinstance(v, classmethod)`，直接存入（绑定 `cls` 由 `classmethod` 自己的 `get` 负责）；
-    4. 否则若 `isinstance(v, protocols.Callable)`，将 `MethodDescriptor(v)` 存入；
+    1. 若 `isinstance(v, property)`，直接存入**描述器表**（属性行为由 `property` 自己的 `get`、`set`、`delete` 负责）；
+    2. 否则若 `isinstance(v, staticmethod)`，将 `v.func` 存入**属性表**（纯标签，不是描述器，不参与绑定）；
+    3. 否则若 `isinstance(v, classmethod)`，直接存入**描述器表**（绑定 `cls` 由 `classmethod` 自己的 `get` 负责）；
+    4. 否则若 `isinstance(v, protocols.Callable)`，将 `MethodDescriptor(v)` 存入**描述器表**；
        `MethodDescriptor` 是 `Descriptor` 的子类；
        get 时返回一个把 `obj` 绑定为第一参数的可调用对象；
-    5. 否则原样存入。
+    5. 否则原样存入**属性表**。
+
+   这一步是描述器表唯一的建立时机，此后该表不再变化（见 3.9.1.1）。
 
 属性的读、写、删规则见 3.9.1 所述；`property`、`staticmethod`、`classmethod` 见 4.2。
 
@@ -890,7 +892,7 @@ MRO 的计算：
 若继承关系本身矛盾无法线性化，则抛出 `TypeError`。
 
 `__abstractmethods__` 的计算：
-候选集合为各基类 `__abstractmethods__` 的并集，加上本次新收集的属性中 `__is_abstract_method__` 为 `True` 的名字；
+候选集合为各基类 `__abstractmethods__` 的并集，加上本次新收集的属性（两张表都算）中 `__is_abstract_method__` 为 `True` 的名字；
 对候选集合中每个名字，按新类自己的 MRO 重新查一次，
 查到的结果仍是 `__is_abstract_method__` 则保留，否则（被具体实现覆盖）从集合中去掉；
 剩下的即为该类的 `__abstractmethods__`。
@@ -1060,31 +1062,43 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 `Descriptor` 把 `get` 标记为 `@abstractmethod`；
 `set`、`delete` 则有默认实现，调用即无条件抛出 `AttributeError`，需要可写、可删就重写它们。
 
+描述器不存在类的属性表里，而是单独存在该类的**描述器表**中，这张表在类建立时一次性确定（见 3.4.8），此后不再变化：
+类建立完成之后再往类上赋一个描述器（如 `C.p = property(...)`），只是写进属性表、成为一个普通类属性，不参与本节的任何规则。
+
+只有类有描述器表。实例只有属性表，实例属性表里存着的描述器同样只是普通的值。
+
 ##### 3.9.1.2 对属性的操作
+
+下文说"某个 MRO 上有 `attr`"而不指明是哪张表时，指沿 MRO 从前往后、两张表中任意一张先找到者。
 
 读 `o.attr`：
 
-1. 若 `o` 本身是一个类，且它自己的 MRO 上有 `attr` 且是描述器，则返回 `该属性.get(o)`；
-2. 否则若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则返回 `该属性.get(o)`；
+1. 若 `o` 本身是一个类，且它自己的 MRO 上某个类的描述器表中有 `attr`，则返回 `该描述器.get(o)`；
+2. 否则若 `type(o)` 的 MRO 上某个类的描述器表中有 `attr`，则返回 `该描述器.get(o)`；
 3. 否则若 `o` 自身属性表中有 `attr`，则返回它；
-4. 否则若 `type(o)` 的 MRO 上有 `attr`（非描述器），则返回它；
+4. 否则若 `type(o)` 的 MRO 上某个类的属性表中有 `attr`，则返回它；
 5. 否则若 `type(o)` 的 MRO 上有 `__getattr__`，则返回 `__getattr__(o, attr)`；
 6. 否则 `AttributeError`。
 
 写 `o.attr = v`：
 
-1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则调用 `该属性.set(o, v)`；
+1. 若 `type(o)` 的 MRO 上某个类的描述器表中有 `attr`，则调用 `该描述器.set(o, v)`；
 2. 否则若 `type(o)` 的 MRO 上有 `__setattr__`，则调用 `__setattr__(o, attr, v)`；
 3. 否则写入 `o` 自身属性表（无则新建）。
 
 删 `del o.attr`：
 
-1. 若 `type(o)` 的 MRO 上有 `attr` 且是描述器，则调用 `该属性.delete(o)`；
+1. 若 `type(o)` 的 MRO 上某个类的描述器表中有 `attr`，则调用 `该描述器.delete(o)`；
 2. 否则若 `type(o)` 的 MRO 上有 `__delattr__`，则调用 `__delattr__(o, attr)`；
 3. 否则若 `o` 自身属性表中有 `attr`，则从中删除；
 4. 否则 `AttributeError`。
 
-**属性表**不通过任何属性名暴露，唯一的取得方式是内置函数 `attrs(obj)`（见 4.1.8）。属性表本身是 `dict`。
+即：描述器表整体优先于属性表，同名时属性表里那一份永远读不到，是个死项。
+
+**属性表**不通过任何属性名暴露，唯一的取得方式是内置函数 `attrs(obj)`（见 4.1.8）。属性表本身是 `dict`，可读可写。
+
+**描述器表**则既不通过属性名暴露，`attrs` 也取不到；上述规则读到的永远是 `get` 的结果而不是描述器对象本身
+（`property` 例外，它的 `get` 在经由类访问时故意返回自己，供内省，见 4.2.17）。
 
 **注意**：对象对其他对象的引用不止属性表这一种。
 解释器内部还会维护一些不通过属性机制暴露的引用，SL 层均访问不到，纯属 C++ 实现细节。但它们是真实的引用，垃圾回收照样要遍历到。
@@ -1393,6 +1407,8 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 返回 `obj` 的自身属性表（见 3.9.1.2），为实时视图，可读可改内容。
 
+`obj` 是类时，返回的同样只是它的属性表，不含描述器表——即拿不到方法、`property`、`classmethod`。
+
 #### 4.1.9 `finalclass(cls)`
 
 要求 `cls` 为类，否则抛出 `TypeError`；
@@ -1607,8 +1623,8 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 `super_obj.__getattr__(self, attr)`：
 
 在 `type(obj)` 的 MRO 中找到 `cls` 的位置，从下一个类开始查找 `attr`。
-找到且是描述器则 `get(obj)`；
-否则原样返回；
+在描述器表中找到则 `get(obj)`；
+在属性表中找到则原样返回；
 全部找不到则 `AttributeError`。
 
 #### 4.2.22 FuncGroup(*functions, name=None)
