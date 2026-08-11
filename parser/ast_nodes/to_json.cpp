@@ -22,9 +22,9 @@ const char *collect_to_json(const CollectMark mark) {
     case CollectMark::Container::None:
         return "none";
     case CollectMark::Container::List:
-        return mark.spread_ ? "$*" : "$";
+        return mark.expand_ ? "$ *" : "$";
     case CollectMark::Container::Dict:
-        return mark.spread_ ? "$$**" : "$$";
+        return mark.expand_ ? "$$ **" : "$$";
     }
     return "none";
 }

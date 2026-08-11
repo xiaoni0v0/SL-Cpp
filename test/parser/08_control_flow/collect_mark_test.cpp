@@ -28,9 +28,9 @@ TEST_SUITE("收集模式记号——四种合法写法") {
     TEST_CASE("迭代模式上的四种记号") {
         CHECK(parse_json(U"for (i : xs) body") == for_iter("none"));
         CHECK(parse_json(U"for $ (i : xs) body") == for_iter("$"));
-        CHECK(parse_json(U"for $ * (i : xs) body") == for_iter("$*"));
+        CHECK(parse_json(U"for $ * (i : xs) body") == for_iter("$ *"));
         CHECK(parse_json(U"for $$ (i : xs) body") == for_iter("$$"));
-        CHECK(parse_json(U"for $$ ** (i : xs) body") == for_iter("$$**"));
+        CHECK(parse_json(U"for $$ ** (i : xs) body") == for_iter("$$ **"));
     }
 
     TEST_CASE("步进模式上的四种记号") {
@@ -39,9 +39,9 @@ TEST_SUITE("收集模式记号——四种合法写法") {
         }};
         CHECK(collect_of(U"for (;;) body") == "none");
         CHECK(collect_of(U"for $ (;;) body") == "$");
-        CHECK(collect_of(U"for $ * (;;) body") == "$*");
+        CHECK(collect_of(U"for $ * (;;) body") == "$ *");
         CHECK(collect_of(U"for $$ (;;) body") == "$$");
-        CHECK(collect_of(U"for $$ ** (;;) body") == "$$**");
+        CHECK(collect_of(U"for $$ ** (;;) body") == "$$ **");
     }
 
     TEST_CASE("while 上的四种记号——出的仍是 ForCond") {
@@ -53,15 +53,15 @@ TEST_SUITE("收集模式记号——四种合法写法") {
         }};
         CHECK(collect_of(U"while (c) body") == "none");
         CHECK(collect_of(U"while $ (c) body") == "$");
-        CHECK(collect_of(U"while $ * (c) body") == "$*");
+        CHECK(collect_of(U"while $ * (c) body") == "$ *");
         CHECK(collect_of(U"while $$ (c) body") == "$$");
-        CHECK(collect_of(U"while $$ ** (c) body") == "$$**");
+        CHECK(collect_of(U"while $$ ** (c) body") == "$$ **");
     }
 
     TEST_CASE("两位之间、记号与括号之间都可以有空白或换行") {
-        CHECK(parse_json(U"for$*(i : xs) body") == for_iter("$*"));
-        CHECK(parse_json(U"for\n$\n*\n(i : xs) body") == for_iter("$*"));
-        CHECK(parse_json(U"for $$\n**\n(i : xs) body") == for_iter("$$**"));
+        CHECK(parse_json(U"for$*(i : xs) body") == for_iter("$ *"));
+        CHECK(parse_json(U"for\n$\n*\n(i : xs) body") == for_iter("$ *"));
+        CHECK(parse_json(U"for $$\n**\n(i : xs) body") == for_iter("$$ **"));
     }
 }
 

@@ -54,11 +54,38 @@ TEST_SUITE("StaticEvaler 死分支消除") {
     }
 
     TEST_CASE("while(False) 一次都不会跑，值退化成 SL.md 的默认值：不收集是 0，收集是 []") {
+        const auto empty_list =
+            nlohmann::json{{"type", "LiteralList"}, {"items", nlohmann::json::array()}};
+
         CHECK(fold_json(U"while (False) 1") == int_lit("0"));
+        CHECK(fold_json(U"while $ (False) 1") == empty_list);
+        // 展开与否不影响结果容器，$ * 一样折成空列表
+        CHECK(fold_json(U"while $ * (False) 1") == empty_list);
+    }
+
+    TEST_CASE("$$ 一次都不会跑也不折——空 dict 写不出字面量，折不出等价的节点") {
         CHECK(
-            fold_json(U"while $ (False) 1") ==
-            nlohmann::json{{"type", "LiteralList"}, {"items", nlohmann::json::array()}}
+            fold_json(U"while $$ (False) 1") == nlohmann::json{
+                                                    {"type", "ForCond"},
+                                                    {"collect", "$$"},
+                                                    {"init", nullptr},
+                                                    {"cond", bool_lit(false)},
+                                                    {"inc", nullptr},
+                                                    {"body", int_lit("1")}
+                                                }
         );
+        CHECK(
+            fold_json(U"while $$ ** (False) 1") == nlohmann::json{
+                                                       {"type", "ForCond"},
+                                                       {"collect", "$$ **"},
+                                                       {"init", nullptr},
+                                                       {"cond", bool_lit(false)},
+                                                       {"inc", nullptr},
+                                                       {"body", int_lit("1")}
+                                                   }
+        );
+        // 不折整个节点，但 init 这种子表达式该折还是照折
+        CHECK(fold_json(U"for $$ (x = 1 + 1; False;) 1")["init"]["value"] == int_lit("2"));
     }
 
     TEST_CASE("for 的 cond 是 False：init 无论如何都会先无条件求值一次，副作用必须保留") {

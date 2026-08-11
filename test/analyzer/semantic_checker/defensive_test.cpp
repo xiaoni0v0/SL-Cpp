@@ -313,4 +313,46 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
         )};
         check_throws_internal_error_with(*program, "too few elements");
     }
+
+    TEST_CASE("AstNodeForCond：没有结果容器却带着展开标志") {
+        AstNodeProgramPtr program{wrap(
+            std::make_unique<AstNodeForCond>(
+                Position{0, 0},
+                CollectMark{CollectMark::Container::None, true},
+                nullptr,
+                nullptr,
+                nullptr,
+                int_lit()
+            )
+        )};
+        check_throws_internal_error_with(*program, "expand flag without a collect container");
+    }
+
+    TEST_CASE("AstNodeForIter：没有结果容器却带着展开标志") {
+        AstNodeProgramPtr program{wrap(
+            std::make_unique<AstNodeForIter>(
+                Position{0, 0},
+                CollectMark{CollectMark::Container::None, true},
+                std::make_unique<AstNodeIdentifier>(Position{0, 0}, U"i"),
+                std::make_unique<AstNodeIdentifier>(Position{0, 0}, U"xs"),
+                int_lit()
+            )
+        )};
+        check_throws_internal_error_with(*program, "expand flag without a collect container");
+    }
+
+    TEST_CASE("四种合法记号本身不该被这条断言误伤") {
+        const auto build{[](const CollectMark mark) {
+            return wrap(
+                std::make_unique<AstNodeForCond>(
+                    Position{0, 0}, mark, nullptr, nullptr, nullptr, int_lit()
+                )
+            );
+        }};
+        CHECK_NOTHROW(check_ast(*build({CollectMark::Container::None, false})));
+        CHECK_NOTHROW(check_ast(*build({CollectMark::Container::List, false})));
+        CHECK_NOTHROW(check_ast(*build({CollectMark::Container::List, true})));
+        CHECK_NOTHROW(check_ast(*build({CollectMark::Container::Dict, false})));
+        CHECK_NOTHROW(check_ast(*build({CollectMark::Container::Dict, true})));
+    }
 }

@@ -94,6 +94,9 @@ void SemanticChecker::check(const AstNodeIf &node) {
 void SemanticChecker::check(const AstNodeForCond &node) {
     const Position pos{node.pos_};
 
+    if (node.collect_.container_ == CollectMark::Container::None && node.collect_.expand_)
+        error_internal("expand flag without a collect container", pos);
+
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -109,6 +112,9 @@ void SemanticChecker::check(const AstNodeForCond &node) {
 
 void SemanticChecker::check(const AstNodeForIter &node) {
     const Position pos{node.pos_};
+
+    if (node.collect_.container_ == CollectMark::Container::None && node.collect_.expand_)
+        error_internal("expand flag without a collect container", pos);
 
     const Context saved{ctx_};
     ctx_.can_star = false;

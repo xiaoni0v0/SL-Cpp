@@ -36,7 +36,7 @@ struct AstNodeIf : AstNode {
 // 收集模式记号 $ / $ * / $$ / $$ **，两个 for 节点共用
 struct CollectMark {
     enum class Container { None, List, Dict } container_; // 无 / $ 出 list / $$ 出 dict
-    bool spread_; // 是否带 * / **（把每轮的值摊开）；container_ 为 None 时无意义
+    bool expand_; // 是否带 * / **（把每轮的值展开）；container_ 为 None 时必须为 false
 };
 
 // for [collect] (init cond inc) body

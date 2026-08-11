@@ -17,6 +17,15 @@ TEST_SUITE("SemanticChecker 作用域跟踪") {
         CHECK_NOTHROW(check_program(U"for $ (x : y) continue"));
     }
 
+    TEST_CASE("四种收集模式记号都不影响任何语义检查——每轮的值合不合规是运行期的事") {
+        for (const std::u32string mark : {U"", U"$", U"$ *", U"$$", U"$$ **"}) {
+            CHECK_NOTHROW(check_program(U"for " + mark + U" (i : xs) break"));
+            CHECK_NOTHROW(check_program(U"while " + mark + U" (True) continue"));
+            // 每轮的值是什么形状一律不管，$$ 也不要求写成二元组
+            CHECK_NOTHROW(check_program(U"for " + mark + U" (i : xs) i"));
+        }
+    }
+
     TEST_CASE("嵌套循环内的 break/continue 合法（内层循环就够）") {
         CHECK_NOTHROW(check_program(U"while (True) { while (True) { break } }"));
     }

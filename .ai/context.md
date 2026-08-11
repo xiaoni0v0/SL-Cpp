@@ -1296,8 +1296,8 @@ parser 用 `expect(IDENTIFIER)` 当场就能保证形状，不需要像 `del` �
 ## 收集模式扩展：`$ *`、`$$`、`$$ **`（补上字典推导式的空缺）
 
 用户提的设计，同意并写入。最好的说法不是"`$` 后面若有则必须是 `*`"这条规则，而是**两个记号各管一个轴**：
-第一个（`$`/`$$`）定结果容器（list/dict），第二个（`*`/`**`）定每轮的值怎么进容器（整体一项 / 摊开一批）。
-配对约束是推出来的——摊开方式必须跟容器种类匹配，正好复用展开语法里 `*` 对可迭代、`**` 对映射的既有分工。
+第一个（`$`/`$$`）定结果容器（list/dict），第二个（`*`/`**`）定每轮的值怎么进容器（整体一项 / 展开一批）。
+配对约束是推出来的——展开方式必须跟容器种类匹配，正好复用展开语法里 `*` 对可迭代、`**` 对映射的既有分工。
 `$`:`$$` 和 `*`:`**` 两组"加倍 = 从序列升到映射"也是同一个隐喻。
 
 **记号挂在 `for` 上而不是挂在被收集的表达式上**（即不写成 `for $ (i : xs) *e`）。后者看着更贴合展开语法的
@@ -1320,7 +1320,7 @@ parser 用 `expect(IDENTIFIER)` 当场就能保证形状，不需要像 `del` �
 实现（Lexer + Parser 已完成，Checker 不需要改）：
 
 - Lexer 加 `SIGN_DOUBLEDOLLAR`，`$` 从"严格单字符"那组挪进多字符组走贪婪最长匹配。
-- 节点上原来的 `bool collect_` 换成 `CollectMark collect_`（`Container{None,List,Dict}` + `bool spread_`），
+- 节点上原来的 `bool collect_` 换成 `CollectMark collect_`（`Container{None,List,Dict}` + `bool expand_`），
   声明在 `ast_node_control_flows.h` 顶部、两个 for 节点上方。没放进 `ast_node_misc.h`：那里的收录标准虽然
   也对得上（非 AstNode、被多个节点类型共用），但两个使用者就在同一个头文件里，搬过去只会让 misc 往杂物间
   滑。两个字段捆成一个结构体而不是节点上两个平行字段，是为了让 `parse_collect_mark()` 能按值返回整块。
@@ -1332,5 +1332,10 @@ parser 用 `expect(IDENTIFIER)` 当场就能保证形状，不需要像 `del` �
   `$ *` 仍然照折，容器还是 list。
 - SemanticChecker 没有可加的检查：`$ *` 要可迭代、`$$` 要 2 元素、`$$ **` 要映射，全是运行期的事。
 
-已知的一个可表达但无意义的状态：`container_ == None && spread_ == true`。Parser 造不出来，消费方也一律先看
-`container_`，所以它是惰性的，没为它加防御检查。
+字段叫 `expand_` 不叫 `spread_`：SL.md 管这个操作叫"展开"（展开语法那一节），`spread` 是 JS 的词，跟标准
+自己的术语对不上。顺带把标准里 `for` 那节一处"摊开"也统一成了"展开"。
+
+`container_ == None && expand_ == true` 这个组合 Parser 造不出来，但数据形状上可表达，所以 SemanticChecker
+加了 `require_valid_collect`（两个 for 节点开头各调一次），触发即 `InternalError`，消息
+`expand flag without a collect container`——跟"节点为 null""数组长度对不上"那批防御性断言同一档次。
+`defensive_test.cpp` 里手工搭树覆盖了两个节点，外加一条"四种合法记号不该被这条断言误伤"。

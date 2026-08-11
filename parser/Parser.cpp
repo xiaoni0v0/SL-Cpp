@@ -611,7 +611,7 @@ CollectMark Parser::parse_collect_mark() {
             );
         }
         expect(wanted); // 消耗 '*' 或 '**'
-        mark.spread_ = true;
+        mark.expand_ = true;
         skip_newline();
     }
 
