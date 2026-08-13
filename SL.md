@@ -1386,10 +1386,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 ## 4 内置对象
 
-本章列出的所有内置函数、内置类、内置模块，都通过一张固定、全局唯一的**内置表**以名字暴露给标识符
-解析规则（见 3.10.3）：内置表既不是任何帧的 `_L`，也不是任何帧的 `_G`，只在按标识符读取时、当前帧
-与它所属全局帧都没有该名字时，作为最后一级兜底；不参与 `global`/`del`/赋值等写操作，用户代码只能
-通过在 `_L`/`_G` 中新建同名项来 shadow 某个内置名字，无法修改或删除内置表本身的内容。
+本章 4.1/4.2 列出的所有内置函数、内置类，都通过一张固定、唯一的**内置表**以名字暴露给标识符解析规则（见 3.10.3）。
 
 ### 4.1 内置函数
 
@@ -1531,7 +1528,10 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 `bool(x)` 返回 `x` 的真值（见 3.2）。
 
-继承 int。
+继承 `numbers.Real`。
+
+`bool` 没有 `int` 特有的位运算等方法。但 `numbers.Real` 要求的四则运算、大小比较，`bool` 自己实现：
+参与运算前先把 `True`/`False` 按 `1`/`0` 折算成 `int`，再复用 `int` 的实现，结果类型是 `int`（不是 `bool`）。
 
 #### 4.2.6 float
 
@@ -1692,7 +1692,7 @@ f = FuncGroup(
 )
 f(1)    # 输出 1
 f('a')  # 输出 2
-f(True) # 输出 1
+f(True) # 输出 3
 f(1, 2) # 输出 4
 f(1.0)  # 抛出 DispatchError
 ```
@@ -1821,7 +1821,7 @@ $$
 \text{set} \\ \text{frozenset} \\
 \text{numbers.Number}\left\{\begin{array}{l}
 \text{complex} \\
-\text{numbers.Real}\left\{\begin{array}{l}\text{float} \\ \text{int}\left\{\text{bool}\right.\end{array}\right.
+\text{numbers.Real}\left\{\begin{array}{l}\text{float} \\ \text{int} \\ \text{bool} \end{array}\right.
 \end{array}\right. \\
 \text{BaseException}\left\{\begin{array}{l}
 \text{SystemExit} \\ \text{KeyboardInterrupt} \\
