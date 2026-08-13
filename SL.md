@@ -858,7 +858,7 @@ deco( func () {} )
 若确实需要对着某个类型（包括类自身尚未定义完毕、无法写成普通注解的自引用场景）做运行时类型检查，
 直接在函数体内手动 `isinstance` 检查即可。
 
-类型注解是 `TypeVar`（表达多个形参/返回值位置的类型必须彼此一致）时，调用时的一致性检查规则见 4.2.25。
+类型注解是 `TypeVar`（表达多个形参/返回值位置的类型必须彼此一致）时，调用时的一致性检查规则见 4.2.26。
 
 以上涉及函数定义时检查的地方，都在整个函数表达式的捕获、全部形参的注解与默认值、返回类型全部求值完毕之后统一进行。
 
@@ -899,10 +899,12 @@ deco( func () {} )
     1. 若 `isinstance(v, property)`，直接存入**描述器表**（属性行为由 `property` 自己的 `get`、`set`、`delete` 负责）；
     2. 否则若 `isinstance(v, staticmethod)`，将 `v.func` 存入**属性表**（纯标签，不是描述器，不参与绑定）；
     3. 否则若 `isinstance(v, classmethod)`，直接存入**描述器表**（绑定 `cls` 由 `classmethod` 自己的 `get` 负责）；
-    4. 否则若 `isinstance(v, protocols.Callable)`，将 `MethodDescriptor(v)` 存入**描述器表**；
+    4. 否则若 `v` 就是 `unsupported` 这个类本身，将 `unsupported(name)`（`name` 为收集到的这个变量名）存入**描述器表**；
+    5. 否则若 `isinstance(v, unsupported)`，直接存入**描述器表**；
+    6. 否则若 `isinstance(v, protocols.Callable)`，将 `MethodDescriptor(v)` 存入**描述器表**；
        `MethodDescriptor` 是 `Descriptor` 的子类；
        get 时返回一个把 `obj` 绑定为第一参数的可调用对象；
-    5. 否则原样存入**属性表**。
+    7. 否则原样存入**属性表**。
 
    这一步是描述器表唯一的建立时机，此后该表不再变化（见 3.9.1.1）。
 
@@ -1008,7 +1010,7 @@ f(*args, x=1, **extra) # 调用时展开
 
 SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Function Group）对象实现运行时 dispatch，而非通过同名函数定义。
 
-详见 4.2.23 所述。
+详见 4.2.24 所述。
 
 ### 3.8 运算符重载
 
@@ -1223,7 +1225,7 @@ SL 只有 2 种**作用域**：
 - **回收**：帧对象本身占用的内存被释放，是垃圾回收层面的事，只要还有引用指向这个帧对象就不会发生，跟这个帧是死是活无关。
 
 多数情况下弹出即死亡、两者同时发生，函数调用、类体执行结束弹出时，会立刻把自己的局部字典置为 `None`。
-但全局帧（不管是当前脚本的，还是 `import` 导入的模块、`eval_isolated` 临时构造出的那种，见 3.4.5/4.1.14）
+但全局帧（不管是当前脚本的，还是 `import` 导入的模块、`eval_isolated` 临时构造出的那种，见 3.4.5/4.1.13）
 弹出之后不会死亡，局部字典（也就是这份文件自己的 `_G`）会一直保留、继续存在，不区分是不是被缓存。
 
 注意不死亡和不被回收是两码事：一个不死亡的帧，只要没有任何东西再引用它，一样会被当成普通垃圾回收掉。
@@ -1247,21 +1249,24 @@ SL 只有 2 种**作用域**：
 
 #### 3.10.3 作用域确定规则
 
-对标识符 `identifier`，若其未被捕获，只涉及当前帧与它所属的全局帧，不查找帧栈中的其他帧：
+对标识符 `identifier`，若其未被捕获，只涉及当前帧、它所属的全局帧、以及**内置表**（见 4 开头的说明），
+不查找帧栈中的其他帧：
 
 1. 若 `identifier` 在当前帧的 global 标记集中：
-    - 读取：返回 `_G` 中该项的值；不存在则抛出 `NameError`。
+    - 读取：`_G` 中有该项则返回；否则内置表中有该项则返回；否则抛出 `NameError`。
     - 写入：更新 `_G` 中该项，不存在则在 `_G` 中新建。
     - 删除：删除 `_G` 中该项，不存在则抛出 `NameError`。
 
 2. 否则：
-    - 读取：若 `_L` 中有该项，返回它；否则若 `_G` 中有该项，返回它；否则抛出 `NameError`。
+    - 读取：`_L` 中有该项则返回；否则 `_G` 中有该项则返回；否则内置表中有该项则返回；否则抛出 `NameError`。
     - 写入：更新 `_L` 中该项，不存在则在 `_L` 中新建。
     - 删除：删除 `_L` 中该项，不存在则抛出 `NameError`。
 
+写入、删除永远不涉及内置表，内置表本身只读。
+
 若 `identifier` 被捕获，改为按 3.10.4 的规则处理。
 
-**特例**：复合赋值 `x op= expr` 内部读取 `x` 旧值这一步，不适用第 2 条读取时退回 `_G` 的部分。
+**特例**：复合赋值 `x op= expr` 内部读取 `x` 旧值这一步，不适用第 2 条读取时退回 `_G`/内置表的部分。
 不在 global 标记集时只查 `_L`，找不到直接 `NameError`，以保证这一步的读和随后的写始终落在同一帧。
 
 #### 3.10.4 捕获
@@ -1381,6 +1386,11 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 ## 4 内置对象
 
+本章列出的所有内置函数、内置类、内置模块，都通过一张固定、全局唯一的**内置表**以名字暴露给标识符
+解析规则（见 3.10.3）：内置表既不是任何帧的 `_L`，也不是任何帧的 `_G`，只在按标识符读取时、当前帧
+与它所属全局帧都没有该名字时，作为最后一级兜底；不参与 `global`/`del`/赋值等写操作，用户代码只能
+通过在 `_L`/`_G` 中新建同名项来 shadow 某个内置名字，无法修改或删除内置表本身的内容。
+
 ### 4.1 内置函数
 
 #### 4.1.1 `isinstance(obj, type)`
@@ -1451,25 +1461,19 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 可标在普通方法、`property`、`classmethod` 上；
 
-#### 4.1.11 `unsupported(v)`
-
-将 `v.__is_unsupported__` 设为 `True`，返回 `v` 本身。
-
-用于覆盖继承来的默认协议实现、同时让 `protocols` 模块的鸭子类型检查判定为不满足该协议，见 4.3.2。
-
-#### 4.1.12 `input()`
+#### 4.1.11 `input()`
 
 从标准输入读取一行并返回。
 
 返回 `str` 类型的值。
 
-#### 4.1.13 `print(*args, sep=' ', end='\n')`
+#### 4.1.12 `print(*args, sep=' ', end='\n')`
 
 除去 `file` 和 `flush` 参数，其与 Python 的 `print` 函数行为完全一致。
 
 返回 `None`。
 
-#### 4.1.14 `eval_isolated(code, globals=None)`
+#### 4.1.13 `eval_isolated(code, globals=None)`
 
 `code` 为 `str`，在调用这一刻按 2.2.1 的规则解析为若干条表达式，构成一个全新的、独立的文件。
 解析失败则抛出 `SyntaxError`（见 3.11），可在调用处正常捕获。
@@ -1487,9 +1491,9 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 `code` 里对全局变量的读写都实际发生在这个 `dict` 上，调用结束后调用处仍持有同一个对象，能看到 `code` 造成的全部改动。
 不传时新建一个空 `dict` 当 `_G`，用完即弃。
 
-#### 4.1.15 `exit(code=0)`
+#### 4.1.14 `exit(code=0)`
 
-抛出 `SystemExit(code)`（见 4.2.24）。一路传播到解释器顶层无人捕获时，解释器终止，退出码为 `code`。
+抛出 `SystemExit(code)`（见 4.2.25）。一路传播到解释器顶层无人捕获时，解释器终止，退出码为 `code`。
 
 要求 `code` 为 int 或 `None`，其中 `None` 被视为 0。
 
@@ -1649,11 +1653,22 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 `get(self, obj)`：令 `cls = obj if isinstance(obj, type) else type(obj)`，
 返回把 `cls` 绑定为第一参数的可调用对象。
 
-#### 4.2.21 Function
+#### 4.2.21 unsupported
+
+`unsupported(name=None)`，`Descriptor` 的子类，用于在类体中显式声明某个继承来的方法/属性协议不受支持。
+
+`get(self, obj)`：无条件抛出 `AttributeError`（`name` 非 `None` 时错误信息中包含该名字）；
+`set`、`delete` 沿用 `Descriptor` 默认实现，同样无条件抛出 `AttributeError`。
+
+类体中直接写 `some_attr = unsupported`（不加调用）时，收集属性这一步会自动构造 `unsupported(name)`
+（`name` 即 `some_attr`）存入描述器表，见 3.4.8；
+写 `some_attr = unsupported('自定义消息')` 时使用给定实例，不再改写。
+
+#### 4.2.22 Function
 
 `func` 表达式建立的对象的类。实现 `__op_call__`。
 
-#### 4.2.22 super
+#### 4.2.23 super
 
 `super(cls, obj)`。
 
@@ -1664,7 +1679,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 在属性表中找到则原样返回；
 全部找不到则 `AttributeError`。
 
-#### 4.2.23 FuncGroup(*functions, name=None)
+#### 4.2.24 FuncGroup(*functions, name=None)
 
 一个例子足以说明 FuncGroup 的用法：
 
@@ -1682,7 +1697,7 @@ f(1, 2) # 输出 4
 f(1.0)  # 抛出 DispatchError
 ```
 
-#### 4.2.24 异常类
+#### 4.2.25 异常类
 
 只列全局的一批常用异常，其余更细分的见 4.3.3 `exceptions` 模块。
 
@@ -1704,7 +1719,7 @@ BaseException
     └── ImportError    - 模块导入失败（找不到模块/包，或名字有歧义）
 ```
 
-#### 4.2.25 TypeVar
+#### 4.2.26 TypeVar
 
 `TypeVar(bound=None)`。用作类型注解，见 3.4.7。
 
@@ -1737,7 +1752,7 @@ BaseException
 
 以下几者的判定规则类似：
 `isinstance(obj, X)`/`issubclass(cls, X)` 当且仅当 `type(obj)`/`cls` 的 MRO 上有该协议要求的全部方法，
-且没有一个被标记 `__is_unsupported__`（见 4.1.11 `unsupported`）。
+且每个方法按 3.9.1.2 的规则查找到的那一项都不是 `unsupported` 的实例（见 4.2.21 `unsupported`）。
 
 ##### 4.3.2.1 Callable
 
@@ -1773,7 +1788,7 @@ BaseException
 
 1. `isinstance(obj, Iterable)`；
 2. `isinstance(obj, Indexable)`；
-3. `type(obj)` 的 MRO 上有 `__items__`（未被标记 `__is_unsupported__`）。
+3. `type(obj)` 的 MRO 上有 `__items__`，且找到的那一项不是 `unsupported` 的实例。
 
 `dict`、`unordered_dict`、`frozendict` 满足。
 
@@ -1800,7 +1815,7 @@ $$
 \text{SingletonType} \\
 \text{FuncGroup} \\
 \text{CompoundType} \\
-\text{Descriptor}\left\{\begin{array}{l}\text{property} \\ \text{classmethod} \end{array}\right. \\
+\text{Descriptor}\left\{\begin{array}{l}\text{property} \\ \text{classmethod} \\ \text{unsupported} \end{array}\right. \\
 \text{str} \\ \text{tuple} \\ \text{list} \\ \text{range} \\
 \text{dict} \\ \text{unordered_dict} \\ \text{frozendict} \\
 \text{set} \\ \text{frozenset} \\
