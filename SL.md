@@ -471,7 +471,8 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
         2. 属性赋值 `x.attribute = expr`
            先对 `x` 求值，再对 `expr` 求值，令 `x` 的属性 `attribute` 引用结果对象；
         3. 元素赋值 `x[args, ...] = expr`
-           先对 `x` 求值，再对 `args` 逐个求值，再对 `expr` 求值，令 `x` 的元素 `args` 引用结果对象；
+           先对 `x` 求值，再对 `args` 逐个求值，再对 `expr` 求值，
+           最后调用 `type(x)` 的 `__op_set_index__`（见 3.8）令 `x` 的元素 `args` 引用结果对象；
         4. 复合赋值 `target op= expr`（`target` 为纯左值：标识符、属性访问或元素访问之一，定义见 2.1.5）
            若 `target` 是属性访问 `x.attr`，`x` 只求值一次；若是元素访问 `x[index, ...]`，`x` 与各 `index` 只各求值一次，
            读、写复用同一次求值结果，不会因为读旧值和写新值这两步而重复求值。
@@ -602,6 +603,8 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 - `del expr.attr`：删除对象的属性（见 3.9.1.2）。
 
 两种形式的值均为 `None`。
+
+没有 `del expr[index]`，这是刻意设计。
 
 #### 3.4.4 `global` 表达式的值
 
@@ -1032,34 +1035,35 @@ SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Functi
 
 除了 `is`、`and`、`or`、`not`、求属性、`=` 以及所有复合赋值，其他运算符均可重载，对应方法名称如下：
 
-| 运算符                 | 方法名            |
-|------------------------|-------------------|
-| `x[arg, ...]`          | `__op_index__`    |
-| `x(arg, kwarg=v, ...)` | `__op_call__`     |
-| `x?`                   | `__op_question__` |
-| `x!`                   | `__op_exclam__`   |
-| `**`                   | `__op_pow__`      |
-| `+x`                   | `__op_pos__`      |
-| `-x`                   | `__op_neg__`      |
-| `~x`                   | `__op_invert__`   |
-| `*`                    | `__op_mul__`      |
-| `/`                    | `__op_div__`      |
-| `//`                   | `__op_floordiv__` |
-| `%`                    | `__op_mod__`      |
-| `+`                    | `__op_add__`      |
-| `-`                    | `__op_sub__`      |
-| `..`                   | `__op_range__`    |
-| `<<`                   | `__op_lshift__`   |
-| `>>`                   | `__op_rshift__`   |
-| `&`                    | `__op_and__`      |
-| `^`                    | `__op_xor__`      |
-| `\|`                   | `__op_or__`       |
-| `<`                    | `__op_lt__`       |
-| `<=`                   | `__op_le__`       |
-| `>`                    | `__op_gt__`       |
-| `>=`                   | `__op_ge__`       |
-| `!=`                   | `__op_ne__`       |
-| `==`                   | `__op_eq__`       |
+| 运算符                 | 方法名             |
+|------------------------|--------------------|
+| `x[arg, ...]`          | `__op_get_index__` |
+| `x[arg, ...] = v`      | `__op_set_index__` |
+| `x(arg, kwarg=v, ...)` | `__op_call__`      |
+| `x?`                   | `__op_question__`  |
+| `x!`                   | `__op_exclam__`    |
+| `**`                   | `__op_pow__`       |
+| `+x`                   | `__op_pos__`       |
+| `-x`                   | `__op_neg__`       |
+| `~x`                   | `__op_invert__`    |
+| `*`                    | `__op_mul__`       |
+| `/`                    | `__op_div__`       |
+| `//`                   | `__op_floordiv__`  |
+| `%`                    | `__op_mod__`       |
+| `+`                    | `__op_add__`       |
+| `-`                    | `__op_sub__`       |
+| `..`                   | `__op_range__`     |
+| `<<`                   | `__op_lshift__`    |
+| `>>`                   | `__op_rshift__`    |
+| `&`                    | `__op_and__`       |
+| `^`                    | `__op_xor__`       |
+| `\|`                   | `__op_or__`        |
+| `<`                    | `__op_lt__`        |
+| `<=`                   | `__op_le__`        |
+| `>`                    | `__op_gt__`        |
+| `>=`                   | `__op_ge__`        |
+| `!=`                   | `__op_ne__`        |
+| `==`                   | `__op_eq__`        |
 
 ### 3.9 协议
 
@@ -1114,16 +1118,23 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 
 写 `o.attr = v`：
 
-1. 若 `type(o)` 的 MRO 上某个类的描述器表中有 `attr`，则调用 `该描述器.set(o, v)`；
-2. 否则若 `type(o)` 的 MRO 上有 `__setattr__`，则调用 `__setattr__(o, attr, v)`；
-3. 否则写入 `o` 自身属性表（无则新建）。
+1. 若 `o` 本身是一个类，且它自己的 MRO 上某个类的描述器表中有 `attr`，则调用 `该描述器.set(o, v)`；
+2. 否则若 `type(o)` 的 MRO 上某个类的描述器表中有 `attr`，则调用 `该描述器.set(o, v)`；
+3. 否则若 `type(o)` 的 MRO 上有 `__setattr__`，则调用 `__setattr__(o, attr, v)`；
+4. 否则写入 `o` 自身属性表（无则新建）。
 
 删 `del o.attr`：
 
-1. 若 `type(o)` 的 MRO 上某个类的描述器表中有 `attr`，则调用 `该描述器.delete(o)`；
-2. 否则若 `type(o)` 的 MRO 上有 `__delattr__`，则调用 `__delattr__(o, attr)`；
-3. 否则若 `o` 自身属性表中有 `attr`，则从中删除；
-4. 否则 `AttributeError`。
+1. 若 `o` 本身是一个类，且它自己的 MRO 上某个类的描述器表中有 `attr`，则调用 `该描述器.delete(o)`；
+2. 否则若 `type(o)` 的 MRO 上某个类的描述器表中有 `attr`，则调用 `该描述器.delete(o)`；
+3. 否则若 `type(o)` 的 MRO 上有 `__delattr__`，则调用 `__delattr__(o, attr)`；
+4. 否则若 `o` 自身属性表中有 `attr`，则从中删除；
+5. 否则 `AttributeError`。
+
+三者的第 1 条（`o` 本身是类时先查它自己 MRO 的描述器表）必须一致，否则读写会不对称：
+`int.__op_add__ = f` 正是靠写属性的第 1 条命中 `int` 自己描述器表里的方法描述器、调用它的 `set`，
+`MethodDescriptor` 没实现 `set` 便退回 `Descriptor` 的默认实现抛 `AttributeError`。
+若写属性只查 `type(o)`，这一句会静默写进 `int` 的属性表、变成一个永远读不到的死项，防御就形同虚设。
 
 即：描述器表整体优先于属性表，同名时属性表里那一份永远读不到，是个死项。
 
@@ -1176,7 +1187,7 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 同时满足：
 
 1. 可迭代对象；
-2. 实现了 `__op_index__` 方法；
+2. 实现了 `__op_get_index__` 方法；
 3. 实现了 `__items__` 方法；
 
 的对象称为**映射**。
@@ -1790,7 +1801,7 @@ BaseException
 
 ##### 4.3.2.2 Indexable
 
-抽象基类。要求 `__op_index__`。
+抽象基类。要求 `__op_get_index__`。
 
 ##### 4.3.2.3 Hashable
 
