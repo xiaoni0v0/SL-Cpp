@@ -222,7 +222,7 @@ else x = 200
 
 `del` 是表达式。
 
-语法：`del target`。其中 `target` 的必须是标识符或属性访问。
+语法：`del target`。其中 `target` 必须是标识符或属性访问。
 
 #### 2.2.4 `global` 表达式
 
@@ -244,8 +244,7 @@ else x = 200
 其中 `identifier` 是标识符。调用形态的实参规则与普通函数调用一致（任意表达式、`*`/`**` 展开都允许，
 参数个数与类型对不对留到运行期判定）。
 
-`import` 是关键字、不是内置函数名，两种形态都不涉及按名字查找一个 `import` 对象——因此它也不可能被
-`_G`/`_L` 里的同名项遮蔽。相应地，`import` 本身不能作为值使用（写不出 `f = import`）。
+`import` 是关键字，不是内置函数名。
 
 #### 2.2.6 控制流表达式
 
@@ -317,7 +316,7 @@ if (cond1) expr1 ⟦elif (cond2) expr2 ...⟧ ⟦else expr3⟧
 
 语法：`return ⟦expr⟧`，其中 `expr` 为表达式。
 
-可在全局或函数体内使用。
+只能在 Program（整个文件、函数体、类体，见 3.4.1）内使用，作用对象是离它最近的那个 Program。
 
 ##### 2.2.6.7 `try` 表达式
 
@@ -860,7 +859,7 @@ deco( func () {} )
 若确实需要对着某个类型（包括类自身尚未定义完毕、无法写成普通注解的自引用场景）做运行时类型检查，
 直接在函数体内手动 `isinstance` 检查即可。
 
-类型注解是 `TypeVar`（表达多个形参/返回值位置的类型必须彼此一致）时，调用时的一致性检查规则见 4.2.26。
+类型注解是 `TypeVar`（表达多个形参/返回值位置的类型必须彼此一致）时，调用时的一致性检查规则见 4.2.27。
 
 以上涉及函数定义时检查的地方，都在整个函数表达式的捕获、全部形参的注解与默认值、返回类型全部求值完毕之后统一进行。
 
@@ -1013,7 +1012,7 @@ f(*args, x=1, **extra) # 调用时展开
 
 SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Function Group）对象实现运行时 dispatch，而非通过同名函数定义。
 
-详见 4.2.24 所述。
+详见 4.2.25 所述。
 
 ### 3.8 运算符重载
 
@@ -1084,9 +1083,13 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 
 | 方法                    | 何时调用 | 参数                                       |
 |-------------------------|----------|--------------------------------------------|
-| `get(self, obj)`        | 读属性   | `obj`：经其访问的实例                      |
-| `set(self, obj, value)` | 写属性   | `obj`：经其访问的实例；`value`：要写入的值 |
-| `delete(self, obj)`     | 删属性   | `obj`：经其访问的实例                      |
+| `get(self, obj)`        | 读属性   | `obj`：经其访问的对象                      |
+| `set(self, obj, value)` | 写属性   | `obj`：经其访问的对象；`value`：要写入的值 |
+| `delete(self, obj)`     | 删属性   | `obj`：经其访问的对象                      |
+
+其中 `obj` 不一定是实例，经由类访问时传的就是那个类本身（见 3.9.1.2 读属性的第 1 条）。
+因此内置描述器都要判 `isinstance(obj, type)` 分两路（`property` 返回自己供内省、`classmethod` 绑 `cls`、`MethodDescriptor` 不绑定）；
+自定义描述器同样要考虑这一路，不能默认 `obj` 是实例。
 
 `Descriptor` 把 `get` 标记为 `@abstractmethod`；
 `set`、`delete` 则有默认实现，调用即无条件抛出 `AttributeError`，需要可写、可删就重写它们。
@@ -1128,7 +1131,7 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 
 因此绕开属性协议直接写属性表（如 `attrs(int)['__op_add__'] = ...`）改不动任何类的既有行为。
 上述规则本身读到的也永远是 `get` 的结果而不是描述器对象本身
-（`property` 例外，它的 `get` 在经由类访问时故意返回自己，供内省，见 4.2.18）。
+（`property` 例外，它的 `get` 在经由类访问时故意返回自己，供内省，见 4.2.19）。
 
 **注意**：对象对其他对象的引用不止属性表这一种。
 解释器内部还会维护一些不通过属性机制暴露的引用，SL 层均访问不到，纯属 C++ 实现细节。但它们是真实的引用，垃圾回收照样要遍历到。
@@ -1507,7 +1510,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.1.15 `exit(code=0)`
 
-抛出 `SystemExit(code)`（见 4.2.25）。一路传播到解释器顶层无人捕获时，解释器终止，退出码为 `code`。
+抛出 `SystemExit(code)`（见 4.2.26）。一路传播到解释器顶层无人捕获时，解释器终止，退出码为 `code`。
 
 要求 `code` 为 int 或 `None`，其中 `None` 被视为 0。
 
@@ -1605,9 +1608,19 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.2.14 set
 
-容器类，可变，可迭代。
+容器类，可变，可迭代。元素需可哈希，不保证遍历顺序，元素不重复。
 
-#### 4.2.15 range
+`set` 自身不是 `Hashable`（见 4.3.2），不能作 `dict` 的键、`set` 的元素。
+
+#### 4.2.15 frozenset
+
+不可变的 `set`，建立后不能增删其中的元素，其余接口与 `set` 一致。
+
+是 `Hashable`，此时可作 `dict` 的键、`set` 的元素。
+
+`frozenset(it)` 由一个可迭代对象建立；`frozenset()` 建立空的冻结集合。
+
+#### 4.2.16 range
 
 可迭代。
 
@@ -1615,7 +1628,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 2. `range(start, stop)`
 3. `range(start, stop, step)`
 
-#### 4.2.16 SingletonType
+#### 4.2.17 SingletonType
 
 包含了 SL 中的部分“单例”：
 
@@ -1623,7 +1636,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 - NotImplemented
 - StopIteration
 
-#### 4.2.17 CompoundType
+#### 4.2.18 CompoundType
 
 用 `|`, `!`, `?`, `[]` 可以创建**复合类**。
 
@@ -1653,24 +1666,24 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 以上检查均有短路性，但请不要依赖于此，因为检查的顺序不确定，
 例如 `int | str?` 的实际实现*可能*为 `None | int | str` 而非 `int | str | None`。
 
-#### 4.2.18 property
+#### 4.2.19 property
 
 `property(func_get, func_set=None, func_del=None)`，`Descriptor` 的子类。
 `func_set`、`func_del` 为 `None` 时对应操作按 `Descriptor` 默认行为抛 `AttributeError`。
 `get(self, obj)`：若 `isinstance(obj, type)` 返回 `self`（供内省），否则返回 `func_get(obj)`。
 
-#### 4.2.19 staticmethod
+#### 4.2.20 staticmethod
 
 `staticmethod(func)`，`self.func = func`。纯标签，不是描述器，仅在类体收集属性时取出 `v.func` 使用，
 本身不会成为类属性。
 
-#### 4.2.20 classmethod
+#### 4.2.21 classmethod
 
 `classmethod(func)`，`Descriptor` 的子类。
 `get(self, obj)`：令 `cls = obj if isinstance(obj, type) else type(obj)`，
 返回把 `cls` 绑定为第一参数的可调用对象。
 
-#### 4.2.21 unsupported
+#### 4.2.22 unsupported
 
 `unsupported(name=None)`，`Descriptor` 的子类，用于在类体中显式声明某个继承来的方法/属性协议不受支持。
 
@@ -1681,11 +1694,11 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 （`name` 即 `some_attr`）存入描述器表，见 3.4.8；
 写 `some_attr = unsupported('自定义消息')` 时使用给定实例，不再改写。
 
-#### 4.2.22 Function
+#### 4.2.23 Function
 
 `func` 表达式建立的对象的类。实现 `__op_call__`。
 
-#### 4.2.23 super
+#### 4.2.24 super
 
 `super(cls, obj)`。
 
@@ -1696,7 +1709,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 在属性表中找到则原样返回；
 全部找不到则 `AttributeError`。
 
-#### 4.2.24 FuncGroup(*functions, name=None)
+#### 4.2.25 FuncGroup(*functions, name=None)
 
 一个例子足以说明 FuncGroup 的用法：
 
@@ -1714,7 +1727,7 @@ f(1, 2) # 输出 4
 f(1.0)  # 抛出 DispatchError
 ```
 
-#### 4.2.25 异常类
+#### 4.2.26 异常类
 
 只列全局的一批常用异常，其余更细分的见 4.3.3 `exceptions` 模块。
 
@@ -1736,7 +1749,7 @@ BaseException
     └── ImportError    - 模块导入失败（找不到模块/包，或名字有歧义）
 ```
 
-#### 4.2.26 TypeVar
+#### 4.2.27 TypeVar
 
 `TypeVar(bound=None)`。用作类型注解，见 3.4.7。
 
@@ -1759,17 +1772,17 @@ BaseException
 
 ##### 4.3.1.1 Number
 
-抽象基类。定义数值的公共契约：四则运算与相等比较。`int`、`float`、`complex` 均为其子类。
+抽象基类。定义数值的公共契约：四则运算与相等比较。`int`、`float`、`complex`、`bool` 均为其子类。
 
 ##### 4.3.1.2 Real
 
-`Number` 的子类，抽象基类。在四则运算之上增加大小比较。`int`、`float` 为其子类；
+`Number` 的子类，抽象基类。在四则运算之上增加大小比较。`int`、`float`、`bool` 为其子类。
 
 #### 4.3.2 `protocols`
 
 以下几者的判定规则类似：
 `isinstance(obj, X)`/`issubclass(cls, X)` 当且仅当 `type(obj)`/`cls` 的 MRO 上有该协议要求的全部方法，
-且每个方法按 3.9.1.2 的规则查找到的那一项都不是 `unsupported` 的实例（见 4.2.21 `unsupported`）。
+且每个方法按 3.9.1.2 的规则查找到的那一项都不是 `unsupported` 的实例（见 4.2.22 `unsupported`）。
 
 ##### 4.3.2.1 Callable
 
@@ -1786,7 +1799,7 @@ BaseException
 默认按对象身份（同 `is`）计算；可重载 `__hash__(self)` 与 `__op_eq__` 改为按值比较，两者需保持一致
 （相等的对象哈希值必须相等）。
 
-`list`、`dict`、`set`、`unordered_dict` 不是 `Hashable`；`tuple` 是；
+`list`、`dict`、`set`、`unordered_dict` 不是 `Hashable`；`tuple`、`frozenset` 是；
 `frozendict` 在每个键值对均可哈希时可哈希。
 
 ##### 4.3.2.4 Iterable
