@@ -17,6 +17,9 @@ TEST_SUITE("StaticEvaler 数值算术") {
         CHECK(fold_json(U"2 * 3") == int_lit("6"));
     }
 
+    // bool 不继承 int（SL.md 4.2.5），这里能提升是因为 bool 自己实现了 numbers.Real 要求的四则
+    // 运算、大小比较，参与运算前把自己折算成 int。别把这条推广到 int 特有的运算：位运算、容器重复
+    // 次数都不接受 bool（见 bitwise_test.cpp、container_ops_test.cpp）。
     TEST_CASE("bool 参与数值运算按 int 提升，结果类型是 int 不是 bool") {
         CHECK(fold_json(U"True + 1") == int_lit("2"));
         CHECK(fold_json(U"True + True") == int_lit("2"));

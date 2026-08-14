@@ -55,7 +55,7 @@
  *
  * AstNodeProgram 原地精简 exprs_，丢掉全部纯字面量子表达式
  */
-class StaticEvaler final {
+class StaticEvaler {
     // —————————— 一级入口 ——————————
 
     // 一元
@@ -112,7 +112,9 @@ class StaticEvaler final {
 
     // —————————— 数值提升相关 ——————————
 
-    // 是不是 bool 或 int
+    // 是不是 int。只有位运算该用它
+    [[nodiscard]] static bool is_int(const AstNode &node);
+    // 是不是 bool 或 int。四则运算、比较会把 bool 折算成 int 再算，用这个
     [[nodiscard]] static bool is_int_family(const AstNode &node);
     // 是不是 bool 或 int 或 float
     [[nodiscard]] static bool is_numeric(const AstNode &node);

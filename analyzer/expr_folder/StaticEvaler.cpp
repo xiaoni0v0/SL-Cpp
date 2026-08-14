@@ -365,12 +365,12 @@ AstNodePtr StaticEvaler::fold_mul(AstNodeOpBinary &node) {
     // 数字 * 数字：交给 fold_arithmetic
     if (is_numeric(l) && is_numeric(r)) return fold_arithmetic(node);
 
-    // 下面尝试理解为容器的重复
-    if (!is_int_family(l) && !is_int_family(r)) return nullptr;
+    // 下面尝试理解为容器的重复。重复次数只接受 int，bool 不算
+    if (!is_int(l) && !is_int(r)) return nullptr;
     // 确定哪个是重复次数，哪个可能是容器
     const auto &[container_node, count_node] =
         [&]() -> std::pair<const AstNode &, const AstNode &> {
-        if (is_int_family(r)) return {l, r};
+        if (is_int(r)) return {l, r};
         return {r, l};
     }();
 
@@ -523,7 +523,8 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpBinary &node) {
 
 AstNodePtr StaticEvaler::fold_bitwise(const AstNodeOpUnary &node) {
     const AstNode &operand{*node.operand_};
-    if (!is_literal_pure(operand) || !is_int_family(operand)) return nullptr;
+    // 位运算只对 int 有定义
+    if (!is_literal_pure(operand) || !is_int(operand)) return nullptr;
 
     const std::optional v{node_to_int64(operand)};
     if (!v) return nullptr;
@@ -533,8 +534,8 @@ AstNodePtr StaticEvaler::fold_bitwise(const AstNodeOpUnary &node) {
 AstNodePtr StaticEvaler::fold_bitwise(const AstNodeOpBinary &node) {
     using enum AstNodeOpBinary::OpType;
     const AstNode &l{*node.left_}, &r{*node.right_};
-    if (!is_literal_pure(l) || !is_literal_pure(r) || !is_int_family(l) || !is_int_family(r))
-        return nullptr;
+    // 同上
+    if (!is_literal_pure(l) || !is_literal_pure(r) || !is_int(l) || !is_int(r)) return nullptr;
 
     const std::optional lv{node_to_int64(l)};
     const std::optional rv{node_to_int64(r)};
@@ -614,9 +615,12 @@ bool StaticEvaler::is_literal_pure(const AstNode &node) {
     return false; // dict、_G/_L、标识符等都不是
 }
 
+bool StaticEvaler::is_int(const AstNode &node) {
+    return dynamic_cast<const AstNodeLiteralInt *>(&node);
+}
+
 bool StaticEvaler::is_int_family(const AstNode &node) {
-    return dynamic_cast<const AstNodeLiteralBool *>(&node) ||
-           dynamic_cast<const AstNodeLiteralInt *>(&node);
+    return is_int(node) || dynamic_cast<const AstNodeLiteralBool *>(&node);
 }
 
 bool StaticEvaler::is_numeric(const AstNode &node) {

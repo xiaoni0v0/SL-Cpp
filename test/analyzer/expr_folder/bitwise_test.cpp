@@ -1,4 +1,4 @@
-// StaticEvaler/ExprFolder：位运算折叠（& ^ | << >>，只对 bool/int 有意义）。
+// StaticEvaler/ExprFolder：位运算折叠（~ & ^ | << >>，只对 int 有意义，bool 也不行）。
 // dict 的 | 合并见 container_ops_test.cpp（跟 int 的 | 是同一个运算符，按左操作数类型分派）。
 //
 // int 运算一律用 int64_t 计算（不再用任意精度的 BigInt）。& ^ | 两个定宽整数直接算，恒不溢出；
@@ -50,9 +50,36 @@ TEST_SUITE("StaticEvaler 位运算") {
         );
     }
 
-    TEST_CASE("bool 参与位运算按 int 提升") {
-        CHECK(fold_json(U"True & 1") == int_lit("1"));
-        CHECK(fold_json(U"True | False") == int_lit("1"));
+    // bool 不继承 int（SL.md 4.2.5），位运算是 int 特有的方法，bool 没有；这跟四则运算/比较
+    // 会把 bool 折算成 int 再算是两回事（见 arithmetic_test.cpp）。折叠器一律不折，留给运行时抛
+    // TypeError。
+    TEST_CASE("bool 不参与位运算，不折") {
+        CHECK(
+            fold_json(U"True & 1") ==
+            nlohmann::json{
+                {"type", "OpBinary"}, {"op", "&"}, {"left", bool_lit(true)}, {"right", int_lit("1")}
+            }
+        );
+        CHECK(
+            fold_json(U"True | False") == nlohmann::json{
+                                              {"type", "OpBinary"},
+                                              {"op", "|"},
+                                              {"left", bool_lit(true)},
+                                              {"right", bool_lit(false)}
+                                          }
+        );
+        CHECK(
+            fold_json(U"1 << True") == nlohmann::json{
+                                           {"type", "OpBinary"},
+                                           {"op", "<<"},
+                                           {"left", int_lit("1")},
+                                           {"right", bool_lit(true)}
+                                       }
+        );
+        CHECK(
+            fold_json(U"~True") ==
+            nlohmann::json{{"type", "OpUnary"}, {"op", "~"}, {"operand", bool_lit(true)}}
+        );
     }
 
     TEST_CASE("float 不参与位运算，不折") {

@@ -71,6 +71,27 @@ TEST_SUITE("StaticEvaler 容器运算——基本拼接/重复") {
         );
     }
 
+    // 容器重复只对"非负的 int"有定义（SL.md 3.6），bool 不继承 int（SL.md 4.2.5），
+    // 因此 bool 当重复次数是运行时 TypeError，不折。
+    TEST_CASE("bool 当重复次数不折，交给运行时报错") {
+        CHECK(
+            fold_json(U"'ab' * True") == nlohmann::json{
+                                             {"type", "OpBinary"},
+                                             {"op", "*"},
+                                             {"left", str_lit("ab")},
+                                             {"right", bool_lit(true)}
+                                         }
+        );
+        CHECK(
+            fold_json(U"True * 'ab'") == nlohmann::json{
+                                             {"type", "OpBinary"},
+                                             {"op", "*"},
+                                             {"left", bool_lit(true)},
+                                             {"right", str_lit("ab")}
+                                         }
+        );
+    }
+
     TEST_CASE("负数重复次数不折，交给运行时报错") {
         CHECK(
             fold_json(U"(1,) * -1") ==
