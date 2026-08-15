@@ -16,7 +16,15 @@
 // file_path 默认 "<test>"，只在需要检查报错信息里的文件名时才需要显式传。
 inline AstNodeProgramPtr
 parse_program(const std::u32string &source, const std::string &file_path = "<test>") {
-    return Parser{Lexer{source}.tokenize(), file_path}.parse();
+    return Parser{Lexer{source}.tokenize(), file_path}.parse_program();
+}
+
+// 词法 + 语法分析一整份源码，要求它恰好是一条表达式（Parser::parse_single_expr，即 eval 的入口），
+// 返回这条表达式自己的节点。注意跟下面的 parse_single 不是一回事：那个走 Program 入口再挖第一条，
+// 这个走的是另一个入口，"多于一条"由 Parser 自己判而不是测试判。
+inline AstNodePtr
+parse_single_expr(const std::u32string &source, const std::string &file_path = "<test>") {
+    return Parser{Lexer{source}.tokenize(), file_path}.parse_single_expr();
 }
 
 // 解析恰好一条顶层表达式，返回这条表达式自己的节点（多数用例只关心单条表达式解析出的树，
@@ -52,6 +60,21 @@ inline nlohmann::json parse_program_json(const std::u32string &source) {
 // 子串（用于区分"确实是这条规则报的错"，不是恰好被别的规则先一步拦下来）。跟
 // test/analyzer/semantic_checker/test_utils.h 里同名但语义不同的 check_throws_with（那个还会跑
 // SemanticChecker） 故意区分开名字，避免两边都被包含时产生重定义。
+inline void check_parse_single_expr_throws_with(
+    const std::u32string &source, const std::string &message_substring
+) {
+    try {
+        parse_single_expr(source);
+        FAIL("expected SyntaxError containing: " << message_substring);
+    } catch (const SyntaxError &e) {
+        const std::string what{e.what()};
+        CHECK_MESSAGE(
+            what.find(message_substring) != std::string::npos,
+            "expected message to contain \"" << message_substring << "\", got: " << what
+        );
+    }
+}
+
 inline void
 check_parse_throws_with(const std::u32string &source, const std::string &message_substring) {
     try {

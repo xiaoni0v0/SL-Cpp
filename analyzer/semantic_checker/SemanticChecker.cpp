@@ -143,6 +143,9 @@ void SemanticChecker::check(const AstNodeContinue &node) {
 }
 
 void SemanticChecker::check(const AstNodeReturn &node) {
+    // return 的作用对象是离它最近的 Program，外层一个 Program 都没有就无处可去
+    if (!ctx_.in_program) error("return outside program", node.pos_);
+
     // finally 体内禁止 return
     if (ctx_.finally_loop_depth >= 0) error("return inside finally is not allowed", node.pos_);
 
@@ -362,6 +365,7 @@ void SemanticChecker::check(const AstNodeProgram &node) {
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
+    ctx_.in_program = true;
 
     for (const auto &e : node.exprs_) check_not_null(e, node.pos_);
 
@@ -640,7 +644,7 @@ void SemanticChecker::check_doc(const AstNodePtr &doc) const {
         error("doc must be a string literal", doc->pos_);
 }
 
-SemanticChecker::SemanticChecker(const AstNodeProgram &root, std::string file_path)
+SemanticChecker::SemanticChecker(const AstNode &root, std::string file_path)
     : root_{root}, file_path_{std::move(file_path)} {}
 
 void SemanticChecker::check() && { check(root_); }

@@ -71,7 +71,8 @@ TEST_SUITE("StaticEvaler 容器运算——基本拼接/重复") {
         );
     }
 
-    // 容器重复只对"非负的 int"有定义（SL.md 3.6），bool 不继承 int（SL.md 4.2.5），
+    // 容器重复只对"非负的 int"有定义（见 SL.md 的运算符表达式的值一节），bool 不继承 int
+    // （见 SL.md 的 bool 内置类一节），
     // 因此 bool 当重复次数是运行时 TypeError，不折。
     TEST_CASE("bool 当重复次数不折，交给运行时报错") {
         CHECK(

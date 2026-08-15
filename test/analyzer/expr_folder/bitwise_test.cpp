@@ -50,7 +50,8 @@ TEST_SUITE("StaticEvaler 位运算") {
         );
     }
 
-    // bool 不继承 int（SL.md 4.2.5），位运算是 int 特有的方法，bool 没有；这跟四则运算/比较
+    // bool 不继承 int（见 SL.md 的 bool 内置类一节），位运算是 int 特有的方法，bool 没有；
+    // 这跟四则运算/比较
     // 会把 bool 折算成 int 再算是两回事（见 arithmetic_test.cpp）。折叠器一律不折，留给运行时抛
     // TypeError。
     TEST_CASE("bool 不参与位运算，不折") {

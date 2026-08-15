@@ -183,8 +183,6 @@ void ExprFolder::visit(AstNodeImportCall &node) {
     for (auto &kw : node.keyword_args_) visit_and_replace(kw.value_);
 }
 
-ExprFolder::ExprFolder(AstNodeProgram &root) : root_{root} {}
-
-void ExprFolder::fold() const && { visit(root_); }
+void ExprFolder::fold(AstNodeProgram &root) { visit(root); }
 
 void ExprFolder::fold_expr(AstNodePtr &node) { visit_and_replace(node); }

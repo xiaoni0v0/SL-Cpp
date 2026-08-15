@@ -1337,7 +1337,7 @@ Parser::Parser(std::vector<Token> tokens, std::string file_path)
     }
 }
 
-AstNodeProgramPtr Parser::parse() && {
+AstNodeProgramPtr Parser::parse_program() && {
     const Position start_pos{peek().row, peek().col};
 
     // 解析一个若干个表达式
@@ -1347,4 +1347,26 @@ AstNodeProgramPtr Parser::parse() && {
     expect(TokenType::END_OF_FILE); // 消耗 EOF
 
     return std::make_unique<AstNodeProgram>(start_pos, std::move(exprs));
+}
+
+AstNodePtr Parser::parse_single_expr() && {
+    // 只跳空行，不跳 ';'，换行是软终止
+    const auto reject_semicolon{[this] {
+        if (check(TokenType::SIGN_SEMICOLON))
+            error("unexpected ';' where exactly one expression is expected");
+    }};
+
+    skip_newline();
+    reject_semicolon();
+    if (check(TokenType::END_OF_FILE)) error("expected exactly one expression, got none");
+
+    AstNodePtr expr{parse_expr()};
+
+    // 这条表达式之后只允许跟换行，且换行之后必须就是 EOF：多于一条不是这个入口该收的
+    reject_semicolon();
+    check_terminator();
+    skip_newline();
+    if (!check(TokenType::END_OF_FILE)) error("expected exactly one expression, got more than one");
+
+    return expr;
 }

@@ -327,6 +327,7 @@ add_executable(SL_Cpp_Parser_Tests
         test/parser/common/position_tracking_test.cpp
         test/parser/common/error_handling_test.cpp
         test/parser/common/combination_test.cpp
+        test/parser/common/single_expr_entry_test.cpp
 )
 sl_apply_test_target_options(SL_Cpp_Parser_Tests)
 target_link_libraries(SL_Cpp_Parser_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
@@ -401,6 +402,7 @@ add_executable(SL_Cpp_Analyzer_Tests
         test/analyzer/semantic_checker/dict_call_test.cpp
         test/analyzer/semantic_checker/import_test.cpp
         test/analyzer/semantic_checker/defensive_test.cpp
+        test/analyzer/semantic_checker/single_expr_test.cpp
 )
 sl_apply_test_target_options(SL_Cpp_Analyzer_Tests)
 target_link_libraries(SL_Cpp_Analyzer_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)

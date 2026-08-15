@@ -5,13 +5,14 @@
 #include <string>
 
 class SemanticChecker {
-    const AstNodeProgram &root_;
+    const AstNode &root_;
     const std::string file_path_;
 
     struct Context {
         int local_scope_depth{0};   // 是否身处 func 体或 class 体的局部作用域内
         int loop_depth{0};          // for、while 共用
         int finally_loop_depth{-1}; // 身处 finally 体时的外层 loop_depth（-1 表示不在 finally 内）
+        bool in_program{false};     // 外层有没有 Program
         bool can_star{false};
         bool can_double_star{false};
     } ctx_;
@@ -72,10 +73,10 @@ class SemanticChecker {
   public:
     /**
      * 构造 SemanticChecker 对象
-     * @param root      AST 的根节点
+     * @param root      要检查的根节点：整份 Program 或者单独一条表达式。
      * @param file_path 文件路径，默认为 "<unknown>"
      */
-    explicit SemanticChecker(const AstNodeProgram &root, std::string file_path = "<unknown>");
+    explicit SemanticChecker(const AstNode &root, std::string file_path = "<unknown>");
 
     /**
      * 语法合法性检查

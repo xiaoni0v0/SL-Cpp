@@ -18,6 +18,13 @@ inline void check_program(const std::u32string &source) {
     SemanticChecker{*program, "<test>"}.check();
 }
 
+// 按 eval(code) 的方式解析并检查：整份源码必须恰好是一条表达式，且检查时外层环境为空
+// （不在任何 Program 内、不在任何循环内）。不抛异常就是通过。
+inline void check_single_expr(const std::u32string &source) {
+    const AstNodePtr expr{parse_single_expr(source)};
+    SemanticChecker{*expr, "<test>"}.check();
+}
+
 // 直接对一棵手工搭出来的 AST 跑 SemanticChecker——用于测试那些"只有 Parser 出 bug 才会触发"的防御性
 // 断言（比如 AstNodeIf::clauses_ 为空、AstNodeCompare 的 operands_/ops_ 数量对不上），
 // 这类畸形的树没法通过正常解析源码构造出来，只能手工拼。
@@ -28,6 +35,21 @@ inline void check_ast(AstNodeProgram &program) { SemanticChecker{program, "<test
 inline void check_throws_with(const std::u32string &source, const std::string &message_substring) {
     try {
         check_program(source);
+        FAIL("expected SyntaxError containing: " << message_substring);
+    } catch (const SyntaxError &e) {
+        const std::string what{e.what()};
+        CHECK_MESSAGE(
+            what.find(message_substring) != std::string::npos,
+            "expected message to contain \"" << message_substring << "\", got: " << what
+        );
+    }
+}
+
+// 同上，但走 check_single_expr（eval 那条路）。
+inline void
+check_single_expr_throws_with(const std::u32string &source, const std::string &message_substring) {
+    try {
+        check_single_expr(source);
         FAIL("expected SyntaxError containing: " << message_substring);
     } catch (const SyntaxError &e) {
         const std::string what{e.what()};
