@@ -15,7 +15,7 @@ int main(const int argc, char *argv[]) {
 
     // 没有输入文件
     if (argc != 2) {
-        std::cerr << "Usage: " << std::filesystem::path(argv[0]).filename().string()
+        std::cerr << "Usage: " << std::filesystem::path{argv[0]}.filename().string()
                   << " <input_file>" << std::endl;
         return 1;
     }
