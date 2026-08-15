@@ -22,6 +22,13 @@ class ExprFolder {
 #undef X
 
   public:
+    ExprFolder() = delete;
+    ~ExprFolder() = delete;
+    ExprFolder(const ExprFolder &) = delete;
+    ExprFolder(ExprFolder &&) = delete;
+    ExprFolder &operator=(const ExprFolder &) = delete;
+    ExprFolder &operator=(ExprFolder &&) = delete;
+
     /**
      * 折整份 Program：除了逐条折叠，还会做 Program 级别的死语句剪枝
      * @param root Program 根节点，原地修改

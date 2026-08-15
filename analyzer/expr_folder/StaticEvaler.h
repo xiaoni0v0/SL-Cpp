@@ -144,7 +144,6 @@ class StaticEvaler {
     literal_compare_int(const AstNodeLiteralInt &a, const AstNodeLiteralInt &b);
 
   public:
-    // 纯工具类，静态、无状态，直接禁止实例化
     StaticEvaler() = delete;
     ~StaticEvaler() = delete;
     StaticEvaler(const StaticEvaler &) = delete;

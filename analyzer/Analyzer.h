@@ -9,6 +9,13 @@
  */
 class Analyzer {
   public:
+    Analyzer() = delete;
+    ~Analyzer() = delete;
+    Analyzer(const Analyzer &) = delete;
+    Analyzer(Analyzer &&) = delete;
+    Analyzer &operator=(const Analyzer &) = delete;
+    Analyzer &operator=(Analyzer &&) = delete;
+
     /**
      * 分析一整份 Program
      * 折叠会走到 Program 级别的死语句剪枝
