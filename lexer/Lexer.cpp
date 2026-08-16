@@ -431,7 +431,6 @@ std::string Lexer::get_typename_by_tokentype(const TokenType type) {
     static constexpr const char *const TOKEN_TYPE_MAPPING[]{
 #define X(name) #name,
 #include "x_token_type.h"
-
 #undef X
     };
 
