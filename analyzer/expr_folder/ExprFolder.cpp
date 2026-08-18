@@ -18,6 +18,7 @@ void ExprFolder::visit(AstNode &node) {
 #define X(nt)                                                                                      \
     if (auto *n{dynamic_cast<nt *>(p)}) return visit(*n);
 #include "../../parser/ast_nodes/x_ast_nodes.h"
+
 #undef X
 
     assert(!"Unknown node type");

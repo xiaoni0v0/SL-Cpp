@@ -39,6 +39,7 @@ void SemanticChecker::check(const AstNode &node) {
 #define X(nt)                                                                                      \
     if (const auto *n{dynamic_cast<const nt *>(p)}) return check(*n);
 #include "../../parser/ast_nodes/x_ast_nodes.h"
+
 #undef X
 
     assert(!"Unknown node type");
