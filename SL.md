@@ -69,15 +69,16 @@ SL 中有以下**字面量**类型：
 - `_G`, `_L`；
 - int: `123`，目前尚不支持二进制、八进制、十六进制。不允许前导零（单独一个 `0` 除外）；
   负数不是字面量，是一元符号和整数的运算结果；
-- float: `123.45`，目前尚不支持科学计数法；整数、小数部分都不能省略，`1.`、`.1` 不是合法的 float 字面量；
+- decimal: `123.45`，目前尚不支持科学计数法；整数、小数部分都不能省略，`1.`、`.1` 不是合法的 decimal 字面量；
   整数部分同样遵守 int 的前导零限制（`007.5` 不合法），小数部分没有这个限制（`0.05` 合法）；
+  字面量按写下的样子精确表示，不做任何舍入，末尾零也保留（`1.50` 与 `1.5` 值相等但标度不同，见 4.2.6）；
 - str:
   - `"hello"` 或者 `'hello'`，支持转义但不支持多行；
   - `` `hello` ``（反引号），为**原始字符串**，不处理任何转义、原样天然支持多行；
       反引号字符串内不能出现反引号本身，需要用普通字符串拼接得到；
 
   三种写法产出的都是 `str`，没有类型区别；
-  支持的转义（对于 `"..."`/`'...'`）：
+  支持的转义（对于 `""`/`''`）：
   `'\a'`, `'\b'`, `'\f'`, `'\n'`, `'\r'`, `'\t'`, `'\v'`, `'\0'`, `'\\'`, `'\''`, `'\"'`；
   SL 不支持 C/Python 那种字面量相邻自动拼接；
 - tuple: `(1, 2, 3)`，空元组 `()`，单元素元组必须 `(1,)`；括号不可省略，不存在无括号的元组写法（与 Python 不同）；
@@ -223,6 +224,8 @@ else x = 200
 `del` 是表达式。
 
 语法：`del target`。其中 `target` 必须是标识符或属性访问。
+
+没有 `del expr[index]`，这是刻意设计。
 
 #### 2.2.4 `global` 表达式
 
@@ -531,6 +534,9 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 
 以下描述为内置类的实例的语义。自定义类型详见 3.8 所述。
 
+凡结果为 decimal 的运算，结果都要按当前上下文舍入到至多 `prec` 位有效数字（见 4.2.6），
+因此不一定是精确值（如 `1 / 3`）；下文不再逐条重复。
+
 - `x[index, ...]`
   - 对于列表、元组、字符串等，返回下标为 `index` 的元素（此时 `index` 为 int，或 range 对象表示切片）；
   - 对于字典等，返回键为 `index` 所对应的值；
@@ -541,7 +547,7 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 - `x?` 对于类型，生成一个复合类型，表示该类型或 `None`；
 - `x!` 对于类型，生成一个复合类型，表示精确该类型（不可以是子类型）；
 - `x ** y` 返回 `x` 的 `y` 次幂；
-  `x`、`y` 都是 int 时，结果是整数次幂则仍是 int，否则（如 `2 ** -1`）是 float；
+  `x`、`y` 都是 int 时，结果是整数次幂则仍是 int，否则（如 `2 ** -1`）是 decimal；
   结果不为实数（如负数开偶次方根）抛出 `MathError`；
 - `+x`, `-x` 返回正 `x`，负 `x`。
   对于数字，`+x` 等于 `x`，`-x` 等于 `x` 的相反数；
@@ -553,8 +559,8 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
       重复出来的各份中，对应位置的元素是同一个引用，而非各自独立的副本。
       字符串本身不可变，不受此影响；
 - `x / y`, `x // y`, `x % y`
-  对于数字，分别返回 `x` 除以 `y` 的精确商、向下取整商、余数；
-  `x`、`y` 都是 int 时：`/` 结果总是 float；
+  对于数字，分别返回 `x` 除以 `y` 的商、向下取整商、余数；
+  `x`、`y` 都是 int 时：`/` 结果总是 decimal；
   `//`、`%` 结果仍是 int。`y` 为 `0` 一律抛 `MathError`；
   `//` 永远向负无穷方向取整，`%` 与 `//` 满足恒等式 `x % y == x - (x // y) * y`；
   对于 `x` 是 str，`%` 表示字符串格式化，`y` 为替换参数；
@@ -565,11 +571,11 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 - `x - y`
   对于数字、集合，返回 `x` 减 `y` / 差集；
 - `x..y`
-  - 对于 `x` 和 `y` 为 int、float、None，返回一个 range 对象（称为二元 range 对象），
+  - 对于 `x` 和 `y` 为 int、decimal、None，返回一个 range 对象（称为二元 range 对象），
       分别表示 start、stop，步长默认为 1，等同于 Python 里的 range(x, y)；
-  - 对于 `x` 是二元 range 对象且 `y` 是 int、float、None，返回一个 range 对象（称为三元 range 对象），
+  - 对于 `x` 是二元 range 对象且 `y` 是 int、decimal、None，返回一个 range 对象（称为三元 range 对象），
       表示同 Python 里的 `range(start, stop, step)`；
-  - 对于 `x` 是 int、float、None 且 `y` 是二元 range 对象，直接抛出 `TypeError`；
+  - 对于 `x` 是 int、decimal、None 且 `y` 是二元 range 对象，直接抛出 `TypeError`；
 - `x << y`, `x >> y`
   对于 int，分别返回按位左移、按位右移；
 - `x ^ y`
@@ -603,8 +609,6 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 - `del expr.attr`：删除对象的属性（见 3.9.1.2）。
 
 两种形式的值均为 `None`。
-
-没有 `del expr[index]`，这是刻意设计。
 
 #### 3.4.4 `global` 表达式的值
 
@@ -902,14 +906,14 @@ deco( func () {} )
    （不管是正常执行到末尾收集到的，还是被 `return` 提前中止前已经收集到的），按下列规则存为类的**属性**：
     1. 若 `isinstance(v, property)`，直接存入**描述器表**（属性行为由 `property` 自己的 `get`、`set`、`delete` 负责）；
     2. 否则若 `isinstance(v, staticmethod)`，将 `v.func` 存入**属性表**（纯标签，不是描述器，不参与绑定）；
-    3. 否则若 `isinstance(v, classmethod)`，直接存入**描述器表**（绑定 `cls` 由 `classmethod` 自己的 `get` 负责）；
-    4. 否则若 `v` 就是 `unsupported` 这个类本身，将 `unsupported(name)`（`name` 为收集到的这个变量名）存入**描述器表**；
-    5. 否则若 `isinstance(v, unsupported)`，直接存入**描述器表**；
-    6. 否则若 `isinstance(v, protocols.Callable)`，将 `MethodDescriptor(v)` 存入**描述器表**；
+    3. 否则若 `isinstance(v, classmethod)`，直接存入描述器表（绑定 `cls` 由 `classmethod` 自己的 `get` 负责）；
+    4. 否则若 `v` 就是 `unsupported` 这个类本身，将 `unsupported(name)`（`name` 为收集到的这个变量名）存入描述器表；
+    5. 否则若 `isinstance(v, unsupported)`，直接存入描述器表；
+    6. 否则若 `isinstance(v, protocols.Callable)`，将 `MethodDescriptor(v)` 存入描述器表；
        `MethodDescriptor` 是 `Descriptor` 的子类，`get(self, obj)` 按 `obj` 分两种情况：
        - 经由实例访问（`isinstance(obj, type)` 为假）返回一个把 `obj` 绑定为第一参数的可调用对象；
        - 经由类访问（`isinstance(obj, type)` 为真）不绑定，直接返回它持有的那个函数本身。
-    7. 否则原样存入**属性表**。
+    7. 否则原样存入属性表。
 
    这一步是描述器表唯一的建立时机，此后该表不再变化（见 3.9.1.1）。
 
@@ -1569,14 +1573,124 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 `bool` 没有 `int` 特有的位运算等方法。但 `numbers.Real` 要求的四则运算、大小比较，`bool` 自己实现：
 参与运算前先把 `True`/`False` 按 `1`/`0` 折算成 `int`，再复用 `int` 的实现，结果类型是 `int`（不是 `bool`）。
 
-#### 4.2.6 float
+#### 4.2.6 decimal
 
-表示浮点数，底层用 C++ 的 double 实现。
+十进制浮点数，自带高精度。
 
 继承 `numbers.Real`。
 
-`float` 不会自动转换为 `int`，即便数值恰好是整数；
-反过来 `int` 在某些运算下会自动变成 `float`。
+一个 decimal 由符号、系数、指数三部分组成，值为 `符号 × 系数 × 10 ^ 指数`：系数是高精度整数，
+位数不受机器字长限制；指数是范围有限的整数（见 `Emin`/`Emax`）。因为底数是 10，源码里写下的十进制
+字面量都能被精确表示，`0.1 + 0.2 == 0.3` 为真——这正是它取代二进制浮点数的理由。
+
+decimal 的算术遵循 **IBM 通用十进制算术规范**（General Decimal Arithmetic Specification，也就是
+Python `decimal` 模块实现的那一份）。以下只写要点、以及 SL 与该规范不一致的地方，未提及处以该规范为准。
+
+**标度是值的一部分**：`1.5` 与 `1.50` 的系数、指数分别是 `15 × 10 ^ -1` 和 `150 × 10 ^ -2`，两者 `==`
+为真、哈希也相同，但 `str` 分别得到 `1.5` 和 `1.50`。运算结果的标度由该规范的"理想指数"规则决定
+（如 `+`、`-` 取两个操作数指数的较小者，`*` 取两者之和），于是 `1.10 + 2.00` 得到 `3.10` 而不是 `3.1`，
+金额计算不必额外补零。
+
+**构造不舍入，运算才舍入**：字面量、`decimal(x)`（`x` 为 str、int、bool、decimal）、以及 int/bool 在
+混合运算中提升成 decimal，一律精确保留全部位数，哪怕超过当前上下文的 `prec`；而每一个算术运算
+（`+ - * / // % **` 以及各个方法）的结果都按**当前上下文**舍入到至多 `prec` 位有效数字。
+比较运算不舍入。`decimal(str)` 的字符串不合法时抛 `decimal.ConversionSyntax`。
+
+`decimal` 不会自动转换为 `int`，即便数值恰好是整数；反过来 int、bool 在混合运算中提升为 decimal。
+数值相等的 int 与 decimal 哈希相同。
+
+`str` 按该规范的转换规则，指数为正、或调整后的指数小于 `-6` 时用科学计数法（如 `1.5E+30`）。
+SL 目前还没有科学计数法字面量（见 5.1），因此这种输出暂时不能原样当字面量读回来。
+
+`//` 的取整方向以 SL 的统一规则为准，**永远向负无穷**（见 3.4.2），不采纳该规范里 `divide-integer`
+向零截断的定义——SL 的 `//` 不因操作数类型而改变取整方向。`//` 的结果位数超过 `prec` 时抛
+`decimal.DivisionImpossible`。
+
+**特殊值**：decimal 有 `Infinity`、`-Infinity`、`NaN`、`sNaN` 和负零（`-0.0 == 0.0` 为真）。但默认
+上下文把产生它们的三个信号全设成了陷阱（见 4.2.6.3），所以默认设置下它们只能由 `decimal('nan')`
+这类构造显式产生，不会凭空冒出来。NaN 参与序比较（`<`、`<=`、`>`、`>=`）时抛
+`decimal.InvalidOperation`，不像二进制浮点数那样静默返回 `False`，因此排序不会得到无声的错误结果；
+`==`、`!=` 照常返回 `False`、`True`。
+
+##### 4.2.6.1 decimal.Context
+
+描述一次运算所处的算术环境。它是挂在 `decimal` 上的类，不是顶层内置名，源码里只能写作 `decimal.Context`。
+
+| 字段       | 默认值                                         | 含义                                       |
+|------------|------------------------------------------------|--------------------------------------------|
+| `prec`     | `28`                                           | 运算结果保留的有效数字位数上限，正 int     |
+| `rounding` | `decimal.ROUND_HALF_EVEN`                      | 舍入方式，见 4.2.6.2                       |
+| `traps`    | `[DivisionByZero, Overflow, InvalidOperation]` | 要抛异常的信号集合，见 4.2.6.3             |
+| `flags`    | `[]`                                           | 已发生过的信号集合，粘滞，只能手动清空     |
+| `Emax`     | `999999`                                       | 指数上限，超出触发 `Overflow`              |
+| `Emin`     | `-999999`                                      | 指数下限，低于触发 `Subnormal`/`Underflow` |
+
+`decimal.Context(...)` 构造时按关键字传参，没传的字段取上表的默认值。
+
+**当前上下文**是一个全局可变状态，所有运算符走的都是它；`decimal.getcontext()`、
+`decimal.setcontext(ctx)` 这两个类方法读写它。
+
+**临时指定上下文**：decimal 上所有会查上下文的方法都带一个可选的末位参数 `ctx`，传了就按它算、
+且不改动当前上下文，如 `__op_div__(self, other, ctx=None)`。运算符语法永远只传操作数本身，
+也就是永远走当前上下文；要临时指定就得显式调方法。
+
+每个这样的 dunder 都有一个别名，名字是去掉 `__op_` 前缀和末尾下划线的结果（`div = __op_div__`、
+`add = __op_add__`、`floordiv = __op_floordiv__`，依此类推），于是写 `a.div(b, ctx)` 即可，
+不必写 `a.__op_div__(b, ctx)`。比较方法同样带 `ctx`，但只用来决定 NaN 触发的 `InvalidOperation`
+是抛出还是记进 `flags`，不涉及舍入。
+
+`Context` 自己不挂 `ctx.divide(a, b)` 那样的一套算术方法：它和 `a.div(b, ctx)` 是同一件事的第二种
+写法，两套等价 API 对规范和实现都是净负担。代价是左操作数为 int 时够不着——想按临时上下文算
+`1 / 3`，得写 `decimal(1).div(3, ctx)`，多一次显式转换。
+
+Python `Context` 的 `capitals`、`clamp` 两个字段不要：前者是 `E`/`e` 大小写的显示开关，算术环境里
+不该有显示选项（SL 固定输出大写 `E`）；后者只为 IEEE 定宽交换格式服务，而 SL 的 decimal 没有定宽表示。
+
+`with` 尚未加入，因此暂时没有 Python `localcontext()` 那种作用域式的临时上下文，以后再补。
+
+##### 4.2.6.2 舍入方式
+
+八种，与 Python 同名同义，作为常量挂在 `decimal` 上：
+
+| 名称              | 含义                                         |
+|-------------------|----------------------------------------------|
+| `ROUND_HALF_EVEN` | 四舍六入五成双（默认）                       |
+| `ROUND_HALF_UP`   | 四舍五入，恰好一半时远离零                   |
+| `ROUND_HALF_DOWN` | 恰好一半时靠近零                             |
+| `ROUND_UP`        | 一律远离零                                   |
+| `ROUND_DOWN`      | 一律向零截断                                 |
+| `ROUND_CEILING`   | 一律向 `+Infinity`                           |
+| `ROUND_FLOOR`     | 一律向 `-Infinity`                           |
+| `ROUND_05UP`      | 向零截断；但截断后末位是 0 或 5 时改为远离零 |
+
+##### 4.2.6.3 信号与陷阱
+
+运算过程中出现的异常情况称为**信号**。每个信号在上下文里有两种去向：在 `traps` 里就立刻抛出对应的
+异常；不在就把它记进 `flags`（粘滞位，只能由使用者手动清空），并按规范返回一个结果继续算下去。
+
+信号本身就是异常类，挂在 `decimal` 上，全部是 `MathError` 的子类——于是 `except MathError` 能同时
+接住 int 的除零和 decimal 的各种信号：
+
+```
+decimal.DecimalException
+├── decimal.Clamped
+├── decimal.Rounded
+├── decimal.Inexact
+├── decimal.Subnormal
+├── decimal.DivisionByZero      ← 默认陷阱。除数为 0 而被除数不为 0
+├── decimal.InvalidOperation    ← 默认陷阱。运算本身无意义
+│   ├── decimal.ConversionSyntax    - 字符串不是合法的 decimal
+│   ├── decimal.DivisionImpossible  - 整除的结果位数超过 prec
+│   ├── decimal.DivisionUndefined   - 0 / 0
+│   └── decimal.InvalidContext      - 上下文字段本身不合法
+├── decimal.Overflow            ← 默认陷阱。指数超过 Emax。同时是 Inexact、Rounded 的子类
+└── decimal.Underflow           - 指数低于 Emin 且结果不为零。同时是 Inexact、Rounded、Subnormal 的子类
+```
+
+Python 的 `FloatOperation` 不要：它存在的意义是拦截 Decimal 与二进制浮点数混用，SL 没有这种混用。
+
+默认的三个陷阱意味着：**默认设置下 decimal 的出错行为和"直接报错"的语言一致**，不会静默产生
+`Infinity`/`NaN` 让错误一路蔓延下去。要按 IEEE 那样"出错也接着算"，把对应信号从 `traps` 里去掉即可。
 
 #### 4.2.7 complex
 
@@ -1584,7 +1698,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 继承 `numbers.Number`。
 
-其中实部和虚部分别用一个 float 存储。
+其中实部和虚部分别用一个 decimal 存储，因此复数运算同样受当前上下文约束。
 
 #### 4.2.8 str
 
@@ -1749,20 +1863,21 @@ f(1.0)  # 抛出 DispatchError
 
 ```
 BaseException
-├── SystemExit         - exit() 触发
-├── KeyboardInterrupt  - 用户按下 Ctrl + C
+├── SystemExit                       - exit() 触发
+├── KeyboardInterrupt                - 用户按下 Ctrl + C
 └── Exception
-    ├── SyntaxError    - 语法错误。编译期
-    ├── TypeError      - 类型错误
-    ├── ValueError     - 值不合法
-    ├── NameError      - 变量名未找到
-    ├── AttributeError - 属性不存在或不支持该操作
-    ├── IndexError     - `[]` 下标/键不存在或越界（不再区分序列下标与映射键）
-    ├── MathError      - 数学运算错误（除以零、负数开偶次方根、对非正数取对数、对[-1, 1]以外的数取反三角等）
-    ├── DispatchError  - 函数调用时参数不匹配
-    ├── RecursionError - 递归/调用嵌套过深
-    ├── IOError        - 输入输出失败
-    └── ImportError    - 模块导入失败（找不到模块/包，或名字有歧义）
+    ├── SyntaxError                  - 语法错误。编译期
+    ├── TypeError                    - 类型错误
+    ├── ValueError                   - 值不合法
+    ├── NameError                    - 变量名未找到
+    ├── AttributeError               - 属性不存在或不支持该操作
+    ├── IndexError                   - `[]` 下标/键不存在或越界（不再区分序列下标与映射键）
+    ├── MathError                    - 数学运算错误（除以零、负数开偶次方根、对非正数取对数、对[-1, 1]以外的数取反三角等）
+    │   └── decimal.DecimalException - decimal 的各种信号，子类见 4.2.6.3
+    ├── DispatchError                - 函数调用时参数不匹配
+    ├── RecursionError               - 递归/调用嵌套过深
+    ├── IOError                      - 输入输出失败
+    └── ImportError                  - 模块导入失败（找不到模块/包，或名字有歧义）
 ```
 
 #### 4.2.27 TypeVar
@@ -1788,11 +1903,11 @@ BaseException
 
 ##### 4.3.1.1 Number
 
-抽象基类。定义数值的公共契约：四则运算与相等比较。`int`、`float`、`complex`、`bool` 均为其子类。
+抽象基类。定义数值的公共契约：四则运算与相等比较。`int`、`decimal`、`complex`、`bool` 均为其子类。
 
 ##### 4.3.1.2 Real
 
-`Number` 的子类，抽象基类。在四则运算之上增加大小比较。`int`、`float`、`bool` 为其子类。
+`Number` 的子类，抽象基类。在四则运算之上增加大小比较。`int`、`decimal`、`bool` 为其子类。
 
 #### 4.3.2 `protocols`
 
@@ -1861,20 +1976,22 @@ $$
 \text{SingletonType} \\
 \text{FuncGroup} \\
 \text{CompoundType} \\
+\text{TypeVar} \\
+\text{decimal.Context} \\
 \text{Descriptor}\left\{\begin{array}{l}\text{property} \\ \text{classmethod} \\ \text{unsupported} \end{array}\right. \\
 \text{str} \\ \text{tuple} \\ \text{list} \\ \text{range} \\
 \text{dict} \\ \text{unordered_dict} \\ \text{frozendict} \\
 \text{set} \\ \text{frozenset} \\
 \text{numbers.Number}\left\{\begin{array}{l}
 \text{complex} \\
-\text{numbers.Real}\left\{\begin{array}{l}\text{float} \\ \text{int} \\ \text{bool} \end{array}\right.
+\text{numbers.Real}\left\{\begin{array}{l}\text{decimal} \\ \text{int} \\ \text{bool} \end{array}\right.
 \end{array}\right. \\
 \text{BaseException}\left\{\begin{array}{l}
 \text{SystemExit} \\ \text{KeyboardInterrupt} \\
 \text{Exception}\left\{\begin{array}{l}
 \text{SyntaxError} \\ \text{TypeError} \\ \text{ValueError} \\ \text{NameError} \\ \text{AttributeError} \\
-\text{IndexError} \\ \text{MathError} \\ \text{DispatchError} \\ \text{RecursionError} \\
-\text{ImportError} \\
+\text{IndexError} \\ \text{DispatchError} \\ \text{RecursionError} \\ \text{ImportError} \\
+\text{MathError} \to \text{decimal.DecimalException} \\
 \text{IOError} \to \text{exceptions.EncodingError}
 \end{array}\right.
 \end{array}\right.
@@ -1885,8 +2002,8 @@ $$
 
 ### 5.1 较近目标
 
-assert、字面量改进（包括整数允许_分割，整数允许2、8、16进制字面量，浮点数允许科学计数法，字符串允许更多的转义，复数字面量）、
-二元运算符 in、更细分的异常、raw_int。
+assert、字面量改进（包括整数允许_分割，整数允许2、8、16进制字面量，decimal 允许科学计数法，字符串允许更多的转义，复数字面量）、
+二元运算符 in、更细分的异常、raw_int、raw_float。
 
 ### 5.2 较远目标
 
