@@ -2,65 +2,132 @@
 
 """
 format.py
-批量用 clang-format 格式化项目里的 .h / .cpp 文件
-排除规则：文件名以 "x_" 开头、以 ".h" 结尾的内联 X-Macro 头文件（如 x_token_type.h）
+
+批量格式化项目里的源文件，按后缀名分派给对应的格式化器（见 FORMATTERS）：
+    .c / .cc / .cpp / .cxx / .h / .hh / .hpp / .hxx ->  clang-format
+    .py                                             ->  black
+未收录的后缀一律忽略。
+
+排除规则由下面两张 pattern 表控制（glob 通配符，大小写不敏感）：
+    EXCLUDE_DIR_PATTERNS    匹配目录名，命中的目录整棵子树都不进入
+    EXCLUDE_FILE_PATTERNS   匹配文件名，命中的文件跳过
 
 用法：
-    python format.py [项目根目录] [--dry-run]
+    python format.py [项目根目录] [-i]
 
 参数：
-    项目根目录   默认是当前目录 "."
-    --dry-run    只打印命中的文件名列表，不实际执行 clang-format
+    项目根目录       默认是当前目录 "."
+    -i, --in-place   真正原地改写文件；不加这个参数只列出会被格式化的文件
 """
 
 import argparse
+import fnmatch
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Callable, NamedTuple
+from typing import List
 
-# 默认额外排除的目录（噪音目录，可按需增删）
-EXCLUDE_DIRS = {".git", "build"}
-# 支持通配符的排除目录（比如 cmake-build-debug、cmake-build-release）
-EXCLUDE_DIR_PATTERNS = ["cmake-build-*"]
+# 排除的目录名（噪音目录，可按需增删）
+EXCLUDE_DIR_PATTERNS = [
+    ".ai",
+    ".claude",
+    ".git",
+    ".idea",
+    ".venv",
+    "cmake-build-*",
+]
+# 排除的文件名（x_*.h 是内联 X-Macro 头文件，可按需增删）
+EXCLUDE_FILE_PATTERNS = ["x_*.h"]
 
 
-def is_excluded_dir(path: Path) -> bool:
-    """判断路径中是否包含需要排除的目录"""
-    for part in path.parts:
-        if part in EXCLUDE_DIRS:
-            return True
-        for pattern in EXCLUDE_DIR_PATTERNS:
-            if Path(part).match(pattern):
-                return True
-    return False
+class Formatter(NamedTuple):
+    """一个格式化器：叫什么、怎么拼命令行、内容走 stdin 还是给路径"""
+
+    command: str  # 可执行文件名，用于 PATH 检查和报错
+    build_argv: Callable[[Path], List[str]]
+    via_stdin: bool  # True 表示把原文件内容喂给 stdin
+
+    def run(self, path: Path, original: bytes) -> bytes:
+        """跑一遍，返回格式化后的内容；失败抛 FormatError"""
+        result = subprocess.run(
+            self.build_argv(path),
+            input=original if self.via_stdin else b"",
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            detail = result.stderr.decode("utf-8", errors="replace").strip()
+            raise FormatError(detail or f"{self.command} 退出码 {result.returncode}")
+        return result.stdout
+
+
+class FormatError(RuntimeError):
+    """格式化器处理单个文件失败"""
+
+
+CLANG_FORMAT = Formatter(
+    command="clang-format",
+    build_argv=lambda path: ["clang-format", "--style=file", str(path)],
+    via_stdin=False,
+)
+BLACK = Formatter(
+    command="black",
+    # black 只能从 stdin 读、往 stdout 写；--stdin-filename 让它找得到对应的 pyproject.toml
+    build_argv=lambda path: ["black", "--quiet", "--stdin-filename", str(path), "-"],
+    via_stdin=True,
+)
+
+# 后缀名 -> 格式化器。要支持新语言就在这里加一行，别的地方不用动
+FORMATTERS = {
+    ".c": CLANG_FORMAT,
+    ".cc": CLANG_FORMAT,
+    ".cpp": CLANG_FORMAT,
+    ".cxx": CLANG_FORMAT,
+    ".h": CLANG_FORMAT,
+    ".hh": CLANG_FORMAT,
+    ".hpp": CLANG_FORMAT,
+    ".hxx": CLANG_FORMAT,
+    ".py": BLACK,
+}
+
+
+def matches_any(name: str, patterns: list[str]) -> bool:
+    """大小写不敏感的通配符匹配，保证 Windows / Linux 上行为一致"""
+    name = name.lower()
+    return any(fnmatch.fnmatchcase(name, pattern.lower()) for pattern in patterns)
+
+
+def formatter_for(path: Path) -> Formatter | None:
+    """按后缀名分派格式化器，未收录的后缀返回 None"""
+    return FORMATTERS.get(path.suffix.lower())
 
 
 def find_target_files(project_dir: Path) -> list[Path]:
-    """查找所有待格式化的 .h / .cpp 文件，排除噪音目录和 x_*.h 内联头文件"""
+    """查找所有待格式化的文件，跳过排除目录（整棵子树）和排除文件"""
     files = []
-    for ext in ("*.h", "*.cpp"):
-        for path in project_dir.rglob(ext):
-            if is_excluded_dir(path.relative_to(project_dir).parent):
+    for dirpath, dirnames, filenames in os.walk(project_dir):
+        # 就地裁剪，别走进 build/ 这类可能有几十万文件的目录
+        dirnames[:] = [d for d in dirnames if not matches_any(d, EXCLUDE_DIR_PATTERNS)]
+        for name in filenames:
+            if formatter_for(Path(name)) is None:
                 continue
-            if path.name.startswith("x_") and path.suffix == ".h":
+            if matches_any(name, EXCLUDE_FILE_PATTERNS):
                 continue
-            files.append(path)
+            path = Path(dirpath) / name
+            if path.is_file():  # 挡掉断链软链接、管道之类的非普通文件
+                files.append(path)
     return sorted(files)
 
 
 def format_file(path: Path) -> bool:
     """
-    用 clang-format 格式化单个文件。
+    格式化单个文件。
     返回 True 表示内容确实发生了变化，False 表示格式化后与原内容一致（未改动）。
     """
     original = path.read_bytes()
-    result = subprocess.run(
-        ["clang-format", "--style=file", str(path)],
-        capture_output=True,
-        check=True,
-    )
-    formatted = result.stdout
+    formatted = formatter_for(path).run(path, original)
     if formatted != original:
         path.write_bytes(formatted)
         return True
@@ -71,13 +138,22 @@ def pluralize(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
+def missing_commands(files: list[Path]) -> list[str]:
+    """这批文件用得到、但 PATH 里找不到的格式化器"""
+    needed = {formatter_for(f).command for f in files}
+    return sorted(c for c in needed if shutil.which(c) is None)
+
+
 def main():
-    parser = argparse.ArgumentParser(description="批量用 clang-format 格式化项目文件")
+    parser = argparse.ArgumentParser(description="批量格式化项目源文件")
     parser.add_argument(
         "project_dir", nargs="?", default=".", help="项目根目录，默认为当前目录"
     )
     parser.add_argument(
-        "--dry-run", action="store_true", help="只打印命中的文件名，不实际格式化"
+        "-i",
+        "--in-place",
+        action="store_true",
+        help="真正原地改写文件；不加这个参数只列出会被格式化的文件",
     )
     args = parser.parse_args()
 
@@ -88,23 +164,33 @@ def main():
 
     files = find_target_files(project_dir)
 
-    if args.dry_run:
-        # dry-run 模式：只输出命中的文件名，不输出别的任何东西
+    if not args.in_place:
+        # 默认模式：只输出命中的文件名，不输出别的任何东西，方便管道接别的命令
         for f in files:
             print(f)
         return
 
-    if shutil.which("clang-format") is None:
+    missing = missing_commands(files)
+    if missing:
         print(
-            "错误：找不到 clang-format，请先确认已安装并在 PATH 中。", file=sys.stderr
+            f"错误：找不到 {'、'.join(missing)}，请先确认已安装并在 PATH 中。",
+            file=sys.stderr,
         )
         sys.exit(1)
 
     reformatted_count = 0
     unchanged_count = 0
+    failed_count = 0
 
     for f in files:
-        if format_file(f):
+        try:
+            changed = format_file(f)
+        except (FormatError, OSError) as e:
+            # 单个文件失败不中断整批，最后统一汇总并以非零码退出
+            print(f"错误：格式化失败 {f}：{e}", file=sys.stderr)
+            failed_count += 1
+            continue
+        if changed:
             print(f"reformatted {f}")
             reformatted_count += 1
         else:
@@ -120,7 +206,12 @@ def main():
         summary_parts.append(pluralize(reformatted_count, "file") + " reformatted")
     if unchanged_count > 0:
         summary_parts.append(pluralize(unchanged_count, "file") + " left unchanged")
-    print(", ".join(summary_parts) + ".")
+    if failed_count > 0:
+        summary_parts.append(pluralize(failed_count, "file") + " failed to reformat")
+    print((", ".join(summary_parts) + ".") if summary_parts else "No files matched.")
+
+    if failed_count > 0:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
