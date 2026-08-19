@@ -78,7 +78,7 @@ SL 中有以下**字面量**类型：
       反引号字符串内不能出现反引号本身，需要用普通字符串拼接得到；
 
   三种写法产出的都是 `str`，没有类型区别；
-  支持的转义（对于 `""`/`''`）：
+  支持的转义（对于 `"..."`/`'...'`）：
   `'\a'`, `'\b'`, `'\f'`, `'\n'`, `'\r'`, `'\t'`, `'\v'`, `'\0'`, `'\\'`, `'\''`, `'\"'`；
   SL 不支持 C/Python 那种字面量相邻自动拼接；
 - tuple: `(1, 2, 3)`，空元组 `()`，单元素元组必须 `(1,)`；括号不可省略，不存在无括号的元组写法（与 Python 不同）；
@@ -118,7 +118,8 @@ SL 中有以下**字面量**类型：
    若分组没有改变运算顺序且对跨行无影响，则称为冗余括号，不改变表达式的值、类型与求值顺序；
    但冗余括号仍是实实在在写在源码里的语法结构，标准中个别按写出来的形状给出的语法限制会看它在不在
    （如 2.2.6.1、2.2.6.2、2.2.6.3 中 `cond` 不能是裸的普通赋值：`if (x = y)` 非法而 `if ((x = y))` 合法）；
-2. 除了 `is`、`and`、`or`、`not`、求属性、`=` 以及所有复合赋值，其他运算符均可重载。
+2. 除了 `is`、`and`、`or`、`not`、求属性、`=` 以及所有复合赋值，其他运算符均可重载
+   （这里的 `=` 指名字绑定本身；写成元素访问的 `x[i] = v` 另有 `__op_set_index__`，见 3.8）。
 
 **注**：`*`/`**` 展开（3.6）、装饰器 `@`（2.2.9）、收集模式记号 `$`/`$$` 及其后的 `*`/`**`（2.2.6.2）都不是运算符，
 不可重载，故不列入上表。
@@ -560,8 +561,12 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
       字符串本身不可变，不受此影响；
 - `x / y`, `x // y`, `x % y`
   对于数字，分别返回 `x` 除以 `y` 的商、向下取整商、余数；
-  `x`、`y` 都是 int 时：`/` 结果总是 decimal；
-  `//`、`%` 结果仍是 int。`y` 为 `0` 一律抛 `MathError`；
+  `x`、`y` 都是 int 时：
+  - `/` 结果总是 decimal；
+  - `//`、`%` 结果仍是 int。
+  `y` 为 `0` 时：
+  - `x`、`y` 都是 int（含 bool）则一律抛 `MathError`；
+  - 有一方是 decimal 则按当前上下文的陷阱设置处理（见 4.2.6.3），默认同样是抛异常；
   `//` 永远向负无穷方向取整，`%` 与 `//` 满足恒等式 `x % y == x - (x // y) * y`；
   对于 `x` 是 str，`%` 表示字符串格式化，`y` 为替换参数；
   替换参数数量与格式串里的转换次数不一致、转换字符与参数类型不匹配等，一律抛 `TypeError`；
@@ -866,7 +871,7 @@ deco( func () {} )
 若确实需要对着某个类型（包括类自身尚未定义完毕、无法写成普通注解的自引用场景）做运行时类型检查，
 直接在函数体内手动 `isinstance` 检查即可。
 
-类型注解是 `TypeVar`（表达多个形参/返回值位置的类型必须彼此一致）时，调用时的一致性检查规则见 4.2.27。
+类型注解是 `TypeVar`（表达多个形参/返回值位置的类型必须彼此一致）时，调用时的一致性检查规则见 4.2.28。
 
 以上涉及函数定义时检查的地方，都在整个函数表达式的捕获、全部形参的注解与默认值、返回类型全部求值完毕之后统一进行。
 
@@ -1019,7 +1024,7 @@ f(*args, x=1, **extra) # 调用时展开
 
 SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Function Group）对象实现运行时 dispatch，而非通过同名函数定义。
 
-详见 4.2.25 所述。
+详见 4.2.26 所述。
 
 ### 3.8 运算符重载
 
@@ -1030,8 +1035,8 @@ SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Functi
 1. 在 `a` 的类（`type(a)` 及其基类）上查找 `__op_add__`，找到则调用 `type(a).__op_add__(a, b)`；
     - 若类上无 `__op_add__`、或调用返回 `NotImplemented`，则进行第 2 步；
     - 否则返回该调用结果；
-2. 在 `b` 的类上查找 `__op_radd__`，找到则调用 `type(b).__op_radd__(b, a)`；
-    - 若类上无 `__op_radd__`、或调用返回 `NotImplemented`，则进行第 3 步；
+2. 在 `b` 的类上查找 `__rop_add__`，找到则调用 `type(b).__rop_add__(b, a)`；
+    - 若类上无 `__rop_add__`、或调用返回 `NotImplemented`，则进行第 3 步；
     - 否则返回该调用结果；
 3. 抛出 `TypeError`。
 
@@ -1068,6 +1073,8 @@ SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Functi
 | `>=`                   | `__op_ge__`        |
 | `!=`                   | `__op_ne__`        |
 | `==`                   | `__op_eq__`        |
+
+**反向方法名**：把上表中正向名的 `__op_` 换成 `__rop_`，如 `+` 是 `__op_add__` / `__rop_add__`。
 
 ### 3.9 协议
 
@@ -1146,7 +1153,7 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 
 因此绕开属性协议直接写属性表（如 `attrs(int)['__op_add__'] = ...`）改不动任何类的既有行为。
 上述规则本身读到的也永远是 `get` 的结果而不是描述器对象本身
-（`property` 例外，它的 `get` 在经由类访问时故意返回自己，供内省，见 4.2.19）。
+（`property` 例外，它的 `get` 在经由类访问时故意返回自己，供内省，见 4.2.20）。
 
 **注意**：对象对其他对象的引用不止属性表这一种。
 解释器内部还会维护一些不通过属性机制暴露的引用，SL 层均访问不到，纯属 C++ 实现细节。但它们是真实的引用，垃圾回收照样要遍历到。
@@ -1530,7 +1537,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.1.15 `exit(code=0)`
 
-抛出 `SystemExit(code)`（见 4.2.26）。一路传播到解释器顶层无人捕获时，解释器终止，退出码为 `code`。
+抛出 `SystemExit(code)`（见 4.2.27）。一路传播到解释器顶层无人捕获时，解释器终止，退出码为 `code`。
 
 要求 `code` 为 int 或 `None`，其中 `None` 被视为 0。
 
@@ -1741,7 +1748,8 @@ decimal.DecimalException
 用 `|`, `!`, `?`, `[]` 可以创建**复合类**。
 
 1. `|` 表示两种类型均可。例如 `isinstance(1, int | str)` 为 `True`。
-2. `!` 表示精确类（即不允许子类）。例如 `isinstance(1, int!)` 为 `True` 而 `isinstance(True, int!)` 为 `False`。
+2. `!` 表示精确类（即不允许子类）。
+   例如 `isinstance(1, int!)` 为 `True`，而 `isinstance(1, numbers.Real!)` 为 `False`。
 3. `?` 表示可以为 `None`。例如 `isinstance(None, int?)` 为 `True`。
 4. `[]` 对容器类，表示容器中元素的类型。
     1. 对于 `tuple`
@@ -1766,24 +1774,33 @@ decimal.DecimalException
 以上检查均有短路性，但请不要依赖于此，因为检查的顺序不确定，
 例如 `int | str?` 的实际实现*可能*为 `None | int | str` 而非 `int | str | None`。
 
-#### 4.2.19 property
+#### 4.2.19 Descriptor
+
+描述器的基类，`get`/`set`/`delete` 三个方法的语义、以及描述器表的规则见 3.9.1.1。
+自定义属性行为需继承它。
+
+`get(self, obj)` 标记为 `@abstractmethod`，子类必须实现；
+`set(self, obj, value)`、`delete(self, obj)` 有默认实现，调用即无条件抛出 `AttributeError`，
+需要可写、可删就重写它们。
+
+#### 4.2.20 property
 
 `property(func_get, func_set=None, func_del=None)`，`Descriptor` 的子类。
 `func_set`、`func_del` 为 `None` 时对应操作按 `Descriptor` 默认行为抛 `AttributeError`。
 `get(self, obj)`：若 `isinstance(obj, type)` 返回 `self`（供内省），否则返回 `func_get(obj)`。
 
-#### 4.2.20 staticmethod
+#### 4.2.21 staticmethod
 
 `staticmethod(func)`，`self.func = func`。纯标签，不是描述器，仅在类体收集属性时取出 `v.func` 使用，
 本身不会成为类属性。
 
-#### 4.2.21 classmethod
+#### 4.2.22 classmethod
 
 `classmethod(func)`，`Descriptor` 的子类。
 `get(self, obj)`：令 `cls = obj if isinstance(obj, type) else type(obj)`，
 返回把 `cls` 绑定为第一参数的可调用对象。
 
-#### 4.2.22 unsupported
+#### 4.2.23 unsupported
 
 `unsupported(name=None)`，`Descriptor` 的子类，用于在类体中显式声明某个继承来的方法/属性协议不受支持。
 
@@ -1794,11 +1811,11 @@ decimal.DecimalException
 （`name` 即 `some_attr`）存入描述器表，见 3.4.8；
 写 `some_attr = unsupported('自定义消息')` 时使用给定实例，不再改写。
 
-#### 4.2.23 Function
+#### 4.2.24 Function
 
 `func` 表达式建立的对象的类。实现 `__op_call__`。
 
-#### 4.2.24 super
+#### 4.2.25 super
 
 `super(cls, obj)`。
 
@@ -1809,7 +1826,7 @@ decimal.DecimalException
 在属性表中找到则原样返回；
 全部找不到则 `AttributeError`。
 
-#### 4.2.25 FuncGroup(*functions, name=None)
+#### 4.2.26 FuncGroup(*functions, name=None)
 
 一个例子足以说明 FuncGroup 的用法：
 
@@ -1827,7 +1844,7 @@ f(1, 2) # 输出 4
 f(1.0)  # 抛出 DispatchError
 ```
 
-#### 4.2.26 异常类
+#### 4.2.27 异常类
 
 只列全局的一批常用异常，其余更细分的见 4.3.3 `exceptions` 模块。
 
@@ -1850,7 +1867,7 @@ BaseException
     └── ImportError                  - 模块导入失败（找不到模块/包，或名字有歧义）
 ```
 
-#### 4.2.27 TypeVar
+#### 4.2.28 TypeVar
 
 `TypeVar(bound=None)`。用作类型注解，见 3.4.7。
 
@@ -1883,7 +1900,7 @@ BaseException
 
 以下几者的判定规则类似：
 `isinstance(obj, X)`/`issubclass(cls, X)` 当且仅当 `type(obj)`/`cls` 的 MRO 上有该协议要求的全部方法，
-且每个方法按 3.9.1.2 的规则查找到的那一项都不是 `unsupported` 的实例（见 4.2.22 `unsupported`）。
+且每个方法按 3.9.1.2 的规则查找到的那一项都不是 `unsupported` 的实例（见 4.2.23 `unsupported`）。
 
 ##### 4.3.2.1 Callable
 
