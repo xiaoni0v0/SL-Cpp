@@ -101,18 +101,20 @@ FetchContent_MakeAvailable(nlohmann_json cxxopts doctest)
 # 所有的源文件
 add_executable(SL main.cpp
         # utils
-        utils/string_utils.cpp
-        utils/string_utils.h
         utils/file_utils.cpp
         utils/file_utils.h
+        utils/string_utils.cpp
+        utils/string_utils.h
 
         # numeric
-        numeric/BigInt.cpp
-        numeric/BigInt.h
-        numeric/DecContext.cpp
-        numeric/DecContext.h
         numeric/BigDec.cpp
         numeric/BigDec.h
+        numeric/BigInt.cpp
+        numeric/BigInt.h
+        numeric/dec_math.cpp
+        numeric/dec_math.h
+        numeric/DecContext.cpp
+        numeric/DecContext.h
 
         # Executor
         executor/Executor.cpp
@@ -122,21 +124,22 @@ add_executable(SL main.cpp
         lexer/Lexer.cpp
         lexer/Lexer.h
         lexer/token.h
-        lexer/x_token_type.h
         lexer/x_keyword.h
         lexer/x_reservedword.h
+        lexer/x_token_type.h
 
         # builtins
+        builtins/exceptions/EncodingError.h
+        builtins/exceptions/FileNotFoundError.h
         builtins/exceptions/InternalError.h
         builtins/exceptions/SLException.h
         builtins/exceptions/SyntaxError.h
-        builtins/exceptions/EncodingError.h
-        builtins/exceptions/FileNotFoundError.h
 
         # Parser
         parser/Parser.cpp
         parser/Parser.h
         parser/ast_nodes/ast_nodes.h
+        parser/ast_nodes/to_json.cpp
         parser/ast_nodes/x_ast_nodes.h
         parser/ast_nodes/details/ast_node.h
         parser/ast_nodes/details/ast_node_class.h
@@ -150,17 +153,16 @@ add_executable(SL main.cpp
         parser/ast_nodes/details/ast_node_operators.h
         parser/ast_nodes/details/ast_node_postfix.h
         parser/ast_nodes/details/ast_node_var.h
-        parser/ast_nodes/to_json.cpp
 
         # Analyzer
         analyzer/Analyzer.cpp
         analyzer/Analyzer.h
-        analyzer/semantic_checker/SemanticChecker.cpp
-        analyzer/semantic_checker/SemanticChecker.h
         analyzer/expr_folder/ExprFolder.cpp
         analyzer/expr_folder/ExprFolder.h
         analyzer/expr_folder/StaticEvaler.cpp
         analyzer/expr_folder/StaticEvaler.h
+        analyzer/semantic_checker/SemanticChecker.cpp
+        analyzer/semantic_checker/SemanticChecker.h
 )
 
 # 编译选项
@@ -205,12 +207,14 @@ enable_testing()
 
 add_executable(SL_Cpp_Numeric_Tests
         # 被测代码
-        numeric/BigInt.cpp
-        numeric/BigInt.h
-        numeric/DecContext.cpp
-        numeric/DecContext.h
         numeric/BigDec.cpp
         numeric/BigDec.h
+        numeric/BigInt.cpp
+        numeric/BigInt.h
+        numeric/dec_math.cpp
+        numeric/dec_math.h
+        numeric/DecContext.cpp
+        numeric/DecContext.h
 
         # 测试工具
         test/numeric/main_test.cpp
@@ -229,9 +233,9 @@ add_executable(SL_Cpp_Lexer_Tests
         lexer/Lexer.cpp
         lexer/Lexer.h
         lexer/token.h
-        lexer/x_token_type.h
         lexer/x_keyword.h
         lexer/x_reservedword.h
+        lexer/x_token_type.h
         utils/string_utils.cpp
         utils/string_utils.h
 
@@ -275,15 +279,15 @@ add_executable(SL_Cpp_Parser_Tests
         lexer/Lexer.cpp
         lexer/Lexer.h
         lexer/token.h
-        lexer/x_token_type.h
         lexer/x_keyword.h
         lexer/x_reservedword.h
+        lexer/x_token_type.h
         utils/string_utils.cpp
         utils/string_utils.h
         parser/Parser.cpp
         parser/Parser.h
-        parser/ast_nodes/to_json.cpp
         parser/ast_nodes/ast_nodes.h
+        parser/ast_nodes/to_json.cpp
         parser/ast_nodes/x_ast_nodes.h
         parser/ast_nodes/details/ast_node.h
         parser/ast_nodes/details/ast_node_class.h
@@ -353,21 +357,23 @@ add_executable(SL_Cpp_Analyzer_Tests
         lexer/Lexer.cpp
         lexer/Lexer.h
         lexer/token.h
-        lexer/x_token_type.h
         lexer/x_keyword.h
         lexer/x_reservedword.h
+        lexer/x_token_type.h
         utils/string_utils.cpp
         utils/string_utils.h
-        numeric/BigInt.cpp
-        numeric/BigInt.h
-        numeric/DecContext.cpp
-        numeric/DecContext.h
         numeric/BigDec.cpp
         numeric/BigDec.h
+        numeric/BigInt.cpp
+        numeric/BigInt.h
+        numeric/dec_math.cpp
+        numeric/dec_math.h
+        numeric/DecContext.cpp
+        numeric/DecContext.h
         parser/Parser.cpp
         parser/Parser.h
-        parser/ast_nodes/to_json.cpp
         parser/ast_nodes/ast_nodes.h
+        parser/ast_nodes/to_json.cpp
         parser/ast_nodes/x_ast_nodes.h
         parser/ast_nodes/details/ast_node.h
         parser/ast_nodes/details/ast_node_class.h

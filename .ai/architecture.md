@@ -22,10 +22,10 @@
 `executor/` 落地之前，SL.md 里"运行时"相关的条文（对象模型、GC、异常传播的具体机制等）都还没有对应
 实现可以参照，只能靠 SL.md 文本本身。**
 
-**`BigDec` 还缺的**：`**`（含整数指数）、`sqrt`，以及它们要用的 `exp`/`ln`/`log10`——这几个是任意精度
-下唯一需要"带保护位迭代到能定出舍入方向为止"的一类，跟已经实现的四则运算不是一个量级的工作，单独
-做。此外 `hash`（要跟数值相等的 `int` 一致，得先归一标度）和 `int(decimal)` 的取整方向都还没定，
-见 [context.md](context.md) 的悬而未决一节。
+**`BigDec` 的完成度**：SL.md 里 decimal 参与的**运算符全都实现了**——四则、`//`/`%`、比较、`**`，
+外加 `sqrt`/`exp`/`ln`/`log10`（`**` 的一般情形要靠它们）。还没做的是 `hash`（要跟数值相等的 `int`
+一致，得先归一标度）和 `int(decimal)`（取整方向 SL.md 还没定），见 [context.md](context.md) 的
+悬而未决一节。
 
 ## 目录一览
 
@@ -38,7 +38,7 @@
 | `analyzer/` | `Analyzer.{h,cpp}`：入口，依次跑 `SemanticChecker` 和 `ExprFolder`。 |
 | `analyzer/semantic_checker/` | `SemanticChecker.{h,cpp}`：语义检查（作用域规则、lvalue 合法性、`*`/`**` 位置合法性、func/class 约束、AST 结构防御性校验……），只读不改 AST，违规抛 `SyntaxError`（真实语义错误）或 `InternalError`（AST 结构本身违反 Parser 的保证，代表实现自己有 bug）。 |
 | `analyzer/expr_folder/` | `ExprFolder.{h,cpp}`：遍历 + 原地替换 AST 的调度层，拥有 `AstNodePtr` 槽位的所有权。`StaticEvaler.{h,cpp}`：纯函数式的"给一个节点判断能不能折、折成什么"，不遍历树、不拥有节点。 |
-| `numeric/` | `BigInt.{h,cpp}`：手写高精度整数，`int` 的底层实现（`小路径 int64_t` / `大路径 limbs` 双表示）。`BigDec.{h,cpp}`：十进制浮点数，`decimal` 的底层实现（`BigInt 系数 + int64_t 指数 + 独立符号位 + 特殊值 tag`）。`DecContext.{h,cpp}`：`decimal.Context` 的底层实现——舍入方式、精度、指数范围、信号的陷阱/标志位，以及陷阱触发时抛的 `DecTrapped`。 |
+| `numeric/` | `BigInt.{h,cpp}`：手写高精度整数，`int` 的底层实现（`小路径 int64_t` / `大路径 limbs` 双表示）。`BigDec.{h,cpp}`：十进制浮点数，`decimal` 的底层实现（`BigInt 系数 + int64_t 指数 + 独立符号位 + 特殊值 tag`）。`DecContext.{h,cpp}`：`decimal.Context` 的底层实现——舍入方式、精度、指数范围、信号的陷阱/标志位，以及陷阱触发时抛的 `DecTrapped`。`dec_math.{h,cpp}`：`ln`/`log10`/`exp`/`**` 用的整数层定点算法（`ilog`/`iexp`/`dlog`/`dexp`/`dpower` 等），只跟 BigInt 打交道，不认识上下文和信号。 |
 | `builtins/exceptions/` | 前端自己用的 C++ 异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`）——跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。 |
 | `utils/` | 自由函数工具：`string_utils`（UTF-8/UTF-32 互转等）、`file_utils`（读文件）。 |
 | `executor/` | 空壳，还没写。 |
@@ -91,6 +91,11 @@
 （C 实现 libmpdec，跟 `BigDec` 是两套独立代码）算出期望值，`big_dec_test.cpp` 逐条比对结果和触发的
 信号。改 `BigDec` 的语义时要连带重新生成（脚本开头写了用法），别手改那个 `.inc`。脚本带一个倍数
 参数，临时跑几十倍规模的差分测试很方便，提交进仓库的那份用默认倍数。
+
+提交进仓库的这份表是**按跑得动来配的**：`SL_Cpp_Numeric_Tests` 里超越函数和 `**` 那两个用例合起来
+就占了十几秒（BigDec 底下的 BigInt 是朴素算法，一次 `exp`/`ln` 要做几十次大数乘除），整个 ctest
+从 5 秒涨到 15 秒左右。要更大覆盖别往表里堆，用倍数参数临时生成一份跑完再换回来——40 倍规模
+（约 83 万个断言）跑过，全过。
 
 四个测试可执行目标：`SL_Cpp_Numeric_Tests`、`SL_Cpp_Lexer_Tests`、`SL_Cpp_Parser_Tests`、
 `SL_Cpp_Analyzer_Tests`（后者同时覆盖 `semantic_checker/` 和 `expr_folder/` 两个子系统）。怎么构建/

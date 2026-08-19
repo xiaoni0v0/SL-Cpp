@@ -928,6 +928,261 @@ TEST_SUITE("BigDec——代数恒等式（不依赖生成的用例表）") {
     }
 }
 
+TEST_SUITE("BigDec——幂运算与超越函数") {
+
+    TEST_CASE("** 的基本值与理想指数") {
+        DecContext ctx{quiet_context()};
+        CHECK(d("2").pow(d("10"), ctx).to_string() == "1024");
+        CHECK(d("2").pow(d("-1"), ctx).to_string() == "0.5");
+        CHECK(d("10").pow(d("-3"), ctx).to_string() == "0.001");
+        CHECK(d("-2").pow(d("2"), ctx).to_string() == "4");
+        CHECK(d("-2").pow(d("3"), ctx).to_string() == "-8"); // 奇数次幂才带负号
+        CHECK(d("5").pow(d("0"), ctx).to_string() == "1");
+        CHECK(d("0").pow(d("3"), ctx).to_string() == "0");
+        CHECK(d("-0").pow(d("3"), ctx).to_string() == "-0");
+        CHECK(d("-0").pow(d("2"), ctx).to_string() == "0");
+        CHECK(ctx.flags().empty()); // 以上全是精确的整数次幂
+
+        // 指数是非负整数时，结果的标度往"底数标度 × 指数"靠
+        CHECK(d("1.5").pow(d("2"), ctx).to_string() == "2.25");
+        CHECK(d("2.00").pow(d("2"), ctx).to_string() == "4.0000");
+        CHECK(d("1.00").pow(d("3"), ctx).to_string() == "1.000000");
+        CHECK(d("1.00").pow(d("-3"), ctx).to_string() == "1"); // 负指数没有理想指数
+        CHECK(ctx.flags().empty());
+    }
+
+    TEST_CASE("** 的特殊情形") {
+        DecContext ctx{quiet_context()};
+        CHECK(d("0").pow(d("-1"), ctx).to_string() == "Infinity");
+        CHECK(d("-0").pow(d("-1"), ctx).to_string() == "-Infinity");
+        CHECK(d("2").pow(d("Infinity"), ctx).to_string() == "Infinity");
+        CHECK(d("2").pow(d("-Infinity"), ctx).to_string() == "0");
+        CHECK(d("0.5").pow(d("Infinity"), ctx).to_string() == "0");
+        CHECK(d("0.5").pow(d("-Infinity"), ctx).to_string() == "Infinity");
+        CHECK(d("Infinity").pow(d("2"), ctx).to_string() == "Infinity");
+        CHECK(d("Infinity").pow(d("-2"), ctx).to_string() == "0");
+        CHECK(d("-Infinity").pow(d("3"), ctx).to_string() == "-Infinity");
+        CHECK(d("-Infinity").pow(d("2"), ctx).to_string() == "Infinity");
+        CHECK(ctx.flags().empty());
+
+        // 0 ** 0 无意义；负数的非整数次幂不是实数
+        CHECK(d("0").pow(d("0"), ctx).to_string() == "NaN");
+        CHECK(ctx.flags().has(DecCondition::InvalidOperation));
+        DecContext c2{quiet_context()};
+        CHECK(d("-2").pow(d("0.5"), c2).to_string() == "NaN");
+        CHECK(c2.flags().has(DecCondition::InvalidOperation));
+        // 但 (-0) ** 非整数 按 0 ** 非整数 算，不报错
+        DecContext c3{quiet_context()};
+        CHECK(d("-0").pow(d("0.5"), c3).to_string() == "0");
+        CHECK(c3.flags().empty());
+    }
+
+    TEST_CASE("指数不是整数时，结果就算精确也要报 Inexact") {
+        // 规范这么要求；fix 自己不会报，是 pow 事后补上去的
+        DecContext ctx{quiet_context()};
+        CHECK(d("4").pow(d("0.5"), ctx).to_string() == "2.000000000000000000000000000");
+        CHECK(flags_to_string(ctx.flags()) == "Inexact,Rounded");
+        DecContext c2{quiet_context()};
+        CHECK(d("0.25").pow(d("-0.5"), c2).to_string() == "2.000000000000000000000000000");
+        CHECK(flags_to_string(c2.flags()) == "Inexact,Rounded");
+        DecContext c3{quiet_context()};
+        CHECK(d("1E+10").pow(d("0.5"), c3).to_string() == "100000.0000000000000000000000");
+        CHECK(flags_to_string(c3.flags()) == "Inexact,Rounded");
+        // 整数指数就照常，精确就是精确
+        DecContext c4{quiet_context()};
+        CHECK(d("2").pow(d("10"), c4).to_string() == "1024");
+        CHECK(c4.flags().empty());
+    }
+
+    TEST_CASE("精确结果 + 定向舍入：我们跟 _pydecimal 一致，跟 libmpdec 差 1 ulp") {
+        // 规范对非整数指数的 ** 只要求"按 exp(y*ln(x)) 算"，不保证正确舍入，CPython 自己的两套
+        // 实现在这里就不一致（官方扩展测试把这一类列为已知差异）。我们选真值精确就原样给出的
+        // 那一支——ROUND_DOWN 下 9 ** 0.5 给 2.99 实在太不像话。交叉验证表里这些组合是跳过的，
+        // 行为由这个用例钉住
+        struct Case {
+            const char *base;
+            const char *exponent;
+            DecRounding rounding;
+            const char *expected;
+        };
+        const Case cases[]{
+            {"4", "-0.5", DecRounding::Up, "0.500"},
+            {"4", "1.5", DecRounding::Down, "8.00"},
+            {"9", "0.5", DecRounding::Down, "3.00"},
+            {"9", "1.5", DecRounding::Ceiling, "27.0"},
+            {"1E+10", "0.5", DecRounding::Up, "1.00E+5"},
+            {"1E+10", "-0.5", DecRounding::Floor, "0.0000100"},
+            {"0.25", "0.5", DecRounding::ZeroFiveUp, "0.500"},
+        };
+        for (const Case &c : cases) {
+            CAPTURE(c.base);
+            CAPTURE(c.exponent);
+            DecContext ctx{quiet_context(3, c.rounding)};
+            CHECK(d(c.base).pow(d(c.exponent), ctx).to_string() == c.expected);
+            CHECK(flags_to_string(ctx.flags()) == "Inexact,Rounded");
+        }
+    }
+
+    TEST_CASE("1 ** y：值恒是 1，标度和信号看指数长什么样") {
+        DecContext ctx{quiet_context()};
+        CHECK(d("1").pow(d("5"), ctx).to_string() == "1");
+        CHECK(d("1.00").pow(d("3"), ctx).to_string() == "1.000000");
+        CHECK(d("1.00").pow(d("-3"), ctx).to_string() == "1");
+        CHECK(ctx.flags().empty());
+        // 指数不是整数：值仍是 1，但要报 Inexact/Rounded，标度压到 prec 位
+        DecContext c2{quiet_context(5)};
+        CHECK(d("1").pow(d("0.5"), c2).to_string() == "1.0000");
+        CHECK(flags_to_string(c2.flags()) == "Inexact,Rounded");
+        // 底数标度太深，理想指数会被 1-prec 截住，此时只报 Rounded
+        DecContext c3{quiet_context(3)};
+        CHECK(d("1.0000").pow(d("5"), c3).to_string() == "1.00");
+        CHECK(flags_to_string(c3.flags()) == "Rounded");
+    }
+
+    TEST_CASE("sqrt") {
+        DecContext ctx{quiet_context()};
+        CHECK(d("9").sqrt(ctx).to_string() == "3");
+        CHECK(d("100").sqrt(ctx).to_string() == "10");
+        CHECK(d("2.25").sqrt(ctx).to_string() == "1.5");
+        CHECK(d("0.01").sqrt(ctx).to_string() == "0.1");
+        CHECK(d("1.00").sqrt(ctx).to_string() == "1.0"); // 理想指数是 exp/2
+        CHECK(d("0").sqrt(ctx).to_string() == "0");
+        CHECK(d("-0").sqrt(ctx).to_string() == "-0"); // 负零的符号留着
+        CHECK(d("Infinity").sqrt(ctx).to_string() == "Infinity");
+        CHECK(ctx.flags().empty()); // 完全平方数是精确的
+
+        CHECK(d("2").sqrt(ctx).to_string() == "1.414213562373095048801688724");
+        CHECK(ctx.flags().has(DecCondition::Inexact));
+
+        DecContext c2{quiet_context()};
+        CHECK(d("-1").sqrt(c2).to_string() == "NaN");
+        CHECK(c2.flags().has(DecCondition::InvalidOperation));
+        DecContext c3{quiet_context()};
+        CHECK(d("-Infinity").sqrt(c3).to_string() == "NaN");
+        CHECK(c3.flags().has(DecCondition::InvalidOperation));
+    }
+
+    TEST_CASE("ln / log10") {
+        DecContext ctx{quiet_context()};
+        CHECK(d("1").ln(ctx).to_string() == "0");
+        CHECK(d("1.000").ln(ctx).to_string() == "0"); // 标度不影响
+        CHECK(d("0").ln(ctx).to_string() == "-Infinity");
+        CHECK(d("-0").ln(ctx).to_string() == "-Infinity");
+        CHECK(d("Infinity").ln(ctx).to_string() == "Infinity");
+        CHECK(ctx.flags().empty());
+        CHECK(d("2").ln(ctx).to_string() == "0.6931471805599453094172321215");
+        CHECK(d("10").ln(ctx).to_string() == "2.302585092994045684017991455");
+        CHECK(d("0.5").ln(ctx).to_string() == "-0.6931471805599453094172321215");
+        CHECK(d("1E+999999").ln(ctx).to_string() == "2302582.790408952689972307437");
+
+        DecContext c2{quiet_context()};
+        CHECK(d("1000").log10(c2).to_string() == "3"); // 10 的整数次幂走精确分支
+        CHECK(d("0.001").log10(c2).to_string() == "-3");
+        CHECK(d("1E+999999").log10(c2).to_string() == "999999");
+        CHECK(d("1E-999999").log10(c2).to_string() == "-999999");
+        CHECK(d("1").log10(c2).to_string() == "0");
+        CHECK(c2.flags().empty());
+        CHECK(d("2").log10(c2).to_string() == "0.3010299956639811952137388947");
+        CHECK(c2.flags().has(DecCondition::Inexact));
+
+        DecContext c3{quiet_context()};
+        CHECK(d("-1").ln(c3).to_string() == "NaN");
+        CHECK(d("-1").log10(c3).to_string() == "NaN");
+        CHECK(d("-Infinity").ln(c3).to_string() == "NaN");
+        CHECK(c3.flags().has(DecCondition::InvalidOperation));
+    }
+
+    TEST_CASE("exp") {
+        DecContext ctx{quiet_context()};
+        CHECK(d("0").exp(ctx).to_string() == "1");
+        CHECK(d("-0").exp(ctx).to_string() == "1");
+        CHECK(d("Infinity").exp(ctx).to_string() == "Infinity");
+        CHECK(d("-Infinity").exp(ctx).to_string() == "0");
+        CHECK(ctx.flags().empty());
+        CHECK(d("1").exp(ctx).to_string() == "2.718281828459045235360287471");
+        CHECK(d("-1").exp(ctx).to_string() == "0.3678794411714423215955237702");
+        CHECK(d("2").exp(ctx).to_string() == "7.389056098930650227230427461");
+
+        // 参数大到一定程度必然溢出/下溢，走的是不算直接给结果的快路径
+        DecContext c2{quiet_context()};
+        CHECK(d("1E+30").exp(c2).to_string() == "Infinity");
+        CHECK(flags_to_string(c2.flags()) == "Inexact,Overflow,Rounded");
+        DecContext c3{quiet_context()};
+        CHECK(d("-1E+30").exp(c3).to_string() == "0E-1000026");
+        CHECK(flags_to_string(c3.flags()) == "Clamped,Inexact,Rounded,Subnormal,Underflow");
+        // 参数小到跟 0 分不出来时，结果贴着 1
+        DecContext c4{quiet_context()};
+        CHECK(d("1E-30").exp(c4).to_string() == "1.000000000000000000000000000");
+        CHECK(flags_to_string(c4.flags()) == "Inexact,Rounded");
+    }
+
+    TEST_CASE("NaN 传播与 sNaN") {
+        DecContext ctx{quiet_context()};
+        for (const char *const op : {"sqrt", "exp", "ln", "log10"}) {
+            CAPTURE(op);
+            const BigDec nan{d("-NaN")};
+            const BigDec result{
+                std::string{op} == "sqrt"  ? nan.sqrt(ctx)
+                : std::string{op} == "exp" ? nan.exp(ctx)
+                : std::string{op} == "ln"  ? nan.ln(ctx)
+                                           : nan.log10(ctx)
+            };
+            CHECK(result.to_string() == "-NaN");
+        }
+        CHECK(ctx.flags().empty());
+        CHECK(d("NaN").pow(d("2"), ctx).to_string() == "NaN");
+        CHECK(d("2").pow(d("-NaN"), ctx).to_string() == "-NaN");
+        CHECK(ctx.flags().empty());
+
+        DecContext c2{quiet_context()};
+        CHECK(d("sNaN").sqrt(c2).to_string() == "NaN");
+        CHECK(c2.flags().has(DecCondition::InvalidOperation));
+        DecContext c3{quiet_context()};
+        CHECK(d("2").pow(d("sNaN"), c3).to_string() == "NaN");
+        CHECK(c3.flags().has(DecCondition::InvalidOperation));
+    }
+
+    TEST_CASE("默认上下文（陷阱开着）下这些会抛") {
+        DecContext ctx;
+        CHECK_THROWS_AS((void) d("-1").sqrt(ctx), DecTrapped);
+        CHECK_THROWS_AS((void) d("-1").ln(ctx), DecTrapped);
+        CHECK_THROWS_AS((void) d("-1").log10(ctx), DecTrapped);
+        CHECK_THROWS_AS((void) d("0").pow(d("0"), ctx), DecTrapped);
+        CHECK_THROWS_AS((void) d("-2").pow(d("0.5"), ctx), DecTrapped);
+        CHECK_THROWS_AS((void) d("1E+30").exp(ctx), DecTrapped); // Overflow
+        CHECK_NOTHROW((void) d("2").sqrt(ctx));                  // Inexact 默认不设陷阱
+        CHECK_NOTHROW((void) d("2").ln(ctx));
+    }
+
+    TEST_CASE("陷阱把 fix 打断时，上下文的舍入方式也要还原") {
+        // sqrt/exp/ln/log10 内部会临时切成 HalfEven，靠析构还原；要是写成"算完再赋值回去"，
+        // 这里抛出去之后上下文就永远停在 HalfEven 了
+        DecContext ctx;
+        ctx.set_rounding(DecRounding::Ceiling);
+        CHECK_THROWS_AS((void) d("1E+30").exp(ctx), DecTrapped);
+        CHECK(ctx.rounding() == DecRounding::Ceiling);
+        CHECK_THROWS_AS((void) d("-1").sqrt(ctx), DecTrapped);
+        CHECK(ctx.rounding() == DecRounding::Ceiling);
+    }
+
+    TEST_CASE("精确的恒等式：完全平方、10 的整数次幂、整数次幂") {
+        DecContext ctx{quiet_context()};
+        for (int64_t i{0}; i < 40; ++i) {
+            const BigDec n{BigDec::from_bigint(BigInt(i))};
+            CAPTURE(i);
+            const BigDec square{n.mul(n, ctx)};
+            CHECK(square.sqrt(ctx).equals(n, ctx)); // 完全平方开方精确
+            CHECK(n.pow(d("2"), ctx).equals(square, ctx));
+        }
+        for (int64_t k{-30}; k <= 30; ++k) {
+            CAPTURE(k);
+            const BigDec power{d("10").pow(BigDec::from_bigint(BigInt(k)), ctx)};
+            CHECK(power.log10(ctx).equals(BigDec::from_bigint(BigInt(k)), ctx));
+        }
+        CHECK(ctx.flags().has(DecCondition::Inexact) == false);
+    }
+}
+
 TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
 
     TEST_CASE("加法") {
@@ -1049,6 +1304,44 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
             );
             CHECK(result.to_string() == f[5]);
             CHECK(flags_to_string(ctx.flags()) == f[6]);
+        }
+    }
+
+    TEST_CASE("幂运算 **") {
+        for (const char *const raw : kPowCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 8);
+            DecContext ctx{quiet_context(
+                std::stoi(f[2]), rounding_from_name(f[3]), std::stoi(f[4]), std::stoi(f[5])
+            )};
+            CHECK(d(f[0]).pow(d(f[1]), ctx).to_string() == f[6]);
+            CHECK(flags_to_string(ctx.flags()) == f[7]);
+        }
+    }
+
+    TEST_CASE("超越函数 sqrt/exp/ln/log10") {
+        for (const char *const line : kTranscendentalCases) {
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 8);
+            const DecRounding rounding{rounding_from_name(f[3])};
+            DecContext ctx{
+                quiet_context(std::stoi(f[2]), rounding, std::stoi(f[4]), std::stoi(f[5]))
+            };
+            const BigDec a{d(f[0])};
+            const std::string &op{f[1]};
+            const BigDec result{
+                op == "sqrt"  ? a.sqrt(ctx)
+                : op == "exp" ? a.exp(ctx)
+                : op == "ln"  ? a.ln(ctx)
+                              : a.log10(ctx)
+            };
+            CHECK(result.to_string() == f[6]);
+            CHECK(flags_to_string(ctx.flags()) == f[7]);
+            // 这四个内部会临时把舍入方式换成 HalfEven，算完必须还回去
+            CHECK(ctx.rounding() == rounding);
         }
     }
 

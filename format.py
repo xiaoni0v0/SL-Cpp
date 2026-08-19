@@ -38,6 +38,7 @@ EXCLUDE_DIR_PATTERNS = [
     ".idea",
     ".venv",
     "cmake-build-*",
+    "decimal_only_for_claude",
 ]
 # 排除的文件名（x_*.h 是内联 X-Macro 头文件，可按需增删）
 EXCLUDE_FILE_PATTERNS = ["x_*.h"]

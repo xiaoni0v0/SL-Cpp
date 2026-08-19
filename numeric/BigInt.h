@@ -83,6 +83,9 @@ class BigInt {
     // |x| 的十进制位数，0 算 1 位（等价于 to_decimal_string() 去掉负号之后的长度）
     [[nodiscard]] size_t num_decimal_digits() const;
 
+    // |x| 的二进制位数（最高位 1 的位置 + 1），0 算 0 位。同 Python 的 int.bit_length()
+    [[nodiscard]] size_t bit_length() const;
+
     // 转成 double；超出 double 表示范围则返回 ±infinity（标准 IEEE 溢出语义，不抛异常）
     [[nodiscard]] double to_double() const;
 

@@ -103,6 +103,22 @@ class BigDec {
     [[nodiscard]] BigDec mod(const BigDec &rhs, DecContext &ctx) const;
     [[nodiscard]] std::pair<BigDec, BigDec> divmod(const BigDec &rhs, DecContext &ctx) const;
 
+    // 有限、且没有非零的小数部分
+    [[nodiscard]] bool is_integral() const;
+
+    // 超越函数。任意精度下它们都算不出精确值，做法是"多算几位 → 看结果够不够定夺舍入方向 →
+    // 不够就再多算三位"，循环到能定夺为止；因此最终那一步 fix 固定按 ROUND_HALF_EVEN 走
+    // （这时任何舍入方式都会给出同一个答案），算完把上下文的 rounding 原样还回去。
+    // 算法逐个对应 Python `_pydecimal` 里的同名方法，整数层的部分在 dec_math 里
+    [[nodiscard]] BigDec sqrt(DecContext &ctx) const;  // 负数触发 InvalidOperation
+    [[nodiscard]] BigDec exp(DecContext &ctx) const;   // e ** self
+    [[nodiscard]] BigDec ln(DecContext &ctx) const;    // 负数触发 InvalidOperation
+    [[nodiscard]] BigDec log10(DecContext &ctx) const; // 同上
+
+    // self ** rhs。底数为负而指数不是整数时结果不是实数，触发 InvalidOperation；`0 ** 0` 同。
+    // 跟上面四个不同，幂运算尊重上下文的舍入方式，不切成 HalfEven
+    [[nodiscard]] BigDec pow(const BigDec &rhs, DecContext &ctx) const;
+
     // SL 的 == / !=：任一方是 NaN 就恒为不等，且不触发信号；只有 sNaN 才触发 InvalidOperation
     [[nodiscard]] bool equals(const BigDec &rhs, DecContext &ctx) const;
     // SL 的 < <= > >=：任一方是 NaN（安静的也算）都触发 InvalidOperation，没设陷阱时返回
@@ -111,6 +127,22 @@ class BigDec {
 
   private:
     void check_invariant() const;
+
+    // ln()/log10() 的结果的调整后指数的下界，用来定第一轮该算到小数点后多少位。
+    // 调用方保证是有限的正数、且数值不等于 1
+    [[nodiscard]] int64_t ln_exp_bound() const;
+    [[nodiscard]] int64_t log10_exp_bound() const;
+
+    // 整数的精确值。调用方保证是有限的整数，且量级不大——指数很大的整数（`1E+999999`）会让
+    // 这里的 10^exp 炸开，pow() 的两个调用点都先把量级夹住了
+    [[nodiscard]] BigInt integer_value() const;
+    // 调用方保证是有限的整数
+    [[nodiscard]] bool is_even_integer() const;
+
+    // 试着精确算出 self ** other 并压进 p 位有效数字以内，办不到就返回 nullopt。
+    // 调用方保证两边都是有限数、self 为正且数值不等于 1、other 不为 0，而且外层已经用
+    // Emax/Etiny 做过溢出/下溢的粗筛（否则这里的 10^ye、xc^m 之类会炸开）
+    [[nodiscard]] std::optional<BigDec> power_exact(const BigDec &other, int64_t p) const;
 
     // 造一个有限数，不检查指数范围（运算的中间结果允许暂时越界，由 fix 收尾）。
     // 调用方保证 coeff 非负

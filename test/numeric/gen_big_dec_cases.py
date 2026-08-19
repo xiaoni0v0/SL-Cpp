@@ -8,11 +8,18 @@
 #
 #     python test/numeric/gen_big_dec_cases.py 20 > /tmp/big_dec_cases.inc
 #
+# 幂运算例外：非整数指数下的 `**`，规范只要求"按 exp(y*ln(x)) 算"，不保证正确舍入，
+# CPython 自己的两套实现（libmpdec 与 _pydecimal）在"真值恰好可精确表示 + 定向舍入"这种组合上
+# 就差 1 ulp——官方扩展测试 _decimal/tests/deccheck.py 里的 SkipHandler 明写了这是已知差异。
+# BigDec 跟的是 _pydecimal 那一支（真值精确就原样给出，不因舍入方式而偏出去），所以这张表只出
+# 两套实现意见一致的组合，不一致的直接跳过，另有手写用例把我们这一支的行为钉住。
+#
 # SL 的 // 和 % 向负无穷取整，跟 IBM 规范（也就是 Python 的 Decimal）向零截断不同，所以这两个
 # 表的期望值是"先在超高精度下取精确的截断商/余数，再整体修正"推出来的——推导路径跟 C++ 那边
 # 不一样，两边只在数学定义上一致。凡是超高精度下仍不精确的组合直接跳过，不出题。
 import sys
 import decimal
+import _pydecimal
 from decimal import Decimal, Context, localcontext
 import random
 
@@ -375,6 +382,259 @@ def main():
     out.append(emit("kMixedCases", mixed_lines))
     out.append("")
 
+    # 幂运算：a|b|prec|rounding|emax|emin|结果|flags。底数/指数的池子刻意覆盖 power_exact 的
+    # 每条分支：10 的幂、2 的幂、5 的幂、开 n 次方、以及一堆只能走 exp(y*log(x)) 的
+    pow_bases = [
+        "0",
+        "-0",
+        "1",
+        "-1",
+        "1.000",
+        "-1.000",
+        "2",
+        "-2",
+        "10",
+        "-10",
+        "0.5",
+        "-0.5",
+        "4",
+        "9",
+        "16",
+        "25",
+        "100",
+        "1024",
+        "0.0625",
+        "0.04",
+        "2.25",
+        "1E+10",
+        "1E-10",
+        "0.1",
+        "1.5",
+        "-1.5",
+        "3",
+        "5",
+        "8",
+        "2.5",
+        "1.05",
+        "0.2",
+        "1.25",
+        "1000000",
+        "1E+999999",
+        "1E-999999",
+        "6.25E-2",
+        "Infinity",
+        "-Infinity",
+        "NaN",
+        "sNaN",
+    ]
+    pow_exps = [
+        "0",
+        "-0",
+        "1",
+        "-1",
+        "2",
+        "-2",
+        "3",
+        "-3",
+        "0.5",
+        "-0.5",
+        "0.25",
+        "-0.25",
+        "1.5",
+        "10",
+        "-10",
+        "100",
+        "0.1",
+        "-0.1",
+        "1E+3",
+        "1E-3",
+        "2.5",
+        "0.3333333333333333",
+        "28",
+        "29",
+        "1E+6",
+        "-1E+6",
+        "0.2",
+        "1.0",
+        "Infinity",
+        "-Infinity",
+        "NaN",
+        "sNaN",
+    ]
+    pow_lines = []
+    pow_skipped = [0]
+
+    def pow_case(a_s, b_s, prec, rname, rmode, emax, emin):
+        """两套 CPython 实现意见一致才出题，否则跳过（见文件开头对 power 的说明）。"""
+        c = new_ctx(prec, rmode, emax, emin)
+        res = c.power(Decimal(a_s), Decimal(b_s))
+        pc = _pydecimal.Context(prec=prec, rounding=rmode, Emax=emax, Emin=emin)
+        pc.traps = {k: 0 for k in pc.traps}
+        pres = pc.power(_pydecimal.Decimal(a_s), _pydecimal.Decimal(b_s))
+        if str(res) != str(pres):
+            pow_skipped[0] += 1
+            return
+        pow_lines.append(
+            "%s|%s|%d|%s|%d|%d|%s|%s"
+            % (a_s, b_s, prec, rname, emax, emin, res, flags_str(c))
+        )
+
+    for a_s in pow_bases:
+        for b_s in pow_exps:
+            pow_case(a_s, b_s, 28, "HalfEven", decimal.ROUND_HALF_EVEN, 999999, -999999)
+    # 再换一批精度/舍入/指数范围跑一遍，池子小一点免得表太大
+    small_bases = [
+        "2",
+        "-2",
+        "0.5",
+        "4",
+        "9",
+        "10",
+        "0.1",
+        "1E+10",
+        "1",
+        "0",
+        "Infinity",
+    ]
+    small_exps = ["0", "1", "-1", "2", "0.5", "-0.5", "3", "10", "0.25", "1.5", "NaN"]
+    for a_s in small_bases:
+        for b_s in small_exps:
+            for prec, emax, emin in (
+                (1, 999999, -999999),
+                (3, 999999, -999999),
+                (16, 999999, -999999),
+                (5, 9, -9),
+            ):
+                for rname, rmode in (ROUNDINGS if prec == 3 else [ROUNDINGS[4]]):
+                    pow_case(a_s, b_s, prec, rname, rmode, emax, emin)
+    # 随机底数/指数，同样是冲着舍入边界去的
+    for _ in range(60 * scale):
+        base_digits = "".join(
+            rng.choice("0123456789") for _ in range(rng.randint(1, 12))
+        )
+        base = "%s%sE%+d" % (
+            "-" if rng.random() < 0.25 else "",
+            base_digits,
+            rng.randint(-8, 8),
+        )
+        if rng.random() < 0.5:
+            exponent = "%s%d" % ("-" if rng.random() < 0.5 else "", rng.randint(0, 40))
+        else:
+            exponent = "%s%d.%d" % (
+                "-" if rng.random() < 0.5 else "",
+                rng.randint(0, 6),
+                rng.randint(0, 999),
+            )
+        rname, rmode = rng.choice(ROUNDINGS)
+        pow_case(base, exponent, rng.randint(1, 30), rname, rmode, 999999, -999999)
+    out.append(emit("kPowCases", pow_lines))
+    out.append("")
+
+    # 超越函数：a|op|prec|rounding|emax|emin|结果|flags
+    trans_lines = []
+    trans_pool = [
+        "0",
+        "-0",
+        "1",
+        "-1",
+        "1.000",
+        "2",
+        "-2",
+        "0.5",
+        "-0.5",
+        "10",
+        "-10",
+        "100",
+        "1000",
+        "0.1",
+        "0.01",
+        "1E-7",
+        "1E+7",
+        "1E-30",
+        "1E+30",
+        "-1E+30",
+        "-1E-30",
+        "3",
+        "7",
+        "2.718281828459045235360287471",
+        "0.6931471805599453094172321215",
+        "1.0000000000000000000000000001",
+        "0.9999999999999999999999999999",
+        "1E+999999",
+        "1E-999999",
+        "-1E+999999",
+        "123456789",
+        "0.000123456789",
+        "4",
+        "9",
+        "16",
+        "25",
+        "1.44",
+        "2.25",
+        "0.04",
+        "1E+100",
+        "1E-100",
+        "6.25E-3",
+        "1E+2",
+        "1E+4",
+        "1E+8",
+        "12345.6789",
+        "-12345.6789",
+        "0.3",
+        "1.5",
+        "-1.5",
+        "Infinity",
+        "-Infinity",
+        "NaN",
+        "-NaN",
+        "sNaN",
+    ]
+    trans_ctxs = [
+        (28, 999999, -999999),
+        (1, 999999, -999999),
+        (3, 999999, -999999),
+        (16, 999999, -999999),
+        (50, 999999, -999999),
+        (5, 9, -9),
+    ]
+    for a_s in trans_pool:
+        for op in ("sqrt", "exp", "ln", "log10"):
+            for prec, emax, emin in trans_ctxs:
+                for rname, rmode in ROUNDINGS if prec == 3 else [ROUNDINGS[4]]:
+                    c = new_ctx(prec, rmode, emax, emin)
+                    a = Decimal(a_s)
+                    res = {"sqrt": c.sqrt, "exp": c.exp, "ln": c.ln, "log10": c.log10}[
+                        op
+                    ](a)
+                    trans_lines.append(
+                        "%s|%s|%d|%s|%d|%d|%s|%s"
+                        % (a_s, op, prec, rname, emax, emin, res, flags_str(c))
+                    )
+    # 再补一批随机参数，专门碰舍入边界；正数才有 ln/log10/sqrt
+    for _ in range(60 * scale):
+        digits = "".join(rng.choice("0123456789") for _ in range(rng.randint(1, 30)))
+        exp = rng.randint(-30, 30)
+        positive = "%sE%+d" % (digits, exp)
+        signed = ("-" if rng.random() < 0.3 else "") + positive
+        prec = rng.randint(1, 40)
+        rname, rmode = rng.choice(ROUNDINGS)
+        for op, arg in (
+            ("sqrt", signed),
+            ("exp", signed),
+            ("ln", positive),
+            ("log10", positive),
+        ):
+            c = new_ctx(prec, rmode)
+            res = {"sqrt": c.sqrt, "exp": c.exp, "ln": c.ln, "log10": c.log10}[op](
+                Decimal(arg)
+            )
+            trans_lines.append(
+                "%s|%s|%d|%s|%d|%d|%s|%s"
+                % (arg, op, prec, rname, 999999, -999999, res, flags_str(c))
+            )
+    out.append(emit("kTranscendentalCases", trans_lines))
+    out.append("")
+
     # 比较：a|b|序关系(lt/eq/gt/un)|equals(0/1)|equals 的 flags|序比较的 flags
     cmp_lines = []
     cmp_pool = SPECIALS + [
@@ -419,6 +679,10 @@ def main():
     print("\n".join(out))
     print(
         "// 跳过（超高精度下仍不精确、不适合当参考）的除法组合：%d" % skipped,
+        file=sys.stderr,
+    )
+    print(
+        "// 跳过（两套 CPython 实现自己就不一致）的幂运算组合：%d" % pow_skipped[0],
         file=sys.stderr,
     )
 

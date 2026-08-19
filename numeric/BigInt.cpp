@@ -373,6 +373,17 @@ size_t BigInt::num_decimal_digits() const {
     return to_decimal_string().size() - (negative_ ? 1 : 0);
 }
 
+size_t BigInt::bit_length() const {
+    if (is_small_) {
+        const uint64_t magnitude{
+            small_ < 0 ? static_cast<uint64_t>(-(small_ + 1)) + 1 : static_cast<uint64_t>(small_)
+        };
+        return static_cast<size_t>(std::bit_width(magnitude));
+    }
+    check_invariant(); // 大路径下 limbs_ 不该是空的，否则下面 back() 是 UB
+    return (limbs_.size() - 1) * 32 + static_cast<size_t>(std::bit_width(limbs_.back()));
+}
+
 double BigInt::to_double() const {
     if (is_small_) return static_cast<double>(small_);
     check_invariant(); // 同 to_decimal_string，规范化的 0 不该走到这里
