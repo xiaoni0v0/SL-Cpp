@@ -1046,3 +1046,50 @@ TEST_SUITE(
         }
     }
 }
+
+TEST_SUITE("BigInt——bit_length 与 to_double 的窄路径") {
+
+    TEST_CASE("bit_length：小路径、大路径、边界") {
+        CHECK(d("0").bit_length() == 0);
+        CHECK(d("1").bit_length() == 1);
+        CHECK(d("-1").bit_length() == 1); // 只看量级，不管符号
+        CHECK(d("255").bit_length() == 8);
+        CHECK(d("256").bit_length() == 9);
+        CHECK(d("9223372036854775807").bit_length() == 63);  // INT64_MAX
+        CHECK(d("-9223372036854775808").bit_length() == 64); // |INT64_MIN| == 2^63
+        // 下面这些必然走大路径（装不进 int64_t），是 limbs 那一支
+        CHECK(d("9223372036854775808").bit_length() == 64);  // 2^63
+        CHECK(d("18446744073709551615").bit_length() == 64); // 2^64 - 1
+        CHECK(d("18446744073709551616").bit_length() == 65); // 2^64
+        CHECK(d("-18446744073709551616").bit_length() == 65);
+        for (int shift{60}; shift < 200; ++shift) {
+            CAPTURE(shift);
+            CHECK((BigInt(1) << shift).bit_length() == static_cast<size_t>(shift) + 1);
+            CHECK(((BigInt(1) << shift) - BigInt(1)).bit_length() == static_cast<size_t>(shift));
+        }
+    }
+
+    TEST_CASE("bit_length 跟十进制位数彼此印证") {
+        // b 位的数落在 [2^(b-1), 2^b)，于是十进制位数 digits 必然满足
+        // (b-1)*log10(2) < digits <= b*log10(2) + 1，拿它把两个函数互相钉住
+        constexpr double kLog10Of2{0.30102999566398119521};
+        for (const BigInt &x : interesting_values()) {
+            CAPTURE(x.to_decimal_string());
+            if (x.is_zero()) continue;
+            const auto bits{static_cast<double>(x.bit_length())};
+            const auto digits{static_cast<double>(x.num_decimal_digits())};
+            CHECK((bits - 1.0) * kLog10Of2 < digits);
+            CHECK(digits <= bits * kLog10Of2 + 1.0);
+        }
+    }
+
+    TEST_CASE("to_double 把整个值池灌给 strtod 对拍（含 [2^63, 2^64) 那段精确路径）") {
+        // 大路径但 64 位内装得下的那一支（2^63 <= |x| < 2^64）此前没被 to_double 的用例覆盖到，
+        // 而值池里本来就有 2^63、2^64-1 这些值——直接全灌进去，顺带把其余各档也一并对拍
+        for (const BigInt &x : interesting_values()) {
+            const std::string s{x.to_decimal_string()};
+            CAPTURE(s);
+            CHECK(x.to_double() == std::strtod(s.c_str(), nullptr));
+        }
+    }
+}

@@ -26,6 +26,8 @@ BigInt pow10(const int64_t k) {
 std::optional<int64_t> to_int64(const BigInt &x) {
     // 位长卡在 62 而不是 63：63 位的值里只有 INT64_MIN 一个装得下，为这一个特例放宽不值当
     if (x.bit_length() > 62) return std::nullopt;
+    // 绕字符串看着笨，其实不费：能过上面那关的值必然在 BigInt 的小路径上（"装得进 int64_t 就
+    // 一定走小路径"是 BigInt 自己的不变量），to_decimal_string 就是一次 std::to_string
     return std::stoll(x.to_decimal_string());
 }
 

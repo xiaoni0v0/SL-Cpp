@@ -88,9 +88,13 @@
 `CMakeLists.txt` 对应的 `add_executable(...)` 文件列表（不是 glob，漏加不报错、只是静默不参与编译）。
 
 `test/numeric/big_dec_cases.inc` 是**生成产物**：`gen_big_dec_cases.py` 用 CPython 自带的 decimal
-（C 实现 libmpdec，跟 `BigDec` 是两套独立代码）算出期望值，`big_dec_test.cpp` 逐条比对结果和触发的
-信号。改 `BigDec` 的语义时要连带重新生成（脚本开头写了用法），别手改那个 `.inc`。脚本带一个倍数
-参数，临时跑几十倍规模的差分测试很方便，提交进仓库的那份用默认倍数。
+算出期望值，`big_dec_test.cpp` 逐条比对结果和触发的信号。改 `BigDec` 的语义时要连带重新生成
+（脚本开头写了用法），别手改那个 `.inc`。脚本带一个倍数参数，临时跑几十倍规模的差分测试很方便，
+提交进仓库的那份用默认倍数。
+
+**每组用例都拿 CPython 的两套实现（libmpdec 和 `_pydecimal`）各算一遍，不一致就整组跳过**——它们
+自己在 `**` 和 `exp` 上就有已知分歧（见 [context.md](context.md)）。这条规则是防呆用的：分歧点随
+参数漂移，往池子里加一档 `Emin`/舍入方式就可能生成出一张永远过不了的表。
 
 提交进仓库的这份表是**按跑得动来配的**：`SL_Cpp_Numeric_Tests` 里超越函数和 `**` 那两个用例合起来
 就占了十几秒（BigDec 底下的 BigInt 是朴素算法，一次 `exp`/`ln` 要做几十次大数乘除），整个 ctest

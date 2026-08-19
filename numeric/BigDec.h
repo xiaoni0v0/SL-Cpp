@@ -25,8 +25,13 @@ class BigDec {
     enum class Kind : uint8_t { Finite, Infinity, NaN, SignalingNaN };
 
     // 构造出来的有限数，指数必须落在 [-kMaxExponent, kMaxExponent] 里（运算的中间结果可以暂时
-    // 超出，fix 之后必然回到 [Etiny, Emax] 之内）
-    static constexpr int64_t kMaxExponent{999999999};
+    // 超出，fix 之后必然回到 [Etiny, Emax] 之内）。
+    // 上界取的是 Emax 的上限加 prec 的上限，为的是让"任何合法上下文下 fix 出来的结果都还构造得
+    // 回去"成立——次正规结果的指数会被压到 Etiny = Emin - prec + 1，比 Emin 自己的下界还低一整个
+    // prec，卡在 Emax 的量级上就会产出 try_from_string 读不回来的值
+    static constexpr int64_t kMaxExponent{
+        static_cast<int64_t>(DecContext::kMaxExp) + DecContext::kMaxPrec
+    };
 
   private:
     Kind kind_{Kind::Finite};
@@ -153,9 +158,10 @@ class BigDec {
     // Overflow/Underflow/Subnormal/Inexact/Rounded/Clamped
     [[nodiscard]] BigDec fix(DecContext &ctx) const;
 
-    // 把自己重新表示成指数恰为 exp 的形式：指数变小就补零（精确），变大就按 rounding 舍掉低位。
-    // 安静操作——不触发任何信号、不查上下文。调用方保证是有限数
-    [[nodiscard]] BigDec rescale(int64_t exp, DecRounding rounding) const;
+    // 把自己重新表示成指数恰为 exp 的形式，靠补零，因此恒精确。安静操作——不触发任何信号、
+    // 不查上下文。调用方保证是有限数、且 exp <= 自己的指数（IBM 的 rescale 还有个"指数变大就
+    // 按某种舍入方式砍掉低位"的方向，但现有两个调用点都只往小了调，那一支写了也是死代码）
+    [[nodiscard]] BigDec pad_to_exponent(int64_t exp) const;
 
     // 把 coeff 截到只保留最高 keep 位，返回 (截断后的系数, 舍入判定)。判定的含义同 IBM 规范：
     // 1 = 该向远离零的方向进位，0 = 被截掉的部分全是 0（值没变），-1 = 被截掉的部分非 0 但不进位。

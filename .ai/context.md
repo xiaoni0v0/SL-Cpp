@@ -615,8 +615,14 @@ BigInt 已有的 `from_decimal_string`/`to_decimal_string`/`floor_div`/`mod`/`po
 
 **指数为什么是 int64_t 而不是 int32_t**：运算的中间结果（比如乘法的 `exp1 + exp2`）可以暂时越出
 "构造得出来的范围"，`fix` 之后才必然落回 `[Etiny, Emax]`。于是约定：构造入口（`try_from_string`/
-`from_parts`）把指数卡在 `±kMaxExponent`（10^9 量级），中间结果不设限、但保证怎么算都溢不出 int64_t。
+`from_parts`）把指数卡在 `±kMaxExponent`，中间结果不设限、但保证怎么算都溢不出 int64_t。
 这样"指数越界"只在一处判，不用在每个算术步骤里操心。
+
+**`kMaxExponent` 必须比 `Emax` 的上限宽一整个 `prec`**（现在取的是 `kMaxExp + kMaxPrec`）。次正规结果
+的指数会被 `fix` 压到 `Etiny = Emin - prec + 1`，它比 `Emin` 自己的下界还低一个 `prec`；照着 `Emax`
+的量级去卡，`Emin = -999999999` 配任何 `prec >= 2` 就能算出一个 `try_from_string` 读不回来的值，
+"`try_from_string(x.to_string())` 恒等于 x" 这条不变量当场破掉。另一条路是在 `set_emin`/`set_prec`
+里交叉校验，否决了：那会让"合法的 Emin"取决于当前 prec，两个字段之间凭空多出顺序依赖。
 
 **最容易写错的地方**：BigInt 的不变量是"一个值只有一种表示"，BigDec **没有**这条——标度是值的
 一部分，`1.5`（`15×10^-1`）和 `1.50`（`150×10^-2`）是同一个值的两种合法表示。所以 `==` 不能靠
@@ -649,6 +655,11 @@ IBM 规范给的是向零截断的 `divide-integer`/`remainder`，SL 要的是�
 3. **`//` 单独用时不能顺手 `fix` 余数**：那会报出 `Inexact`/`Rounded`——那是余数被舍入才该有的
    信号，跟 `//` 的结果无关。所以公共部分只算到"截断商 + 截断余数 + 要不要修正"，加不加除数、
    舍不舍入由三个入口各自决定。
+4. **商本身却必须过 `fix`**。一度以为"商是整数、位数又不超过 `prec`，fix 只会白报 Inexact/Rounded"
+   就跳过了——前半句对（进不了舍入分支），后半句错：`fix` 还管指数域。`Emax` 小于 `prec - 1` 的上下文
+   （合法，设得出来）下 `100000 // 1` 的商调整后指数是 5，超过 `Emax = 3`，该报 `Overflow`。
+   `_pydecimal` 这里也不 fix，libmpdec 会——过 IBM 测试集的是后者。**位数够不代表指数域够，这是两条
+   独立的检查**。
 
 **两处零的符号**：`//` 的商为零时按两个操作数的符号异或（`0 // -3` 是 `-0`），跟 `*`、`/` 一致，
 不让 `//` 成为唯一丢掉零符号的运算；`%` 的余数恰好为零时符号跟被除数走（`-6 % 3` 是 `-0`），这处
@@ -691,16 +702,22 @@ BigDec、上下文和信号，好单独推敲。**里面那些常数（尤其是
 `fix` 自己不会报，又不能在 `fix` 前后直接补——那会打乱规范规定的信号优先级。做法是先在一个陷阱全关、
 标志位清空的上下文副本上 `fix`，再按优先级顺序把信号补报到真上下文上。
 
-### `**` 上我们跟 libmpdec 差 1 ulp，这是故意的
+### 两处我们跟 libmpdec 不一致，都是故意站 `_pydecimal` 那一边
 
-非整数指数的 `**`，规范只要求"按 `exp(y*ln(x))` 算"，**不保证正确舍入**。CPython 自己的两套实现在
-"真值恰好可精确表示 + 定向舍入"这种组合上就不一致：`9 ** 0.5` 在 ROUND_DOWN 下 libmpdec 给 `2.99`，
-`_pydecimal` 给 `3.00`。这不是谁的 bug——官方扩展测试 `_decimal/tests/deccheck.py` 里的 `SkipHandler`
-明写了 power 上有 1 ulp 级别的已知差异，定向舍入下容忍 [-0.1, 1.1] ulp。
+CPython 自带的两套 decimal 实现（C 的 libmpdec、纯 Python 的 `_pydecimal`）自己就有分歧——官方扩展
+测试 `_decimal/tests/deccheck.py` 里的 `SkipHandler` 明写了这是已知情况。目前撞见两处，BigDec 两边
+都跟 `_pydecimal`：
 
-BigDec 跟 `_pydecimal` 那一支：**真值精确就原样给出，不因舍入方式而偏出去**。`9 ** 0.5` 得 `2.99` 实
-在太不像话。交叉验证表因此只出两套实现意见一致的组合（生成器里两边都算一遍，不一致就跳过，默认规模
-下跳掉 21 条），我们这一支的行为由手写用例钉住。
+1. **非整数指数的 `**`**：规范只要求"按 `exp(y*ln(x))` 算"，**不保证正确舍入**。真值恰好可精确表示
+   且用定向舍入时两边差 1 ulp：`9 ** 0.5` 在 ROUND_DOWN 下 libmpdec 给 `2.99`、`_pydecimal` 给
+   `3.00`。选后者——真值精确就原样给出，`9 ** 0.5` 得 `2.99` 实在太不像话。
+2. **`exp` 在 `Emin == 0` 时**：次正规判定该在舍入前还是舍入后做。`exp` 拿 `0.99…9`（调整后指数 -1）
+   当近似值交给 `fix`，判成次正规，舍完却变回 `1.000…`（调整后指数 0，不次正规）。值一样，只差
+   `Subnormal`/`Underflow` 两个 flag。规范原文写的是 "before any rounding"，字面上支持 `_pydecimal`。
+
+**生成器因此对每一组用例都拿两套实现各算一遍，不一致就整组跳过**（默认规模下 pow 跳 21 条、超越函数
+跳 8 条）。做成全表统一过滤而不是只挡这两处，是因为分歧点随参数漂移——尤其是 `Emin` 和舍入方式——
+哪天有人往池子里加一档参数，不该因此得到一张 BigDec 永远过不了的表。我们这一支的行为由手写用例钉住。
 
 ### 整数/decimal 字面量禁止前导零
 
@@ -773,6 +790,12 @@ Code），但"建立"这个操作每次执行都必须构造全新的 Function �
   自己还没定，见下）。SL.md 里 decimal 参与的运算符本身已经全了，见上面 `numeric/BigDec` 几节。
 - `sqrt`/`exp`/`ln`/`log10` 在 `BigDec` 上有了，但 **SL.md 还没规定它们怎么暴露给用户**——是挂成
   decimal 的方法，还是走一个 `math` 模块？`**` 是运算符，不受这个问题影响，先实现了。
+- **`0 ** 0` 在 int 和 decimal 上不一样**：int 走 `BigInt::pow` 得 `1`，decimal 走 `BigDec::pow` 报
+  `InvalidOperation`。这是照 Python 抄的（`0**0 == 1` vs `Decimal(0)**Decimal(0)` 报错），但 SL.md
+  一个字都没写，等于把一处类型相关的行为差异留在了规范空白里。要么补进 SL.md，要么统一。
+- `BigInt` 还没有外部 oracle 的差分测试（`BigDec` 有，靠 CPython 的 decimal）。现在靠的是手写期望值
+  + 内部恒等式 + `to_double` 跟 `std::strtod` 对拍；恒等式对"两边同时错"是盲的。照
+  `gen_big_dec_cases.py` 的模式加一张 Python `int` 生成的表能补上，重点是位运算和大位移的 `<<`/`>>`。
 - `StaticEvaler` 里那整套 float 折叠（`node_to_double`/`std::pow`/`std::fmod`/`make_float`）还没清
   掉。按"结果为 decimal 的常量折叠一律禁掉"那一节的结论，这些不是改改名的事，要整段删；`decimal`
   接进前端时一起做。

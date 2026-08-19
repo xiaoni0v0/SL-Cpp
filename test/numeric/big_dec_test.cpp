@@ -256,14 +256,34 @@ TEST_SUITE("BigDec——构造与字符串往返") {
     }
 
     TEST_CASE("指数超出允许范围算不合法") {
-        CHECK(BigDec::try_from_string("1E+999999999").has_value());
-        CHECK_FALSE(BigDec::try_from_string("1E+1000000000").has_value());
-        CHECK_FALSE(BigDec::try_from_string("1E-1000000000").has_value());
+        CHECK(BigDec::kMaxExponent == 1999999998); // Emax 的上限 + prec 的上限
+        CHECK(BigDec::try_from_string("1E+1999999998").has_value());
+        CHECK_FALSE(BigDec::try_from_string("1E+1999999999").has_value());
+        CHECK_FALSE(BigDec::try_from_string("1E-1999999999").has_value());
         CHECK_FALSE(BigDec::try_from_string("1E+99999999999999999999999").has_value());
         // 小数部分也会把指数往下拽
-        CHECK_FALSE(BigDec::try_from_string("0.5E-999999999").has_value());
+        CHECK_FALSE(BigDec::try_from_string("0.5E-1999999998").has_value());
         // 指数里的前导零不该把它算成"太长"
         CHECK(BigDec::try_from_string("1E+0000000000000000000000009").has_value());
+    }
+
+    TEST_CASE("再极端的上下文，fix 出来的结果也得读得回去") {
+        // kMaxExponent 卡在 Emax 的量级上时，次正规结果的指数（会被压到 Etiny = Emin - prec + 1）
+        // 能低过它，于是运算能产出 try_from_string 读不回来的值，破坏 to_string 的往返
+        DecContext ctx{quiet_context()};
+        ctx.set_emin(-DecContext::kMaxExp);
+        ctx.set_emax(DecContext::kMaxExp);
+        ctx.set_prec(DecContext::kMaxPrec);
+        CHECK(ctx.etiny() == -1999999997); // 最低的 Etiny，仍在 kMaxExponent 之内
+
+        DecContext small{quiet_context()};
+        small.set_emin(-999999999);
+        const BigDec tiny{d("1E-999999999").mul(d("1E-27"), small)};
+        CHECK(tiny.to_string() == "1E-1000000026");
+        CHECK(small.flags().has(DecCondition::Subnormal));
+        const std::optional<BigDec> parsed{BigDec::try_from_string(tiny.to_string())};
+        REQUIRE(parsed.has_value());
+        CHECK(parsed->identical(tiny));
     }
 
     TEST_CASE("to_string 往返：完整保留表示") {
@@ -1183,10 +1203,95 @@ TEST_SUITE("BigDec——幂运算与超越函数") {
     }
 }
 
+TEST_SUITE("BigDec——生成的用例表铺不到的窄路径") {
+
+    TEST_CASE("// 的商也要过 fix：位数够但指数域不够时报 Overflow") {
+        // Emax 比 prec - 1 还小的上下文才碰得到；生成的表里 prec/Emax 组合不含这一档
+        DecContext ctx{quiet_context(28, DecRounding::HalfEven, 3, -999999)};
+        CHECK(d("100000").floor_div(d("1"), ctx).to_string() == "Infinity");
+        CHECK(flags_to_string(ctx.flags()) == "Inexact,Overflow,Rounded");
+        // 余数不受影响，它本来就一直在过 fix
+        DecContext c2{quiet_context(28, DecRounding::HalfEven, 3, -999999)};
+        CHECK(d("100000").mod(d("1"), c2).to_string() == "0");
+        CHECK(c2.flags().empty());
+        // divmod 两边一致
+        DecContext c3{quiet_context(28, DecRounding::HalfEven, 3, -999999)};
+        const auto [quotient, remainder]{d("100000").divmod(d("1"), c3)};
+        CHECK(quotient.to_string() == "Infinity");
+        CHECK(remainder.to_string() == "0");
+        CHECK(flags_to_string(c3.flags()) == "Inexact,Overflow,Rounded");
+    }
+
+    TEST_CASE("% 和 divmod 也要按修正之后的商判 DivisionImpossible") {
+        // 截断商 -99999 是 5 位放得下，修正成 -100000 才多出一位。// 那边有对应用例，
+        // 这里补上另外两个入口——它们各自独立查这一条，漏一个恒等式就不成立了
+        DecContext ctx{quiet_context(5)};
+        CHECK(d("-99999.5").mod(d("1"), ctx).to_string() == "NaN");
+        CHECK(flags_to_string(ctx.flags()) == "InvalidOperation");
+        DecContext c2{quiet_context(5)};
+        const auto [quotient, remainder]{d("-99999.5").divmod(d("1"), c2)};
+        CHECK(quotient.to_string() == "NaN");
+        CHECK(remainder.to_string() == "NaN");
+        CHECK(flags_to_string(c2.flags()) == "InvalidOperation");
+    }
+
+    TEST_CASE("小 prec + 巨大指数：dlog/dlog10 里 p <= 0 的那一支") {
+        // places = prec - log10_exp_bound() + 2 要小到非正，得指数大到 10 万量级、prec 又只有 1
+        DecContext ctx{quiet_context(1)};
+        CHECK(d("2E+100000").log10(ctx).to_string() == "1E+5");
+        CHECK(flags_to_string(ctx.flags()) == "Inexact,Rounded");
+        DecContext c2{quiet_context(1)};
+        CHECK(d("2E+100000").ln(c2).to_string() == "2E+5");
+        CHECK(flags_to_string(c2.flags()) == "Inexact,Rounded");
+    }
+
+    TEST_CASE("指数小到 y*log(x) 都归零：dpower 里贴着 1 的那一支") {
+        // 这时得给一个"不正好等于 1"的近似值，否则上层判不出能不能定夺舍入方向，会死循环
+        DecContext ctx{quiet_context()};
+        for (const char *const base : {"2", "0.5"}) {
+            for (const char *const exponent : {"1E-999999999", "-1E-999999999"}) {
+                CAPTURE(base);
+                CAPTURE(exponent);
+                DecContext c{quiet_context()};
+                CHECK(d(base).pow(d(exponent), c).to_string() == "1.000000000000000000000000000");
+                CHECK(flags_to_string(c.flags()) == "Inexact,Rounded");
+            }
+        }
+        CHECK(ctx.flags().empty());
+    }
+
+    TEST_CASE("每个条件都有名字，包括 BigDec 自己不会产生的 InvalidContext") {
+        // SL 那边要靠这个名字把 DecTrapped 映射成对应的异常类，不能有漏网的
+        const DecCondition all[]{
+            DecCondition::Clamped,
+            DecCondition::DivisionByZero,
+            DecCondition::Inexact,
+            DecCondition::InvalidOperation,
+            DecCondition::Overflow,
+            DecCondition::Rounded,
+            DecCondition::Subnormal,
+            DecCondition::Underflow,
+            DecCondition::ConversionSyntax,
+            DecCondition::DivisionImpossible,
+            DecCondition::DivisionUndefined,
+            DecCondition::InvalidContext
+        };
+        for (const DecCondition condition : all) {
+            const std::string name{dec_condition_name(condition)};
+            CAPTURE(name);
+            CHECK_FALSE(name.empty());
+            CHECK(name != "?");
+        }
+        CHECK(std::string{dec_condition_name(DecCondition::InvalidContext)} == "InvalidContext");
+        CHECK(signal_of(DecCondition::InvalidContext) == DecCondition::InvalidOperation);
+    }
+}
+
 TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
 
     TEST_CASE("加法") {
-        for (const char *const line : kAddCases) {
+        for (const char *const raw : kAddCases) {
+            const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 4);
@@ -1197,7 +1302,8 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("减法") {
-        for (const char *const line : kSubCases) {
+        for (const char *const raw : kSubCases) {
+            const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 4);
@@ -1208,7 +1314,8 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("乘法") {
-        for (const char *const line : kMulCases) {
+        for (const char *const raw : kMulCases) {
+            const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 4);
@@ -1219,7 +1326,8 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("除法") {
-        for (const char *const line : kDivCases) {
+        for (const char *const raw : kDivCases) {
+            const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 4);
@@ -1230,7 +1338,8 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("//（期望值是按向负无穷重新推的，不是 Python 的 //）") {
-        for (const char *const line : kFloorDivCases) {
+        for (const char *const raw : kFloorDivCases) {
+            const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 4);
@@ -1241,7 +1350,8 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("%（同上）") {
-        for (const char *const line : kModCases) {
+        for (const char *const raw : kModCases) {
+            const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 4);
@@ -1252,7 +1362,8 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("八种舍入方式 × prec 1/2/3/7") {
-        for (const char *const line : kRoundCases) {
+        for (const char *const raw : kRoundCases) {
+            const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 5);
@@ -1263,25 +1374,27 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("指数边界：Overflow / Underflow / Subnormal / Clamped") {
-        for (const char *const line : kEdgeCases) {
+        for (const char *const raw : kEdgeCases) {
+            const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
-            REQUIRE(f.size() == 8);
+            REQUIRE(f.size() == 9);
             DecContext ctx{quiet_context(
-                std::stoi(f[3]), DecRounding::HalfEven, std::stoi(f[4]), std::stoi(f[5])
+                std::stoi(f[3]), rounding_from_name(f[4]), std::stoi(f[5]), std::stoi(f[6])
             )};
             const BigDec a{d(f[0])};
             const BigDec b{d(f[1])};
             const BigDec result{
                 f[2] == "mul" ? a.mul(b, ctx) : (f[2] == "div" ? a.div(b, ctx) : a.add(b, ctx))
             };
-            CHECK(result.to_string() == f[6]);
-            CHECK(flags_to_string(ctx.flags()) == f[7]);
+            CHECK(result.to_string() == f[7]);
+            CHECK(flags_to_string(ctx.flags()) == f[8]);
         }
     }
 
     TEST_CASE("随机操作数 × 随机 op/prec/rounding") {
-        for (const char *const line : kMixedCases) {
+        for (const char *const raw : kMixedCases) {
+            const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 7);
@@ -1322,7 +1435,8 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("超越函数 sqrt/exp/ln/log10") {
-        for (const char *const line : kTranscendentalCases) {
+        for (const char *const raw : kTranscendentalCases) {
+            const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 8);
@@ -1346,7 +1460,8 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("比较") {
-        for (const char *const line : kCompareCases) {
+        for (const char *const raw : kCompareCases) {
+            const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 6);

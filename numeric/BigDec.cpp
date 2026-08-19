@@ -36,12 +36,14 @@ class RoundingGuard {
     RoundingGuard &operator=(const RoundingGuard &) = delete;
 };
 
-// 十进制位数，负数不算符号位
-int64_t int64_digits(int64_t value) {
-    if (value < 0) value = -value;
+// 十进制位数，负数不算符号位。取绝对值走 uint64_t：INT64_MIN 直接取负是 UB
+int64_t int64_digits(const int64_t value) {
+    uint64_t magnitude{
+        value < 0 ? static_cast<uint64_t>(-(value + 1)) + 1 : static_cast<uint64_t>(value)
+    };
     int64_t digits{1};
-    while (value >= 10) {
-        value /= 10;
+    while (magnitude >= 10) {
+        magnitude /= 10;
         ++digits;
     }
     return digits;
@@ -308,22 +310,11 @@ std::pair<BigInt, int> BigDec::split_and_decide(
     return {high, decision};
 }
 
-BigDec BigDec::rescale(const int64_t exp, const DecRounding rounding) const {
+BigDec BigDec::pad_to_exponent(const int64_t exp) const {
     assert(is_finite());
+    assert(exp <= exp_);
     if (coeff_.is_zero()) return make_finite(sign_, BigInt(0), exp);
-    if (exp_ >= exp) return make_finite(sign_, coeff_ * pow10(exp_ - exp), exp); // 补零，精确
-
-    int64_t keep{static_cast<int64_t>(digit_count()) + exp_ - exp};
-    BigInt source{coeff_};
-    if (keep < 0) {
-        // 整个值比 10^(exp-1) 还小，先换成 1 × 10^(exp-1) 再舍——只要保住"非零"这个信息，
-        // 具体小到什么程度不影响结果
-        source = BigInt(1);
-        keep = 0;
-    }
-    auto [kept, decision]{split_and_decide(source, static_cast<size_t>(keep), sign_, rounding)};
-    if (decision > 0) kept = kept + BigInt(1);
-    return make_finite(sign_, std::move(kept), exp);
+    return make_finite(sign_, coeff_ * pow10(exp_ - exp), exp);
 }
 
 BigDec BigDec::raise_overflow(DecContext &ctx, const bool sign) {
@@ -407,7 +398,7 @@ BigDec BigDec::fix(DecContext &ctx) const {
         int64_t keep{digits + exp_ - exp_min};
         BigInt source{coeff_};
         if (keep < 0) {
-            // 同 rescale：整个值比最小可表示的那一位还小，换成 1 再舍，指数由 exp_min 给出
+            // 整个值比最小可表示的那一位还小，换成 1 再舍，指数由 exp_min 给出
             source = BigInt(1);
             keep = 0;
         }
@@ -478,9 +469,9 @@ BigDec BigDec::add(const BigDec &rhs, DecContext &ctx) const {
     // 一方为零：结果就是另一方，但指数要降到两者较小的那个——只是不必降过"另一方再往下
     // prec+1 位"，那以下的位反正会被舍掉
     if (coeff_.is_zero())
-        return rhs.rescale(std::max(min_exp, rhs.exp_ - ctx.prec() - 1), ctx.rounding()).fix(ctx);
+        return rhs.pad_to_exponent(std::max(min_exp, rhs.exp_ - ctx.prec() - 1)).fix(ctx);
     if (rhs.coeff_.is_zero())
-        return rescale(std::max(min_exp, exp_ - ctx.prec() - 1), ctx.rounding()).fix(ctx);
+        return pad_to_exponent(std::max(min_exp, exp_ - ctx.prec() - 1)).fix(ctx);
 
     auto [op1, op2]{align_for_add(*this, rhs, ctx.prec())};
     if (op1.sign != op2.sign) {
@@ -567,8 +558,8 @@ BigDec::trunc_divmod(const BigDec &rhs, const int64_t prec) const {
 
     if (coeff_.is_zero() || rhs.is_infinite() || adjusted() - rhs.adjusted() <= -2) {
         // |self| 比 |rhs| 至少小一个数量级（或者被除数是 0、除数是无穷），截断商必然是 0。
-        // 这里的 rescale 只会补零，不会真舍掉什么
-        return std::pair{BigInt(0), rescale(ideal_exp, DecRounding::Down)};
+        // ideal_exp 恒不大于自己的指数，所以这里只是补零，不会真舍掉什么
+        return std::pair{BigInt(0), pad_to_exponent(ideal_exp)};
     }
     if (adjusted() - rhs.adjusted() > prec) return std::nullopt; // 商位数必然超过 prec
 
@@ -625,9 +616,10 @@ BigDec BigDec::floor_div(const BigDec &rhs, DecContext &ctx) const {
         floor_quotient(trunc->first, *this, rhs, trunc->second, ctx.prec())
     };
     if (!quotient) return raise_invalid(ctx, DecCondition::DivisionImpossible);
-    // 商必然是整数、位数也不超过 prec，不需要再 fix（跟着 fix 只会白报 Inexact/Rounded——
-    // 那是余数被舍入才该有的信号，而 // 的结果跟余数无关）
-    return quotient_to_dec(*quotient, sign_ != rhs.sign_);
+    // 商必然是整数、位数也不超过 prec，所以这一步 fix 报不出 Inexact/Rounded（进不了舍入分支），
+    // 但**不能**因此跳过：位数够不代表指数域也够，商的调整后指数超过 Emax 时得报 Overflow
+    // （Emax 小于 prec - 1 的上下文虽然罕见，但设得出来）
+    return quotient_to_dec(*quotient, sign_ != rhs.sign_).fix(ctx);
 }
 
 BigDec BigDec::mod(const BigDec &rhs, DecContext &ctx) const {
@@ -674,11 +666,13 @@ std::pair<BigDec, BigDec> BigDec::divmod(const BigDec &rhs, DecContext &ctx) con
         const BigDec ans{raise_invalid(ctx, DecCondition::DivisionImpossible)};
         return {ans, ans};
     }
+    // 商在前、余数在后：陷阱开着时，先算的那个的信号才是用户看到的异常
+    BigDec quotient_dec{quotient_to_dec(*quotient, sign_ != rhs.sign_).fix(ctx)};
     BigDec remainder{
         needs_floor_correction(*this, rhs, trunc->second) ? trunc->second.add(rhs, ctx)
                                                           : trunc->second.fix(ctx)
     };
-    return {quotient_to_dec(*quotient, sign_ != rhs.sign_), std::move(remainder)};
+    return {std::move(quotient_dec), std::move(remainder)};
 }
 
 int BigDec::cmp_no_nan(const BigDec &a, const BigDec &b) {
@@ -996,7 +990,9 @@ std::optional<BigDec> BigDec::power_exact(const BigDec &other, const int64_t p) 
             BigInt quotient{BigInt(5).pow(BigInt(e))};
             if (!quotient.mod(xc).is_zero()) return std::nullopt; // 不是 5 的幂
             quotient = quotient.floor_div(xc);
-            while (quotient.mod(BigInt(5)).is_zero()) { // 把多估的那几次方除回去
+            // 把多估的那几次方除回去。28/65 这个估计一直到 5^2658 都不多不少，所以这个
+            // 循环在现实的系数上转不起来；留着是因为再往上就估不准了
+            while (quotient.mod(BigInt(5)).is_zero()) {
                 quotient = quotient.floor_div(BigInt(5));
                 --e;
             }

@@ -28,4 +28,4 @@ echo.
 echo ===== 开始测试 =====
 echo.
 cd cmake-build-debug
-ctest --extra-verbose
+ctest --extra-verbose -j 22

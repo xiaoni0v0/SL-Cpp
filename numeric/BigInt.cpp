@@ -2,6 +2,7 @@
 
 #include <bit>
 #include <cassert>
+#include <cmath>
 #include <stdckdint.h>
 #include <stdexcept>
 #include <utility>
@@ -424,7 +425,7 @@ double BigInt::to_double() const {
         exponent = static_cast<int>(drop_bits < kExponentClamp ? drop_bits : kExponentClamp);
     }
 
-    const double result{ldexp(static_cast<double>(mantissa), exponent)};
+    const double result{std::ldexp(static_cast<double>(mantissa), exponent)};
     return negative_ ? -result : result;
 }
 
