@@ -1579,97 +1579,72 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 继承 `numbers.Real`。
 
-一个 decimal 由符号、系数、指数三部分组成，值为 `符号 × 系数 × 10 ^ 指数`：系数是高精度整数，
-位数不受机器字长限制；指数是范围有限的整数（见 `Emin`/`Emax`）。因为底数是 10，源码里写下的十进制
-字面量都能被精确表示，`0.1 + 0.2 == 0.3` 为真——这正是它取代二进制浮点数的理由。
+值为 `符号 × 系数 × 10 ^ 指数`：
 
-decimal 的算术遵循 **IBM 通用十进制算术规范**（General Decimal Arithmetic Specification，也就是
-Python `decimal` 模块实现的那一份）。以下只写要点、以及 SL 与该规范不一致的地方，未提及处以该规范为准。
+- 系数是高精度整数，位数不受机器字长限制；
+- 指数是范围有限的整数（见 `Emin`/`Emax`）。
 
-**标度是值的一部分**：`1.5` 与 `1.50` 的系数、指数分别是 `15 × 10 ^ -1` 和 `150 × 10 ^ -2`，两者 `==`
-为真、哈希也相同，但 `str` 分别得到 `1.5` 和 `1.50`。运算结果的标度由该规范的"理想指数"规则决定
-（如 `+`、`-` 取两个操作数指数的较小者，`*` 取两者之和），于是 `1.10 + 2.00` 得到 `3.10` 而不是 `3.1`，
-金额计算不必额外补零。
+底数是 10，因此十进制字面量都能被精确表示，`0.1 + 0.2 == 0.3` 为真。
 
-**构造不舍入，运算才舍入**：字面量、`decimal(x)`（`x` 为 str、int、bool、decimal）、以及 int/bool 在
-混合运算中提升成 decimal，一律精确保留全部位数，哪怕超过当前上下文的 `prec`；而每一个算术运算
-（`+ - * / // % **` 以及各个方法）的结果都按**当前上下文**舍入到至多 `prec` 位有效数字。
-比较运算不舍入。`decimal(str)` 的字符串不合法时抛 `decimal.ConversionSyntax`。
+算术遵循 IBM 通用十进制算术规范（即 Python `decimal` 模块实现的那一份）。
+以下只写要点和与该规范不一致的地方，未提及处以该规范为准。
 
-`decimal` 不会自动转换为 `int`，即便数值恰好是整数；反过来 int、bool 在混合运算中提升为 decimal。
-数值相等的 int 与 decimal 哈希相同。
+- 标度是值的一部分：`1.5` 与 `1.50` 的指数分别是 `-1` 和 `-2`，两者 `==` 为真、哈希也相同，
+  但 `str` 分别得到 `1.5` 和 `1.50`；运算结果的标度按该规范的"理想指数"规则决定；
+- 构造不舍入，运算才舍入：
+  字面量、`decimal(x)`（`x` 为 str、int、bool、decimal）、以及 int/bool 提升成 decimal，都精确保留全部位数；
+  每个算术运算的结果则按当前上下文舍入到至多 `prec` 位有效数字，比较不舍入。
+  `decimal(str)` 的字符串不合法时抛 `decimal.ConversionSyntax`；
+- `//` 永远向负无穷取整（见 3.4.2），不采纳该规范里 `divide-integer` 向零截断的定义；
+  结果位数超过 `prec` 时抛 `decimal.DivisionImpossible`；
+- `decimal` 不会自动转换为 `int`；数值相等的 int 与 decimal 哈希相同；
+- 有 `Infinity`、`-Infinity`、`NaN`、`sNaN`、负零。
+  默认上下文把产生它们的信号都设成了陷阱，因此默认设置下它们只能由 `decimal('nan')` 这类构造显式产生。
+  NaN 参与序比较时抛 `decimal.InvalidOperation`，`==`、`!=` 照常返回 `False`、`True`；
+- `str` 按该规范的转换规则，指数为正、或调整后的指数小于 `-6` 时用科学计数法（如 `1.5E+30`）；
+  科学计数法字面量尚未加入（见 5.1），因此这种输出暂时读不回来。
 
-`str` 按该规范的转换规则，指数为正、或调整后的指数小于 `-6` 时用科学计数法（如 `1.5E+30`）。
-SL 目前还没有科学计数法字面量（见 5.1），因此这种输出暂时不能原样当字面量读回来。
-
-`//` 的取整方向以 SL 的统一规则为准，**永远向负无穷**（见 3.4.2），不采纳该规范里 `divide-integer`
-向零截断的定义——SL 的 `//` 不因操作数类型而改变取整方向。`//` 的结果位数超过 `prec` 时抛
-`decimal.DivisionImpossible`。
-
-**特殊值**：decimal 有 `Infinity`、`-Infinity`、`NaN`、`sNaN` 和负零（`-0.0 == 0.0` 为真）。但默认
-上下文把产生它们的三个信号全设成了陷阱（见 4.2.6.3），所以默认设置下它们只能由 `decimal('nan')`
-这类构造显式产生，不会凭空冒出来。NaN 参与序比较（`<`、`<=`、`>`、`>=`）时抛
-`decimal.InvalidOperation`，不像二进制浮点数那样静默返回 `False`，因此排序不会得到无声的错误结果；
-`==`、`!=` 照常返回 `False`、`True`。
+`decimal` 是类不是模块，下面的 `Context`、`getcontext`、`setcontext` 以及各信号类都是它的类属性。
 
 ##### 4.2.6.1 decimal.Context
 
-描述一次运算所处的算术环境。它是挂在 `decimal` 上的类，不是顶层内置名，源码里只能写作 `decimal.Context`。
+算术环境，`decimal` 的嵌套类。按关键字构造，没传的字段取默认值：
 
 | 字段       | 默认值                                         | 含义                                       |
 |------------|------------------------------------------------|--------------------------------------------|
 | `prec`     | `28`                                           | 运算结果保留的有效数字位数上限，正 int     |
-| `rounding` | `decimal.ROUND_HALF_EVEN`                      | 舍入方式，见 4.2.6.2                       |
+| `rounding` | `Context.ROUND_HALF_EVEN`                      | 舍入方式，见 4.2.6.2                       |
 | `traps`    | `[DivisionByZero, Overflow, InvalidOperation]` | 要抛异常的信号集合，见 4.2.6.3             |
 | `flags`    | `[]`                                           | 已发生过的信号集合，粘滞，只能手动清空     |
 | `Emax`     | `999999`                                       | 指数上限，超出触发 `Overflow`              |
 | `Emin`     | `-999999`                                      | 指数下限，低于触发 `Subnormal`/`Underflow` |
 
-`decimal.Context(...)` 构造时按关键字传参，没传的字段取上表的默认值。
+`decimal.getcontext()`、`decimal.setcontext(ctx)` 这两个类方法读写全局上下文，所有运算符走的都是它。
 
-**当前上下文**是一个全局可变状态，所有运算符走的都是它；`decimal.getcontext()`、
-`decimal.setcontext(ctx)` 这两个类方法读写它。
-
-**临时指定上下文**：decimal 上所有会查上下文的方法都带一个可选的末位参数 `ctx`，传了就按它算、
-且不改动当前上下文，如 `__op_div__(self, other, ctx=None)`。运算符语法永远只传操作数本身，
-也就是永远走当前上下文；要临时指定就得显式调方法。
-
-每个这样的 dunder 都有一个别名，名字是去掉 `__op_` 前缀和末尾下划线的结果（`div = __op_div__`、
-`add = __op_add__`、`floordiv = __op_floordiv__`，依此类推），于是写 `a.div(b, ctx)` 即可，
-不必写 `a.__op_div__(b, ctx)`。比较方法同样带 `ctx`，但只用来决定 NaN 触发的 `InvalidOperation`
-是抛出还是记进 `flags`，不涉及舍入。
-
-`Context` 自己不挂 `ctx.divide(a, b)` 那样的一套算术方法：它和 `a.div(b, ctx)` 是同一件事的第二种
-写法，两套等价 API 对规范和实现都是净负担。代价是左操作数为 int 时够不着——想按临时上下文算
-`1 / 3`，得写 `decimal(1).div(3, ctx)`，多一次显式转换。
-
-Python `Context` 的 `capitals`、`clamp` 两个字段不要：前者是 `E`/`e` 大小写的显示开关，算术环境里
-不该有显示选项（SL 固定输出大写 `E`）；后者只为 IEEE 定宽交换格式服务，而 SL 的 decimal 没有定宽表示。
-
-`with` 尚未加入，因此暂时没有 Python `localcontext()` 那种作用域式的临时上下文，以后再补。
+decimal 上所有会查上下文的方法都带一个可选的末位参数 `ctx`，如 `__op_div__(self, other, ctx=None)`，
+传了就按它算且不改动当前上下文；运算符语法只传操作数，因此永远走当前上下文。
 
 ##### 4.2.6.2 舍入方式
 
-八种，与 Python 同名同义，作为常量挂在 `decimal` 上：
+`Context` 的类属性，即 `rounding` 字段的全部合法取值：
 
 | 名称              | 含义                                         |
 |-------------------|----------------------------------------------|
 | `ROUND_HALF_EVEN` | 四舍六入五成双（默认）                       |
 | `ROUND_HALF_UP`   | 四舍五入，恰好一半时远离零                   |
-| `ROUND_HALF_DOWN` | 恰好一半时靠近零                             |
+| `ROUND_HALF_DOWN` | 四舍五入，恰好一半时靠近零                   |
 | `ROUND_UP`        | 一律远离零                                   |
-| `ROUND_DOWN`      | 一律向零截断                                 |
+| `ROUND_DOWN`      | 一律靠近零                                   |
 | `ROUND_CEILING`   | 一律向 `+Infinity`                           |
 | `ROUND_FLOOR`     | 一律向 `-Infinity`                           |
 | `ROUND_05UP`      | 向零截断；但截断后末位是 0 或 5 时改为远离零 |
 
 ##### 4.2.6.3 信号与陷阱
 
-运算过程中出现的异常情况称为**信号**。每个信号在上下文里有两种去向：在 `traps` 里就立刻抛出对应的
-异常；不在就把它记进 `flags`（粘滞位，只能由使用者手动清空），并按规范返回一个结果继续算下去。
+运算中出现的异常情况称为**信号**：在当前上下文的 `traps` 里就抛出对应异常，
+否则记进 `flags`（粘滞位，只能手动清空）并按规范返回一个结果继续算。
 
-信号本身就是异常类，挂在 `decimal` 上，全部是 `MathError` 的子类——于是 `except MathError` 能同时
-接住 int 的除零和 decimal 的各种信号：
+信号本身就是异常类，均为 `MathError` 的子类：
 
 ```
 decimal.DecimalException
@@ -1677,20 +1652,15 @@ decimal.DecimalException
 ├── decimal.Rounded
 ├── decimal.Inexact
 ├── decimal.Subnormal
-├── decimal.DivisionByZero      ← 默认陷阱。除数为 0 而被除数不为 0
-├── decimal.InvalidOperation    ← 默认陷阱。运算本身无意义
+├── decimal.DivisionByZero          ← 默认陷阱。除数为 0 而被除数不为 0
+├── decimal.InvalidOperation        ← 默认陷阱。运算本身无意义
 │   ├── decimal.ConversionSyntax    - 字符串不是合法的 decimal
 │   ├── decimal.DivisionImpossible  - 整除的结果位数超过 prec
 │   ├── decimal.DivisionUndefined   - 0 / 0
 │   └── decimal.InvalidContext      - 上下文字段本身不合法
-├── decimal.Overflow            ← 默认陷阱。指数超过 Emax。同时是 Inexact、Rounded 的子类
-└── decimal.Underflow           - 指数低于 Emin 且结果不为零。同时是 Inexact、Rounded、Subnormal 的子类
+├── decimal.Overflow                ← 默认陷阱。指数超过 Emax。同时是 Inexact、Rounded 的子类
+└── decimal.Underflow               - 指数低于 Emin 且结果不为零。同时是 Inexact、Rounded、Subnormal 的子类
 ```
-
-Python 的 `FloatOperation` 不要：它存在的意义是拦截 Decimal 与二进制浮点数混用，SL 没有这种混用。
-
-默认的三个陷阱意味着：**默认设置下 decimal 的出错行为和"直接报错"的语言一致**，不会静默产生
-`Infinity`/`NaN` 让错误一路蔓延下去。要按 IEEE 那样"出错也接着算"，把对应信号从 `traps` 里去掉即可。
 
 #### 4.2.7 complex
 
