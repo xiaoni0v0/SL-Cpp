@@ -355,6 +355,24 @@ std::string BigInt::to_decimal_string() const {
     return result;
 }
 
+size_t BigInt::num_decimal_digits() const {
+    if (is_small_) {
+        // 小路径下逐次除 10 就够快，不必绕道字符串
+        uint64_t magnitude{
+            small_ < 0 ? static_cast<uint64_t>(-(small_ + 1)) + 1 : static_cast<uint64_t>(small_)
+        };
+        size_t digits{1};
+        while (magnitude >= 10) {
+            magnitude /= 10;
+            ++digits;
+        }
+        return digits;
+    }
+    // 大路径没有比"真的转成十进制"更省的办法：二进制位长只能给出估计，校正还得再跟一个 10 的
+    // 幂比一次，代价并不更低
+    return to_decimal_string().size() - (negative_ ? 1 : 0);
+}
+
 double BigInt::to_double() const {
     if (is_small_) return static_cast<double>(small_);
     check_invariant(); // 同 to_decimal_string，规范化的 0 不该走到这里

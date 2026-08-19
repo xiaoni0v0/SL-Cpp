@@ -109,6 +109,10 @@ add_executable(SL main.cpp
         # numeric
         numeric/BigInt.cpp
         numeric/BigInt.h
+        numeric/DecContext.cpp
+        numeric/DecContext.h
+        numeric/BigDec.cpp
+        numeric/BigDec.h
 
         # Executor
         executor/Executor.cpp
@@ -203,12 +207,18 @@ add_executable(SL_Cpp_Numeric_Tests
         # 被测代码
         numeric/BigInt.cpp
         numeric/BigInt.h
+        numeric/DecContext.cpp
+        numeric/DecContext.h
+        numeric/BigDec.cpp
+        numeric/BigDec.h
 
         # 测试工具
         test/numeric/main_test.cpp
 
         # 测试代码
         test/numeric/big_int_test.cpp
+        test/numeric/big_dec_test.cpp
+        test/numeric/big_dec_cases.inc
 )
 sl_apply_test_target_options(SL_Cpp_Numeric_Tests)
 target_link_libraries(SL_Cpp_Numeric_Tests PRIVATE doctest::doctest)
@@ -350,6 +360,10 @@ add_executable(SL_Cpp_Analyzer_Tests
         utils/string_utils.h
         numeric/BigInt.cpp
         numeric/BigInt.h
+        numeric/DecContext.cpp
+        numeric/DecContext.h
+        numeric/BigDec.cpp
+        numeric/BigDec.h
         parser/Parser.cpp
         parser/Parser.h
         parser/ast_nodes/to_json.cpp
