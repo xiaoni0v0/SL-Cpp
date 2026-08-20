@@ -398,6 +398,45 @@ TEST_SUITE("BigDec——构造与字符串往返") {
             d("1234567890123456789012345678901234").copy_negate().to_string() ==
             "-1234567890123456789012345678901234"
         );
+        // copy-* 是安静操作：sNaN 只翻符号，不报 InvalidOperation
+        DecContext ctx{quiet_context()};
+        CHECK(d("sNaN").copy_negate().to_string() == "-sNaN");
+        CHECK(d("-sNaN").copy_abs().to_string() == "sNaN");
+        CHECK(ctx.flags().empty());
+    }
+
+    TEST_CASE("显式正号的特殊值") {
+        CHECK(d("+Infinity").to_string() == "Infinity");
+        CHECK(d("+NaN").to_string() == "NaN");
+        CHECK(d("+sNaN").to_string() == "sNaN");
+        CHECK(d("+Inf").to_string() == "Infinity");
+    }
+
+    TEST_CASE("is_integral：有限且没有非零小数部分") {
+        CHECK(d("0").is_integral());
+        CHECK(d("-0").is_integral());
+        CHECK(d("0.00").is_integral()); // 数值是 0
+        CHECK(d("0E-5").is_integral());
+        CHECK(d("0E+5").is_integral());
+        CHECK(d("1").is_integral());
+        CHECK(d("-7").is_integral());
+        CHECK(d("1.0").is_integral());
+        CHECK(d("1.00").is_integral());
+        CHECK(d("10.0").is_integral());
+        CHECK(d("3.00").is_integral()); // 看起来像小数，数值是整数
+        CHECK(d("2.0").is_integral());
+        CHECK(d("1E+10").is_integral());
+        CHECK(d("2.5E+1").is_integral()); // 25
+        CHECK(d("100E-2").is_integral()); // 1.00
+        CHECK_FALSE(d("1.5").is_integral());
+        CHECK_FALSE(d("0.1").is_integral());
+        CHECK_FALSE(d("0.5").is_integral());
+        CHECK_FALSE(d("2.5E-1").is_integral()); // 0.25
+        CHECK_FALSE(d("1.10").is_integral());
+        CHECK_FALSE(d("Infinity").is_integral());
+        CHECK_FALSE(d("-Infinity").is_integral());
+        CHECK_FALSE(d("NaN").is_integral());
+        CHECK_FALSE(d("sNaN").is_integral());
     }
 }
 
@@ -695,6 +734,27 @@ TEST_SUITE("BigDec——一元运算") {
         CHECK(d("sNaN").plus(ctx).to_string() == "NaN");
         CHECK(ctx.flags().has(DecCondition::InvalidOperation));
         CHECK(d("-sNaN").plus(ctx).to_string() == "-NaN"); // sNaN 的符号跟着走
+    }
+
+    TEST_CASE("二元运算 NaN：sNaN 优先于安静 NaN，左操作数优先于右操作数") {
+        DecContext ctx{quiet_context()};
+        CHECK(d("-sNaN").add(d("sNaN"), ctx).to_string() == "-NaN"); // 两边都是 sNaN，跟左边
+        CHECK(ctx.flags().has(DecCondition::InvalidOperation));
+        DecContext c2{quiet_context()};
+        CHECK(d("NaN").add(d("-sNaN"), c2).to_string() == "-NaN"); // 安静 vs sNaN，跟 sNaN
+        CHECK(c2.flags().has(DecCondition::InvalidOperation));
+        DecContext c3{quiet_context()};
+        CHECK(d("-NaN").add(d("NaN"), c3).to_string() == "-NaN"); // 两个安静 NaN，跟左边
+        CHECK(c3.flags().empty());
+    }
+
+    TEST_CASE("±Infinity 的一元 ±") {
+        DecContext ctx{quiet_context()};
+        CHECK(d("Infinity").plus(ctx).to_string() == "Infinity");
+        CHECK(d("-Infinity").plus(ctx).to_string() == "-Infinity");
+        CHECK(d("Infinity").minus(ctx).to_string() == "-Infinity");
+        CHECK(d("-Infinity").minus(ctx).to_string() == "Infinity");
+        CHECK(ctx.flags().empty());
     }
 }
 
@@ -1101,6 +1161,17 @@ TEST_SUITE("BigDec——幂运算与超越函数") {
         CHECK(d("1.00").pow(d("3"), ctx).to_string() == "1.000000");
         CHECK(d("1.00").pow(d("-3"), ctx).to_string() == "1"); // 负指数没有理想指数
         CHECK(ctx.flags().empty());
+        // 指数写成带末尾零的整数（3.00 / 1.0），要按整数次幂走理想指数，不能当成非整数
+        CHECK(d("2.00").pow(d("3.00"), ctx).to_string() == "8.000000");
+        CHECK(d("5.0").pow(d("1.0"), ctx).to_string() == "5.0");
+        CHECK(d("-1.0").pow(d("2"), ctx).to_string() == "1.00");
+        CHECK(d("-1.0").pow(d("3"), ctx).to_string() == "-1.000");
+        CHECK(d("-2.5").pow(d("2.0"), ctx).to_string() == "6.25");
+        CHECK(d("-2.5").pow(d("3.00"), ctx).to_string() == "-15.625");
+        CHECK(d("10.0").pow(d("-1"), ctx).to_string() == "0.1");
+        CHECK(d("0.1").pow(d("-1"), ctx).to_string() == "1E+1"); // 负指数、xc==1，没有理想指数
+        CHECK(d("0E+5").pow(d("2"), ctx).to_string() == "0");    // 零的幂指数一律归 0
+        CHECK(ctx.flags().empty());
     }
 
     TEST_CASE("** 的特殊情形") {
@@ -1115,6 +1186,8 @@ TEST_SUITE("BigDec——幂运算与超越函数") {
         CHECK(d("Infinity").pow(d("-2"), ctx).to_string() == "0");
         CHECK(d("-Infinity").pow(d("3"), ctx).to_string() == "-Infinity");
         CHECK(d("-Infinity").pow(d("2"), ctx).to_string() == "Infinity");
+        CHECK(d("-Infinity").pow(d("2.0"), ctx).to_string() == "Infinity"); // 2.0 必须被认成偶整数
+        CHECK(d("-Infinity").pow(d("3.00"), ctx).to_string() == "-Infinity");
         CHECK(ctx.flags().empty());
 
         // 0 ** 0 无意义；负数的非整数次幂不是实数

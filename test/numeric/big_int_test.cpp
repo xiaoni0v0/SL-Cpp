@@ -206,6 +206,10 @@ TEST_SUITE("BigInt——符号/奇偶/绝对值") {
         CHECK(d("-3").is_odd());
         CHECK_FALSE(d("4").is_odd());
         CHECK_FALSE(d("0").is_odd());
+        // INT64_MIN == -2^63，偶；小路径负数的 `small_ % 2` 在 C++ 里是负的，不能写成 `== 1`
+        CHECK_FALSE(d("-9223372036854775808").is_odd());
+        CHECK(d("-9223372036854775807").is_odd());      // INT64_MIN + 1
+        CHECK_FALSE(d("9223372036854775808").is_odd()); // 2^63，大路径偶数
     }
 
     TEST_CASE("is_odd：大路径（超出 int64_t 范围）下同样成立，只看最低位那个 limb") {
@@ -627,6 +631,9 @@ TEST_SUITE("BigInt——位运算：按无穷位补码语义，与 Python 一致
         CHECK((~d("-1")).to_decimal_string() == "0");
         CHECK((~d("100")).to_decimal_string() == "-101");
         CHECK((~d("-100")).to_decimal_string() == "99");
+        // INT64_MIN 取负会升级到大路径：~(-2^63) == 2^63 - 1 == INT64_MAX
+        CHECK((~d("-9223372036854775808")).to_decimal_string() == "9223372036854775807");
+        CHECK((~d("9223372036854775807")).to_decimal_string() == "-9223372036854775808");
     }
 
     TEST_CASE("& 全正数：跟普通按位与一致") {
