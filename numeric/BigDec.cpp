@@ -282,7 +282,7 @@ std::pair<BigInt, int> BigDec::split_and_decide(
     const BigInt half{unit * BigInt(5)};       // "恰好一半"
 
     const bool low_zero{low.is_zero()};
-    const bool at_least_half{!(low < half)}; // 被丢掉的最高位数字 >= 5
+    const bool at_least_half{low >= half}; // 被丢掉的最高位数字 >= 5
     const bool exact_half{low == half};
     // 留下的部分的末位数字：是不是偶数（HalfEven 用）、是不是 0 或 5（ZeroFiveUp 用）。keep 为 0
     // 时 high 是 0，两个判断都成立，正好对应规范里"没有前一位可看"时规定的取值
@@ -971,7 +971,7 @@ std::optional<BigDec> BigDec::power_exact(const BigDec &other, const int64_t p) 
         BigInt scaled_xe; // -xe*y
         if (last_digit == BigInt(2) || last_digit == BigInt(4) || last_digit == BigInt(6) ||
             last_digit == BigInt(8)) {
-            if (!((xc & -xc) == xc)) return std::nullopt; // 不是 2 的幂
+            if ((xc & -xc) != xc) return std::nullopt; // 不是 2 的幂
             const int64_t e{static_cast<int64_t>(xc.bit_length()) - 1};
             // x = 2^e * 10^xe 时结果是 5^(-e*y) * 10^(e*y + xe*y)。
             // 5^emax < 10^p 的最大 emax，93/65 是 log(10)/log(5) 的上界
@@ -1042,7 +1042,7 @@ std::optional<BigDec> BigDec::power_exact(const BigDec &other, const int64_t p) 
 
     if (n > BigInt(1)) {
         // 1 < xc < 2^n 时 xc 不可能是某个整数的 n 次幂
-        if (!(n < BigInt(xc_bits))) return std::nullopt;
+        if (n >= BigInt(xc_bits)) return std::nullopt;
         const int64_t n_small{dec_math::to_int64(n).value()}; // 上一行保证了装得下
 
         const BigInt divided{BigInt(xe).floor_div(n)};

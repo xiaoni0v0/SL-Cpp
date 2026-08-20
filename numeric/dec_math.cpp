@@ -51,7 +51,7 @@ BigInt sqrt_nearest(const BigInt &n, BigInt a) {
     assert(!n.is_negative() && !n.is_zero());
     assert(!a.is_negative() && !a.is_zero());
     BigInt b{0};
-    while (!(a == b)) {
+    while (a != b) {
         b = a;
         // 牛顿迭代 a = (a + ceil(n/a)) / 2。ceil 借向负无穷的除法写成 -((-n) // a)
         a = (a - (-n).floor_div(a)) >> 1;
@@ -59,7 +59,7 @@ BigInt sqrt_nearest(const BigInt &n, BigInt a) {
     return a;
 }
 
-BigInt ilog(BigInt x, const BigInt &m) {
+BigInt ilog(const BigInt &x, const BigInt &m) {
     assert(!x.is_negative() && !x.is_zero());
     assert(!m.is_negative() && !m.is_zero());
 

@@ -31,7 +31,7 @@ inline constexpr int64_t kTaylorL{8};
 
 // M * log(x/M) 的整数近似。调用方保证 x > 0、M > 0；误差界只跟 x/M 有关，
 // 0.1 <= x/M <= 10 时不超过 22
-[[nodiscard]] BigInt ilog(BigInt x, const BigInt &m);
+[[nodiscard]] BigInt ilog(const BigInt &x, const BigInt &m);
 
 // floor(10^p * log(10))。调用方保证 p >= 0。
 // 内部有一份不断变长的数字缓存，因此**不是线程安全的**（整个前端目前都是单线程）
