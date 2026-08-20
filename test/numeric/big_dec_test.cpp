@@ -88,6 +88,19 @@ DecRounding rounding_from_name(const std::string &name) {
     return DecRounding::HalfEven;
 }
 
+DecCondition condition_from_name(const std::string &name) {
+    if (name == "Clamped") return DecCondition::Clamped;
+    if (name == "DivisionByZero") return DecCondition::DivisionByZero;
+    if (name == "Inexact") return DecCondition::Inexact;
+    if (name == "InvalidOperation") return DecCondition::InvalidOperation;
+    if (name == "Overflow") return DecCondition::Overflow;
+    if (name == "Rounded") return DecCondition::Rounded;
+    if (name == "Subnormal") return DecCondition::Subnormal;
+    if (name == "Underflow") return DecCondition::Underflow;
+    REQUIRE_MESSAGE(false, "未知的信号名");
+    return DecCondition::InvalidOperation;
+}
+
 // 覆盖各种"容易出 bug"的值，供后面的恒等式交叉验证批量使用：三类特殊值、正负零、同一个数值的
 // 不同标度、指数落在 Emin/Emax 附近的、系数恰好卡在 prec 位上的、跨多个 limb 的巨大系数
 std::vector<std::string> interesting_strings() {
@@ -1590,6 +1603,109 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
             );
             CHECK(result.to_string() == f[5]);
             CHECK(flags_to_string(ctx.flags()) == f[6]);
+        }
+    }
+
+    TEST_CASE(
+        "陷阱开启：抛不抛、抛哪个条件、抛之前 flags 走到哪一步（上面所有表都只有陷阱全关"
+        "的路径，这张表专补陷阱开着时的行为，值池里塞了带非零指数的零和极端指数）"
+    ) {
+        // 行格式：a|b|op|prec|rounding|emax|emin|trap|结果|flags——真抛了的话结果为空、
+        // flags 是 "THROW:条件名;抛出时已记下的flags"
+        const auto run_trapped{
+            [](const BigDec &a, const BigDec &b, const std::string &op, DecContext &ctx) {
+                try {
+                    const BigDec r{
+                        op == "add"        ? a.add(b, ctx)
+                        : op == "sub"      ? a.sub(b, ctx)
+                        : op == "mul"      ? a.mul(b, ctx)
+                        : op == "div"      ? a.div(b, ctx)
+                        : op == "floordiv" ? a.floor_div(b, ctx)
+                        : op == "mod"      ? a.mod(b, ctx)
+                        : op == "pow"      ? a.pow(b, ctx)
+                        : op == "sqrt"     ? a.sqrt(ctx)
+                        : op == "exp"      ? a.exp(ctx)
+                        : op == "ln"       ? a.ln(ctx)
+                                           : a.log10(ctx)
+                    };
+                    return std::pair{r.to_string(), flags_to_string(ctx.flags())};
+                } catch (const DecTrapped &e) {
+                    return std::pair{
+                        std::string{},
+                        "THROW:" + std::string{dec_condition_name(e.condition())} + ";" +
+                            flags_to_string(ctx.flags())
+                    };
+                }
+            }
+        };
+
+        const auto check_trap_table{[&run_trapped](const auto &table, const bool unary) {
+            for (const char *const raw : table) {
+                const std::string line{raw};
+                CAPTURE(line);
+                const std::vector<std::string> f{split_fields(line)};
+                REQUIRE(f.size() == 10);
+                const DecRounding rounding{rounding_from_name(f[4])};
+                DecContext ctx{
+                    quiet_context(std::stoi(f[3]), rounding, std::stoi(f[5]), std::stoi(f[6]))
+                };
+                ctx.traps().add(condition_from_name(f[7]));
+                const BigDec a{d(f[0])};
+                const BigDec b{unary && f[1].empty() ? a : d(f[1])};
+                const auto [res, fl]{run_trapped(a, b, f[2], ctx)};
+                CHECK(res == f[8]);
+                CHECK(fl == f[9]);
+                // 抛出来的 DecTrapped 在 BigDec 一侧就该是细分条件（0/0 是 DivisionUndefined，
+                // 不是折算后的 InvalidOperation）——生成器那边按这个约定出的题
+            }
+        }};
+
+        check_trap_table(kTrappedArith, false);
+        check_trap_table(kTrappedFloorDivMod, false);
+        check_trap_table(kTrappedTrans, true);
+    }
+
+    TEST_CASE("陷阱开启：== 与序比较抛不抛、抛什么") {
+        // 行格式：a|b|trap|eq;eqf|rel;orf，';' 前是结果、后是 flags（抛了就是
+        // "THROW:条件名;flags"）
+        for (const char *const raw : kTrappedCmp) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 5);
+            const BigDec a{d(f[0])};
+            const BigDec b{d(f[1])};
+            DecContext ctx{quiet_context()};
+            ctx.traps().add(condition_from_name(f[2]));
+            try {
+                const bool eq{a.equals(b, ctx)};
+                const std::string got{
+                    (eq ? "1" : "0") + std::string{";"} + flags_to_string(ctx.flags())
+                };
+                CHECK(got == f[3]);
+            } catch (const DecTrapped &e) {
+                CHECK(
+                    "THROW:" + std::string{dec_condition_name(e.condition())} + ";" +
+                        flags_to_string(ctx.flags()) ==
+                    f[3]
+                );
+            }
+            try {
+                const std::partial_ordering ordering{a.compare_ordering(b, ctx)};
+                const std::string rel{
+                    ordering == std::partial_ordering::unordered ? "un"
+                    : ordering == std::partial_ordering::less    ? "lt"
+                    : ordering == std::partial_ordering::greater ? "gt"
+                                                                 : "eq"
+                };
+                CHECK(rel + ";" + flags_to_string(ctx.flags()) == f[4]);
+            } catch (const DecTrapped &e) {
+                CHECK(
+                    "THROW:" + std::string{dec_condition_name(e.condition())} + ";" +
+                        flags_to_string(ctx.flags()) ==
+                    f[4]
+                );
+            }
         }
     }
 

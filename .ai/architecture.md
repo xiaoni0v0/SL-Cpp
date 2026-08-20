@@ -90,7 +90,8 @@
 `test/numeric/big_dec_cases.inc` 是**生成产物**：`gen_big_dec_cases.py` 用 CPython 自带的 decimal
 算出期望值，`big_dec_test.cpp` 逐条比对结果和触发的信号。改 `BigDec` 的语义时要连带重新生成
 （脚本开头写了用法），别手改那个 `.inc`。脚本带一个倍数参数，临时跑几十倍规模的差分测试很方便，
-提交进仓库的那份用默认倍数。
+提交进仓库的那份用默认倍数。表里除了陷阱全关的路径，还有 `kTrapped*` 四张陷阱开启的表（抛不抛、
+抛哪个条件、抛出时 flags 到哪一步），值池刻意塞了带非零指数的零；这些表的合并规则见脚本头注释。
 
 **每组用例都拿 CPython 的两套实现（libmpdec 和 `_pydecimal`）各算一遍，不一致就整组跳过**——它们
 自己在 `**` 和 `exp` 上就有已知分歧（见 [context.md](context.md)）。这条规则是防呆用的：分歧点随

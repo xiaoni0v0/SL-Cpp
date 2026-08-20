@@ -633,8 +633,11 @@ BigInt 已有的 `from_decimal_string`/`to_decimal_string`/`floor_div`/`mod`/`po
 
 SL.md 的异常树里 decimal 有 12 个异常类，但 `traps`/`flags` 只认 8 个——`ConversionSyntax`、
 `DivisionImpossible`、`DivisionUndefined`、`InvalidContext` 都是 `InvalidOperation` 的细分，查陷阱、
-记标志位时一律先折算成 `InvalidOperation`（`signal_of`），只有抛出来的异常带的是细分条件。这是照抄
-Python 的 `_condition_map`，不是自己发明的。
+记标志位时一律先折算成 `InvalidOperation`（`signal_of`）。折算这一步是照抄 Python 的 `_condition_map`；
+但"抛出来的 DecTrapped 带细分条件"这层跟 CPython 的实际行为**不一致**——Python 抛的是折算后的基类
+（`0/0` 抛 `decimal.InvalidOperation`，不是 `decimal.DivisionUndefined`）。带细分条件是刻意选的
+"信息更多"版本：SL.md 自己把细分异常列成了类，executor 按 `condition()` 映射时让用户能按细分
+异常去 catch，比 Python 的基类更有用。别把"抛细分条件"再当成"照抄 Python"。
 
 陷阱触发时抛的是 `DecTrapped`（`numeric/` 自己的 C++ 异常），不是 SL 的 `decimal.XXX`——同 BigInt 抛
 `std::domain_error` 的理由：`numeric/` 不认识、也不该认识 SL 的异常类体系，由调用方按 `condition()`
@@ -675,6 +678,12 @@ IBM 规范给的是向零截断的 `divide-integer`/`remainder`，SL 要的是�
 `//`/`%` 是我们偏离规范的地方，Python 的答案不能直接用。生成器的做法是**换一条推导路径**：先在超高
 精度下拿到精确的截断商/余数，再整体修正，凡是超高精度下仍不精确的组合直接跳过不出题。两边只在数学
 定义上一致，不共用代码路径——如果照着 C++ 的算法再写一遍 Python，测的就只是"我抄得一不一致"。
+
+表里除陷阱全关的路径外，还有**陷阱开启的路径**（`kTrapped*` 四张表）：抛不抛、抛哪个条件、抛出时
+flags 走到哪一步都是规范的一部分。陷阱表只要求两套 CPython 实现"抛出的条件名"一致——它们在抛出前
+记 flags 的顺序不一致（1/3 在 Inexact 陷阱下，libmpdec 先记 Rounded、_pydecimal 先抛 Inexact），
+抛出时的 flags 以 _pydecimal 为准（BigDec 是照它移植的）。值池里还刻意塞了带非零指数的零
+（`0E+999999` 这类），专门压 fix 的零夹取、add 的零操作数、trunc_divmod 的量级短路这些路径。
 
 **还没实现的**：`hash`（要先归一标度）和 `int(decimal)`（取整方向 SL.md 还没定）。SL.md 里 decimal
 参与的运算符本身已经全了。

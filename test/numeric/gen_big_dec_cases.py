@@ -16,6 +16,9 @@
 #     且用定向舍入时两边差 1 ulp（`9 ** 0.5` 在 ROUND_DOWN 下 libmpdec 给 2.99、_pydecimal 给 3.00）。
 #   * `exp` 在 `Emin == 0` 时：次正规判定该在舍入前还是舍入后做，两边选得不一样，值相同、
 #     只差 Subnormal/Underflow 两个 flag。规范原文写的是 "before any rounding"。
+#   * 陷阱开启的路径上，抛出前记 flags 的顺序两边不一样（1/3 在 Inexact 陷阱下，libmpdec 先记
+#     Rounded、_pydecimal 先抛 Inexact）——陷阱表只要求两套实现"抛出的条件名"一致，抛出时的
+#     flags 以 _pydecimal 为准（BigDec 是照它移植的）。
 #
 # BigDec 两处都站 _pydecimal 一边，行为由 big_dec_test.cpp 里的手写用例钉住。之所以做成"全表统一
 # 过滤"而不是只挡这两处：分歧点是随参数（尤其是 Emin、舍入方式）漂移的，哪天有人往池子里加一档
@@ -59,9 +62,13 @@ HUGE_PREC = 2000
 SKIPPED = {}
 
 
-def new_ctx(prec=28, rounding=HALF_EVEN, emax=999999, emin=-999999, mod=decimal):
+def new_ctx(
+    prec=28, rounding=HALF_EVEN, emax=999999, emin=-999999, mod=decimal, traps_on=None
+):
     c = mod.Context(prec=prec, rounding=rounding, Emax=emax, Emin=emin)
     c.traps = {k: 0 for k in c.traps}  # 陷阱全关，只收 flags
+    if traps_on is not None:
+        c.traps[getattr(mod, traps_on)] = 1
     c.clear_flags()
     return c
 
@@ -82,20 +89,84 @@ def agreed(table, prec, rounding, emax, emin, run):
     return str(c_res), flags_str(c_ctx)
 
 
+def merge_outcome(c_fl, p_fl):
+    """把两套实现的 flags 串合成一个期望值：抛出路径上只要求抛出的条件名一致（libmpdec 与
+    _pydecimal 在抛出前记 flags 的顺序不一致，Inexact/Rounded 谁先谁后各说各话），抛出时的
+    flags 以 _pydecimal 为准——BigDec 是照它移植的；非抛出路径要求完全一致。返回 None 表示
+    不一致、整组跳过。"""
+    if c_fl.startswith("THROW:"):
+        if not p_fl.startswith("THROW:"):
+            return None
+        c_name = c_fl[6:].split(";", 1)[0]
+        p_name = p_fl[6:].split(";", 1)[0]
+        if c_name != p_name:
+            return None
+        return p_fl
+    if p_fl.startswith("THROW:"):
+        return None
+    if c_fl != p_fl:
+        return None
+    return p_fl
+
+
+def agreed_trap(table, prec, rounding, emax, emin, trap, run):
+    """带单个陷阱的 agreed：run 抛异常时返回 ('', 'THROW:名字;抛出时的flags')。"""
+    c_ctx = new_ctx(prec, rounding, emax, emin, decimal, trap)
+    c_res = run(c_ctx, decimal)
+    p_ctx = new_ctx(prec, rounding, emax, emin, _pydecimal, trap)
+    p_res = run(p_ctx, _pydecimal)
+    if c_res[0] != p_res[0] or merge_outcome(c_res[1], p_res[1]) is None:
+        SKIPPED[table] = SKIPPED.get(table, 0) + 1
+        return None
+    return c_res[0], p_res[1]
+
+
+def trapped(note, run):
+    """把 run(ctx, mod) 包成"抛异常就返回 ('', 'THROW:名字;抛出时的flags')"的形式。
+    note(mod) 在抛异常时给出 BigDec 那边的细分条件名（或 None 表示不改）——Python 抛的是
+    折算后的基类（0/0 抛 InvalidOperation，BigDec 抛 DivisionUndefined，是项目里记录在案的
+    设计决定），这里把名字折算回细分条件再比对。"""
+
+    def inner(ctx, mod):
+        try:
+            return str(run(ctx, mod)), flags_str(ctx, mod)
+        except Exception as e:  # noqa: BLE001
+            name = type(e).__name__
+            if name == "InvalidOperation" and note is not None:
+                name = note(mod) or name
+            return "", "THROW:" + name + ";" + flags_str(ctx, mod)
+
+    return inner
+
+
 # --------------------------------------------------------------------------
 # // 和 % 的参考值：向负无穷取整（SL 语义，跟 IBM 规范的向零截断不同）。
 # 推导路径跟 C++ 那边不一样——先在超高精度下拿到精确的截断商/余数，再整体修正——
 # 两边只在数学定义上一致，不共用代码路径。凡是超高精度下仍不精确的组合直接跳过不出题
 # --------------------------------------------------------------------------
-def floor_divmod_one(x_s, y_s, prec, rounding, emax, emin, mod):
-    """返回 (商, 商的flags, 余数, 余数的flags)，或 None 表示这组推不精确、不适合当参考。"""
+def floor_divmod_one(x_s, y_s, prec, rounding, emax, emin, mod, traps_on=None):
+    """返回 (商, 商的flags, 余数, 余数的flags)，或 None 表示这组推不精确、不适合当参考。
+    traps_on 不为 None 时，flags 可能是 'THROW:名字;抛出时的flags'（商/余数各自独立）。"""
     x, y = mod.Decimal(x_s), mod.Decimal(y_s)
     exact = [True]
+
+    def record(ctx, cond):
+        """记信号；陷阱开着就抛细分条件本身——Python 抛的是折算后的基类，BigDec 抛的是
+        细分条件（见 .ai/context.md），这里跟 BigDec 对齐。"""
+        sig = {
+            mod.ConversionSyntax: mod.InvalidOperation,
+            mod.DivisionImpossible: mod.InvalidOperation,
+            mod.DivisionUndefined: mod.InvalidOperation,
+            mod.InvalidContext: mod.InvalidOperation,
+        }.get(cond, cond)
+        ctx.flags[sig] = 1
+        if ctx.traps[sig]:
+            raise cond()
 
     def nan_of(ctx):
         if x.is_snan() or y.is_snan():
             which = x if x.is_snan() else y
-            ctx.flags[mod.InvalidOperation] = 1
+            record(ctx, mod.InvalidOperation)
             return mod.Decimal("-NaN") if which.is_signed() else mod.Decimal("NaN")
         if x.is_nan():
             return x
@@ -111,19 +182,19 @@ def floor_divmod_one(x_s, y_s, prec, rounding, emax, emin, mod):
         if x.is_infinite():
             if kind == "q":
                 if y.is_infinite():
-                    ctx.flags[mod.InvalidOperation] = 1
+                    record(ctx, mod.InvalidOperation)
                     return mod.Decimal("NaN")
                 return mod.Decimal("-Infinity") if sign else mod.Decimal("Infinity")
-            ctx.flags[mod.InvalidOperation] = 1
+            record(ctx, mod.InvalidOperation)
             return mod.Decimal("NaN")
         if y.is_zero():
             if x.is_zero():
-                ctx.flags[mod.InvalidOperation] = 1  # DivisionUndefined
+                record(ctx, mod.DivisionUndefined)
                 return mod.Decimal("NaN")
             if kind == "q":
-                ctx.flags[mod.DivisionByZero] = 1
+                record(ctx, mod.DivisionByZero)
                 return mod.Decimal("-Infinity") if sign else mod.Decimal("Infinity")
-            ctx.flags[mod.InvalidOperation] = 1  # x % 0
+            record(ctx, mod.InvalidOperation)
             return mod.Decimal("NaN")
 
         # 必须比 prec 本身宽出一截，否则"超高精度"这个假设自己先垮了：prec 逼近/超过 HUGE_PREC
@@ -134,7 +205,7 @@ def floor_divmod_one(x_s, y_s, prec, rounding, emax, emin, mod):
         qt, rt = big.divmod(x, y)  # 向零截断
         if qt.is_nan():
             # 超高精度下都装不下的商，目标精度当然更装不下
-            ctx.flags[mod.InvalidOperation] = 1  # DivisionImpossible
+            record(ctx, mod.DivisionImpossible)
             return mod.Decimal("NaN")
         if big.flags[mod.Inexact]:
             exact[0] = False
@@ -147,7 +218,7 @@ def floor_divmod_one(x_s, y_s, prec, rounding, emax, emin, mod):
                 exact[0] = False
                 return None
         if q.is_finite() and len(q.copy_abs().as_tuple().digits) > prec:
-            ctx.flags[mod.InvalidOperation] = 1  # DivisionImpossible
+            record(ctx, mod.DivisionImpossible)
             return mod.Decimal("NaN")
         # 商也要过 fix：位数够不代表指数域也够，调整后的指数超过 Emax 时得报 Overflow
         if kind == "q":
@@ -158,30 +229,38 @@ def floor_divmod_one(x_s, y_s, prec, rounding, emax, emin, mod):
             e = r.as_tuple().exponent
             ne = min(max(e, etiny), emax)
             if ne != e:
-                ctx.flags[mod.Clamped] = 1
+                record(ctx, mod.Clamped)
                 return mod.Decimal((1 if r.is_signed() else 0, (0,), ne))
             return r
         return ctx.plus(r)
 
-    q_ctx = new_ctx(prec, rounding, emax, emin, mod)
-    q = compute("q", q_ctx)
-    r_ctx = new_ctx(prec, rounding, emax, emin, mod)
-    r = compute("r", r_ctx)
+    results = []
+    for kind in ("q", "r"):
+        ctx = new_ctx(prec, rounding, emax, emin, mod, traps_on)
+        try:
+            v = compute(kind, ctx)
+            results.append((str(v), flags_str(ctx, mod)))
+        except Exception as e:  # noqa: BLE001
+            results.append(
+                ("", "THROW:" + type(e).__name__ + ";" + flags_str(ctx, mod))
+            )
     if not exact[0]:
         return None
-    return str(q), flags_str(q_ctx, mod), str(r), flags_str(r_ctx, mod)
+    return results[0][0], results[0][1], results[1][0], results[1][1]
 
 
-def floor_divmod(x_s, y_s, prec, rounding, emax=999999, emin=-999999):
+def floor_divmod(x_s, y_s, prec, rounding, emax=999999, emin=-999999, traps_on=None):
     """同上，但两套实现都推一遍，不一致就跳过。"""
-    c = floor_divmod_one(x_s, y_s, prec, rounding, emax, emin, decimal)
-    p = floor_divmod_one(x_s, y_s, prec, rounding, emax, emin, _pydecimal)
+    c = floor_divmod_one(x_s, y_s, prec, rounding, emax, emin, decimal, traps_on)
+    p = floor_divmod_one(x_s, y_s, prec, rounding, emax, emin, _pydecimal, traps_on)
     if c is None or p is None:
         return None
-    if c != p:
+    q = merge_outcome(c[1], p[1])
+    r = merge_outcome(c[3], p[3])
+    if c[0] != p[0] or q is None or r is None:
         SKIPPED["floordiv/mod"] = SKIPPED.get("floordiv/mod", 0) + 1
         return None
-    return c
+    return c[0], q, p[2], r
 
 
 # --------------------------------------------------------------------------
@@ -192,6 +271,15 @@ FINITE_POOL = [
     "-0",
     "0.00",
     "-0.00",
+    "0.000",
+    "0E+5",
+    "-0E+5",
+    "0E-5",
+    "0E+999999",
+    "0E-999999",
+    "-0E+999999",
+    "-0E-999999",
+    "-0.0E+7",
     "1",
     "-1",
     "1.0",
@@ -515,6 +603,233 @@ def main():
             "%s|%s|%s|%d|%s|%s|%s" % (a_s, b_s, op, prec, rname, res, fl)
         )
     out.append(emit("kMixedCases", mixed_lines))
+    out.append("")
+
+    # ---- 陷阱：op|a|b|prec|rounding|emax|emin|trap|结果|flags -----------------
+    # 陷阱开着时"抛不抛、抛哪个、抛之前 flags 走到哪一步"同样是规范的一部分，上面各表全是
+    # 陷阱全关的路径。结果为空、flags 形如 "THROW:名字;抛出时的flags" 的行表示真的抛了，
+    # 否则两个字段照常是"结果|flags"。值池刻意塞带非零指数的零（0E+999999 这类）和极端指数，
+    # 专打 fix 的零夹取、add 的零操作数、trunc_divmod 的量级短路这些只有极端输入才走的路径
+    trap_lines = []
+    trap_pool = FINITE_POOL + SPECIALS
+    for _ in range(500 * scale):
+        a_s = rand_decimal(rng) if rng.random() < 0.7 else rng.choice(trap_pool)
+        b_s = rand_decimal(rng) if rng.random() < 0.7 else rng.choice(trap_pool)
+        op = rng.choice(["add", "sub", "mul", "div"])
+        prec = rng.randint(1, 30)
+        rname, rmode = rng.choice(ROUNDINGS)
+        emax, emin = rng.choice(
+            [
+                (999999, -999999),
+                (4, -4),
+                (9, -9),
+                (2, -2),
+                (3, 0),
+                (0, 0),
+                (999999, 0),
+                (3, -999999),
+            ]
+        )
+        trap = rng.choice(SIGNAL_ATTRS)
+        got = agreed_trap(
+            "trap",
+            prec,
+            rmode,
+            emax,
+            emin,
+            trap,
+            trapped(
+                lambda m: (
+                    "DivisionUndefined"
+                    if op == "div"
+                    and m.Decimal(a_s).is_zero()
+                    and m.Decimal(b_s).is_zero()
+                    else None
+                ),
+                lambda c, m, x=a_s, y=b_s, o=op: {
+                    "add": c.add,
+                    "sub": c.subtract,
+                    "mul": c.multiply,
+                    "div": c.divide,
+                }[o](m.Decimal(x), m.Decimal(y)),
+            ),
+        )
+        if got is None:
+            continue
+        res, fl = got
+        trap_lines.append(
+            "%s|%s|%s|%d|%s|%d|%d|%s|%s|%s"
+            % (a_s, b_s, op, prec, rname, emax, emin, trap, res, fl)
+        )
+    out.append(emit("kTrappedArith", trap_lines))
+    out.append("")
+
+    # ---- 陷阱 × // / %：a|b|op|prec|rounding|emax|emin|trap|结果|flags ---------
+    # 期望值还是 floor_divmod 那条推导路径，只是带上陷阱；q、r 各自独立出题
+    trap_fd_lines = []
+    trap_fd_pairs = [(a, b) for a in trap_pool[:12] for b in trap_pool[:12]]
+    rng.shuffle(trap_fd_pairs)
+    for a_s, b_s in trap_fd_pairs[: 240 * scale]:
+        prec = rng.randint(1, 30)
+        rname, rmode = rng.choice(ROUNDINGS)
+        emax, emin = rng.choice(
+            [
+                (999999, -999999),
+                (4, -4),
+                (9, -9),
+                (2, -2),
+                (3, 0),
+                (0, 0),
+                (999999, 0),
+                (3, -999999),
+            ]
+        )
+        trap = rng.choice(SIGNAL_ATTRS)
+        got = floor_divmod(a_s, b_s, prec, rmode, emax, emin, trap)
+        if got is None:
+            continue
+        q, qf, r, rf = got
+        for op, res, fl in (("floordiv", q, qf), ("mod", r, rf)):
+            trap_fd_lines.append(
+                "%s|%s|%s|%d|%s|%d|%d|%s|%s|%s"
+                % (a_s, b_s, op, prec, rname, emax, emin, trap, res, fl)
+            )
+    out.append(emit("kTrappedFloorDivMod", trap_fd_lines))
+    out.append("")
+
+    # ---- 陷阱 × 幂/超越函数：a|b|op|prec|rounding|emax|emin|trap|结果|flags ----
+    trap_trans_lines = []
+    trap_trans_pool = (
+        FINITE_POOL[:22]
+        + SPECIALS
+        + [
+            "1E+30",
+            "1E-30",
+            "2.718281828459045235360287471",
+            "0.9999999999999999999999999999",
+            "0.5",
+            "1.5",
+            "2",
+            "4",
+            "9",
+            "1E+100",
+            "1E-100",
+            "1E+1999999998",
+            "1E-1999999998",
+        ]
+    )
+    for _ in range(160 * scale):
+        op = rng.choice(["pow", "sqrt", "exp", "ln", "log10"])
+        a_s = rng.choice(trap_trans_pool)
+        b_s = ""
+        if op == "pow":
+            b_s = rng.choice(
+                trap_trans_pool[:30]
+                + ["0.3333333333333333", "28", "29", "1E+6", "-1E+6", "1E+3", "1E-3"]
+            )
+        prec = rng.choice([1, 2, 3, 5, 7, 16, 28, 50, 100])
+        rname, rmode = rng.choice(ROUNDINGS)
+        emax, emin = rng.choice([(999999, -999999), (4, -4), (9, -9), (3, 0), (0, 0)])
+        trap = rng.choice(SIGNAL_ATTRS)
+        got = agreed_trap(
+            "trap-trans",
+            prec,
+            rmode,
+            emax,
+            emin,
+            trap,
+            trapped(
+                None,
+                lambda c, m, a=a_s, b=b_s, o=op: (
+                    {
+                        "pow": c.power,
+                        "sqrt": c.sqrt,
+                        "exp": c.exp,
+                        "ln": c.ln,
+                        "log10": c.log10,
+                    }[o](m.Decimal(a), m.Decimal(b))
+                    if b
+                    else {
+                        "pow": c.power,
+                        "sqrt": c.sqrt,
+                        "exp": c.exp,
+                        "ln": c.ln,
+                        "log10": c.log10,
+                    }[o](m.Decimal(a))
+                ),
+            ),
+        )
+        if got is None:
+            continue
+        res, fl = got
+        trap_trans_lines.append(
+            "%s|%s|%s|%d|%s|%d|%d|%s|%s|%s"
+            % (a_s, b_s, op, prec, rname, emax, emin, trap, res, fl)
+        )
+    out.append(emit("kTrappedTrans", trap_trans_lines))
+    out.append("")
+
+    # ---- 陷阱 × 比较：a|b|trap|eq;eqf|rel;orf --------------------------------
+    # == 只有 sNaN 会抛；序比较任何 NaN 都会抛（SL 语义，Python 两边一致）
+    trap_cmp_lines = []
+    trap_cmp_pool = SPECIALS + [
+        "0",
+        "-0",
+        "0E+5",
+        "0E-999999",
+        "1.5",
+        "1.50",
+        "1E+10",
+        "-1E+10",
+        "1E-10",
+        "2",
+        "-2",
+        "1E+999999",
+        "-1E+999999",
+    ]
+    for a_s in trap_cmp_pool:
+        for b_s in trap_cmp_pool:
+            trap = "InvalidOperation"
+            results = {}
+            for mod in (decimal, _pydecimal):
+                a, b = mod.Decimal(a_s), mod.Decimal(b_s)
+                with mod.localcontext(
+                    new_ctx(28, HALF_EVEN, 999999, -999999, mod, trap)
+                ) as c:
+                    try:
+                        eq = a == b
+                        eqf = flags_str(c, mod)
+                    except Exception as e:  # noqa: BLE001
+                        eqf = "THROW:" + type(e).__name__ + ";" + flags_str(c, mod)
+                with mod.localcontext(
+                    new_ctx(28, HALF_EVEN, 999999, -999999, mod, trap)
+                ) as c:
+                    try:
+                        lt = a < b
+                        gt = a > b
+                        orf = flags_str(c, mod)
+                    except Exception as e:  # noqa: BLE001
+                        orf = "THROW:" + type(e).__name__ + ";" + flags_str(c, mod)
+                if a.is_nan() or b.is_nan():
+                    rel = "un"
+                elif lt:
+                    rel = "lt"
+                elif gt:
+                    rel = "gt"
+                else:
+                    rel = "eq"
+                results[mod] = (eq, eqf, rel, orf)
+            c_r, p_r = results[decimal], results[_pydecimal]
+            eqf = merge_outcome(c_r[1], p_r[1])
+            orf = merge_outcome(c_r[3], p_r[3])
+            if c_r[0] != p_r[0] or c_r[2] != p_r[2] or eqf is None or orf is None:
+                SKIPPED["trap-cmp"] = SKIPPED.get("trap-cmp", 0) + 1
+                continue
+            eq, rel = c_r[0], p_r[2]
+            o1 = eqf if eqf.startswith("THROW:") else ("1" if eq else "0") + ";" + eqf
+            o2 = orf if orf.startswith("THROW:") else rel + ";" + orf
+            trap_cmp_lines.append("%s|%s|%s|%s|%s" % (a_s, b_s, trap, o1, o2))
+    out.append(emit("kTrappedCmp", trap_cmp_lines))
     out.append("")
 
     # ---- 幂运算：a|b|prec|rounding|emax|emin|结果|flags --------------------
