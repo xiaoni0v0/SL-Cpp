@@ -220,9 +220,10 @@ add_executable(SL_Cpp_Numeric_Tests
         test/numeric/main_test.cpp
 
         # 测试代码
-        test/numeric/big_int_test.cpp
-        test/numeric/big_dec_test.cpp
         test/numeric/big_dec_cases.inc
+        test/numeric/big_dec_test.cpp
+        test/numeric/big_int_cases.inc
+        test/numeric/big_int_test.cpp
 )
 sl_apply_test_target_options(SL_Cpp_Numeric_Tests)
 target_link_libraries(SL_Cpp_Numeric_Tests PRIVATE doctest::doctest)

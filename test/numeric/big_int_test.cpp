@@ -1,4 +1,7 @@
 // BigInt：任意精度有符号整数。语义细节（// 向负无穷取整、位运算按无穷位补码）见 SL.md 运算符语义。
+//
+// 文件末尾那些 kXxxCases 表是交叉验证用的，期望值由 gen_big_int_cases.py 从 Python 内置的 int
+// 生成，落在 big_int_cases.inc 里——跟 BigInt 是各自独立的代码。
 #include "../../numeric/BigInt.h"
 
 #include <doctest/doctest.h>
@@ -7,9 +10,25 @@
 #include <cstdlib>
 #include <limits>
 #include <stdexcept>
+#include <vector>
 
 namespace {
+
+#include "big_int_cases.inc"
+
 BigInt d(const std::string &s) { return BigInt::from_decimal_string(s); }
+
+// 用例行按 '|' 拆开
+std::vector<std::string> split_fields(const std::string &line) {
+    std::vector<std::string> fields{""};
+    for (const char c : line) {
+        if (c == '|')
+            fields.emplace_back();
+        else
+            fields.back().push_back(c);
+    }
+    return fields;
+}
 
 // 覆盖各种"容易出 bug"的数据，供后面的恒等式交叉验证批量使用：0/±1、int64_t 边界内外、
 // 恰好卡在 shrink() 判定边界上的值（2^63 附近）、全 1 比特的 limb（bitwise
@@ -1090,6 +1109,135 @@ TEST_SUITE("BigInt——bit_length 与 to_double 的窄路径") {
             const std::string s{x.to_decimal_string()};
             CAPTURE(s);
             CHECK(x.to_double() == std::strtod(s.c_str(), nullptr));
+        }
+    }
+}
+
+TEST_SUITE("BigInt——跟 Python int 的交叉验证") {
+
+    TEST_CASE("加减乘") {
+        for (const char *const raw : kAddCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 3);
+            CHECK((d(f[0]) + d(f[1])).to_decimal_string() == f[2]);
+        }
+        for (const char *const raw : kSubCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 3);
+            CHECK((d(f[0]) - d(f[1])).to_decimal_string() == f[2]);
+        }
+        for (const char *const raw : kMulCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 3);
+            CHECK((d(f[0]) * d(f[1])).to_decimal_string() == f[2]);
+        }
+    }
+
+    TEST_CASE("floor_div / mod（Python 的 // 和 % 恰好也是向负无穷取整，语义天然一致）") {
+        for (const char *const raw : kFloorDivCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 3);
+            CHECK(d(f[0]).floor_div(d(f[1])).to_decimal_string() == f[2]);
+        }
+        for (const char *const raw : kModCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 3);
+            CHECK(d(f[0]).mod(d(f[1])).to_decimal_string() == f[2]);
+        }
+    }
+
+    TEST_CASE("位运算（Python 的 &/|/^ 同样按无穷位补码语义）") {
+        for (const char *const raw : kAndCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 3);
+            CHECK((d(f[0]) & d(f[1])).to_decimal_string() == f[2]);
+        }
+        for (const char *const raw : kOrCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 3);
+            CHECK((d(f[0]) | d(f[1])).to_decimal_string() == f[2]);
+        }
+        for (const char *const raw : kXorCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 3);
+            CHECK((d(f[0]) ^ d(f[1])).to_decimal_string() == f[2]);
+        }
+    }
+
+    TEST_CASE("移位（a << k 恒等于 a*2^k，a >> k 恒等于 a//2^k，Python 同样按此定义）") {
+        for (const char *const raw : kShiftLeftCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 3);
+            CHECK((d(f[0]) << std::stoll(f[1])).to_decimal_string() == f[2]);
+        }
+        for (const char *const raw : kShiftRightCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 3);
+            CHECK((d(f[0]) >> std::stoll(f[1])).to_decimal_string() == f[2]);
+        }
+    }
+
+    TEST_CASE("pow") {
+        for (const char *const raw : kPowCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 3);
+            CHECK(d(f[0]).pow(d(f[1])).to_decimal_string() == f[2]);
+        }
+    }
+
+    TEST_CASE("比较") {
+        for (const char *const raw : kCompareCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 3);
+            const BigInt a{d(f[0])}, b{d(f[1])};
+            const int expect{std::stoi(f[2])};
+            CHECK((a < b) == (expect < 0));
+            CHECK((a == b) == (expect == 0));
+            CHECK((a > b) == (expect > 0));
+        }
+    }
+
+    TEST_CASE("bit_length") {
+        for (const char *const raw : kBitLengthCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 2);
+            CHECK(d(f[0]).bit_length() == static_cast<size_t>(std::stoull(f[1])));
+        }
+    }
+
+    TEST_CASE("to_double（期望值是 Python float(a) 的精确十六进制表示，strtod 认得同一种记法）") {
+        for (const char *const raw : kToDoubleCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 2);
+            CHECK(d(f[0]).to_double() == std::strtod(f[1].c_str(), nullptr));
         }
     }
 }
