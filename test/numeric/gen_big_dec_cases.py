@@ -24,10 +24,10 @@
 # SL 的 // 和 % 向负无穷取整，跟 IBM 规范（也就是 Python 的 Decimal）向零截断不同，所以这两个
 # 表的期望值是"先在超高精度下取精确的截断商/余数，再整体修正"推出来的——推导路径跟 C++ 那边
 # 不一样，两边只在数学定义上一致。凡是超高精度下仍不精确的组合直接跳过，不出题。
-import sys
-import decimal
 import _pydecimal
+import decimal
 import random
+import sys
 
 ROUNDINGS = [
     ("Down", decimal.ROUND_DOWN),
@@ -235,7 +235,7 @@ def rand_decimal(rng):
 
 
 def emit(name, lines):
-    out = ["const char *const %s[]{" % name]
+    out = ["constexpr const char *const %s[]{" % name]
     for line in lines:
         out.append('    "%s",' % line)
     out.append("};")
@@ -250,6 +250,8 @@ def main():
         "// 本文件由 test/numeric/gen_big_dec_cases.py 生成，不要手改。",
         "// 期望值来自 CPython 自带的两套 decimal 实现，跟 BigDec 是各自独立的代码。",
         "// 每张表的行格式见 big_dec_test.cpp 里跑这张表的那段。",
+        "",
+        "#pragma once",
         "",
     ]
 
@@ -798,4 +800,5 @@ def main():
         print("// 跳过的组合（%s）：%d" % (table, count), file=sys.stderr)
 
 
-main()
+if __name__ == "__main__":
+    main()

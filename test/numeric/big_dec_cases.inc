@@ -2,7 +2,9 @@
 // 期望值来自 CPython 自带的两套 decimal 实现，跟 BigDec 是各自独立的代码。
 // 每张表的行格式见 big_dec_test.cpp 里跑这张表的那段。
 
-const char *const kAddCases[]{
+#pragma once
+
+constexpr const char *const kAddCases[]{
     "Infinity|Infinity|Infinity|",
     "Infinity|-Infinity|NaN|InvalidOperation",
     "Infinity|NaN|NaN|",
@@ -646,7 +648,7 @@ const char *const kAddCases[]{
     "100|9.999999999999999999999999999E+15|10000000000000100.00000000000|Inexact,Rounded",
 };
 
-const char *const kSubCases[]{
+constexpr const char *const kSubCases[]{
     "Infinity|Infinity|NaN|InvalidOperation",
     "Infinity|-Infinity|Infinity|",
     "Infinity|NaN|NaN|",
@@ -1290,7 +1292,7 @@ const char *const kSubCases[]{
     "100|9.999999999999999999999999999E+15|-9999999999999899.999999999999|",
 };
 
-const char *const kMulCases[]{
+constexpr const char *const kMulCases[]{
     "Infinity|Infinity|Infinity|",
     "Infinity|-Infinity|-Infinity|",
     "Infinity|NaN|NaN|",
@@ -1934,7 +1936,7 @@ const char *const kMulCases[]{
     "100|9.999999999999999999999999999E+15|999999999999999999.9999999999|Rounded",
 };
 
-const char *const kDivCases[]{
+constexpr const char *const kDivCases[]{
     "Infinity|Infinity|NaN|InvalidOperation",
     "Infinity|-Infinity|NaN|InvalidOperation",
     "Infinity|NaN|NaN|",
@@ -2578,7 +2580,7 @@ const char *const kDivCases[]{
     "100|9.999999999999999999999999999E+15|1.000000000000000000000000000E-14|Inexact,Rounded",
 };
 
-const char *const kFloorDivCases[]{
+constexpr const char *const kFloorDivCases[]{
     "Infinity|Infinity|NaN|InvalidOperation",
     "Infinity|-Infinity|NaN|InvalidOperation",
     "Infinity|NaN|NaN|",
@@ -3197,7 +3199,7 @@ const char *const kFloorDivCases[]{
     "100|9.999999999999999999999999999E+15|0|",
 };
 
-const char *const kModCases[]{
+constexpr const char *const kModCases[]{
     "Infinity|Infinity|NaN|InvalidOperation",
     "Infinity|-Infinity|NaN|InvalidOperation",
     "Infinity|NaN|NaN|",
@@ -3816,7 +3818,7 @@ const char *const kModCases[]{
     "100|9.999999999999999999999999999E+15|100.000000000000|",
 };
 
-const char *const kRoundCases[]{
+constexpr const char *const kRoundCases[]{
     "0|1|Down|0|",
     "0|2|Down|0|",
     "0|3|Down|0|",
@@ -5195,7 +5197,7 @@ const char *const kRoundCases[]{
     "sNaN|7|ZeroFiveUp|NaN|InvalidOperation",
 };
 
-const char *const kEdgeCases[]{
+constexpr const char *const kEdgeCases[]{
     "1|1|mul|3|HalfEven|4|-4|1|",
     "1|1|div|3|HalfEven|4|-4|1|",
     "1|1|add|3|HalfEven|4|-4|2|",
@@ -9818,7 +9820,7 @@ const char *const kEdgeCases[]{
     "-1E-4|1E-5|add|2|ZeroFiveUp|2|-2|-0.001|Inexact,Rounded,Subnormal,Underflow",
 };
 
-const char *const kMixedCases[]{
+constexpr const char *const kMixedCases[]{
     "3.5|-53133763116258609087993968128E+657341|mul|29|Down|-1.8596817090690513180797888844E+657370|Inexact,Rounded",
     "1|314744646839146040940310E+22|floordiv|22|Up|0|",
     "-9662589397870701174822187945E+30|sNaN|mul|10|ZeroFiveUp|NaN|InvalidOperation",
@@ -10215,7 +10217,7 @@ const char *const kMixedCases[]{
     "674453920292486E+692608|3.5|add|8|Ceiling|6.7445393E+692622|Inexact,Rounded",
 };
 
-const char *const kPowCases[]{
+constexpr const char *const kPowCases[]{
     "0|0|28|HalfEven|999999|-999999|NaN|InvalidOperation",
     "0|-0|28|HalfEven|999999|-999999|NaN|InvalidOperation",
     "0|1|28|HalfEven|999999|-999999|0|",
@@ -12900,7 +12902,7 @@ const char *const kPowCases[]{
     "11079E-4|1.255|28|ZeroFiveUp|999999|-999999|1.137229732816598088448268514|Inexact,Rounded",
 };
 
-const char *const kTranscendentalCases[]{
+constexpr const char *const kTranscendentalCases[]{
     "0|sqrt|28|HalfEven|999999|-999999|0|",
     "0|sqrt|1|HalfEven|999999|-999999|0|",
     "0|sqrt|3|Down|999999|-999999|0|",
@@ -17755,7 +17757,7 @@ const char *const kTranscendentalCases[]{
     "7520134497E+22|log10|27|Floor|999999|-999999|31.8762256079829439320698551|Inexact,Rounded",
 };
 
-const char *const kCompareCases[]{
+constexpr const char *const kCompareCases[]{
     "Infinity|Infinity|eq|1||",
     "Infinity|-Infinity|gt|0||",
     "Infinity|NaN|un|0||InvalidOperation",

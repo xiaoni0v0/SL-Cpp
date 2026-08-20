@@ -50,7 +50,7 @@ constexpr DecCondition kAllSignals[]{
     DecCondition::Subnormal,
     DecCondition::Underflow
 };
-static_assert(sizeof(kAllSignals) / sizeof(kAllSignals[0]) == kDecSignalCount);
+static_assert(std::size(kAllSignals) == kDecSignalCount);
 
 // 拼成 "Inexact,Rounded" 这样的串，跟用例表里的写法对得上
 std::string flags_to_string(const DecSignalSet &flags) {
@@ -225,7 +225,7 @@ TEST_SUITE("BigDec——构造与字符串往返") {
     }
 
     TEST_CASE("非法字符串返回 nullopt") {
-        const char *const bad[]{
+        constexpr const char *const bad[]{
             "",      "-",     "+",     ".",      "-.",    "e5",     "E5",      ".e5",
             "1.2.3", "1e",    "1e+",   "1e+ ",   "--1",   "1-",     "0x10",    "1 ",
             " 1",    "1_000", "abc",   "Inf5",   "NaN1",  "sNaN12", "Infinit", "Infinityy",
@@ -476,8 +476,8 @@ TEST_SUITE("BigDec——上下文与信号机制") {
 
     TEST_CASE("默认上下文下这些运算是抛异常的") {
         auto trapped = [](auto &&op) {
-            DecContext ctx;
             try {
+                DecContext ctx;
                 op(ctx);
             } catch (const DecTrapped &e) {
                 return e.condition();
@@ -640,7 +640,7 @@ TEST_SUITE("BigDec——// 和 % 的向负无穷取整语义") {
 
     TEST_CASE("恒等式 x % y == x - (x // y) * y") {
         DecContext ctx{quiet_context()};
-        const char *const pool[]{
+        constexpr const char *const pool[]{
             "0",   "-0",   "1",    "-1",    "7",    "-7",    "3",          "-3",
             "2.5", "-2.5", "0.1",  "-0.1",  "100",  "-100",  "1.50",       "-1.50",
             "6",   "-6",   "1E+5", "-1E+5", "1E-5", "-1E-5", "12345.6789", "0.7",
@@ -660,7 +660,7 @@ TEST_SUITE("BigDec——// 和 % 的向负无穷取整语义") {
     }
 
     TEST_CASE("divmod 跟单独算 // 和 % 一致") {
-        const char *const pool[]{
+        constexpr const char *const pool[]{
             "0",
             "-0",
             "1",
@@ -710,7 +710,7 @@ TEST_SUITE("BigDec——// 和 % 的向负无穷取整语义") {
 
     TEST_CASE("跟 BigInt 的 floor_div/mod 交叉验证（整数值的 decimal）") {
         DecContext ctx{quiet_context()};
-        const char *const pool[]{
+        constexpr const char *const pool[]{
             "0",
             "1",
             "-1",
@@ -1025,7 +1025,7 @@ TEST_SUITE("BigDec——幂运算与超越函数") {
             DecRounding rounding;
             const char *expected;
         };
-        const Case cases[]{
+        constexpr Case cases[]{
             {"4", "-0.5", DecRounding::Up, "0.500"},
             {"4", "1.5", DecRounding::Down, "8.00"},
             {"9", "0.5", DecRounding::Down, "3.00"},
@@ -1262,7 +1262,7 @@ TEST_SUITE("BigDec——生成的用例表铺不到的窄路径") {
 
     TEST_CASE("每个条件都有名字，包括 BigDec 自己不会产生的 InvalidContext") {
         // SL 那边要靠这个名字把 DecTrapped 映射成对应的异常类，不能有漏网的
-        const DecCondition all[]{
+        constexpr DecCondition all[]{
             DecCondition::Clamped,
             DecCondition::DivisionByZero,
             DecCondition::Inexact,
