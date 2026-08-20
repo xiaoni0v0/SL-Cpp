@@ -85,7 +85,7 @@ void DecContext::set_emin(const int32_t emin) {
 
 void DecContext::raise(const DecCondition condition) {
     const DecCondition signal{signal_of(condition)};
-    // 先记 flags 再判陷阱：抛出去之后这次调用就结束了，但这个信号确实发生过，标志位得留下
+    // 先记 flags 再判陷阱：抛出去之后这次调用就结束了，但信号确实发生过
     flags_.add(signal);
     if (traps_.has(signal)) throw DecTrapped(condition);
 }

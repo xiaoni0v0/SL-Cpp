@@ -21,8 +21,7 @@ std::string ascii_upper(const std::string &s) {
     return result;
 }
 
-// 临时把上下文的舍入方式换掉，析构时还回去。超越函数的最后一步 fix 可能因为陷阱抛异常，
-// 不能靠"算完再赋值回去"这种顺序执行来还原
+// 临时把上下文的舍入方式换掉，析构时还回去（fix 可能因陷阱抛出，不能靠"算完再赋值回去"）
 class RoundingGuard {
     DecContext &ctx_;
     DecRounding saved_;
@@ -50,7 +49,7 @@ int64_t int64_digits(const int64_t value) {
 }
 
 // 近似值算到位了没有：末尾恰好是 5000…0 就说明它正卡在两个可表示值的正中间，
-// 这时候任何舍入方式都定不下方向，得回去多算几位。调用方保证 coeff 的位数 > p
+// 任何舍入方式都定不下方向，得回去多算几位。调用方保证 coeff 的位数 > p
 bool is_roundable(const BigInt &coeff, const int64_t p) {
     const int64_t digits{static_cast<int64_t>(coeff.num_decimal_digits())};
     assert(digits - p - 1 >= 0);
@@ -64,8 +63,8 @@ struct WorkRep {
     int64_t exp{0};
 };
 
-// 把两个操作数调成同一个指数，好逐位相加。指数小的那个若小到"再怎么加也影响不了舍入后的结果"，
-// 就换成一个 1 × 10^exp 的粘滞值——否则为了对齐，另一个可能要乘上 10^(几百万)。
+// 把两个操作数调成同一个指数，好逐位相加。指数小的那个若小到"再怎么加也影响不了舍入后的
+// 结果"，就换成 1 × 10^exp 的粘滞值——否则对齐可能要乘上 10^(几百万)。
 // 调用方保证两边都是有限非零数
 std::pair<WorkRep, WorkRep> align_for_add(const BigDec &a, const BigDec &b, const int64_t prec) {
     WorkRep op1{a.is_negative(), a.coefficient(), a.exponent()};
@@ -190,8 +189,8 @@ std::optional<BigDec> BigDec::try_from_string(const std::string &s) {
     }
     if (i != s.size()) return std::nullopt; // 尾部还剩别的字符
 
-    // 系数就是整数部分和小数部分的数字直接拼起来，前导 0 由 BigInt 自然丢掉；小数部分有几位，
-    // 指数就往下挪几位（末尾零因此得以保留：1.50 是 150 × 10^-2）
+    // 系数就是整数部分和小数部分直接拼起来（前导 0 由 BigInt 丢掉），小数部分有几位指数就
+    // 往下挪几位（末尾零因此得以保留：1.50 是 150 × 10^-2）
     std::string digits{s.substr(int_begin, int_end - int_begin)};
     digits += s.substr(frac_begin, frac_end - frac_begin);
     exp -= static_cast<int64_t>(frac_end - frac_begin);
@@ -226,9 +225,9 @@ std::string BigDec::to_string() const {
 
     const std::string digits{coeff_.to_decimal_string()}; // 恒非负、无多余前导 0
     const int64_t digit_len{static_cast<int64_t>(digits.size())};
-    // 小数点落在系数的第几位之后（可以 <= 0 或者 >= 位数，下面分三种情形各自补零）
-    const int64_t left_digits{exp_ + digit_len};
+    // 小数点落在系数的第几位之后（可以 <= 0 或者 >= 位数，下面分三种情形各自补零）；
     // 指数为正、或者调整后的指数小于 -6，就改用科学计数法（小数点固定放在第一位之后）
+    const int64_t left_digits{exp_ + digit_len};
     const int64_t dot_place{exp_ <= 0 && left_digits > -6 ? left_digits : 1};
 
     std::string int_part;
@@ -284,15 +283,15 @@ std::pair<BigInt, int> BigDec::split_and_decide(
     const bool low_zero{low.is_zero()};
     const bool at_least_half{low >= half}; // 被丢掉的最高位数字 >= 5
     const bool exact_half{low == half};
-    // 留下的部分的末位数字：是不是偶数（HalfEven 用）、是不是 0 或 5（ZeroFiveUp 用）。keep 为 0
-    // 时 high 是 0，两个判断都成立，正好对应规范里"没有前一位可看"时规定的取值
+    // 留下的部分的末位：是不是偶数（HalfEven 用）、是不是 0 或 5（ZeroFiveUp 用）。
+    // keep 为 0 时 high 是 0、两个判断都成立，对应规范里"没有前一位可看"时的取值
     const bool high_even{!high.is_odd()};
     const bool high_is_0_or_5{high.mod(BigInt(5)).is_zero()};
 
     const int down{low_zero ? 0 : -1}; // 截断
     const int up{low_zero ? 0 : 1};    // 进位
 
-    // 八种舍入方式各自一行，横着读就是完整的规则表
+    // 八种舍入方式各一行，横着读就是完整的规则表
     // clang-format off
     int decision{0};
     switch (rounding) {
@@ -466,8 +465,8 @@ BigDec BigDec::add(const BigDec &rhs, DecContext &ctx) const {
         const bool result_sign{negative_zero || (sign_ && rhs.sign_)};
         return make_finite(result_sign, BigInt(0), min_exp).fix(ctx);
     }
-    // 一方为零：结果就是另一方，但指数要降到两者较小的那个——只是不必降过"另一方再往下
-    // prec+1 位"，那以下的位反正会被舍掉
+    // 一方为零：结果就是另一方，指数降到两者较小的那个——但不必降过"另一方再往下 prec+1 位"，
+    // 那以下的位反正会被舍掉
     if (coeff_.is_zero())
         return rhs.pad_to_exponent(std::max(min_exp, rhs.exp_ - ctx.prec() - 1)).fix(ctx);
     if (rhs.coeff_.is_zero())
@@ -505,7 +504,7 @@ BigDec BigDec::div(const BigDec &rhs, DecContext &ctx) const {
     if (is_infinite() && rhs.is_infinite()) return raise_invalid(ctx);
     if (is_infinite()) return infinity(result_sign);
     if (rhs.is_infinite()) {
-        // 有限数除以无穷是零，指数取最小可表示的那个；这是一次"指数被迫改动"，规范要求报 Clamped
+        // 有限数除以无穷是零，指数取最小可表示的那个；指数被迫改动，规范要求报 Clamped
         ctx.raise(DecCondition::Clamped);
         return make_finite(result_sign, BigInt(0), ctx.etiny());
     }
@@ -576,8 +575,7 @@ BigDec::trunc_divmod(const BigDec &rhs, const int64_t prec) const {
 }
 
 BigDec BigDec::quotient_to_dec(const BigInt &quotient, const bool sign_if_zero) {
-    // 商为 0 时 BigInt 记不住符号，按两个操作数的符号异或补上——同 * 和 / 的规矩
-    // （0 / -3 是 -0），别让 // 成为唯一丢掉零符号的那个
+    // 商为 0 时 BigInt 记不住符号，按两个操作数的符号异或补上——同 * 和 / 的规矩（0 / -3 是 -0）
     return make_finite(
         quotient.is_zero() ? sign_if_zero : quotient.is_negative(), quotient.abs(), 0
     );
@@ -616,9 +614,8 @@ BigDec BigDec::floor_div(const BigDec &rhs, DecContext &ctx) const {
         floor_quotient(trunc->first, *this, rhs, trunc->second, ctx.prec())
     };
     if (!quotient) return raise_invalid(ctx, DecCondition::DivisionImpossible);
-    // 商必然是整数、位数也不超过 prec，所以这一步 fix 报不出 Inexact/Rounded（进不了舍入分支），
-    // 但**不能**因此跳过：位数够不代表指数域也够，商的调整后指数超过 Emax 时得报 Overflow
-    // （Emax 小于 prec - 1 的上下文虽然罕见，但设得出来）
+    // 商是整数、位数也不超过 prec，fix 报不出 Inexact/Rounded；但不能因此跳过——
+    // 位数够不代表指数域也够，商的调整后指数超过 Emax 时得报 Overflow
     return quotient_to_dec(*quotient, sign_ != rhs.sign_).fix(ctx);
 }
 
@@ -635,8 +632,8 @@ BigDec BigDec::mod(const BigDec &rhs, DecContext &ctx) const {
     if (!floor_quotient(trunc->first, *this, rhs, trunc->second, ctx.prec()))
         return raise_invalid(ctx, DecCondition::DivisionImpossible);
     if (!needs_floor_correction(*this, rhs, trunc->second)) return trunc->second.fix(ctx);
-    // 修正走带上下文的 add，而不是"先精确相加再 fix"：结果一样（add 对齐时的粘滞位就是为了
-    // 保证这一点），但精确相加在 |rhs| 远大于 |self| 时会先造出一个几百万位的中间值
+    // 修正走带上下文的 add，而不是先精确相加再 fix：结果一样（add 对齐时的粘滞位保证），
+    // 但精确相加在 |rhs| 远大于 |self| 时会先造出一个几百万位的中间值
     return trunc->second.add(rhs, ctx);
 }
 
@@ -990,8 +987,7 @@ std::optional<BigDec> BigDec::power_exact(const BigDec &other, const int64_t p) 
             BigInt quotient{BigInt(5).pow(BigInt(e))};
             if (!quotient.mod(xc).is_zero()) return std::nullopt; // 不是 5 的幂
             quotient = quotient.floor_div(xc);
-            // 把多估的那几次方除回去。28/65 这个估计一直到 5^2658 都不多不少，所以这个
-            // 循环在现实的系数上转不起来；留着是因为再往上就估不准了
+            // 把多估的那几次方除回去（28/65 这个估计一直到 5^2658 都精确，再往上才用得上）
             while (quotient.mod(BigInt(5)).is_zero()) {
                 quotient = quotient.floor_div(BigInt(5));
                 --e;
@@ -1186,9 +1182,9 @@ BigDec BigDec::pow(const BigDec &rhs, DecContext &ctx) const {
 
     if (!exact || rhs.is_integral()) return ans->fix(ctx);
 
-    // 指数不是整数时，规范要求即使结果精确也报 Inexact（结果落进次正规区还要报 Underflow）。
-    // fix 自己不会报，又不能在 fix 前后直接补——那会打乱规范规定的信号优先级。于是先在一个
-    // 陷阱全关、标志位清空的副本上 fix，再按优先级顺序把信号补报到真上下文上
+    // 指数不是整数时，规范要求即使结果精确也报 Inexact（落进次正规区还要报 Underflow）。
+    // fix 不报这些，又不能直接在 fix 前后补（会打乱信号优先级），于是先在一个陷阱全关、
+    // 标志位清空的副本上 fix，再按优先级把信号补报到真上下文上
     BigDec padded{*ans};
     if (static_cast<int64_t>(padded.digit_count()) <= p) {
         // 补零补到 prec+1 位，保证 Rounded 一定会被触发

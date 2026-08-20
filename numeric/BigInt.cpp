@@ -25,7 +25,7 @@ BigInt BigInt::promoted() const {
     if (!is_small_) return *this;
 
     const bool negative{small_ < 0};
-    // 分两步算 magnitude，避免 small_ == INT64_MIN 时 -small_ 本身溢出 int64_t 的表示范围
+    // 分两步取 magnitude，避免 small_ == INT64_MIN 时 -small_ 溢出
     const uint64_t magnitude{
         negative ? static_cast<uint64_t>(-(small_ + 1)) + 1 : static_cast<uint64_t>(small_)
     };
@@ -39,10 +39,9 @@ BigInt BigInt::promoted() const {
 }
 
 BigInt BigInt::shrink(BigInt big) {
-    // 已经是小路径就原样返回：小路径对象的 limbs_/negative_ 恒为空/false，不挡住会把
-    // big.small_ 的真实值误读成 0
+    // 已经是小路径就原样返回（小路径对象的 limbs_/negative_ 恒为空/false）
     if (big.is_small_) return big;
-    // 2 个 limb（64 位）已经能覆盖 int64_t 的全部表示范围，更多 limb 的值必然装不下，直接原样返回
+    // 2 个 limb 已覆盖 int64_t 全部范围，更多 limb 的值必然装不下
     if (big.limbs_.size() > 2) return big;
 
     uint64_t magnitude{0};
@@ -170,8 +169,7 @@ BigInt::shift_right_magnitude(const std::vector<uint32_t> &a, const uint64_t bit
     const size_t limb_shift{static_cast<size_t>(bits / 32)};
     const unsigned bit_shift{static_cast<unsigned>(bits % 32)};
 
-    // 被移出的位是否有非 0：跳过的那些整 limb，加上 limb_shift 位置那个 limb 里被移出的低
-    // bit_shift 位（按整 limb 判断非 0，而不是逐 bit 扫，跟 to_double 的 sticky 位是同一个道理）
+    // 被移出的位是否有非 0：整 limb 加残位按 limb 判断，跟 to_double 的 sticky 位同理
     bool dropped_nonzero{false};
     for (size_t i{0}; i < limb_shift && i < a.size() && !dropped_nonzero; ++i)
         if (a[i] != 0) dropped_nonzero = true;
@@ -195,8 +193,7 @@ BigInt::shift_right_magnitude(const std::vector<uint32_t> &a, const uint64_t bit
     return {std::move(result), dropped_nonzero};
 }
 
-// 二进制逐位长除法：从最高位到最低位，边移边比较边减，是标准手算长除法的二进制版本。
-// 不是渐进最优（Knuth Algorithm D 更快），但正确性显然，不用处理"猜商偏大要修正"这类细节。
+// 二进制逐位长除法：从高位到低位边移边比较边减。慢但正确性显然，不用处理猜商修正
 std::pair<std::vector<uint32_t>, std::vector<uint32_t>>
 BigInt::div_mod_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
     assert(!b.empty()); // 调用方保证 b 不为 0；参数已 normalize，非空即非零
@@ -233,7 +230,7 @@ BigInt::div_mod_magnitude(const std::vector<uint32_t> &a, const std::vector<uint
 
 std::vector<uint32_t> BigInt::to_twos_complement(const size_t limb_count) const {
     assert(!is_small_);
-    assert(limb_count > limbs_.size()); // 至少留一个 limb 的安全余量，见头文件里这个函数的注释
+    assert(limb_count > limbs_.size()); // 至少留一个 limb 的安全余量，见头文件
 
     std::vector<uint32_t> result(limb_count, 0);
     if (!negative_) {
@@ -269,7 +266,7 @@ BigInt BigInt::from_twos_complement(std::vector<uint32_t> limbs) {
 }
 
 std::pair<BigInt, BigInt> BigInt::divmod_floor_big(const BigInt &divisor) const {
-    // 调用方保证 *this、divisor 都已经是大路径（floor_div/mod 的小路径分支处理不了才会走到这里）
+    // 调用方保证 *this、divisor 都已是大路径
     assert(!is_small_);
     assert(!divisor.is_small_);
 
@@ -328,10 +325,11 @@ BigInt BigInt::from_decimal_string(const std::string &s) {
 
 std::string BigInt::to_decimal_string() const {
     if (is_small_) return std::to_string(small_);
-    check_invariant(); // 大路径下不该规范化成 0（那应该走小路径），否则下面 chunks.back() 是 UB
+    check_invariant(); // 大路径下不该是 0（那应该走小路径），否则下面 chunks.back() 是 UB
 
+    // 每次除以 10^9 剥一段，低位在前
     std::vector magnitude{limbs_};
-    std::vector<uint32_t> chunks; // 每个 chunk 是 [0, 10^9) 内的一段十进制数字，低位在前
+    std::vector<uint32_t> chunks;
 
     while (!magnitude.empty()) {
         uint64_t remainder{0};
@@ -358,7 +356,7 @@ std::string BigInt::to_decimal_string() const {
 
 size_t BigInt::num_decimal_digits() const {
     if (is_small_) {
-        // 小路径下逐次除 10 就够快，不必绕道字符串
+        // 小路径逐次除 10 就够快，不必绕道字符串
         uint64_t magnitude{
             small_ < 0 ? static_cast<uint64_t>(-(small_ + 1)) + 1 : static_cast<uint64_t>(small_)
         };
@@ -369,8 +367,7 @@ size_t BigInt::num_decimal_digits() const {
         }
         return digits;
     }
-    // 大路径没有比"真的转成十进制"更省的办法：二进制位长只能给出估计，校正还得再跟一个 10 的
-    // 幂比一次，代价并不更低
+    // 大路径没有比"真的转成十进制"更省的办法
     return to_decimal_string().size() - (negative_ ? 1 : 0);
 }
 
@@ -397,19 +394,17 @@ double BigInt::to_double() const {
     uint64_t mantissa{0};
     int exponent{0};
     if (bit_length <= 64) {
-        // 64 位内装得下，直接精确取值，转 double 只经历这一次舍入
+        // 64 位内直接精确取值，转 double 只经历这一次舍入
         for (size_t i{limbs_.size()}; i-- > 0;) mantissa = (mantissa << 32) | limbs_[i];
     } else {
-        // 逐 limb 累加、边算边舍入会导致每次都可能错 1 ULP。改成只取最高 64 位；被舍弃的低位
-        // 只要有一个非 0，就把 sticky 位 or 进最低位，让 uint64_t -> double 这一次舍入等价于
-        // 直接对整个大数就近取偶，不会因为"分段舍入"而多错一次
+        // 只取最高 64 位；被舍弃的低位只要有一个非 0，就把 sticky 位或进最低位，
+        // 让 uint64_t -> double 这一次舍入等价于直接对整个大数就近取偶
         const size_t drop_bits{bit_length - 64};
         for (size_t i{0}; i < 64; ++i) {
             const size_t bit_index{bit_length - 1 - i};
             mantissa = (mantissa << 1) | ((limbs_[bit_index / 32] >> (bit_index % 32)) & 1u);
         }
-        // 按整个 limb 判断非 0（而不是逐 bit 扫），把这一步从 O(drop_bits) 降到 O(drop_bits / 32)：
-        // 低位全 0 的输入（比如 2^k 这种）之前要一路扫到底，是最坏情况
+        // 按整 limb 判断非 0（而不是逐 bit 扫）
         bool sticky{false};
         const size_t full_limbs{drop_bits / 32};
         for (size_t limb_i{0}; limb_i < full_limbs && !sticky; ++limb_i)
@@ -421,7 +416,8 @@ double BigInt::to_double() const {
             }
         }
         if (sticky) mantissa |= 1u;
-        constexpr size_t kExponentClamp{100000}; // 这么大指数不管怎样都会让 double 溢出成 infinity
+        // 这么大的指数不管怎样 ldexp 都会溢出成 infinity，提前截断避免造出天文数字
+        constexpr size_t kExponentClamp{100000};
         exponent = static_cast<int>(drop_bits < kExponentClamp ? drop_bits : kExponentClamp);
     }
 
@@ -436,8 +432,8 @@ int BigInt::sign() const {
 
 BigInt BigInt::abs() const {
     if (is_small_) {
-        if (small_ == INT64_MIN)
-            return shrink(promoted().abs()); // |INT64_MIN| == 2^63，装不进 int64_t
+        // |INT64_MIN| == 2^63，装不进 int64_t
+        if (small_ == INT64_MIN) return shrink(promoted().abs());
         BigInt result;
         result.is_small_ = true;
         result.small_ = small_ < 0 ? -small_ : small_;
@@ -450,8 +446,8 @@ BigInt BigInt::abs() const {
 
 BigInt BigInt::operator-() const {
     if (is_small_) {
+        // -INT64_MIN 溢出 int64_t，只能停留在大路径
         if (small_ == INT64_MIN) {
-            // -INT64_MIN 溢出 int64_t（|INT64_MIN| == 2^63 > INT64_MAX），只能停留在大路径
             BigInt result{promoted()};
             result.negative_ = false; // magnitude（2^63）不变，取负后应当是正的
             return result;
@@ -463,7 +459,7 @@ BigInt BigInt::operator-() const {
     }
     BigInt result{*this};
     if (!result.limbs_.empty()) result.negative_ = !result.negative_;
-    // magnitude 恰好为 2^63 时取负后是 INT64_MIN，能装回小路径，必须过 shrink()
+    // magnitude 恰好为 2^63 时取负后是 INT64_MIN，能装回小路径
     return shrink(std::move(result));
 }
 
@@ -512,8 +508,8 @@ BigInt BigInt::operator*(const BigInt &rhs) const {
 BigInt BigInt::floor_div(const BigInt &divisor) const {
     if (divisor.is_zero()) throw std::domain_error("BigInt: division by zero");
 
-    // 小路径快路径：原生截断除法 + 向负无穷取整修正，唯一的坑是 INT64_MIN / -1 会溢出（结果本该
-    // 是 2^63），这一种情况退回大路径，其余组合恒安全
+    // 小路径快路径：原生截断除法 + 向负无穷修正。INT64_MIN / -1 会溢出（结果应是 2^63），
+    // 这一种组合退回大路径
     if (is_small_ && divisor.is_small_ && !(small_ == INT64_MIN && divisor.small_ == -1)) {
         int64_t q{small_ / divisor.small_};
         const int64_t r{small_ % divisor.small_};
@@ -545,8 +541,7 @@ BigInt BigInt::mod(const BigInt &divisor) const {
 BigInt BigInt::pow(const BigInt &exponent) const {
     if (exponent.is_negative()) throw std::domain_error("BigInt::pow: negative exponent");
 
-    // 逐位快速幂：base/result 随乘法自然按需升级到大路径。>> 1 等价于 floor_div(2) 但走大路径
-    // 更快；exp 归零后不再平方——否则最后一轮会白算一次全程最贵的平方（规模是最终结果的 2 倍）
+    // 逐位快速幂；exp 归零后不再平方（最后一轮是全过程中最贵的一次）
     BigInt result{1};
     BigInt base{*this};
     BigInt exp{exponent};
@@ -560,11 +555,10 @@ BigInt BigInt::pow(const BigInt &exponent) const {
 }
 
 BigInt BigInt::operator&(const BigInt &rhs) const {
-    // 两个都在 int64_t 范围内时，原生按位与的结果显然也在范围内（补码位运算不会让量级变大），
-    // 不需要经过 shrink
+    // 两个都在 int64_t 范围内时，补码位运算不会让量级变大，原生结果必然在范围内
     if (is_small_ && rhs.is_small_) return BigInt(small_ & rhs.small_);
 
-    // n 按提升到大路径之后的 limb 数来算，+1 留一个安全 limb（见 to_twos_complement 的注释）
+    // n 按大路径 limb 数 + 1（安全 limb，见 to_twos_complement 的头文件注释）
     const BigInt a{promoted()};
     const BigInt b{rhs.promoted()};
     const size_t n{(a.limbs_.size() > b.limbs_.size() ? a.limbs_.size() : b.limbs_.size()) + 1};
@@ -605,7 +599,7 @@ BigInt BigInt::operator<<(const long long k) const {
     if (k < 0) throw std::domain_error("BigInt::operator<<: negative shift count");
     if (k == 0 || is_zero()) return *this;
 
-    // k <= 62 时 int64_t{1} << k 本身不会碰到符号位，可以安全地拿去做溢出检测的乘数
+    // k <= 62 时 int64_t{1} << k 不碰符号位，可以安全地拿去做溢出检测的乘数
     if (is_small_ && k <= 62) {
         int64_t product;
         if (!ckd_mul(&product, small_, int64_t{1} << k)) return BigInt(product);
@@ -621,18 +615,14 @@ BigInt BigInt::operator>>(const long long k) const {
     if (k == 0 || is_zero()) return *this;
 
     if (is_small_) {
-        // 移位数超过 63 时更高位全是符号位延伸出来的结果：非负恒为 0，负数恒为 -1
+        // 移位数超过 63 时结果恒为符号位延伸：非负得 0，负数得 -1
         if (k >= 63) return BigInt(small_ < 0 ? -1 : 0);
-        // C++20 起，有符号整数的算术右移是标准保证的行为，恰好等价于向负无穷取整除以 2^k
+        // C++20 起有符号整数算术右移是标准行为，恰好等价于向负无穷取整除 2^k
         return BigInt(small_ >> k);
     }
 
-    // 位移数超过大路径的总比特数时，跟小路径同理，结果恒为 0（非负）或 -1（负数）——不能真去
-    // floor_div(2^k)：k 一旦有几亿，2^k 本身就得先花大量时间/内存造出来，这里必须提前短路
-    // 直接在大小上做右移（向零截断），再按符号决定要不要向负无穷取整修正：非负数截断即是
-    // floor；负数则只有在被移出的位里真有非 0 时，才需要把截断的商再多减 1（更负）。
-    // shift_right_magnitude 本身按整 limb 判断，不管 k 多大都是 O(limb 数)，不需要再单独
-    // 为"k 超过比特长度"这种情况短路
+    // 大路径直接对大小右移（向零截断），负数在被移出的位里真有非 0 时把商再多减 1。
+    // shift_right_magnitude 按整 limb 判断，多大的 k 都是 O(limb 数)，不需要再单独短路
     auto [truncated, dropped_nonzero]{shift_right_magnitude(limbs_, static_cast<uint64_t>(k))};
     if (!negative_ || !dropped_nonzero)
         return shrink(from_magnitude(std::move(truncated), negative_));
@@ -642,14 +632,13 @@ BigInt BigInt::operator>>(const long long k) const {
 std::strong_ordering BigInt::operator<=>(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) return small_ <=> rhs.small_;
 
-    // 不 promoted() 拷贝：先比符号；符号相同、一方大路径时按不变量它的量级必然更大，不用比较；
-    // 两边都是大路径才 compare_magnitude，直接传 limbs_，不拷贝
+    // 不 promoted() 拷贝：先比符号；同号且一方是大路径时按不变量它的量级必然更大
     const bool a_neg{is_negative()}, b_neg{rhs.is_negative()};
     if (a_neg != b_neg) return a_neg ? std::strong_ordering::less : std::strong_ordering::greater;
 
     if (is_small_ != rhs.is_small_) {
         const bool this_is_bigger_magnitude{!is_small_};
-        // 同为非负：量级越大值越大；同为负数：量级越大值越小，方向取反
+        // 同为非负：量级越大值越大；同为负数反过来
         if (a_neg)
             return this_is_bigger_magnitude ? std::strong_ordering::less
                                             : std::strong_ordering::greater;
@@ -657,7 +646,7 @@ std::strong_ordering BigInt::operator<=>(const BigInt &rhs) const {
                                         : std::strong_ordering::less;
     }
 
-    // 都是大路径、同号：非负直接比大小；同为负数时，量级越大值越小，反过来比较参数顺序即可
+    // 都是大路径、同号；同为负数时量级越大值越小，反过来比较参数顺序即可
     return a_neg ? compare_magnitude(rhs.limbs_, limbs_) : compare_magnitude(limbs_, rhs.limbs_);
 }
 
@@ -665,7 +654,7 @@ bool BigInt::operator==(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) return small_ == rhs.small_;
     check_invariant();
     rhs.check_invariant();
-    if (is_small_ != rhs.is_small_)
-        return false; // 按不变量，能装进 int64_t 的值必然走小路径，不用再比较
+    // 按不变量，能装进 int64_t 的值必然走小路径
+    if (is_small_ != rhs.is_small_) return false;
     return negative_ == rhs.negative_ && limbs_ == rhs.limbs_;
 }

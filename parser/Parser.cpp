@@ -1362,7 +1362,7 @@ AstNodePtr Parser::parse_single_expr() && {
 
     AstNodePtr expr{parse_expr()};
 
-    // 这条表达式之后只允许跟换行，且换行之后必须就是 EOF：多于一条不是这个入口该收的
+    // 这条表达式之后只允许跟换行，且换行之后必须就是 EOF
     reject_semicolon();
     check_terminator();
     skip_newline();

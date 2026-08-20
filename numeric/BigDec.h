@@ -9,26 +9,20 @@
 #include "BigInt.h"
 #include "DecContext.h"
 
-// 十进制浮点数，SL 的 decimal 的底层实现：值为 (-1)^符号 × 系数 × 10^指数，系数是任意精度整数、
-// 指数是范围有限的整数。算术遵循 IBM 通用十进制算术规范（Python decimal 实现的那一份），
-// 与之不一致的地方逐处注明——目前只有 floor_div/mod 一处（SL 的 //、% 向负无穷取整，
-// 不是规范里 divide-integer/remainder 的向零截断）。
+// 十进制浮点数，SL 的 decimal 的底层实现：值为 (-1)^符号 × 系数 × 10^指数，系数是任意精度
+// 整数。算术遵循 IBM 通用十进制算术规范（Python decimal 实现的那一份），与规范不一致处逐处
+// 注明——目前只有 //、% 向负无穷取整（不是规范里向零截断的 divide-integer/remainder）。
 //
-// **标度是值的一部分**：1.5 和 1.50 数值相等但指数不同，to_string() 得到的串也不同。因此
-// BigInt 那条"一个值只有一种表示"的不变量在这里**不成立**，判等不能靠结构相等，一律走
-// equals()/compare_ordering()。
-//
-// 构造不舍入，运算才舍入：字面量、from_string()、from_bigint() 都精确保留全部位数，
-// 每个算术运算的结果才按上下文舍入到至多 prec 位有效数字。
+// 标度是值的一部分：1.5 和 1.50 数值相等但指数不同，判等不能靠结构相等，一律走
+// equals()/compare_ordering()。构造不舍入，运算才舍入。
 class BigDec {
   public:
     enum class Kind : uint8_t { Finite, Infinity, NaN, SignalingNaN };
 
-    // 构造出来的有限数，指数必须落在 [-kMaxExponent, kMaxExponent] 里（运算的中间结果可以暂时
-    // 超出，fix 之后必然回到 [Etiny, Emax] 之内）。
-    // 上界取的是 Emax 的上限加 prec 的上限，为的是让"任何合法上下文下 fix 出来的结果都还构造得
-    // 回去"成立——次正规结果的指数会被压到 Etiny = Emin - prec + 1，比 Emin 自己的下界还低一整个
-    // prec，卡在 Emax 的量级上就会产出 try_from_string 读不回来的值
+    // 构造出来的有限数，指数必须落在 [-kMaxExponent, kMaxExponent] 内（运算的中间结果可以
+    // 暂时超出，fix 之后必然回到 [Etiny, Emax] 之内）。上界取 Emax 上限 + prec 上限，为的是
+    // "任何合法上下文下 fix 出来的结果都还构造得回去"——次正规结果的指数会被压到
+    // Etiny = Emin - prec + 1，卡在 Emax 的量级上就会产出 try_from_string 读不回来的值
     static constexpr int64_t kMaxExponent{
         static_cast<int64_t>(DecContext::kMaxExp) + DecContext::kMaxPrec
     };
@@ -52,10 +46,8 @@ class BigDec {
     [[nodiscard]] static BigDec quiet_nan(bool sign = false);
     [[nodiscard]] static BigDec signaling_nan(bool sign = false);
 
-    // 按 IBM 规范的数字字符串语法解析（`Inf`/`Infinity`/`NaN`/`sNaN` 以及指数记号 `E` 都不区分
-    // 大小写），不合法返回 nullopt。构造不舍入，因此不需要上下文；指数超出 kMaxExponent 也算
-    // 不合法。跟 Python 的三处差异：不接受首尾空白、不接受数字里的 `_`、不接受 NaN 后面的诊断
-    // 信息（SL 的 decimal 没有 NaN 诊断信息这个概念，静默丢掉比拒绝更糟）
+    // 按 IBM 规范的数字字符串语法解析（Inf/Infinity/NaN/sNaN 及指数记号不区分大小写），
+    // 不合法返回 nullopt。跟 Python 的差异：不收首尾空白、数字里的 '_'、NaN 后的诊断信息
     [[nodiscard]] static std::optional<BigDec> try_from_string(const std::string &s);
     // try_from_string 的上下文版：不合法则触发 ConversionSyntax，没设陷阱时返回安静 NaN
     [[nodiscard]] static BigDec from_string(const std::string &s, DecContext &ctx);
@@ -74,22 +66,22 @@ class BigDec {
     [[nodiscard]] int64_t exponent() const { return exp_; }
     // 系数的十进制位数，系数为 0 时算 1 位
     [[nodiscard]] size_t digit_count() const;
-    // 调整后的指数 exp + 位数 - 1，即科学计数法写成 d.dddE±n 时的那个 n。调用方保证是有限数
+    // 调整后的指数 exp + 位数 - 1（科学计数法 d.dddE±n 里的 n）。调用方保证是有限数
     [[nodiscard]] int64_t adjusted() const;
 
-    // IBM 的 to-scientific-string：完整保留表示（`1.5` 与 `1.50`、`0` 与 `-0` 都得到不同的串），
+    // IBM 的 to-scientific-string：完整保留表示（1.5 与 1.50、0 与 -0 都得到不同的串），
     // 因此 try_from_string(x.to_string()) 恒与 x 表示层面完全相同。不查上下文、不触发信号
     [[nodiscard]] std::string to_string() const;
 
-    // 表示层面完全相同（类别、符号、系数、指数都一样）。跟 SL 的 `==` **不是**一回事：
+    // 表示层面完全相同（类别、符号、系数、指数都一样）。跟 SL 的 == 不是一回事：
     // SL 里 1.5 == 1.50 为真、NaN == NaN 为假，这里正好都相反
     [[nodiscard]] bool identical(const BigDec &rhs) const;
 
-    // 只翻/清符号位，不舍入、不查上下文、不触发任何信号（IBM 的 copy-negate / copy-abs）
+    // 只翻/清符号位，不舍入、不查上下文（IBM 的 copy-negate / copy-abs）
     [[nodiscard]] BigDec copy_negate() const;
     [[nodiscard]] BigDec copy_abs() const;
 
-    // 一元 +、-、abs。按 IBM 规范这三个都要按上下文舍入，`+x` 不是恒等操作
+    // 一元 +、-、abs。按 IBM 规范这三个都要按上下文舍入，+x 不是恒等操作
     [[nodiscard]] BigDec plus(DecContext &ctx) const;
     [[nodiscard]] BigDec minus(DecContext &ctx) const;
     [[nodiscard]] BigDec abs(DecContext &ctx) const;
@@ -99,13 +91,10 @@ class BigDec {
     [[nodiscard]] BigDec mul(const BigDec &rhs, DecContext &ctx) const;
     [[nodiscard]] BigDec div(const BigDec &rhs, DecContext &ctx) const;
 
-    // SL 的 // 和 %：**向负无穷取整**，不是 IBM 规范里向零截断的 divide-integer/remainder。
-    // 因此非零余数的符号跟除数一致（规范里跟被除数一致）。精确算术下 x % y == x - (x // y) * y
-    // 成立，这条恒等式定的是余数的方向和符号；但两边都要各自按上下文舍入（% 直接舍入精确余数，
-    // 右边的乘法额外经历一次舍入），因此舍入后的返回值不保证逐位相等，别拿它当逐位恒等式来用。
-    // 余数恰好为零时符号仍跟被除数走（`-6 % 3` 是 `-0`）：这一处照抄规范，因为上面那个恒等式
-    // 自己在零上也定不出符号（IBM 的加法规定 a - a 得 +0），换成"跟除数走"并不更有理有据。
-    // 商的位数超过 prec 时触发 DivisionImpossible
+    // SL 的 // 和 %：向负无穷取整（不是 IBM 规范的向零截断），非零余数的符号跟除数一致。
+    // 精确算术下 x % y == x - (x // y) * y 成立；两边各自按上下文舍入，返回值不保证逐位相等。
+    // 余数恰好为零时符号跟被除数走（-6 % 3 是 -0，照抄规范）。商的位数超过 prec 时触发
+    // DivisionImpossible
     [[nodiscard]] BigDec floor_div(const BigDec &rhs, DecContext &ctx) const;
     [[nodiscard]] BigDec mod(const BigDec &rhs, DecContext &ctx) const;
     [[nodiscard]] std::pair<BigDec, BigDec> divmod(const BigDec &rhs, DecContext &ctx) const;
@@ -113,16 +102,16 @@ class BigDec {
     // 有限、且没有非零的小数部分
     [[nodiscard]] bool is_integral() const;
 
-    // 超越函数。任意精度下它们都算不出精确值，做法是"多算几位 → 看结果够不够定夺舍入方向 →
-    // 不够就再多算三位"，循环到能定夺为止；因此最终那一步 fix 固定按 ROUND_HALF_EVEN 走
+    // 超越函数：任意精度下算不出精确值，做法是"多算几位 → 看结果够不够定夺舍入方向 →
+    // 不够就再多算三位"，循环到能定夺为止；最终那步 fix 固定按 ROUND_HALF_EVEN 走
     // （这时任何舍入方式都会给出同一个答案），算完把上下文的 rounding 原样还回去。
-    // 算法逐个对应 Python `_pydecimal` 里的同名方法，整数层的部分在 dec_math 里
+    // 算法逐个对应 Python `_pydecimal` 里的同名方法，整数层在 dec_math 里
     [[nodiscard]] BigDec sqrt(DecContext &ctx) const;  // 负数触发 InvalidOperation
     [[nodiscard]] BigDec exp(DecContext &ctx) const;   // e ** self
     [[nodiscard]] BigDec ln(DecContext &ctx) const;    // 负数触发 InvalidOperation
     [[nodiscard]] BigDec log10(DecContext &ctx) const; // 同上
 
-    // self ** rhs。底数为负而指数不是整数时结果不是实数，触发 InvalidOperation；`0 ** 0` 同。
+    // self ** rhs。底数为负而指数不是整数时结果不是实数，触发 InvalidOperation；0 ** 0 同。
     // 跟上面四个不同，幂运算尊重上下文的舍入方式，不切成 HalfEven
     [[nodiscard]] BigDec pow(const BigDec &rhs, DecContext &ctx) const;
 
@@ -140,7 +129,7 @@ class BigDec {
     [[nodiscard]] int64_t ln_exp_bound() const;
     [[nodiscard]] int64_t log10_exp_bound() const;
 
-    // 整数的精确值。调用方保证是有限的整数，且量级不大——指数很大的整数（`1E+999999`）会让
+    // 整数的精确值。调用方保证是有限的整数，且量级不大——指数很大的整数（1E+999999）会让
     // 这里的 10^exp 炸开，pow() 的两个调用点都先把量级夹住了
     [[nodiscard]] BigInt integer_value() const;
     // 调用方保证是有限的整数
@@ -161,13 +150,12 @@ class BigDec {
     [[nodiscard]] BigDec fix(DecContext &ctx) const;
 
     // 把自己重新表示成指数恰为 exp 的形式，靠补零，因此恒精确。安静操作——不触发任何信号、
-    // 不查上下文。调用方保证是有限数、且 exp <= 自己的指数（IBM 的 rescale 还有个"指数变大就
-    // 按某种舍入方式砍掉低位"的方向，但现有两个调用点都只往小了调，那一支写了也是死代码）
+    // 不查上下文。调用方保证是有限数、且 exp <= 自己的指数
     [[nodiscard]] BigDec pad_to_exponent(int64_t exp) const;
 
     // 把 coeff 截到只保留最高 keep 位，返回 (截断后的系数, 舍入判定)。判定的含义同 IBM 规范：
-    // 1 = 该向远离零的方向进位，0 = 被截掉的部分全是 0（值没变），-1 = 被截掉的部分非 0 但不进位。
-    // sign 只有 Ceiling/Floor 两种舍入方式用得上。调用方保证 keep < coeff 的十进制位数
+    // 1 = 向远离零进位，0 = 被截掉的部分全是 0，-1 = 被截掉的部分非 0 但不进位。
+    // sign 只有 Ceiling/Floor 用得上。调用方保证 keep < coeff 的十进制位数
     [[nodiscard]] static std::pair<BigInt, int>
     split_and_decide(const BigInt &coeff, size_t keep, bool sign, DecRounding rounding);
 
@@ -203,8 +191,7 @@ class BigDec {
     );
 
     // 把 trunc_divmod 给的商的绝对值修正成向负无穷取整的商（带符号）。
-    // nullopt 表示位数超过 prec——注意要按修正**之后**的商来判，截断商恰好 prec 位时减 1 会多
-    // 出一位。% 也要查这一条：商算不出来的话 x % y == x - (x // y) * y 就不成立了
+    // nullopt 表示位数超过 prec——要按修正之后的商来判（截断商恰好 prec 位时减 1 会多出一位）
     [[nodiscard]] static std::optional<BigInt> floor_quotient(
         const BigInt &magnitude, const BigDec &dividend, const BigDec &divisor,
         const BigDec &trunc_remainder, int64_t prec

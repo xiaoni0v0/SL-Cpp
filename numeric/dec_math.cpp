@@ -24,10 +24,9 @@ BigInt pow10(const int64_t k) {
 }
 
 std::optional<int64_t> to_int64(const BigInt &x) {
-    // 位长卡在 62 而不是 63：63 位的值里只有 INT64_MIN 一个装得下，为这一个特例放宽不值当
+    // 位长卡在 62 而不是 63：63 位的值里只有 INT64_MIN 装得下，为这一个特例放宽不值当
     if (x.bit_length() > 62) return std::nullopt;
-    // 绕字符串看着笨，其实不费：能过上面那关的值必然在 BigInt 的小路径上（"装得进 int64_t 就
-    // 一定走小路径"是 BigInt 自己的不变量），to_decimal_string 就是一次 std::to_string
+    // 能过上面那关的值必然在小路径上，to_decimal_string 就是一次 std::to_string
     return std::stoll(x.to_decimal_string());
 }
 
@@ -63,9 +62,8 @@ BigInt ilog(const BigInt &x, const BigInt &m) {
     assert(!x.is_negative() && !x.is_zero());
     assert(!m.is_negative() && !m.is_zero());
 
-    // 思路：log(x/M) = log1p((x-M)/M)，反复用 log1p(y) = 2*log1p(y/(1+sqrt(1+y))) 把 y 压小，
-    // 小到 2^-L 以内再上泰勒级数。全程是定点整数：实数 z 用 z*M 的整数近似表示，
-    // 而 y 存的是 2^R*y*M 的近似（R 是已经做过的缩减次数），免得反复右移丢精度
+    // 反复用 log1p(y) = 2*log1p(y/(1+sqrt(1+y))) 把 y 压到 2^-L 以内再上泰勒级数。
+    // 全程定点：实数 z 用 z*M 的整数近似表示，y 存的是 2^R*y*M 的近似（R 是已缩减次数）
     BigInt y{x - m};
     int64_t r{0};
     while (true) {
@@ -88,23 +86,18 @@ BigInt ilog(const BigInt &x, const BigInt &m) {
 
 BigInt log10_digits(const int64_t p) {
     assert(p >= 0);
-    // log(10) = 2.302585...。先存着一段够用的，不够了再往后算——这些位是截断的、恒正确，
-    // 于是越算越长、只增不减。注意这份缓存让本函数不是线程安全的（前端目前全程单线程）
+    // 先存一段够用的 log(10)，不够了再往后算（这些位是截断的、恒正确，缓存只增不减）
     static std::string digits{"23025850929940456840179914546843642076011014886"};
 
     if (static_cast<size_t>(p) >= digits.size()) {
-        // 一次多算 3 位，直到多出来的那几位不全是 0（全是 0 说明还没定下来）
+        // 一次多算 3 位，直到多出来的那几位不全是 0（全是 0 说明还没定下来）。
+        // ilog 出来的位数只比 m 略少，不可能短到连 tail 位都不够——用 assert 把假设钉住
         int64_t extra{3};
         std::string computed;
         while (true) {
             const BigInt m{pow10(p + extra + 2)};
             computed = div_nearest(ilog(m * BigInt(10), m), BigInt(100)).to_decimal_string();
             const size_t tail{static_cast<size_t>(extra)};
-            // m 的量级是 10^(p+extra+2)，ilog 出来的位数只会比它略少，不可能短到连 tail 位都不够；
-            // Python 那边等价的写法是 digits[-extra:] != '0'*extra，长度不够时切片会直接拿到整个
-            // 短串、长度对不上永远判 true（也就是恒 break）。这里改成显式的 && 短路，形式上更清楚，
-            // 但如果这条"够长"的假设被未来的改动打破，两边的行为就会分叉——用 assert 把假设钉住，
-            // 而不是让它在从未真正短过的分支里静默继续加 extra
             assert(computed.size() > tail);
             if (computed.size() > tail &&
                 computed.substr(computed.size() - tail) != std::string(tail, '0'))
@@ -117,8 +110,7 @@ BigInt log10_digits(const int64_t p) {
         assert(end > 1);
         digits = computed.substr(0, end - 1);
     }
-    // 上面这段扩容，保证了 digits 至少能覆盖到 p 位；缓存长度不够时 substr 会静默截断出一个
-    // 量级完全错的值，不会报错——用 assert 把这条不变量钉住
+    // 上面的扩容保证 digits 至少覆盖到 p 位
     assert(digits.size() > static_cast<size_t>(p));
     return BigInt::from_decimal_string(digits.substr(0, static_cast<size_t>(p) + 1));
 }
@@ -181,7 +173,7 @@ BigInt dlog10(BigInt c, const int64_t e, int64_t p) {
 BigInt iexp(const BigInt &x, const BigInt &m) {
     assert(!m.is_negative() && !m.is_zero());
 
-    // 思路：先把 z = x/M 除以 2^R 压到 2^-L 以内，用泰勒级数算 expm1，
+    // 先把 z = x/M 除以 2^R 压到 2^-L 以内，用泰勒级数算 expm1，
     // 再用 expm1(2z) = expm1(z)*(expm1(z)+2) 逐步倍回去
     const int64_t r{static_cast<int64_t>((x << kTaylorL).floor_div(m).bit_length())};
     const int64_t t{taylor_terms(m)};
@@ -199,8 +191,8 @@ BigInt iexp(const BigInt &x, const BigInt &m) {
 std::pair<BigInt, int64_t> dexp(const BigInt &c, const int64_t e, int64_t p) {
     p += 2; // 拿 M = 10^(p+2) 去调 iexp，也就是多算三位
 
-    // log(10) 要跟着多算 c*10^e 的调整后指数那么多位。这里的位数跟着 Python 连负号一起数了
-    // （它写的是 len(str(c))），c 为负时会多算一位——只会让精度更保守，照抄以免跟参考实现分叉
+    // log(10) 要跟着多算 c*10^e 的调整后指数那么多位。位数跟 Python 一样把负号也算进去
+    // （它写 len(str(c))）——c 为负时只会多算一位、更保守，照抄以免跟参考实现分叉
     const int64_t c_len{static_cast<int64_t>(c.num_decimal_digits()) + (c.is_negative() ? 1 : 0)};
     const int64_t extra{std::max<int64_t>(0, e + c_len - 1)};
     const int64_t q{p + extra};
@@ -212,7 +204,6 @@ std::pair<BigInt, int64_t> dexp(const BigInt &c, const int64_t e, int64_t p) {
     const BigInt quot{c_shift.floor_div(log_ten)};
     const BigInt rem{div_nearest(c_shift - quot * log_ten, pow10(extra))};
 
-    // iexp 的误差 < 120，除以 1000 之后 < 0.62
     // 商的量级由上层的溢出/下溢粗筛保证落在 int64_t 里，装不下说明上层漏了一道闸
     return {div_nearest(iexp(rem, pow10(p)), BigInt(1000)), to_int64(quot).value() - p + 3};
 }
@@ -227,14 +218,13 @@ dpower(const BigInt &xc, const int64_t xe, const BigInt &yc, const int64_t ye, c
 
     // y*log(x) = yc*lxc*10^(-p-b-1+ye) = pc * 10^(-p-1)
     const int64_t shift{ye - b};
-    // b 的定义是 digits(yc) + ye，所以 shift 恒等于 -digits(yc) <= -1：yc 是非零整数的系数，
-    // 位数至少是 1。shift >= 0 这一支永远走不到，留着只是跟 Python 的写法（不假设这条恒等式）
-    // 保持一致，便于跟参考实现对着改
+    // b 的定义是 digits(yc) + ye，所以 shift 恒等于 -digits(yc) <= -1；shift >= 0 这一支
+    // 永远走不到，留着只是跟 Python 的写法（不假设这条恒等式）保持一致
     assert(shift < 0);
     const BigInt pc{shift >= 0 ? lxc * yc * pow10(shift) : div_nearest(lxc * yc, pow10(-shift))};
 
     if (pc.is_zero()) {
-        // 结果贴着 1。这里特意给一个不正好等于 1 的近似值——上层要靠"末几位不是 5000…"来判断
+        // 结果贴着 1。这里特意给一个不正好等于 1 的近似值——上层要靠"末几位不是 5000…"判断
         // 能不能定下舍入方向，正好是 1 会让它永远判不出来
         const bool greater_than_one{
             (static_cast<int64_t>(xc.num_decimal_digits()) + xe >= 1) == !yc.is_negative()
