@@ -224,6 +224,30 @@ TEST_SUITE("BigDec——构造与字符串往返") {
         CHECK_FALSE(d("NaN").is_zero());
     }
 
+    TEST_CASE("kind() 直接反映构造出来的类别") {
+        CHECK(d("1.5").kind() == BigDec::Kind::Finite);
+        CHECK(d("0").kind() == BigDec::Kind::Finite);
+        CHECK(d("Infinity").kind() == BigDec::Kind::Infinity);
+        CHECK(d("-Infinity").kind() == BigDec::Kind::Infinity);
+        CHECK(d("NaN").kind() == BigDec::Kind::NaN);
+        CHECK(d("sNaN").kind() == BigDec::Kind::SignalingNaN);
+    }
+
+    TEST_CASE("from_string(s, ctx)：合法串直接构造，不查上下文、不触发信号") {
+        DecContext ctx;
+        CHECK(BigDec::from_string("1.50", ctx).identical(d("1.50")));
+        CHECK(BigDec::from_string("Infinity", ctx).identical(d("Infinity")));
+        CHECK(ctx.flags().empty());
+    }
+
+    TEST_CASE("from_string(s, ctx)：不合法串在陷阱关着时返回安静 NaN、报 ConversionSyntax") {
+        DecContext ctx{quiet_context()};
+        const BigDec result{BigDec::from_string("abc", ctx)};
+        CHECK(result.is_nan());
+        CHECK_FALSE(result.is_signaling_nan());
+        CHECK(ctx.flags().has(DecCondition::InvalidOperation));
+    }
+
     TEST_CASE("非法字符串返回 nullopt") {
         constexpr const char *const bad[]{
             "",      "-",     "+",     ".",      "-.",    "e5",     "E5",      ".e5",
@@ -541,6 +565,79 @@ TEST_SUITE("BigDec——上下文与信号机制") {
         CHECK(d("NaN").compare_ordering(d("1"), quiet) == std::partial_ordering::unordered);
         CHECK(quiet.flags().has(DecCondition::InvalidOperation));
     }
+
+    TEST_CASE("fix() 里同时开好几个陷阱时，抛出来的必须是规范顺序里最先报的那个") {
+        // fix() 内部按固定顺序 raise：溢出走 Overflow -> Inexact -> Rounded；
+        // 舍入进次正规区走 Underflow -> Subnormal -> Inexact -> Rounded -> (下溢到 0 再 Clamped)。
+        // 这里对着同一个触发路径，每次只放开"排在更前面的都不开"的那个信号，验证真正抛出来的
+        // 条件确实是它，而不是随便哪个凑巧先被判断到的信号
+        const auto first_thrown{[](DecContext ctx, auto &&op) {
+            try {
+                op(ctx);
+            } catch (const DecTrapped &e) {
+                return e.condition();
+            }
+            FAIL("该抛没抛");
+            return DecCondition::Clamped;
+        }};
+
+        // 溢出路径：prec 3、Emax 4 下，1E+999 乘 10 必然溢出
+        {
+            DecContext ctx{quiet_context(3, DecRounding::HalfEven, 4, -4)};
+            ctx.traps() =
+                DecSignalSet{DecCondition::Overflow, DecCondition::Inexact, DecCondition::Rounded};
+            CHECK(first_thrown(ctx, [](DecContext &c) {
+                      (void) d("1E+999").mul(d("10"), c);
+                  }) == DecCondition::Overflow);
+        }
+
+        // 舍入进次正规区、且发生了真实截断（decision != 0）：Underflow/Subnormal/Inexact/Rounded
+        // 都会被 raise。prec 3、Emax 4、Emin -4（Etiny -6）下，1.23456E-5 落进这条路径
+        const auto subnormal_rounded{[](DecContext &c) { (void) d("1.23456E-5").plus(c); }};
+        {
+            DecContext ctx{quiet_context(3, DecRounding::HalfEven, 4, -4)};
+            ctx.traps() = DecSignalSet{
+                DecCondition::Underflow,
+                DecCondition::Subnormal,
+                DecCondition::Inexact,
+                DecCondition::Rounded
+            };
+            CHECK(first_thrown(ctx, subnormal_rounded) == DecCondition::Underflow);
+        }
+        {
+            DecContext ctx{quiet_context(3, DecRounding::HalfEven, 4, -4)};
+            ctx.traps() =
+                DecSignalSet{DecCondition::Subnormal, DecCondition::Inexact, DecCondition::Rounded};
+            CHECK(first_thrown(ctx, subnormal_rounded) == DecCondition::Subnormal);
+        }
+        {
+            DecContext ctx{quiet_context(3, DecRounding::HalfEven, 4, -4)};
+            ctx.traps() = DecSignalSet{DecCondition::Inexact, DecCondition::Rounded};
+            CHECK(first_thrown(ctx, subnormal_rounded) == DecCondition::Inexact);
+        }
+        {
+            DecContext ctx{quiet_context(3, DecRounding::HalfEven, 4, -4)};
+            ctx.traps() = DecSignalSet{DecCondition::Rounded};
+            CHECK(first_thrown(ctx, subnormal_rounded) == DecCondition::Rounded);
+        }
+
+        // 下溢到 0：同一条路径再往极端走一步（1E-100 在这个上下文里舍不出任何有效数字）。
+        // 先在陷阱全关的上下文里确认真的下溢到 0、且报了 Clamped；再只放开 Clamped，验证它
+        // 确实排在最后也确实会抛
+        {
+            DecContext quiet{quiet_context(3, DecRounding::HalfEven, 4, -4)};
+            const BigDec result{d("1E-100").plus(quiet)};
+            CHECK(result.is_zero());
+            CHECK(quiet.flags().has(DecCondition::Clamped));
+        }
+        {
+            DecContext ctx{quiet_context(3, DecRounding::HalfEven, 4, -4)};
+            ctx.traps() = DecSignalSet{DecCondition::Clamped};
+            CHECK(first_thrown(ctx, [](DecContext &c) {
+                      (void) d("1E-100").plus(c);
+                  }) == DecCondition::Clamped);
+        }
+    }
 }
 
 TEST_SUITE("BigDec——一元运算") {
@@ -638,7 +735,11 @@ TEST_SUITE("BigDec——// 和 % 的向负无穷取整语义") {
         CHECK(d("1").floor_div(d("-3"), ctx).to_string() == "-1");
     }
 
-    TEST_CASE("恒等式 x % y == x - (x // y) * y") {
+    // 这条恒等式只在精确算术下必然成立，右边的乘法要按上下文舍入，跟 % 直接舍入出来的余数不保证
+    // 逐位相等（例：1 % 0.30000000000000000000000000009 在 prec 28 下就不相等，CPython 的
+    // Decimal 同样如此）——SL.md 3.4.2 只拿它定 % 的方向和符号，不承诺逐位相等。下面这个值池刻意
+    // 温和（系数位数不多，乘积不会顶到 prec），能过是这批具体输入凑巧没撞上双重舍入，不代表恒成立
+    TEST_CASE("恒等式 x % y == x - (x // y) * y（温和值池下逐位成立，非普遍恒等式）") {
         DecContext ctx{quiet_context()};
         constexpr const char *const pool[]{
             "0",   "-0",   "1",    "-1",    "7",    "-7",    "3",          "-3",
@@ -657,6 +758,24 @@ TEST_SUITE("BigDec——// 和 % 的向负无穷取整语义") {
                 CHECK(actual.equals(expected, ctx));
             }
         }
+    }
+
+    TEST_CASE("反例：x - (x // y) * y 的乘法自己也要舍入，跟 % 直接舍出的余数逐位不同") {
+        // prec 28 下的具体反例，跟 CPython 的 Decimal 核对过：x // y == 3，但 3 * y 已经是 29
+        // 位、要被舍入一次，再拿去减就比 % 直接算出的精确余数多丢了一点精度。两边在数学意义上
+        // 都是"正确"的（% 就该等于精确余数舍入后的样子），只是不逐位相等——钉住这个反例，防止
+        // 有人真的拿"逐位恒等式"的假设去优化或校验代码
+        DecContext ctx{quiet_context()};
+        const BigDec x{d("1")};
+        const BigDec y{d("0.30000000000000000000000000009")};
+        const BigDec quotient{x.floor_div(y, ctx)};
+        const BigDec remainder{x.mod(y, ctx)};
+        CHECK(quotient.to_string() == "3");
+        CHECK(remainder.to_string() == "0.09999999999999999999999999973");
+        const BigDec via_multiply{x.sub(quotient.mul(y, ctx), ctx)};
+        CHECK(via_multiply.to_string() == "0.0999999999999999999999999997"); // 少一位有效数字
+        CHECK_FALSE(remainder.identical(via_multiply));
+        CHECK(remainder.equals(via_multiply, ctx) == false); // 数值上也确实不相等，不只是标度不同
     }
 
     TEST_CASE("divmod 跟单独算 // 和 % 一致") {
@@ -1014,6 +1133,19 @@ TEST_SUITE("BigDec——幂运算与超越函数") {
         CHECK(c4.flags().empty());
     }
 
+    TEST_CASE("指数不是整数、结果精确但落进次正规/溢出区：Underflow/Overflow 照样要补报") {
+        // 跟 CPython 的 Decimal 核对过。这两条走的是 power() 里"exact 分支算出的结果落在次正规区
+        // /溢出区"那段专门补 Underflow/Overflow 的路径——精确路径本身不会经过 fix() 的溢出/下溢
+        // 判断，得手动把信号照规范补上
+        DecContext ctx{quiet_context(5, DecRounding::HalfEven, 9, -9)};
+        CHECK(d("1E-100").pow(d("0.5"), ctx).to_string() == "0E-13");
+        CHECK(flags_to_string(ctx.flags()) == "Clamped,Inexact,Rounded,Subnormal,Underflow");
+
+        DecContext c2{quiet_context(5, DecRounding::HalfEven, 100, -999999999)};
+        CHECK(d("1E+400").pow(d("0.5"), c2).to_string() == "Infinity");
+        CHECK(flags_to_string(c2.flags()) == "Inexact,Overflow,Rounded");
+    }
+
     TEST_CASE("精确结果 + 定向舍入：我们跟 _pydecimal 一致，跟 libmpdec 差 1 ulp") {
         // 规范对非整数指数的 ** 只要求"按 exp(y*ln(x)) 算"，不保证正确舍入，CPython 自己的两套
         // 实现在这里就不一致（官方扩展测试把这一类列为已知差异）。我们选真值精确就原样给出的
@@ -1057,6 +1189,22 @@ TEST_SUITE("BigDec——幂运算与超越函数") {
         DecContext c3{quiet_context(3)};
         CHECK(d("1.0000").pow(d("5"), c3).to_string() == "1.00");
         CHECK(flags_to_string(c3.flags()) == "Rounded");
+    }
+
+    TEST_CASE(
+        "power_exact 里 5 的幂的 e 修正循环：底数 5^2659、指数 -1、prec 900 时估计值多算了一次，"
+        "循环会真的转一圈（注释里说过现实系数上转不起来——这组是刻意凑出来的极端反例，够窄，"
+        "不适合塞进随机生成的用例表，钉一条手写用例）"
+    ) {
+        DecContext ctx{quiet_context(900)};
+        const BigInt base_coeff{BigInt(5).pow(BigInt(2659))};
+        const BigDec base{BigDec::from_bigint(base_coeff)};
+        const BigDec result{base.pow(d("-1"), ctx)};
+        REQUIRE(result.is_finite());
+        // x = 5^2659 时 1/x == 2^2659 * 10^-2659，且这个表示已经是最简形式（系数不再被 10 整除）
+        CHECK(result.coefficient() == BigInt(2).pow(BigInt(2659)));
+        CHECK(result.exponent() == -2659);
+        CHECK(ctx.flags().empty()); // 精确，指数又是整数，不强制报 Inexact
     }
 
     TEST_CASE("sqrt") {
@@ -1361,6 +1509,20 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
         }
     }
 
+    TEST_CASE("divmod（期望值取 // 和 % 各自的结果，flags 取并集）") {
+        for (const char *const raw : kDivmodCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 5);
+            DecContext ctx{quiet_context()};
+            const auto [quotient, remainder]{d(f[0]).divmod(d(f[1]), ctx)};
+            CHECK(quotient.to_string() == f[2]);
+            CHECK(remainder.to_string() == f[3]);
+            CHECK(flags_to_string(ctx.flags()) == f[4]);
+        }
+    }
+
     TEST_CASE("八种舍入方式 × prec 1/2/3/7") {
         for (const char *const raw : kRoundCases) {
             const std::string line{raw};
@@ -1384,9 +1546,20 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
             )};
             const BigDec a{d(f[0])};
             const BigDec b{d(f[1])};
+            const std::string &op{f[2]};
             const BigDec result{
-                f[2] == "mul" ? a.mul(b, ctx) : (f[2] == "div" ? a.div(b, ctx) : a.add(b, ctx))
+                op == "mul"        ? a.mul(b, ctx)
+                : op == "div"      ? a.div(b, ctx)
+                : op == "add"      ? a.add(b, ctx)
+                : op == "sub"      ? a.sub(b, ctx)
+                : op == "floordiv" ? a.floor_div(b, ctx)
+                                   : a.mod(b, ctx)
             };
+            REQUIRE_MESSAGE(
+                (op == "mul" || op == "div" || op == "add" || op == "sub" || op == "floordiv" ||
+                 op == "mod"),
+                "用例表里出现了没实现的 op"
+            );
             CHECK(result.to_string() == f[7]);
             CHECK(flags_to_string(ctx.flags()) == f[8]);
         }

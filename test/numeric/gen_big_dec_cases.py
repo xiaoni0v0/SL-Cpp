@@ -126,6 +126,10 @@ def floor_divmod_one(x_s, y_s, prec, rounding, emax, emin, mod):
             ctx.flags[mod.InvalidOperation] = 1  # x % 0
             return mod.Decimal("NaN")
 
+        # 必须比 prec 本身宽出一截，否则"超高精度"这个假设自己先垮了：prec 逼近/超过 HUGE_PREC
+        # 时，这个参考模型会在精度不够的地方自己触发 Inexact，把本该有解的组合错判成
+        # DivisionImpossible——踩过这个坑（prec 3000 时），BigDec 那边其实算对了
+        assert prec < HUGE_PREC, "floor_divmod_one 的参考精度必须比被测的 prec 更宽"
         big = new_ctx(HUGE_PREC, rounding, 999999999, -999999999, mod)
         qt, rt = big.divmod(x, y)  # 向零截断
         if qt.is_nan():
@@ -297,7 +301,7 @@ def main():
         out.append("")
 
     # ---- // 和 %：a|b|结果|flags ------------------------------------------
-    fd_lines, mod_lines = [], []
+    fd_lines, mod_lines, divmod_lines = [], [], []
     for a_s, b_s in all_pairs:
         got = floor_divmod(a_s, b_s, 28, HALF_EVEN)
         if got is None:
@@ -306,9 +310,17 @@ def main():
         q, qf, r, rf = got
         fd_lines.append("%s|%s|%s|%s" % (a_s, b_s, q, qf))
         mod_lines.append("%s|%s|%s|%s" % (a_s, b_s, r, rf))
+        # divmod 本身没有独立的期望值来源（IBM 规范没有这个复合操作），沿用同一组 q/r：divmod
+        # 该等价于分别算 // 和 %、flags 取两边的并集，用这张表把这条等价关系铺在跟 // /% 一样
+        # 大的值池上
+        names = (set(qf.split(",")) | set(rf.split(","))) - {""}
+        union = ",".join(n for n in SIGNAL_ATTRS if n in names)
+        divmod_lines.append("%s|%s|%s|%s|%s" % (a_s, b_s, q, r, union))
     out.append(emit("kFloorDivCases", fd_lines))
     out.append("")
     out.append(emit("kModCases", mod_lines))
+    out.append("")
+    out.append(emit("kDivmodCases", divmod_lines))
     out.append("")
 
     # ---- 舍入：a|prec|rounding|结果|flags ---------------------------------
@@ -402,7 +414,7 @@ def main():
     for a_s in edge_values:
         for b_s in edge_values:
             for prec, emax, emin in ((3, 4, -4), (2, 2, -2), (5, 9, -9), (3, 4, 0)):
-                for op in ("mul", "div", "add"):
+                for op in ("mul", "div", "add", "sub"):
                     got = agreed(
                         "edge",
                         prec,
@@ -413,6 +425,7 @@ def main():
                             "mul": c.multiply,
                             "div": c.divide,
                             "add": c.add,
+                            "sub": c.subtract,
                         }[o](m.Decimal(a), m.Decimal(b)),
                     )
                     if got is None:
@@ -420,6 +433,16 @@ def main():
                     edge_lines.append(
                         "%s|%s|%s|%d|%s|%d|%d|%s|%s"
                         % (a_s, b_s, op, prec, "HalfEven", emax, emin, got[0], got[1])
+                    )
+                for op in ("floordiv", "mod"):
+                    got = floor_divmod(a_s, b_s, prec, HALF_EVEN, emax, emin)
+                    if got is None:
+                        continue
+                    q, qf, r, rf = got
+                    res, fl = (q, qf) if op == "floordiv" else (r, rf)
+                    edge_lines.append(
+                        "%s|%s|%s|%d|%s|%d|%d|%s|%s"
+                        % (a_s, b_s, op, prec, "HalfEven", emax, emin, res, fl)
                     )
     for a_s in [
         "9.99E+3",
@@ -616,6 +639,7 @@ def main():
                 (3, 999999, -999999),
                 (16, 999999, -999999),
                 (5, 9, -9),
+                (100, 999999, -999999),  # prec > 50：默认规模生成器此前完全没铺到的量级
             ):
                 for rname, rmode in (ROUNDINGS if prec == 3 else [ROUNDINGS[4]]):
                     pow_case(a_s, b_s, prec, rname, rmode, emax, emin)
@@ -706,6 +730,7 @@ def main():
         (3, 999999, -999999),
         (16, 999999, -999999),
         (50, 999999, -999999),
+        (100, 999999, -999999),  # prec > 50：默认规模生成器此前完全没铺到的量级
         (5, 9, -9),
         (3, 999999, 0),
     ]

@@ -100,6 +100,12 @@ BigInt log10_digits(const int64_t p) {
             const BigInt m{pow10(p + extra + 2)};
             computed = div_nearest(ilog(m * BigInt(10), m), BigInt(100)).to_decimal_string();
             const size_t tail{static_cast<size_t>(extra)};
+            // m 的量级是 10^(p+extra+2)，ilog 出来的位数只会比它略少，不可能短到连 tail 位都不够；
+            // Python 那边等价的写法是 digits[-extra:] != '0'*extra，长度不够时切片会直接拿到整个
+            // 短串、长度对不上永远判 true（也就是恒 break）。这里改成显式的 && 短路，形式上更清楚，
+            // 但如果这条"够长"的假设被未来的改动打破，两边的行为就会分叉——用 assert 把假设钉住，
+            // 而不是让它在从未真正短过的分支里静默继续加 extra
+            assert(computed.size() > tail);
             if (computed.size() > tail &&
                 computed.substr(computed.size() - tail) != std::string(tail, '0'))
                 break;
@@ -111,6 +117,9 @@ BigInt log10_digits(const int64_t p) {
         assert(end > 1);
         digits = computed.substr(0, end - 1);
     }
+    // 上面这段扩容，保证了 digits 至少能覆盖到 p 位；缓存长度不够时 substr 会静默截断出一个
+    // 量级完全错的值，不会报错——用 assert 把这条不变量钉住
+    assert(digits.size() > static_cast<size_t>(p));
     return BigInt::from_decimal_string(digits.substr(0, static_cast<size_t>(p) + 1));
 }
 
@@ -218,6 +227,10 @@ dpower(const BigInt &xc, const int64_t xe, const BigInt &yc, const int64_t ye, c
 
     // y*log(x) = yc*lxc*10^(-p-b-1+ye) = pc * 10^(-p-1)
     const int64_t shift{ye - b};
+    // b 的定义是 digits(yc) + ye，所以 shift 恒等于 -digits(yc) <= -1：yc 是非零整数的系数，
+    // 位数至少是 1。shift >= 0 这一支永远走不到，留着只是跟 Python 的写法（不假设这条恒等式）
+    // 保持一致，便于跟参考实现对着改
+    assert(shift < 0);
     const BigInt pc{shift >= 0 ? lxc * yc * pow10(shift) : div_nearest(lxc * yc, pow10(-shift))};
 
     if (pc.is_zero()) {

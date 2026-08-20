@@ -1088,6 +1088,23 @@ TEST_SUITE("BigInt——bit_length 与 to_double 的窄路径") {
         }
     }
 
+    TEST_CASE("num_decimal_digits：具体数值直接钉住（此前只在跟 bit_length 互证时被间接用到）") {
+        CHECK(d("0").num_decimal_digits() == 1); // 0 算 1 位
+        CHECK(d("-0").num_decimal_digits() == 1);
+        CHECK(d("7").num_decimal_digits() == 1);
+        CHECK(d("-7").num_decimal_digits() == 1); // 负号不算位数
+        CHECK(d("99").num_decimal_digits() == 2);
+        CHECK(d("100").num_decimal_digits() == 3);
+        CHECK(d("9223372036854775807").num_decimal_digits() == 19);  // INT64_MAX，小路径边界
+        CHECK(d("-9223372036854775808").num_decimal_digits() == 19); // INT64_MIN
+        // 下面这些必然走大路径
+        CHECK(d("9223372036854775808").num_decimal_digits() == 19);  // 2^63
+        CHECK(d("18446744073709551615").num_decimal_digits() == 20); // 2^64 - 1
+        CHECK(d("18446744073709551616").num_decimal_digits() == 20); // 2^64
+        CHECK(d("123456789012345678901234567890").num_decimal_digits() == 30);
+        CHECK(d("-123456789012345678901234567890").num_decimal_digits() == 30);
+    }
+
     TEST_CASE("bit_length 跟十进制位数彼此印证") {
         // b 位的数落在 [2^(b-1), 2^b)，于是十进制位数 digits 必然满足
         // (b-1)*log10(2) < digits <= b*log10(2) + 1，拿它把两个函数互相钉住

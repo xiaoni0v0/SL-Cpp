@@ -804,9 +804,10 @@ Code），但"建立"这个操作每次执行都必须构造全新的 Function �
 - **`0 ** 0` 在 int 和 decimal 上不一样**：int 走 `BigInt::pow` 得 `1`，decimal 走 `BigDec::pow` 报
   `InvalidOperation`。这是照 Python 抄的（`0**0 == 1` vs `Decimal(0)**Decimal(0)` 报错），但 SL.md
   一个字都没写，等于把一处类型相关的行为差异留在了规范空白里。要么补进 SL.md，要么统一。
-- `BigInt` 还没有外部 oracle 的差分测试（`BigDec` 有，靠 CPython 的 decimal）。现在靠的是手写期望值
-  + 内部恒等式 + `to_double` 跟 `std::strtod` 对拍；恒等式对"两边同时错"是盲的。照
-  `gen_big_dec_cases.py` 的模式加一张 Python `int` 生成的表能补上，重点是位运算和大位移的 `<<`/`>>`。
+- `BigInt::pow` 没有上限，但没上限的具体后果是"挂死"而不是头文件写的"可能抛 `std::bad_alloc`"：
+  指数大到一定程度，先被朴素 O(n²) 乘法拖到实际算不完（内存反而通常够，不会真的 OOM）。
+  `operator<<` 的超大位移是干净的 `bad_alloc`，`>>` 有 O(1) 短路，两者都不受影响。这是 VM 层的资源
+  guard 议题（要不要在解释器调用 `pow` 之前就卡一个指数上限），不是 `BigInt` 自己该管的，先记在这。
 - `StaticEvaler` 里那整套 float 折叠（`node_to_double`/`std::pow`/`std::fmod`/`make_float`）还没清
   掉。按"结果为 decimal 的常量折叠一律禁掉"那一节的结论，这些不是改改名的事，要整段删；`decimal`
   接进前端时一起做。
