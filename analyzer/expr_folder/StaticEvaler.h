@@ -14,23 +14,27 @@
  * 折叠范围：
  *
  * 一元：
- *   bool/int: + - ~
- *   float: + -
- *   str/tuple/list: 无
+ *   int: + - ~
+ *   bool: + -（没有 ~：位运算是 int 特有的，bool 改继承 numbers.Real 之后不再沾 int 的边，
+ *     见 .ai/context.md "bool 不再继承 int" 一节）
+ *   decimal/str/tuple/list: 无（decimal 的 +x/-x 同样要按运行时上下文舍入，不是恒等操作，
+ *     不折的理由同下面二元的 decimal 算术）
  *
  * 二元：
- *           bool/int   float   str   tuple   list
- * bool/int     A         B      D      E      E
- *  float       B         B      E      E      E
- *   str        D         E      C      E      E
- *  tuple       E         E      E      C      E
- *  list        E         E      E      E      C
+ *            int  bool  decimal  str  tuple  list
+ *       int   A     B      D      E     F      F
+ *      bool   B     B      D      F     F      F
+ *   decimal   D     D      D      F     F      F
+ *       str   E     F      F      C     F      F
+ *     tuple   F     F      F      F     C      F
+ *      list   F     F      F      F     F      C
  *
- * A = { ** * / // % + - << >> & ^ | < <= > >= != == }
- * B = { ** * / // % + - < <= > >= != == }
+ * A = { ** * // % + - < <= > >= != == << >> & ^ | }
+ * B = { ** * // % + - < <= > >= != == }
  * C = { + < <= > >= != == }
- * D = { * != == }
- * E = { != == }
+ * D = { < <= > >= != == }
+ * E = { * != == }
+ * F = { != == }
  *
  * 以上中：
  * - 纯数值运算（含位运算）一律用 int64_t 计算，任何一步超出 int64_t 范围都不折；
