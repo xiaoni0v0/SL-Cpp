@@ -139,6 +139,49 @@ TEST_SUITE("BigInt——构造与十进制字符串往返") {
         CHECK_THROWS_AS((void) BigInt::from_decimal_string("\xef\xbc\x91"), std::invalid_argument);
     }
 
+    TEST_CASE("科学计数法：尾数 × 10^指数") {
+        CHECK(d("1e9").to_decimal_string() == "1000000000");
+        CHECK(d("1E9").to_decimal_string() == "1000000000"); // e/E 都收
+        CHECK(d("1e+9").to_decimal_string() == "1000000000");
+        CHECK(d("-1e9").to_decimal_string() == "-1000000000"); // 符号在最前面
+        CHECK(d("+1e9").to_decimal_string() == "1000000000");
+        CHECK(d("123e4").to_decimal_string() == "1230000"); // 尾数不止一位
+        CHECK(d("1e0").to_decimal_string() == "1");         // 指数 0 就是尾数本身
+        CHECK(d("0e100").to_decimal_string() == "0");       // 零乘多少都是零，且不产生负零
+        CHECK(d("-0e100").to_decimal_string() == "0");
+        // 指数带前导零合法（BigInt 这层不管"不允许前导零"，那是 lexer 对源码字面量的规矩）
+        CHECK(d("1e009").to_decimal_string() == "1000000000");
+        // 跟等价的手写字面量、以及 pow 三方对上
+        CHECK(d("1e100") == d("1" + std::string(100, '0')));
+        CHECK(d("1e100") == d("10").pow(d("100")));
+        CHECK(d("25e40") == d("25") * d("10").pow(d("40")));
+    }
+
+    TEST_CASE("科学计数法：指数为负一律不合法（BigInt 是整数类型）") {
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("1e-9"), std::invalid_argument);
+        // 数值上恰好是整数 10，同样不收——合不合法只看写法，不看算出来的值
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("100e-1"), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("1e-0"), std::invalid_argument);
+    }
+
+    TEST_CASE("科学计数法：残缺/畸形的指数部分抛 std::invalid_argument") {
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("1e"), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("1e+"), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("e9"), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("1e9e9"), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("1e9."), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("1e1.5"), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("1e 9"), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("1ee9"), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("1.5e9"), std::invalid_argument);
+        // 指数本身装不进 int64_t（19 位）。挡的是"指数表示不了"，不是"指数太大算不动"
+        CHECK_THROWS_AS(
+            (void) BigInt::from_decimal_string("1e9999999999999999999"), std::invalid_argument
+        );
+        // 前导零不计入位数：下面这个去掉前导零只有 1 位，照收
+        CHECK(d("1e0000000000000000000009").to_decimal_string() == "1000000000");
+    }
+
     TEST_CASE("超长十进制字符串往返（500 位、2000 位），顺带过一遍加减法不会破坏这么长的数") {
         for (const int len : {500, 2000}) {
             std::string s(static_cast<size_t>(len), '0');
@@ -1242,6 +1285,16 @@ TEST_SUITE("BigInt——跟 Python int 的交叉验证") {
             CHECK((a < b) == (expect < 0));
             CHECK((a == b) == (expect == 0));
             CHECK((a > b) == (expect > 0));
+        }
+    }
+
+    TEST_CASE("科学计数法解析（期望值是 Python 的 int(尾数) * 10**指数）") {
+        for (const char *const raw : kSciNotationCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 2);
+            CHECK(d(f[0]).to_decimal_string() == f[1]);
         }
     }
 

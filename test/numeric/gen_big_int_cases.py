@@ -134,6 +134,21 @@ def main():
     out.append(emit("kShiftRightCases", shift_lines_r))
     out.append("")
 
+    # ---- 科学计数法解析：字面量|展开后的十进制串 ----------------------------
+    # 尾数和指数都取一批边界值组合，期望值直接由 Python 的 int(mantissa) * 10**exp 给出。
+    # 指数恒非负（BigInt 不收负指数，那类归 big_int_test.cpp 里的手写用例管）
+    sci_lines = []
+    sci_mantissas = [0, 1, -1, 7, -7, 10, 100, 12345, -12345, 2**63, -(2**63) - 1, 10**30]
+    for m in sci_mantissas:
+        for e in (0, 1, 2, 9, 18, 19, 40, 100, 300):
+            for form in ("e", "E", "e+"):
+                sci_lines.append("%d%s%d|%d" % (m, form, e, m * 10**e))
+    for m in (1, -1, 123):  # 指数带前导零：BigInt 这层不管前导零，值该跟去掉零一样
+        for e_text, e in (("007", 7), ("0000000000000000000009", 9), ("00", 0)):
+            sci_lines.append("%de%s|%d" % (m, e_text, m * 10**e))
+    out.append(emit("kSciNotationCases", sci_lines))
+    out.append("")
+
     # ---- 幂：a|b|结果（b >= 0，控制结果位数，不然表会爆炸）--------------------
     pow_lines = []
     pow_bases = [

@@ -60,7 +60,14 @@ class BigInt {
     BigInt() = default;
     explicit BigInt(long long value);
 
-    // 十进制字符串构造，允许前导 '-'/'+'，其余字符不合法则抛 std::invalid_argument
+    // 十进制字符串构造，语法 `[+-]?digits([eE][+-]?digits)?`，其余字符不合法则抛
+    // std::invalid_argument。
+    // 科学计数法的指数必须非负——BigInt 是整数类型，`1e-9` 不是整数；`100e-1` 数值上虽然是整数
+    // 10，同样不收（只看写法，不看算出来的值）。指数本身装不进 int64_t 也抛。
+    // **指数不设上限**：`1e999999999` 会真去造一个十亿位的数，可能抛 std::bad_alloc、或者慢到
+    // 不可接受（同 pow）。SL 源码里的字面量另有 65536 的指数上限，但那条归 lexer 管：它只约束
+    // `e` 记法、不约束手写的等长字面量，是源码形态的政策，而这里拿到的都是字符串，看不出也不该
+    // 关心它来自哪种写法（"不允许前导零"同理只在 lexer，这里 "007" 照常给 7）
     [[nodiscard]] static BigInt from_decimal_string(const std::string &s);
 
     // 转十进制字符串，负数带前导 '-'，恒无多余前导 0（0 输出 "0"）

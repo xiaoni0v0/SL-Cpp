@@ -295,6 +295,8 @@ std::pair<BigInt, BigInt> BigInt::divmod_floor_big(const BigInt &divisor) const 
 BigInt::BigInt(const long long value) : is_small_{true}, small_{value} {}
 
 BigInt BigInt::from_decimal_string(const std::string &s) {
+    const auto is_digit{[](const char c) { return c >= '0' && c <= '9'; }};
+
     if (s.empty()) throw std::invalid_argument("BigInt::from_decimal_string: empty string");
 
     size_t i{0};
@@ -303,16 +305,41 @@ BigInt BigInt::from_decimal_string(const std::string &s) {
         neg = s[0] == '-';
         i = 1;
     }
-    if (i >= s.size()) throw std::invalid_argument("BigInt::from_decimal_string: no digits");
+
+    const size_t digits_begin{i};
+    while (i < s.size() && is_digit(s[i])) ++i;
+    const size_t digits_end{i};
+    if (digits_begin == digits_end)
+        throw std::invalid_argument("BigInt::from_decimal_string: no digits");
+
+    // 科学计数法后缀。指数只能非负：BigInt 是整数类型，`1e-9` 不是整数；`100e-1` 数值上虽是
+    // 整数 10，同样不收——合不合法只看写法，不看算出来的值（同 SL.md 2.1.4 对字面量的规定）
+    int64_t exponent{0};
+    if (i < s.size() && (s[i] == 'e' || s[i] == 'E')) {
+        ++i;
+        if (i < s.size() && s[i] == '-')
+            throw std::invalid_argument("BigInt::from_decimal_string: negative exponent");
+        if (i < s.size() && s[i] == '+') ++i;
+
+        const size_t exp_begin{i};
+        while (i < s.size() && is_digit(s[i])) ++i;
+        if (exp_begin == i)
+            throw std::invalid_argument("BigInt::from_decimal_string: no exponent digits");
+        // 先跳过前导 0，再按剩下的位数挡掉大到装不进 int64_t 的（19 位就可能溢出）。
+        // 挡的是"指数本身表示不了"，不是"指数太大算不动"——后者不设限，见头文件
+        size_t exp_digits{exp_begin};
+        while (exp_digits + 1 < i && s[exp_digits] == '0') ++exp_digits;
+        if (i - exp_digits > 18)
+            throw std::invalid_argument("BigInt::from_decimal_string: exponent out of range");
+        for (size_t k{exp_digits}; k < i; ++k) exponent = exponent * 10 + (s[k] - '0');
+    }
+    if (i != s.size())
+        throw std::invalid_argument("BigInt::from_decimal_string: invalid character");
 
     std::vector<uint32_t> limbs;
-    for (; i < s.size(); ++i) {
-        const char c{s[i]};
-        if (c < '0' || c > '9')
-            throw std::invalid_argument("BigInt::from_decimal_string: invalid character");
-
+    for (size_t k{digits_begin}; k < digits_end; ++k) {
         // limbs = limbs * 10 + digit
-        uint64_t carry{static_cast<uint64_t>(c - '0')};
+        uint64_t carry{static_cast<uint64_t>(s[k] - '0')};
         for (auto &limb : limbs) {
             const uint64_t cur{static_cast<uint64_t>(limb) * 10 + carry};
             limb = static_cast<uint32_t>(cur);
@@ -320,7 +347,11 @@ BigInt BigInt::from_decimal_string(const std::string &s) {
         }
         if (carry) limbs.push_back(static_cast<uint32_t>(carry));
     }
-    return shrink(from_magnitude(std::move(limbs), neg));
+    BigInt mantissa{shrink(from_magnitude(std::move(limbs), neg))};
+    if (exponent == 0) return mantissa;
+    // 乘 10^exponent，而不是先把零拼进数字串再解析：上面那个逐位 *10 的循环是 O(位数²)，
+    // 同量级下比 pow 慢一个数量级（10^65536：138ms vs 11ms）
+    return mantissa * BigInt(10).pow(BigInt(exponent));
 }
 
 std::string BigInt::to_decimal_string() const {
