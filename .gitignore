@@ -1,4 +1,5 @@
 .idea/
+__pycache__/
 test/doc/*.md
 test/doc/*.html
 

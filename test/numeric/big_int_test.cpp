@@ -157,6 +157,18 @@ TEST_SUITE("BigInt——构造与十进制字符串往返") {
         CHECK(d("25e40") == d("25") * d("10").pow(d("40")));
     }
 
+    TEST_CASE(
+        "科学计数法：尾数为 0 时必须 O(1) 短路，不能真的去构造 10^指数"
+        "（指数不设上限，没这条短路的话 0e1000000 白算三秒多，再大一档就是分钟级/爆内存）"
+    ) {
+        CHECK(d("0e1000000").is_zero());
+        CHECK(d("0e999999999").to_decimal_string() == "0"); // 十亿级指数，没短路会直接卡死
+        CHECK(d("-0e999999999").to_decimal_string() == "0");
+        CHECK(d("00e999999999").to_decimal_string() == "0");
+        // 尾数非零时照旧真去算，短路不能误伤
+        CHECK(d("1e100") == d("10").pow(d("100")));
+    }
+
     TEST_CASE("科学计数法：指数为负一律不合法（BigInt 是整数类型）") {
         CHECK_THROWS_AS((void) BigInt::from_decimal_string("1e-9"), std::invalid_argument);
         // 数值上恰好是整数 10，同样不收——合不合法只看写法，不看算出来的值
@@ -336,7 +348,9 @@ TEST_SUITE("BigInt——to_double") {
         check_matches_strtod(-two_pow_127);
     }
 
-    TEST_CASE("大范围扫描 10^k（k = 15..300）跟 std::strtod 对拍，覆盖更多可能踩中舍入边界的量级") {
+    TEST_CASE(
+        "大范围扫描 10^k（k 从 15 到 295，步长 7）跟 std::strtod 对拍，覆盖更多舍入边界量级"
+    ) {
         for (int k{15}; k <= 300; k += 7) {
             const std::string s{"1" + std::string(static_cast<size_t>(k), '0')};
             const BigInt x{d(s)};
@@ -1333,6 +1347,16 @@ TEST_SUITE("BigInt——跟 Python int 的交叉验证") {
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 2);
             CHECK(d(f[0]).bit_length() == static_cast<size_t>(std::stoull(f[1])));
+        }
+    }
+
+    TEST_CASE("num_decimal_digits（期望值是 Python 的 len(str(abs(a)))）") {
+        for (const char *const raw : kDecimalDigitsCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 2);
+            CHECK(d(f[0]).num_decimal_digits() == static_cast<size_t>(std::stoull(f[1])));
         }
     }
 

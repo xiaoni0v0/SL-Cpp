@@ -206,6 +206,11 @@ def main():
     out.append(emit("kBitLengthCases", bl_lines))
     out.append("")
 
+    # ---- num_decimal_digits：a|十进制位数（负号不算，0 算 1 位）----------------
+    dd_lines = ["%d|%d" % (a, len(str(abs(a)))) for a in pool]
+    out.append(emit("kDecimalDigitsCases", dd_lines))
+    out.append("")
+
     # ---- to_double：a|float(a) 的精确十六进制表示 -----------------------------
     dbl_lines = ["%d|%s" % (a, to_double_hex(a)) for a in pool]
     out.append(emit("kToDoubleCases", dbl_lines))

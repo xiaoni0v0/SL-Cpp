@@ -477,6 +477,45 @@ def main():
     out.append(emit("kRoundCases", round_lines))
     out.append("")
 
+    # ---- 一元 - / abs：a|op|prec|rounding|结果|flags -----------------------
+    # 上面那张 kRoundCases 走的是 plus，minus/abs 各有自己的零符号规则（ROUND_FLOOR 下 -0 才
+    # 留得住负号），单独铺一张；值池在 round_pool 基础上补带标度的零和贴着 Emax/Emin 的值
+    unary_lines = []
+    unary_pool = round_pool + [
+        "0.00",
+        "-0.00",
+        "0E+5",
+        "-0E+5",
+        "0E-5",
+        "-0E-999999",
+        "1E+999999",
+        "-1E+999999",
+        "1E-999999",
+        "1.50",
+        "-1.50",
+    ]
+    for a_s in unary_pool:
+        for op in ("minus", "abs"):
+            for rname, rmode in ROUNDINGS:
+                for prec in (1, 2, 3, 7):
+                    got = agreed(
+                        "unary",
+                        prec,
+                        rmode,
+                        999999,
+                        -999999,
+                        lambda c, m, a=a_s, o=op: {"minus": c.minus, "abs": c.abs}[o](
+                            m.Decimal(a)
+                        ),
+                    )
+                    if got is None:
+                        continue
+                    unary_lines.append(
+                        "%s|%s|%d|%s|%s|%s" % (a_s, op, prec, rname, got[0], got[1])
+                    )
+    out.append(emit("kUnaryCases", unary_lines))
+    out.append("")
+
     # ---- 指数边界：a|b|op|prec|rounding|emax|emin|结果|flags ---------------
     # 前半段是"指数域比精度窄"的各种组合（Emin 取到 0，那是次正规判定最容易出事的地方）；
     # 后半段专挑刚好越界的值 × 八种舍入，为的是把 raise_overflow 里"给 ±Infinity 还是给

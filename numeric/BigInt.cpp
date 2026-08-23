@@ -234,7 +234,9 @@ BigInt BigInt::from_decimal_string(const std::string &s) {
         if (carry) limbs.push_back(static_cast<uint32_t>(carry));
     }
     const BigInt mantissa{shrink(from_magnitude(std::move(limbs), neg))};
-    if (exponent == 0) return mantissa;
+    // 尾数为 0 时结果恒是 0，别去算 10^exponent：那一步的代价只跟指数走，"0e1000000" 会白算
+    // 三秒多，而指数不设上限（见头文件），再大一档就是分钟级
+    if (exponent == 0 || mantissa.is_zero()) return mantissa;
     // 乘 10^exponent，而不是先把零拼进数字串再解析：上面那个逐位 *10 的循环是 O(位数²)，
     // 同量级下比 pow 慢一个数量级（10^65536：138ms vs 11ms）
     return mantissa.mul(BigInt(10).pow(BigInt(exponent)));

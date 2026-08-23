@@ -1152,6 +1152,8 @@ std::optional<BigDec> BigDec::power_exact(const BigDec &other, const int64_t p) 
             assert(!diff.is_negative()); // 剥掉末尾零只会让指数变大，不会小于理想指数
             zeros = diff > BigInt(p - 1) ? p - 1 : dec_math::to_int64(diff).value();
         }
+        // 本函数里三处 to_int64 都是 int64_t 指数域的兜底：exp_ 有 kMaxExponent 卡着、|y| 又被
+        // 外层的溢出/下溢粗筛卡着，两者之积到不了 2^62，所以这三条 return 实际走不到，是防御性的
         const std::optional<int64_t> result_exp{dec_math::to_int64(exponent - BigInt(zeros))};
         if (!result_exp) return std::nullopt;
         return make_finite(false, pow10(zeros), *result_exp);

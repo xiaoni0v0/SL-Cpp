@@ -87,11 +87,14 @@
 绑定**，见 [notes/no-section-numbers.md](notes/no-section-numbers.md)。新增测试文件必须手动加进
 `CMakeLists.txt` 对应的 `add_executable(...)` 文件列表（不是 glob，漏加不报错、只是静默不参与编译）。
 
-`test/numeric/big_dec_cases.inc` 是**生成产物**：`gen_big_dec_cases.py` 用 CPython 自带的 decimal
-算出期望值，`big_dec_test.cpp` 逐条比对结果和触发的信号。改 `BigDec` 的语义时要连带重新生成
-（脚本开头写了用法），别手改那个 `.inc`。脚本带一个倍数参数，临时跑几十倍规模的差分测试很方便，
-提交进仓库的那份用默认倍数。表里除了陷阱全关的路径，还有 `kTrapped*` 四张陷阱开启的表（抛不抛、
-抛哪个条件、抛出时 flags 到哪一步），值池刻意塞了带非零指数的零；这些表的合并规则见脚本头注释。
+`test/numeric/big_dec_cases.inc` 和 `big_int_cases.inc` 都是**生成产物**，分别由
+`gen_big_dec_cases.py`（期望值来自 CPython 自带的 decimal）和 `gen_big_int_cases.py`（期望值来自
+Python 内置的 int）产出，`big_dec_test.cpp`/`big_int_test.cpp` 逐条比对结果和触发的信号。改
+`BigDec`/`BigInt` 的语义时要连带重新生成（脚本开头写了用法），别手改那两个 `.inc`；生成器的种子
+是固定的，同一个 CPython 版本下重新生成应当跟仓库里的逐字节一致，这一点可以当回归检查用。两个
+脚本都带一个倍数参数，临时跑几十倍规模的差分测试很方便，提交进仓库的那份用默认倍数。BigDec 那张
+表里除了陷阱全关的路径，还有 `kTrapped*` 四张陷阱开启的表（抛不抛、抛哪个条件、抛出时 flags 到
+哪一步），值池刻意塞了带非零指数的零；这些表的合并规则见脚本头注释。
 
 **每组用例都拿 CPython 的两套实现（libmpdec 和 `_pydecimal`）各算一遍，不一致就整组跳过**——它们
 自己在 `**` 和 `exp` 上就有已知分歧（见 [context.md](context.md)）。这条规则是防呆用的：分歧点随
@@ -99,8 +102,9 @@
 
 提交进仓库的这份表是**按跑得动来配的**：`SL_Cpp_Numeric_Tests` 里超越函数和 `**` 那两个用例合起来
 就占了十几秒（BigDec 底下的 BigInt 是朴素算法，一次 `exp`/`ln` 要做几十次大数乘除），整个 ctest
-从 5 秒涨到 15 秒左右。要更大覆盖别往表里堆，用倍数参数临时生成一份跑完再换回来——40 倍规模
-（约 83 万个断言）跑过，全过。
+现在约 28 秒。要更大覆盖别往表里堆，用倍数参数临时生成一份跑完再换回来——40 倍规模
+（约 83 万个断言）跑过，全过。单条最贵的手写用例是 `log10_digits` 那个（约 1.6 秒，见
+[context.md](context.md) 里"覆盖率驱动补的窄路径"一节），嫌慢时它是第一个可以砍的。
 
 四个测试可执行目标：`SL_Cpp_Numeric_Tests`、`SL_Cpp_Lexer_Tests`、`SL_Cpp_Parser_Tests`、
 `SL_Cpp_Analyzer_Tests`（后者同时覆盖 `semantic_checker/` 和 `expr_folder/` 两个子系统）。怎么构建/

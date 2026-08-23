@@ -7,6 +7,7 @@
 
 #include "../../numeric/BigInt.h"
 #include "../../numeric/DecContext.h"
+#include "../../numeric/dec_math.h"
 
 #include <doctest/doctest.h>
 
@@ -1232,6 +1233,77 @@ TEST_SUITE("BigDec——幂运算与超越函数") {
         CHECK(flags_to_string(c2.flags()) == "Inexact,Overflow,Rounded");
     }
 
+    TEST_CASE("指数不是整数、结果精确、又开着陷阱：补报信号的顺序决定抛哪个、抛时 flags 到哪一步") {
+        // power() 尾部那段是先在一个陷阱全关的副本上 fix，再按 Overflow → Underflow → Subnormal
+        // → Inexact → Rounded → Clamped 的顺序补报到真上下文。顺序错了值不变，但"抛出来的是哪个
+        // 条件""抛出时 flags 走到哪一步"就全变了。
+        //
+        // 交叉验证表钉不住这一块：下面 24 组里有 9 组 libmpdec 跟 _pydecimal 不一致（前者把 fix
+        // 期间的 flags 全带上，后者只带补报到抛出点为止的），生成器遇到分歧整组跳过。我们跟
+        // _pydecimal，同 .ai/context.md 记的那两处已知分歧一个立场
+        struct Outcome {
+            DecCondition trap;
+            const char *result; // nullptr 表示会抛，抛出的条件就是 trap 自己
+            const char *flags;  // 无论抛没抛，事后 flags 都得是这个
+        };
+        const auto check{[](const char *base,
+                            const char *exponent,
+                            const int32_t prec,
+                            const int32_t emax,
+                            const int32_t emin,
+                            const std::vector<Outcome> &outcomes) {
+            for (const Outcome &o : outcomes) {
+                CAPTURE(base);
+                CAPTURE(emax);
+                CAPTURE(dec_condition_name(o.trap));
+                DecContext ctx{quiet_context(prec, DecRounding::HalfEven, emax, emin)};
+                ctx.traps().add(o.trap);
+                try {
+                    const BigDec got{d(base).pow(d(exponent), ctx)};
+                    CHECK(o.result != nullptr);
+                    if (o.result != nullptr) CHECK(got.to_string() == o.result);
+                } catch (const DecTrapped &e) {
+                    CHECK(o.result == nullptr);
+                    CHECK(
+                        std::string{dec_condition_name(e.condition())} == dec_condition_name(o.trap)
+                    );
+                }
+                CHECK(flags_to_string(ctx.flags()) == o.flags);
+            }
+        }};
+
+        // 精确结果越过 Emax：fix 报 Overflow + Inexact + Rounded
+        const std::vector<Outcome> overflowed{
+            {DecCondition::Clamped, "Infinity", "Inexact,Overflow,Rounded"},
+            {DecCondition::DivisionByZero, "Infinity", "Inexact,Overflow,Rounded"},
+            {DecCondition::Inexact, nullptr, "Inexact,Overflow"},
+            {DecCondition::InvalidOperation, "Infinity", "Inexact,Overflow,Rounded"},
+            {DecCondition::Overflow, nullptr, "Overflow"},
+            {DecCondition::Rounded, nullptr, "Inexact,Overflow,Rounded"},
+            {DecCondition::Subnormal, "Infinity", "Inexact,Overflow,Rounded"},
+            {DecCondition::Underflow, "Infinity", "Inexact,Overflow,Rounded"},
+        };
+        // 精确结果 1E+15 越过 Emax = 4
+        check("1E+30", "0.5", 5, 4, -4, overflowed);
+        // 同上，但 Emin 远在天边：补报只看 fix 报了什么，跟 Emin 本身无关
+        check("1E+400", "0.5", 5, 100, -999999999, overflowed);
+
+        // 精确结果 1E-50 落进次正规区并一路下溢到零，五个信号一起报
+        const std::vector<Outcome> underflowed{
+            {DecCondition::Clamped, nullptr, "Clamped,Inexact,Rounded,Subnormal,Underflow"},
+            {DecCondition::DivisionByZero, "0E-13", "Clamped,Inexact,Rounded,Subnormal,Underflow"},
+            {DecCondition::Inexact, nullptr, "Inexact,Subnormal,Underflow"},
+            {DecCondition::InvalidOperation,
+             "0E-13",
+             "Clamped,Inexact,Rounded,Subnormal,Underflow"},
+            {DecCondition::Overflow, "0E-13", "Clamped,Inexact,Rounded,Subnormal,Underflow"},
+            {DecCondition::Rounded, nullptr, "Inexact,Rounded,Subnormal,Underflow"},
+            {DecCondition::Subnormal, nullptr, "Subnormal,Underflow"},
+            {DecCondition::Underflow, nullptr, "Underflow"},
+        };
+        check("1E-100", "0.5", 5, 9, -9, underflowed);
+    }
+
     TEST_CASE("精确结果 + 定向舍入：我们跟 _pydecimal 一致，跟 libmpdec 差 1 ulp") {
         // 规范对非整数指数的 ** 只要求"按 exp(y*ln(x)) 算"，不保证正确舍入，CPython 自己的两套
         // 实现在这里就不一致（官方扩展测试把这一类列为已知差异）。我们选真值精确就原样给出的
@@ -1546,6 +1618,87 @@ TEST_SUITE("BigDec——生成的用例表铺不到的窄路径") {
         CHECK(ctx.flags().empty());
     }
 
+    TEST_CASE("** 的近似值不够定夺舍入方向时要再多算三位（dpower 那圈重试循环）") {
+        // 判据是"末尾恰好是 5000…0"。这几组是拿 _pydecimal 的 _dpower 扫出来的：首轮 prec+3 位
+        // 算出来正好卡在两个可表示值中间，非得再转一圈不可。随机生成的表撞不到这种巧合，
+        // 而少了这圈重试，下面每一条的末位都会错
+        struct Case {
+            const char *base;
+            const char *exponent;
+            int32_t prec;
+            const char *expected;
+        };
+        constexpr Case cases[]{
+            {"3", "-2.5", 3, "0.0642"},
+            {"13", "1.3", 5, "28.062"},
+            {"2", "0.25", 9, "1.18920712"},
+            {"5", "-0.5", 10, "0.4472135955"},
+            {"0.2", "0.5", 9, "0.447213595"},
+        };
+        for (const Case &c : cases) {
+            CAPTURE(c.base);
+            CAPTURE(c.exponent);
+            DecContext ctx{quiet_context(c.prec)};
+            CHECK(d(c.base).pow(d(c.exponent), ctx).to_string() == c.expected);
+            CHECK(flags_to_string(ctx.flags()) == "Inexact,Rounded");
+        }
+    }
+
+    TEST_CASE("power_exact 负指数分支的三道上限：e 超过 emax、结果系数位数超过 p") {
+        // 这三条都得让 power_exact 中途放弃、退回 exp(y*log(x))。生成的表里 prec 都太大，
+        // 撞不到 emax 那两道闸；位数那道闸更窄，要 p 大到 5^emax < 10^p 这个估计开始变松
+        DecContext ctx{quiet_context(3)};
+        CHECK(d("1024").pow(d("-3"), ctx).to_string() == "9.31E-10"); // 2 的幂：e*|y| > emax
+        CHECK(flags_to_string(ctx.flags()) == "Inexact,Rounded");
+        DecContext c2{quiet_context(1)};
+        CHECK(d("125").pow(d("-3"), c2).to_string() == "5E-7"); // 5 的幂：同上
+        CHECK(flags_to_string(c2.flags()) == "Inexact,Rounded");
+        // 5^-293 精确值是 2^293×10^-293，2^293 有 89 位，比 p = prec + 1 = 88 多一位
+        DecContext c3{quiet_context(87)};
+        CHECK(
+            d("5").pow(d("-293"), c3).to_string() ==
+            "1.59143435651131725489722319406982668832145968255151269580948472605811039044010680"
+            "170578E-205"
+        );
+        CHECK(flags_to_string(c3.flags()) == "Inexact,Rounded");
+    }
+
+    TEST_CASE("power_exact 的理想指数补零会被 p - 位数 夹住") {
+        // 底数带标度、指数是正整数时结果要往理想指数靠，但补的零不能让系数超过 p 位。
+        // 2.000 ** 3 的理想指数是 -9，补满要 9 个零，p - 1 = 3 把它夹到 3 个
+        DecContext ctx{quiet_context(3)};
+        CHECK(d("2.000").pow(d("3"), ctx).to_string() == "8.00");
+        CHECK(flags_to_string(ctx.flags()) == "Rounded");
+    }
+
+    TEST_CASE("log10_digits 的缓存扩容：既要剥掉不可靠的尾零，也要在算不准时再多算三位") {
+        // 这是 numeric/ 里唯一一处直接戳 dec_math 的用例：log(10) 这个常数被 ln/log10/exp/**
+        // 全体依赖，而"多算几位 → 末几位全 0 说明还没定下来 → 再多算三位 → 剥掉尾零连同紧挨着
+        // 的那一位"这段簿记，只有特定的 p 才走得到，从 BigDec 那一层没法定向命中。
+        //
+        // p 是拿 log(10) 的真实数字扫出来的：p = 176 走剥尾零那一支，p = 409 是 2500 以内唯一
+        // 需要重试的。两者都远高于其余用例摸得到的量级（prec 最大 100，折算过去约 125），
+        // 所以不管 doctest 用什么顺序跑，这两次调用都会真的触发重算。
+        // 代价是 p = 409 那次约 1.6 秒（BigInt 是朴素算法）——嫌慢可以砍掉它，剥尾零那条很便宜
+        constexpr const char *const kLog10Digits{
+            // log(10) 的前 410 位有效数字
+            "23025850929940456840179914546843642076011014886287729760333279009"
+            "67572609677352480235997205089598298341967784042286248633409525465"
+            "08280675666628736909878168948290720832555468084379989482623319852"
+            "83935053089653777326288461633662222876982198867465436674744042432"
+            "74365155048934314939391479619404400222105101714174800368808401264"
+            "70806855677432162283552201148046637156591213734507478569476834636"
+            "16792101806445070648"
+        };
+        const std::string expected{kLog10Digits};
+        REQUIRE(expected.size() == 410);
+        CHECK(dec_math::log10_digits(176).to_decimal_string() == expected.substr(0, 177));
+        CHECK(dec_math::log10_digits(409).to_decimal_string() == expected);
+        // 缓存只增不减：回头要小一点的 p，切出来的还得对
+        CHECK(dec_math::log10_digits(0).to_decimal_string() == "2");
+        CHECK(dec_math::log10_digits(46).to_decimal_string() == expected.substr(0, 47));
+    }
+
     TEST_CASE("每个条件都有名字，包括 BigDec 自己不会产生的 InvalidContext") {
         // SL 那边要靠这个名字把 DecTrapped 映射成对应的异常类，不能有漏网的
         constexpr DecCondition all[]{
@@ -1670,6 +1823,20 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
             DecContext ctx{quiet_context(std::stoi(f[1]), rounding_from_name(f[2]))};
             CHECK(d(f[0]).plus(ctx).to_string() == f[3]);
             CHECK(flags_to_string(ctx.flags()) == f[4]);
+        }
+    }
+
+    TEST_CASE("一元 - 和 abs × 八种舍入 × prec 1/2/3/7") {
+        for (const char *const raw : kUnaryCases) {
+            const std::string line{raw};
+            CAPTURE(line);
+            const std::vector<std::string> f{split_fields(line)};
+            REQUIRE(f.size() == 6);
+            DecContext ctx{quiet_context(std::stoi(f[2]), rounding_from_name(f[3]))};
+            const BigDec value{d(f[0])};
+            const BigDec got{f[1] == "minus" ? value.minus(ctx) : value.abs(ctx)};
+            CHECK(got.to_string() == f[4]);
+            CHECK(flags_to_string(ctx.flags()) == f[5]);
         }
     }
 

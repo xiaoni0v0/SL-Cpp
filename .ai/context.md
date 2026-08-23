@@ -808,6 +808,63 @@ CPython 自带的两套 decimal 实现（C 的 libmpdec、纯 Python 的 `_pydec
 跳 8 条）。做成全表统一过滤而不是只挡这两处，是因为分歧点随参数漂移——尤其是 `Emin` 和舍入方式——
 哪天有人往池子里加一档参数，不该因此得到一张 BigDec 永远过不了的表。我们这一支的行为由手写用例钉住。
 
+### 覆盖率驱动补的窄路径，以及哪些分支是刻意不可达的
+
+拿 clang 的 source-based coverage（`-fprofile-instr-generate -fcoverage-mapping` 单独编一份
+`SL_Cpp_Numeric_Tests`，`llvm-cov show -show-branches=count`）量过一次 `numeric/`，据此补齐了几条
+生成的用例表撞不到的路径。现在 `BigDec.cpp`/`BigInt.cpp`/`dec_math.cpp` 三个文件**行覆盖都是
+100%**，剩下的只有分支级的未覆盖，而且**下面这些是刻意不可达的防御性代码，别再花时间去凑输入**：
+
+- `power_exact` 里三处 `to_int64(...)` 失败的 `return nullopt`：`exp_` 有 `kMaxExponent` 卡着、
+  `|y|` 又被外层 `pow()` 的溢出/下溢粗筛卡着，两者之积到不了 2^62。连带 `dec_math::to_int64`
+  也就从来不会返回 `nullopt`（它只有这三个调用点会检查返回值，`dexp` 那处是直接 `.value()`）。
+- `is_even_integer()` 的 `coeff_.is_zero()`：`pow()` 在更早的地方就把"指数为 0"处理掉了。
+- `power_exact` 里 `while (!exponent.is_zero() && ...)` 的 `!exponent.is_zero()`：`xc == 1` 这一支
+  要求底数数值不等于 1，于是 `xe != 0`。（Python 原版没这个判断，真喂 0 进去会死循环。）
+- `dec_math::dpower` 里 `shift >= 0` 那一支：旁边的 `assert(shift < 0)` 已经写明恒等式，留着只是
+  跟 Python 的写法保持一致。`dlog` 里 `p + extra < 0` 同理，从 `ln()`/`log10()` 那边推不出来。
+- `BigInt` 里 `add_magnitude`/`mul_magnitude` 结果不会有多余高位 0、`shift_right_magnitude` 收不到
+  `bits == 0`、`from_twos_complement` 收不到空 limbs、大路径的 `minus()` 收不到空 limbs——都是
+  调用方的不变量保证的。
+
+**真的补进去的**（都在 `big_dec_test.cpp` 的"生成的用例表铺不到的窄路径"套件里）：`**` 那圈"不够
+定夺就多算三位"的重试循环（此前一次都没跑过，而 `exp`/`ln` 的同款循环是走到的）；`power_exact`
+负指数分支的三道上限（2 的幂 / 5 的幂各自的 `e > emax`、以及结果系数位数超过 `p`）；理想指数补零被
+`p - 位数` 夹住那一档；`log10_digits` 缓存扩容时的"再多算三位"和"剥掉尾零连同紧挨着的那一位"。
+
+后面这条最贵（约 1.6 秒）也最讲究：触发它的 `p` 是拿 log(10) 的真实数字扫出来的——2500 以内只有
+`p = 409` 需要重试，`p = 176` 走剥尾零。**必须挑远高于其余用例摸得到的量级的 `p`**（其余最多到
+125 左右），因为那份缓存是进程级静态的、只增不减，`p` 选小了就会变成"看 doctest 先跑哪个用例"的
+薛定谔覆盖。这也是全项目唯一一处测试直接调 `dec_math`：从 BigDec 那层没法定向命中某个 `p`，而绕
+`log10()` 走还要多花一秒。
+
+另外，**`**` 的"精确结果 + 非整数指数"补报信号那段跟陷阱的交互，只能靠手写用例**：24 组里有 9 组
+libmpdec 跟 `_pydecimal` 不一致（前者把 `fix` 期间的 flags 全带上，后者只带补报到抛出点为止的），
+生成器遇到分歧整组跳过，随机撞到也出不了题。跟上一节那两处一样，我们站 `_pydecimal`。
+
+### `BigInt::from_decimal_string`：尾数为 0 时不去算 `10^指数`
+
+`from_decimal_string` 的指数刻意不设上限（见 `BigInt.h`，65536 那条限制归 lexer 管），代价是
+`"0e1000000"` 曾经要白算三秒多才返回 `0`，而这一步的代价只跟指数走、是 O(指数²)，再大一档就是
+分钟级/爆内存。加了一条 `mantissa.is_zero()` 短路。**不要把它理解成"给指数加了上限"**——尾数非零
+时照旧真去算，`2 ** 10**9` 那种"炸就炸呗"的决定没有变。
+
+### `0 ** 0`：int 给 1，decimal 抛 InvalidOperation，两边故意不统一
+
+SL.md 原先没规定，是真实的规范空白，已补进 3.4.2。用户拍板：`BigInt::pow` 保持 `0 ** 0 == 1`
+（同大多数语言的整数幂约定，也同 Python 的 `int`），decimal 那边照 IBM 规范触发
+`decimal.InvalidOperation`（默认陷阱开着，所以默认设置下是抛异常）。于是 `0 ** 0` 是 `1` 而
+`0.0 ** 0` 抛异常——这个不对称是知情选择，不是漏掉：两条路各自跟着自己那套既有规范走，比为了
+"看起来一致"去改其中一边更站得住。
+
+同时把 `Context` 数值字段的取值范围写进了 SL.md 4.2.6.1（`prec` 最小 1 最大 999999999、`Emax`
+最小 0 最大 999999999、`Emin` 最小 -999999999 最大 0，边界都算合法，越界抛
+`decimal.InvalidContext`）。**这段是用文字写的，别改回 `1..999999999` 那种记法**——SL 自己的
+`a..b` 左闭右开（同 Python 的 `range`），拿它写闭区间会把上界排除在外，意思正好说反。这个上界就是
+`DecContext::kMaxPrec`/`kMaxExp`，取这个量级的理由见 `DecContext.h`——为的是 `etiny()`/`etop()`
+以及 `exp ± prec` 这类中间算式在 int64_t 里怎么算都溢不出来。CPython 的 C 实现放到 10^18，我们
+没跟：那要么把指数换成更宽的类型，要么在每个算术步骤里操心溢出，两样都不划算。
+
 ### 整数/decimal 字面量禁止前导零
 
 SL.md 一直没规定 `007`/`00` 合不合法，是真实的规范空白，已补上：不合法（单独一个 `0` 除外；decimal
@@ -881,12 +938,10 @@ Code），但"建立"这个操作每次执行都必须构造全新的 Function �
   自己还没定，见下）。SL.md 里 decimal 参与的运算符本身已经全了，见上面 `numeric/BigDec` 几节。
 - `sqrt`/`exp`/`ln`/`log10` 在 `BigDec` 上有了，但 **SL.md 还没规定它们怎么暴露给用户**——是挂成
   decimal 的方法，还是走一个 `math` 模块？`**` 是运算符，不受这个问题影响，先实现了。
-- **`0 ** 0` 在 int 和 decimal 上不一样**：int 走 `BigInt::pow` 得 `1`，decimal 走 `BigDec::pow` 报
-  `InvalidOperation`。这是照 Python 抄的（`0**0 == 1` vs `Decimal(0)**Decimal(0)` 报错），但 SL.md
-  一个字都没写，等于把一处类型相关的行为差异留在了规范空白里。要么补进 SL.md，要么统一。
 - `BigInt::pow` 没有上限，但没上限的具体后果是"挂死"而不是头文件写的"可能抛 `std::bad_alloc`"：
   指数大到一定程度，先被朴素 O(n²) 乘法拖到实际算不完（内存反而通常够，不会真的 OOM）。
-  `operator<<` 的超大位移是干净的 `bad_alloc`，`>>` 有 O(1) 短路，两者都不受影响。这是 VM 层的资源
+  `operator<<` 的超大位移是干净的 `bad_alloc`，`>>` 有 O(1) 短路，`from_decimal_string` 的零尾数也
+  短路了（见上面对应的决策一节），这几个都不受影响。这是 VM 层的资源
   guard 议题（要不要在解释器调用 `pow` 之前就卡一个指数上限），不是 `BigInt` 自己该管的，先记在这。
 - `StaticEvaler` 里那整套 float 折叠（`node_to_double`/`std::pow`/`std::fmod`/`make_float`）还没清
   掉。按"结果为 decimal 的常量折叠一律禁掉"那一节的结论，这些不是改改名的事，要整段删；`decimal`

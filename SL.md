@@ -562,6 +562,9 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 - `x ** y` 返回 `x` 的 `y` 次幂；
   `x`、`y` 都是 int 时，结果为整数则仍是 int，否则（如 `2 ** -1`）是 decimal；
   结果不为实数（如负数开偶次方根）抛出 `MathError`；
+  `0 ** 0` 的结果取决于操作数类型，两边不统一：
+  - `x`、`y` 都是 int 或 bool 时是 `1`；
+  - 有一方是 decimal 时按 IBM 规范触发 `decimal.InvalidOperation`（默认上下文里它是陷阱，所以默认设置下就是抛异常）；
 - `+x`, `-x` 返回正 `x`，负 `x`。
   对于 int，`+x` 等于 `x`，`-x` 等于 `x` 的相反数；
   对于 decimal，二者都是运算，结果按当前上下文舍入（`+x` 不一定恒等于 `x`，见 4.2.6）；
@@ -1633,6 +1636,15 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 | `flags`    | `[]`                                           | 已发生过的信号集合，粘滞，只能手动清空     |
 | `Emax`     | `999999`                                       | 指数上限，超出触发 `Overflow`              |
 | `Emin`     | `-999999`                                      | 指数下限，低于触发 `Subnormal`/`Underflow` |
+
+数值字段的取值范围，边界值本身都算合法：
+
+- `prec` 最小 `1`、最大 `999999999`；
+- `Emax` 最小 `0`、最大 `999999999`；
+- `Emin` 最小 `-999999999`、最大 `0`。
+
+构造 `Context` 或给字段赋值时越界，抛 `decimal.InvalidContext`；
+这条是字段本身的合法性检查，跟算术过程中的信号无关，不受 `traps` 影响。
 
 `decimal.getcontext()`、`decimal.setcontext(ctx)` 这两个类方法读写全局上下文，所有运算符走的都是它。
 
