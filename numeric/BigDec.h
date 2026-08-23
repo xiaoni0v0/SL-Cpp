@@ -37,6 +37,43 @@ class BigDec {
     BigInt coeff_;   // 系数，恒非负；特殊值时恒为 0，不参与运算
     int64_t exp_{0}; // 十进制指数；特殊值时恒为 0，不参与运算
 
+    void check_invariant() const;
+
+    // 造一个有限数，不检查指数范围（运算的中间结果允许暂时越界，由 fix 收尾）。
+    // 调用方保证 coeff 非负
+    [[nodiscard]] static BigDec make_finite(bool sign, BigInt coeff, int64_t exp);
+
+    // 每个算术结果的最后一步（IBM 的 "fix"）：压到至多 prec 位有效数字、指数压进
+    // [Etiny, Emax]，并按规范规定的先后顺序触发
+    // Overflow/Underflow/Subnormal/Inexact/Rounded/Clamped
+    [[nodiscard]] BigDec fix(DecContext &ctx) const;
+
+    // 重新表示成指数恰为 exp 的形式，靠补零，因此恒精确、不触发信号。
+    // 调用方保证是有限数、且 exp <= 自己的指数
+    [[nodiscard]] BigDec pad_to_exponent(int64_t exp) const;
+
+    // ln()/log10() 的结果的调整后指数的下界，用来定第一轮该算到小数点后多少位。
+    // 调用方保证是有限的正数、且数值不等于 1
+    [[nodiscard]] int64_t ln_exp_bound() const;
+    [[nodiscard]] int64_t log10_exp_bound() const;
+
+    // 整数的精确值。调用方保证是有限的整数，且量级不大——指数很大的整数（1E+999999）会让
+    // 这里的 10^exp 炸开，pow() 的两个调用点都先把量级夹住了
+    [[nodiscard]] BigInt integer_value() const;
+    // 调用方保证是有限的整数
+    [[nodiscard]] bool is_even_integer() const;
+
+    // 试着精确算出 self ** other 并压进 p 位有效数字以内，办不到就返回 nullopt。
+    // 调用方保证两边都是有限数、self 为正且数值不等于 1、other 不为 0，而且外层已经用
+    // Emax/Etiny 做过溢出/下溢的粗筛（否则这里的 10^ye、xc^m 之类会炸开）
+    [[nodiscard]] std::optional<BigDec> power_exact(const BigDec &other, int64_t p) const;
+
+    // IBM 规范里那对向零截断的 divide-integer / remainder，是 //、% 的原料。返回 (商的绝对值,
+    // 余数)：余数是精确值、符号同被除数、指数取两个操作数里较小的那个。调用方保证两边都不是
+    // NaN、self 有限、rhs 非零。nullopt 表示商的位数超过 prec（对应 DivisionImpossible）
+    [[nodiscard]] std::optional<std::pair<BigInt, BigDec>>
+    trunc_divmod(const BigDec &rhs, int64_t prec) const;
+
   public:
     BigDec() = default; // +0，指数 0
 
@@ -153,42 +190,4 @@ class BigDec {
 
     [[nodiscard]] bool operator==(const BigDec &rhs) const;
     [[nodiscard]] std::partial_ordering operator<=>(const BigDec &rhs) const;
-
-  private:
-    void check_invariant() const;
-
-    // 造一个有限数，不检查指数范围（运算的中间结果允许暂时越界，由 fix 收尾）。
-    // 调用方保证 coeff 非负
-    [[nodiscard]] static BigDec make_finite(bool sign, BigInt coeff, int64_t exp);
-
-    // 每个算术结果的最后一步（IBM 的 "fix"）：压到至多 prec 位有效数字、指数压进
-    // [Etiny, Emax]，并按规范规定的先后顺序触发
-    // Overflow/Underflow/Subnormal/Inexact/Rounded/Clamped
-    [[nodiscard]] BigDec fix(DecContext &ctx) const;
-
-    // 重新表示成指数恰为 exp 的形式，靠补零，因此恒精确、不触发信号。
-    // 调用方保证是有限数、且 exp <= 自己的指数
-    [[nodiscard]] BigDec pad_to_exponent(int64_t exp) const;
-
-    // ln()/log10() 的结果的调整后指数的下界，用来定第一轮该算到小数点后多少位。
-    // 调用方保证是有限的正数、且数值不等于 1
-    [[nodiscard]] int64_t ln_exp_bound() const;
-    [[nodiscard]] int64_t log10_exp_bound() const;
-
-    // 整数的精确值。调用方保证是有限的整数，且量级不大——指数很大的整数（1E+999999）会让
-    // 这里的 10^exp 炸开，pow() 的两个调用点都先把量级夹住了
-    [[nodiscard]] BigInt integer_value() const;
-    // 调用方保证是有限的整数
-    [[nodiscard]] bool is_even_integer() const;
-
-    // 试着精确算出 self ** other 并压进 p 位有效数字以内，办不到就返回 nullopt。
-    // 调用方保证两边都是有限数、self 为正且数值不等于 1、other 不为 0，而且外层已经用
-    // Emax/Etiny 做过溢出/下溢的粗筛（否则这里的 10^ye、xc^m 之类会炸开）
-    [[nodiscard]] std::optional<BigDec> power_exact(const BigDec &other, int64_t p) const;
-
-    // IBM 规范里那对向零截断的 divide-integer / remainder，是 //、% 的原料。返回 (商的绝对值,
-    // 余数)：余数是精确值、符号同被除数、指数取两个操作数里较小的那个。调用方保证两边都不是
-    // NaN、self 有限、rhs 非零。nullopt 表示商的位数超过 prec（对应 DivisionImpossible）
-    [[nodiscard]] std::optional<std::pair<BigInt, BigDec>>
-    trunc_divmod(const BigDec &rhs, int64_t prec) const;
 };

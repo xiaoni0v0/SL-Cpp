@@ -14,6 +14,29 @@ class BigInt {
     std::vector<uint32_t> limbs_; // 小端，limbs_[0] 最低 32 位；大路径专用
     bool negative_{false};        // 大路径专用；值为 0 时恒 false（不存在负零）
 
+    // 去掉多余的最高位 0；若结果为空则把 negative_ 归位成 false。不负责收缩回小路径
+    void normalize();
+    // 用一段大小（可能带多余高位 0）+ 符号构造大路径值（内部 normalize）
+    [[nodiscard]] static BigInt from_magnitude(std::vector<uint32_t> limbs, bool negative);
+    // 转成大路径表示（已经是大路径则原样拷贝）
+    [[nodiscard]] BigInt promoted() const;
+    // 能装进 int64_t 就收缩回小路径，否则原样返回。所有慢路径算完的地方都要过这一步
+    [[nodiscard]] static BigInt shrink(BigInt big);
+    // Debug 断言：核实"能装进 int64_t 就必然是小路径"等内部不变量。
+    // 只在依赖它的入口调用，不放进 shrink() 内部（会互相递归）
+    void check_invariant() const;
+
+    // 无穷位补码视角下前 limb_count 个 limb（负数高位补 1）。调用方保证走大路径、
+    // limb_count > limbs_.size()（留一个安全 limb，否则全 1 的最高位会被误读成符号位）
+    [[nodiscard]] std::vector<uint32_t> to_twos_complement(size_t limb_count) const;
+    // 逆操作：补码 limb（最高位决定符号）转回符号-大小表示（大路径）
+    [[nodiscard]] static BigInt from_twos_complement(std::vector<uint32_t> limbs);
+    // bit_and/bit_or/bit_xor 的公共骨架：两边取补码、逐 limb 施加 op、再转回来
+    [[nodiscard]] BigInt bitwise_big(const BigInt &rhs, uint32_t (*op)(uint32_t, uint32_t)) const;
+
+    // 向负无穷取整的除法+取模。调用方保证 divisor 不为 0、两边都走大路径
+    [[nodiscard]] std::pair<BigInt, BigInt> divmod_floor_big(const BigInt &divisor) const;
+
   public:
     BigInt() = default;
     explicit BigInt(long long value);
@@ -103,28 +126,4 @@ class BigInt {
     [[nodiscard]] std::strong_ordering operator<=>(const BigInt &rhs) const {
         return compare_ordering(rhs);
     }
-
-  private:
-    // 去掉多余的最高位 0；若结果为空则把 negative_ 归位成 false。不负责收缩回小路径
-    void normalize();
-    // 用一段大小（可能带多余高位 0）+ 符号构造大路径值（内部 normalize）
-    [[nodiscard]] static BigInt from_magnitude(std::vector<uint32_t> limbs, bool negative);
-    // 转成大路径表示（已经是大路径则原样拷贝）
-    [[nodiscard]] BigInt promoted() const;
-    // 能装进 int64_t 就收缩回小路径，否则原样返回。所有慢路径算完的地方都要过这一步
-    [[nodiscard]] static BigInt shrink(BigInt big);
-    // Debug 断言：核实"能装进 int64_t 就必然是小路径"等内部不变量。
-    // 只在依赖它的入口调用，不放进 shrink() 内部（会互相递归）
-    void check_invariant() const;
-
-    // 无穷位补码视角下前 limb_count 个 limb（负数高位补 1）。调用方保证走大路径、
-    // limb_count > limbs_.size()（留一个安全 limb，否则全 1 的最高位会被误读成符号位）
-    [[nodiscard]] std::vector<uint32_t> to_twos_complement(size_t limb_count) const;
-    // 逆操作：补码 limb（最高位决定符号）转回符号-大小表示（大路径）
-    [[nodiscard]] static BigInt from_twos_complement(std::vector<uint32_t> limbs);
-    // bit_and/bit_or/bit_xor 的公共骨架：两边取补码、逐 limb 施加 op、再转回来
-    [[nodiscard]] BigInt bitwise_big(const BigInt &rhs, uint32_t (*op)(uint32_t, uint32_t)) const;
-
-    // 向负无穷取整的除法+取模。调用方保证 divisor 不为 0、两边都走大路径
-    [[nodiscard]] std::pair<BigInt, BigInt> divmod_floor_big(const BigInt &divisor) const;
 };
