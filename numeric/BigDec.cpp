@@ -87,23 +87,172 @@ std::pair<WorkRep, WorkRep> align_for_add(const BigDec &a, const BigDec &b, cons
     return {op1, op2};
 }
 
+// 把 coeff 截到只保留最高 keep 位，返回 (截断后的系数, 舍入判定)。判定的含义同 IBM 规范：
+// 1 = 向远离零进位，0 = 被截掉的部分全是 0，-1 = 被截掉的部分非 0 但不进位。
+// sign 只有 Ceiling/Floor 用得上。调用方保证 keep < coeff 的十进制位数
+std::pair<BigInt, int> split_and_decide(
+    const BigInt &coeff, const size_t keep, const bool sign, const DecRounding rounding
+) {
+    const size_t digits{coeff.num_decimal_digits()};
+    assert(keep < digits);
+
+    // dropped >= 1，因此 10^(dropped-1) 恒有意义
+    const int64_t dropped{static_cast<int64_t>(digits - keep)};
+    const BigInt unit{pow10(dropped - 1)};     // 被丢掉的那段里最高位的权重
+    const BigInt scale{unit * BigInt(10)};     // 10^dropped
+    const BigInt high{coeff.floor_div(scale)}; // 留下的部分
+    const BigInt low{coeff - high * scale};    // 丢掉的部分
+    const BigInt half{unit * BigInt(5)};       // "恰好一半"
+
+    const bool low_zero{low.is_zero()};
+    const bool at_least_half{low >= half}; // 被丢掉的最高位数字 >= 5
+    const bool exact_half{low == half};
+    // 留下的部分的末位：是不是偶数（HalfEven 用）、是不是 0 或 5（ZeroFiveUp 用）。
+    // keep 为 0 时 high 是 0、两个判断都成立，对应规范里"没有前一位可看"时的取值
+    const bool high_even{!high.is_odd()};
+    const bool high_is_0_or_5{high.mod(BigInt(5)).is_zero()};
+
+    const int down{low_zero ? 0 : -1}; // 截断
+    const int up{low_zero ? 0 : 1};    // 进位
+
+    // 八种舍入方式各一行，横着读就是完整的规则表
+    // clang-format off
+    int decision{0};
+    switch (rounding) {
+    case DecRounding::Down:       decision = down;                                          break;
+    case DecRounding::Up:         decision = up;                                            break;
+    case DecRounding::HalfUp:     decision = at_least_half ? 1 : down;                      break;
+    case DecRounding::HalfDown:   decision = exact_half ? -1 : (at_least_half ? 1 : down);  break;
+    case DecRounding::HalfEven:   decision = exact_half && high_even
+                                                 ? -1 : (at_least_half ? 1 : down);         break;
+    case DecRounding::Ceiling:    decision = sign ? down : up;                              break;
+    case DecRounding::Floor:      decision = sign ? up : down;                              break;
+    case DecRounding::ZeroFiveUp: decision = high_is_0_or_5 ? up : down;                    break;
+    }
+    // clang-format on
+    return {high, decision};
+}
+
+// 触发 Overflow 并给出没设陷阱时的结果：按 rounding 决定是 ±Infinity 还是当前精度下最大的有限数
+BigDec raise_overflow(DecContext &ctx, const bool sign) {
+    ctx.raise(DecCondition::Overflow);
+    // 没设陷阱：就近舍入的几种一律给 ±Infinity，带方向的几种看方向跟符号合不合
+    switch (ctx.rounding()) {
+    case DecRounding::HalfUp:
+    case DecRounding::HalfDown:
+    case DecRounding::HalfEven:
+    case DecRounding::Up:
+        return BigDec::infinity(sign);
+    case DecRounding::Ceiling:
+        if (!sign) return BigDec::infinity(sign);
+        break;
+    case DecRounding::Floor:
+        if (sign) return BigDec::infinity(sign);
+        break;
+    case DecRounding::Down:
+    case DecRounding::ZeroFiveUp:
+        break;
+    }
+    return BigDec::from_parts(sign, pow10(ctx.prec()) - BigInt(1), ctx.etop()); // prec 个 9
+}
+
+// 触发 InvalidOperation（或它的某个细分条件），没设陷阱时结果是安静 NaN
+BigDec
+raise_invalid(DecContext &ctx, const DecCondition condition = DecCondition::InvalidOperation) {
+    ctx.raise(condition);
+    return BigDec::quiet_nan();
+}
+
+// NaN 传播：任一方是 NaN 就返回该 NaN（sNaN 先触发 InvalidOperation，再退化成安静 NaN），
+// 都不是 NaN 则返回 nullopt
+std::optional<BigDec> check_nans(const BigDec &a, DecContext &ctx) {
+    if (a.is_signaling_nan()) {
+        ctx.raise(DecCondition::InvalidOperation);
+        return BigDec::quiet_nan(a.is_negative()); // sNaN 报过之后退化成同号的安静 NaN
+    }
+    if (a.is_nan()) return a;
+    return std::nullopt;
+}
+
+std::optional<BigDec> check_nans(const BigDec &a, const BigDec &b, DecContext &ctx) {
+    // sNaN 优先于安静 NaN，左操作数优先于右操作数
+    if (a.is_signaling_nan() || b.is_signaling_nan()) {
+        const BigDec &which{a.is_signaling_nan() ? a : b};
+        ctx.raise(DecCondition::InvalidOperation);
+        return BigDec::quiet_nan(which.is_negative());
+    }
+    if (a.is_nan()) return a;
+    if (b.is_nan()) return b;
+    return std::nullopt;
+}
+
+// 数值大小比较，-1/0/1。调用方保证两边都不是 NaN
+int cmp_no_nan(const BigDec &a, const BigDec &b) {
+    assert(!a.is_nan() && !b.is_nan());
+
+    if (a.is_infinite() || b.is_infinite()) {
+        const int a_inf{a.is_infinite() ? (a.is_negative() ? -1 : 1) : 0};
+        const int b_inf{b.is_infinite() ? (b.is_negative() ? -1 : 1) : 0};
+        if (a_inf != b_inf) return a_inf < b_inf ? -1 : 1;
+        return 0; // 同号的两个无穷
+    }
+
+    // 零跟符号无关：-0 == 0
+    if (a.coefficient().is_zero())
+        return b.coefficient().is_zero() ? 0 : (b.is_negative() ? 1 : -1);
+    if (b.coefficient().is_zero()) return a.is_negative() ? -1 : 1;
+
+    if (a.is_negative() != b.is_negative()) return a.is_negative() ? -1 : 1;
+
+    // 同号且都非零，比量级；符号为负时结论反过来
+    const int sign_factor{a.is_negative() ? -1 : 1};
+    const int64_t a_adjusted{a.adjusted()};
+    const int64_t b_adjusted{b.adjusted()};
+    if (a_adjusted != b_adjusted) return a_adjusted > b_adjusted ? sign_factor : -sign_factor;
+
+    // 调整后的指数相同，说明两个系数补零对齐之后位数也相同，直接比。补的零数量等于两者位数之差，
+    // 不会因为指数相差很大而炸开
+    const BigInt a_aligned{
+        a.coefficient() * pow10(std::max<int64_t>(a.exponent() - b.exponent(), 0))
+    };
+    const BigInt b_aligned{
+        b.coefficient() * pow10(std::max<int64_t>(b.exponent() - a.exponent(), 0))
+    };
+    if (a_aligned == b_aligned) return 0;
+    return a_aligned > b_aligned ? sign_factor : -sign_factor;
+}
+
+// 把 // 算出来的整数商装回 BigDec。商为 0 时 BigInt 记不住符号，用 sign_if_zero 补上
+BigDec quotient_to_dec(const BigInt &quotient, const bool sign_if_zero) {
+    // 同 * 和 / 的规矩（0 / -3 是 -0），别让 // 成为唯一丢掉零符号的那个
+    return BigDec::from_parts(
+        quotient.is_zero() ? sign_if_zero : quotient.is_negative(), quotient.abs(), 0
+    );
+}
+
+// 向零截断的商/余数要不要往负无穷方向修正一格。余数的符号跟被除数一致，所以"余数与除数异号"
+// 就是"两个操作数异号"
+bool needs_floor_correction(
+    const BigDec &dividend, const BigDec &divisor, const BigDec &trunc_remainder
+) {
+    return !trunc_remainder.is_zero() && dividend.is_negative() != divisor.is_negative();
+}
+
+// 把 trunc_divmod 给的商的绝对值修正成向负无穷取整的商（带符号）。
+// nullopt 表示位数超过 prec——要按修正之后的商来判（截断商恰好 prec 位时减 1 会多出一位）
+std::optional<BigInt> floor_quotient(
+    const BigInt &magnitude, const BigDec &dividend, const BigDec &divisor,
+    const BigDec &trunc_remainder, const int64_t prec
+) {
+    BigInt quotient{dividend.is_negative() != divisor.is_negative() ? -magnitude : magnitude};
+    if (needs_floor_correction(dividend, divisor, trunc_remainder)) quotient = quotient - BigInt(1);
+    if (static_cast<int64_t>(quotient.num_decimal_digits()) > prec) return std::nullopt;
+    return quotient;
+}
+
 } // namespace
 
-void BigDec::check_invariant() const {
-    assert(!coeff_.is_negative()); // 系数恒非负，符号单独存在 sign_ 里
-    // 特殊值的系数/指数不参与运算，一律归一成 0，这样 identical() 只比字段就够了
-    assert(kind_ == Kind::Finite || (coeff_.is_zero() && exp_ == 0));
-}
-
-BigDec BigDec::make_finite(const bool sign, BigInt coeff, const int64_t exp) {
-    BigDec result;
-    result.kind_ = Kind::Finite;
-    result.sign_ = sign;
-    result.coeff_ = std::move(coeff);
-    result.exp_ = exp;
-    result.check_invariant();
-    return result;
-}
+// —————————— 构造 ——————————
 
 BigDec BigDec::from_bigint(const BigInt &value) {
     return make_finite(value.is_negative(), value.abs(), 0);
@@ -203,12 +352,7 @@ BigDec BigDec::from_string(const std::string &s, DecContext &ctx) {
     return raise_invalid(ctx, DecCondition::ConversionSyntax);
 }
 
-size_t BigDec::digit_count() const { return coeff_.num_decimal_digits(); }
-
-int64_t BigDec::adjusted() const {
-    assert(is_finite());
-    return exp_ + static_cast<int64_t>(digit_count()) - 1;
-}
+// —————————— 转换 ——————————
 
 std::string BigDec::to_string() const {
     const std::string sign_str{sign_ ? "-" : ""};
@@ -250,9 +394,29 @@ std::string BigDec::to_string() const {
     return sign_str + int_part + frac_part + exp_part;
 }
 
+// —————————— 查询 ——————————
+
+bool BigDec::is_integral() const {
+    if (!is_finite()) return false;
+    if (exp_ >= 0 || coeff_.is_zero()) return true;
+    const int64_t drop{-exp_};
+    // 小数部分比整个系数还长，那整数部分只能是 0，而系数非零，必然不是整数
+    if (drop >= static_cast<int64_t>(digit_count())) return false;
+    return coeff_.mod(pow10(drop)).is_zero();
+}
+
+size_t BigDec::digit_count() const { return coeff_.num_decimal_digits(); }
+
+int64_t BigDec::adjusted() const {
+    assert(is_finite());
+    return exp_ + static_cast<int64_t>(digit_count()) - 1;
+}
+
 bool BigDec::identical(const BigDec &rhs) const {
     return kind_ == rhs.kind_ && sign_ == rhs.sign_ && exp_ == rhs.exp_ && coeff_ == rhs.coeff_;
 }
+
+// —————————— 一元运算 ——————————
 
 BigDec BigDec::copy_negate() const {
     BigDec result{*this};
@@ -264,170 +428,6 @@ BigDec BigDec::copy_abs() const {
     BigDec result{*this};
     result.sign_ = false;
     return result;
-}
-
-std::pair<BigInt, int> BigDec::split_and_decide(
-    const BigInt &coeff, const size_t keep, const bool sign, const DecRounding rounding
-) {
-    const size_t digits{coeff.num_decimal_digits()};
-    assert(keep < digits);
-
-    // dropped >= 1，因此 10^(dropped-1) 恒有意义
-    const int64_t dropped{static_cast<int64_t>(digits - keep)};
-    const BigInt unit{pow10(dropped - 1)};     // 被丢掉的那段里最高位的权重
-    const BigInt scale{unit * BigInt(10)};     // 10^dropped
-    const BigInt high{coeff.floor_div(scale)}; // 留下的部分
-    const BigInt low{coeff - high * scale};    // 丢掉的部分
-    const BigInt half{unit * BigInt(5)};       // "恰好一半"
-
-    const bool low_zero{low.is_zero()};
-    const bool at_least_half{low >= half}; // 被丢掉的最高位数字 >= 5
-    const bool exact_half{low == half};
-    // 留下的部分的末位：是不是偶数（HalfEven 用）、是不是 0 或 5（ZeroFiveUp 用）。
-    // keep 为 0 时 high 是 0、两个判断都成立，对应规范里"没有前一位可看"时的取值
-    const bool high_even{!high.is_odd()};
-    const bool high_is_0_or_5{high.mod(BigInt(5)).is_zero()};
-
-    const int down{low_zero ? 0 : -1}; // 截断
-    const int up{low_zero ? 0 : 1};    // 进位
-
-    // 八种舍入方式各一行，横着读就是完整的规则表
-    // clang-format off
-    int decision{0};
-    switch (rounding) {
-    case DecRounding::Down:       decision = down;                                          break;
-    case DecRounding::Up:         decision = up;                                            break;
-    case DecRounding::HalfUp:     decision = at_least_half ? 1 : down;                      break;
-    case DecRounding::HalfDown:   decision = exact_half ? -1 : (at_least_half ? 1 : down);  break;
-    case DecRounding::HalfEven:   decision = exact_half && high_even
-                                                 ? -1 : (at_least_half ? 1 : down);         break;
-    case DecRounding::Ceiling:    decision = sign ? down : up;                              break;
-    case DecRounding::Floor:      decision = sign ? up : down;                              break;
-    case DecRounding::ZeroFiveUp: decision = high_is_0_or_5 ? up : down;                    break;
-    }
-    // clang-format on
-    return {high, decision};
-}
-
-BigDec BigDec::pad_to_exponent(const int64_t exp) const {
-    assert(is_finite());
-    assert(exp <= exp_);
-    if (coeff_.is_zero()) return make_finite(sign_, BigInt(0), exp);
-    return make_finite(sign_, coeff_ * pow10(exp_ - exp), exp);
-}
-
-BigDec BigDec::raise_overflow(DecContext &ctx, const bool sign) {
-    ctx.raise(DecCondition::Overflow);
-    // 没设陷阱：就近舍入的几种一律给 ±Infinity，带方向的几种看方向跟符号合不合
-    switch (ctx.rounding()) {
-    case DecRounding::HalfUp:
-    case DecRounding::HalfDown:
-    case DecRounding::HalfEven:
-    case DecRounding::Up:
-        return infinity(sign);
-    case DecRounding::Ceiling:
-        if (!sign) return infinity(sign);
-        break;
-    case DecRounding::Floor:
-        if (sign) return infinity(sign);
-        break;
-    case DecRounding::Down:
-    case DecRounding::ZeroFiveUp:
-        break;
-    }
-    return make_finite(sign, pow10(ctx.prec()) - BigInt(1), ctx.etop()); // prec 个 9
-}
-
-BigDec BigDec::raise_invalid(DecContext &ctx, const DecCondition condition) {
-    ctx.raise(condition);
-    return quiet_nan();
-}
-
-std::optional<BigDec> BigDec::check_nans(const BigDec &a, DecContext &ctx) {
-    if (a.is_signaling_nan()) {
-        ctx.raise(DecCondition::InvalidOperation);
-        return quiet_nan(a.sign_); // sNaN 报过之后退化成同号的安静 NaN
-    }
-    if (a.is_nan()) return a;
-    return std::nullopt;
-}
-
-std::optional<BigDec> BigDec::check_nans(const BigDec &a, const BigDec &b, DecContext &ctx) {
-    // sNaN 优先于安静 NaN，左操作数优先于右操作数
-    if (a.is_signaling_nan() || b.is_signaling_nan()) {
-        const BigDec &which{a.is_signaling_nan() ? a : b};
-        ctx.raise(DecCondition::InvalidOperation);
-        return quiet_nan(which.sign_);
-    }
-    if (a.is_nan()) return a;
-    if (b.is_nan()) return b;
-    return std::nullopt;
-}
-
-BigDec BigDec::fix(DecContext &ctx) const {
-    if (!is_finite()) return *this; // Inf/NaN 原样返回（我们的 NaN 没有诊断信息，无需截断）
-
-    const int64_t prec{ctx.prec()};
-    const int64_t etiny{ctx.etiny()};
-    const int64_t etop{ctx.etop()};
-
-    if (coeff_.is_zero()) {
-        // 零只需要把指数夹回 [Etiny, Emax]
-        const int64_t new_exp{std::clamp(exp_, etiny, static_cast<int64_t>(ctx.emax()))};
-        if (new_exp == exp_) return *this;
-        ctx.raise(DecCondition::Clamped);
-        return make_finite(sign_, BigInt(0), new_exp);
-    }
-
-    const int64_t digits{static_cast<int64_t>(digit_count())};
-    // 结果允许的最小指数：再小就说明有效数字超过了 prec 位
-    int64_t exp_min{digits + exp_ - prec};
-    if (exp_min > etop) {
-        // 等价于 adjusted() > Emax
-        const BigDec ans{raise_overflow(ctx, sign_)};
-        ctx.raise(DecCondition::Inexact);
-        ctx.raise(DecCondition::Rounded);
-        return ans;
-    }
-
-    const bool subnormal{exp_min < etiny};
-    if (subnormal) exp_min = etiny;
-
-    if (exp_ < exp_min) {
-        int64_t keep{digits + exp_ - exp_min};
-        BigInt source{coeff_};
-        if (keep < 0) {
-            // 整个值比最小可表示的那一位还小，换成 1 再舍，指数由 exp_min 给出
-            source = BigInt(1);
-            keep = 0;
-        }
-        auto [kept, decision]{
-            split_and_decide(source, static_cast<size_t>(keep), sign_, ctx.rounding())
-        };
-        if (decision > 0) {
-            kept = kept + BigInt(1);
-            // 进位可能让位数多出一位（999 -> 1000），这时砍掉末位、指数加一
-            if (static_cast<int64_t>(kept.num_decimal_digits()) > prec) {
-                kept = kept.floor_div(BigInt(10));
-                ++exp_min;
-            }
-        }
-        const BigDec ans{
-            exp_min > etop ? raise_overflow(ctx, sign_)
-                           : make_finite(sign_, std::move(kept), exp_min)
-        };
-
-        // 信号的先后顺序按规范来，别调换：陷阱开着的时候，先抛出来的那个才是用户看到的
-        if (decision != 0 && subnormal) ctx.raise(DecCondition::Underflow);
-        if (subnormal) ctx.raise(DecCondition::Subnormal);
-        if (decision != 0) ctx.raise(DecCondition::Inexact);
-        ctx.raise(DecCondition::Rounded);
-        if (ans.is_zero()) ctx.raise(DecCondition::Clamped); // 下溢到 0
-        return ans;
-    }
-
-    if (subnormal) ctx.raise(DecCondition::Subnormal);
-    return *this; // 本来就表示得下，原样返回
 }
 
 BigDec BigDec::plus(DecContext &ctx) const {
@@ -448,6 +448,8 @@ BigDec BigDec::abs(DecContext &ctx) const {
     if (const std::optional<BigDec> nan{check_nans(*this, ctx)}) return *nan;
     return sign_ ? minus(ctx) : plus(ctx);
 }
+
+// —————————— 二元算术 ——————————
 
 BigDec BigDec::add(const BigDec &rhs, DecContext &ctx) const {
     if (const std::optional<BigDec> nan{check_nans(*this, rhs, ctx)}) return *nan;
@@ -548,55 +550,6 @@ BigDec BigDec::div(const BigDec &rhs, DecContext &ctx) const {
     return make_finite(result_sign, std::move(quotient), exp).fix(ctx);
 }
 
-std::optional<std::pair<BigInt, BigDec>>
-BigDec::trunc_divmod(const BigDec &rhs, const int64_t prec) const {
-    assert(is_finite() && !rhs.is_nan() && !rhs.is_zero());
-
-    // 余数的"理想指数"：两个操作数指数里较小的那个（除数为无穷时就是被除数自己的指数）
-    const int64_t ideal_exp{rhs.is_infinite() ? exp_ : std::min(exp_, rhs.exp_)};
-
-    if (coeff_.is_zero() || rhs.is_infinite() || adjusted() - rhs.adjusted() <= -2) {
-        // |self| 比 |rhs| 至少小一个数量级（或者被除数是 0、除数是无穷），截断商必然是 0。
-        // ideal_exp 恒不大于自己的指数，所以这里只是补零，不会真舍掉什么
-        return std::pair{BigInt(0), pad_to_exponent(ideal_exp)};
-    }
-    if (adjusted() - rhs.adjusted() > prec) return std::nullopt; // 商位数必然超过 prec
-
-    // 两边对齐到同一个指数（也就是 ideal_exp）之后，就是两个整数的带余除法
-    BigInt a{coeff_};
-    BigInt b{rhs.coeff_};
-    if (exp_ >= rhs.exp_)
-        a = a * pow10(exp_ - rhs.exp_);
-    else
-        b = b * pow10(rhs.exp_ - exp_);
-    const BigInt magnitude{a.floor_div(b)};
-    if (static_cast<int64_t>(magnitude.num_decimal_digits()) > prec) return std::nullopt;
-    return std::pair{magnitude, make_finite(sign_, a - magnitude * b, ideal_exp)};
-}
-
-BigDec BigDec::quotient_to_dec(const BigInt &quotient, const bool sign_if_zero) {
-    // 商为 0 时 BigInt 记不住符号，按两个操作数的符号异或补上——同 * 和 / 的规矩（0 / -3 是 -0）
-    return make_finite(
-        quotient.is_zero() ? sign_if_zero : quotient.is_negative(), quotient.abs(), 0
-    );
-}
-
-bool BigDec::needs_floor_correction(
-    const BigDec &dividend, const BigDec &divisor, const BigDec &trunc_remainder
-) {
-    return !trunc_remainder.is_zero() && dividend.sign_ != divisor.sign_;
-}
-
-std::optional<BigInt> BigDec::floor_quotient(
-    const BigInt &magnitude, const BigDec &dividend, const BigDec &divisor,
-    const BigDec &trunc_remainder, const int64_t prec
-) {
-    BigInt quotient{dividend.sign_ != divisor.sign_ ? -magnitude : magnitude};
-    if (needs_floor_correction(dividend, divisor, trunc_remainder)) quotient = quotient - BigInt(1);
-    if (static_cast<int64_t>(quotient.num_decimal_digits()) > prec) return std::nullopt;
-    return quotient;
-}
-
 BigDec BigDec::floor_div(const BigDec &rhs, DecContext &ctx) const {
     if (const std::optional<BigDec> nan{check_nans(*this, rhs, ctx)}) return *nan;
     if (is_infinite()) {
@@ -672,98 +625,140 @@ std::pair<BigDec, BigDec> BigDec::divmod(const BigDec &rhs, DecContext &ctx) con
     return {std::move(quotient_dec), std::move(remainder)};
 }
 
-int BigDec::cmp_no_nan(const BigDec &a, const BigDec &b) {
-    assert(!a.is_nan() && !b.is_nan());
+BigDec BigDec::pow(const BigDec &rhs, DecContext &ctx) const {
+    if (const std::optional<BigDec> nan{check_nans(*this, rhs, ctx)}) return *nan;
 
-    if (a.is_infinite() || b.is_infinite()) {
-        const int a_inf{a.is_infinite() ? (a.sign_ ? -1 : 1) : 0};
-        const int b_inf{b.is_infinite() ? (b.sign_ ? -1 : 1) : 0};
-        if (a_inf != b_inf) return a_inf < b_inf ? -1 : 1;
-        return 0; // 同号的两个无穷
+    // 0 ** 0 无意义；其余 x ** 0 一律是 1
+    if (rhs.is_zero()) {
+        if (is_zero()) return raise_invalid(ctx);
+        return make_finite(false, BigInt(1), 0);
     }
 
-    // 零跟符号无关：-0 == 0
-    if (a.coeff_.is_zero()) return b.coeff_.is_zero() ? 0 : (b.sign_ ? 1 : -1);
-    if (b.coeff_.is_zero()) return a.sign_ ? -1 : 1;
-
-    if (a.sign_ != b.sign_) return a.sign_ ? -1 : 1;
-
-    // 同号且都非零，比量级；符号为负时结论反过来
-    const int sign_factor{a.sign_ ? -1 : 1};
-    const int64_t a_adjusted{a.adjusted()};
-    const int64_t b_adjusted{b.adjusted()};
-    if (a_adjusted != b_adjusted) return a_adjusted > b_adjusted ? sign_factor : -sign_factor;
-
-    // 调整后的指数相同，说明两个系数补零对齐之后位数也相同，直接比。补的零数量等于两者位数之差，
-    // 不会因为指数相差很大而炸开
-    const BigInt a_aligned{a.coeff_ * pow10(std::max<int64_t>(a.exp_ - b.exp_, 0))};
-    const BigInt b_aligned{b.coeff_ * pow10(std::max<int64_t>(b.exp_ - a.exp_, 0))};
-    if (a_aligned == b_aligned) return 0;
-    return a_aligned > b_aligned ? sign_factor : -sign_factor;
-}
-
-bool BigDec::equals(const BigDec &rhs, DecContext &ctx) const {
-    // 安静 NaN 参与判等不报信号，直接不等；sNaN 才触发 InvalidOperation
-    if (is_signaling_nan() || rhs.is_signaling_nan()) {
-        ctx.raise(DecCondition::InvalidOperation);
-        return false;
+    // 结果为负，当且仅当底数为负且指数是奇整数
+    bool result_sign{false};
+    BigDec base{*this};
+    if (sign_) {
+        if (rhs.is_integral()) {
+            if (!rhs.is_even_integer()) result_sign = true;
+        } else if (!is_zero()) {
+            // 负数的非整数次幂不是实数。(-0) ** 非整数 不算，按 0 ** 非整数 处理
+            return raise_invalid(ctx);
+        }
+        base = copy_negate(); // 底数取绝对值，符号已经单独记在 result_sign 里
     }
-    if (is_nan() || rhs.is_nan()) return false;
-    return cmp_no_nan(*this, rhs) == 0;
-}
 
-std::partial_ordering BigDec::compare_ordering(const BigDec &rhs, DecContext &ctx) const {
-    // 序比较里安静 NaN 也要报信号——排序时静默返回"不小于"会得到无声的错误结果
-    if (is_nan() || rhs.is_nan()) {
-        ctx.raise(DecCondition::InvalidOperation);
-        return std::partial_ordering::unordered;
+    // 0 ** 正数 = 0，0 ** 负数 = Infinity
+    if (base.is_zero())
+        return rhs.sign_ ? infinity(result_sign) : make_finite(result_sign, BigInt(0), 0);
+    // Infinity ** 正数 = Infinity，Infinity ** 负数 = 0
+    if (base.is_infinite())
+        return rhs.sign_ ? make_finite(result_sign, BigInt(0), 0) : infinity(result_sign);
+
+    const int64_t p{ctx.prec()};
+    const BigDec one{from_bigint(BigInt(1))};
+
+    // 1 ** y 的值恒是 1，但结果的标度和触发的信号取决于底数自己的指数和 y 长什么样
+    if (cmp_no_nan(base, one) == 0) {
+        int64_t exp{0};
+        if (rhs.is_integral()) {
+            // 直接取 int(rhs) 有风险（可能是 1E+999999999），先跟 prec 比一下再说
+            const int64_t multiplier{
+                rhs.sign_ ? 0
+                : cmp_no_nan(rhs, from_bigint(BigInt(p))) > 0
+                    ? p
+                    : dec_math::to_int64(rhs.integer_value()).value()
+            };
+            const BigInt exp_big{BigInt(base.exp_) * BigInt(multiplier)};
+            if (exp_big < BigInt(1 - p)) {
+                exp = 1 - p;
+                ctx.raise(DecCondition::Rounded);
+            } else {
+                exp = dec_math::to_int64(exp_big).value(); // 不小于 1-p，必然装得下
+            }
+        } else {
+            ctx.raise(DecCondition::Inexact);
+            ctx.raise(DecCondition::Rounded);
+            exp = 1 - p;
+        }
+        return make_finite(result_sign, pow10(-exp), exp);
     }
-    const int result{cmp_no_nan(*this, rhs)};
-    if (result < 0) return std::partial_ordering::less;
-    if (result > 0) return std::partial_ordering::greater;
-    return std::partial_ordering::equivalent;
-}
 
-bool BigDec::is_integral() const {
-    if (!is_finite()) return false;
-    if (exp_ >= 0 || coeff_.is_zero()) return true;
-    const int64_t drop{-exp_};
-    // 小数部分比整个系数还长，那整数部分只能是 0，而系数非零，必然不是整数
-    if (drop >= static_cast<int64_t>(digit_count())) return false;
-    return coeff_.mod(pow10(drop)).is_zero();
-}
+    const int64_t base_adj{base.adjusted()};
 
-int64_t BigDec::ln_exp_bound() const {
-    // 0.1 <= x <= 10 时用不等式 1-1/x <= ln(x) <= x-1 卡；出了这个范围光看指数就够了
-    const int64_t adj{adjusted()};
-    if (adj >= 1) return int64_digits(adj * 23 / 10) - 1; // 23/10 是 ln(10) 的下界
-    if (adj <= -2) return int64_digits((-1 - adj) * 23 / 10) - 1;
-
-    // 下面两支里 exp_ 必然 <= 0，10^-exp_ 的规模跟系数本身相当，不会炸开
-    if (adj == 0) { // 1 < self < 10
-        const std::string num{(coeff_ - pow10(-exp_)).to_decimal_string()};
-        const std::string den{coeff_.to_decimal_string()};
-        return static_cast<int64_t>(num.size()) - static_cast<int64_t>(den.size()) -
-               (num < den ? 1 : 0);
+    // x ** ±Infinity：看 |x| 在 1 的哪一侧
+    if (rhs.is_infinite()) {
+        if ((!rhs.sign_) == (base_adj < 0)) return make_finite(result_sign, BigInt(0), 0);
+        return infinity(result_sign);
     }
-    // adj == -1，也就是 0.1 <= self < 1
-    return exp_ + static_cast<int64_t>((pow10(-exp_) - coeff_).to_decimal_string().size()) - 1;
-}
 
-int64_t BigDec::log10_exp_bound() const {
-    const int64_t adj{adjusted()};
-    if (adj >= 1) return int64_digits(adj) - 1;
-    if (adj <= -2) return int64_digits(-1 - adj) - 1;
-
-    if (adj == 0) { // 1 < self < 10；2.31 是 1/log10(e) 的上界
-        const std::string num{(coeff_ - pow10(-exp_)).to_decimal_string()};
-        const std::string den{(coeff_ * BigInt(231)).to_decimal_string()};
-        return static_cast<int64_t>(num.size()) - static_cast<int64_t>(den.size()) -
-               (num < den ? 1 : 0) + 2;
+    // 先用一个很粗的界筛掉必然溢出/下溢的情形，免得精确路径去算天文数字
+    std::optional<BigDec> ans;
+    bool exact{false};
+    const int64_t bound{base.log10_exp_bound() + rhs.adjusted()};
+    if ((base_adj >= 0) == !rhs.sign_) {
+        if (bound >= int64_digits(ctx.emax()))
+            ans = make_finite(result_sign, BigInt(1), static_cast<int64_t>(ctx.emax()) + 1);
+    } else {
+        if (bound >= int64_digits(-ctx.etiny()))
+            ans = make_finite(result_sign, BigInt(1), ctx.etiny() - 1);
     }
-    const std::string num{(pow10(-exp_) - coeff_).to_decimal_string()};
-    return static_cast<int64_t>(num.size()) + exp_ - (num < "231" ? 1 : 0) - 1;
+
+    // 多算一位去试精确解：结果精确的话，后面就不用走 exp(y*log(x)) 那条又慢又只能逼近的路
+    if (!ans) {
+        ans = base.power_exact(rhs, p + 1);
+        if (ans) {
+            if (result_sign) ans = ans->copy_negate();
+            exact = true;
+        }
+    }
+
+    if (!ans) {
+        // 一般情形：x**y 按 exp(y*log(x)) 算，同样是每次多算三位直到能定夺舍入方向
+        const BigInt yc{rhs.sign_ ? -rhs.coeff_ : rhs.coeff_};
+        int64_t extra{3};
+        BigInt coeff;
+        int64_t exp{0};
+        while (true) {
+            std::tie(coeff, exp) =
+                dec_math::dpower(base.coeff_, base.exp_, yc, rhs.exp_, p + extra);
+            if (is_roundable(coeff, p)) break;
+            extra += 3;
+        }
+        ans = make_finite(result_sign, std::move(coeff), exp);
+    }
+
+    if (!exact || rhs.is_integral()) return ans->fix(ctx);
+
+    // 指数不是整数时，规范要求即使结果精确也报 Inexact（落进次正规区还要报 Underflow）。
+    // fix 不报这些，又不能直接在 fix 前后补（会打乱信号优先级），于是先在一个陷阱全关、
+    // 标志位清空的副本上 fix，再按优先级把信号补报到真上下文上
+    BigDec padded{*ans};
+    if (static_cast<int64_t>(padded.digit_count()) <= p) {
+        // 补零补到 prec+1 位，保证 Rounded 一定会被触发
+        const int64_t pad{p + 1 - static_cast<int64_t>(padded.digit_count())};
+        padded = make_finite(padded.sign_, padded.coeff_ * pow10(pad), padded.exp_ - pad);
+    }
+    DecContext scratch{ctx};
+    scratch.traps().clear();
+    scratch.flags().clear();
+    const BigDec fixed{padded.fix(scratch)};
+
+    scratch.raise(DecCondition::Inexact);
+    if (scratch.flags().has(DecCondition::Subnormal)) scratch.raise(DecCondition::Underflow);
+
+    if (scratch.flags().has(DecCondition::Overflow)) ctx.raise(DecCondition::Overflow);
+    for (const DecCondition condition :
+         {DecCondition::Underflow,
+          DecCondition::Subnormal,
+          DecCondition::Inexact,
+          DecCondition::Rounded,
+          DecCondition::Clamped}) {
+        if (scratch.flags().has(condition)) ctx.raise(condition);
+    }
+    return fixed;
 }
+
+// —————————— 超越函数 ——————————
 
 BigDec BigDec::sqrt(DecContext &ctx) const {
     if (const std::optional<BigDec> nan{check_nans(*this, ctx)}) return *nan;
@@ -906,6 +901,207 @@ BigDec BigDec::log10(DecContext &ctx) const {
 
     const RoundingGuard guard{ctx, DecRounding::HalfEven};
     return ans.fix(ctx);
+}
+
+// —————————— 比较 ——————————
+
+bool BigDec::equals(const BigDec &rhs, DecContext &ctx) const {
+    // 安静 NaN 参与判等不报信号，直接不等；sNaN 才触发 InvalidOperation
+    if (is_signaling_nan() || rhs.is_signaling_nan()) {
+        ctx.raise(DecCondition::InvalidOperation);
+        return false;
+    }
+    if (is_nan() || rhs.is_nan()) return false;
+    return cmp_no_nan(*this, rhs) == 0;
+}
+
+std::partial_ordering BigDec::compare_ordering(const BigDec &rhs, DecContext &ctx) const {
+    // 序比较里安静 NaN 也要报信号——排序时静默返回"不小于"会得到无声的错误结果
+    if (is_nan() || rhs.is_nan()) {
+        ctx.raise(DecCondition::InvalidOperation);
+        return std::partial_ordering::unordered;
+    }
+    const int result{cmp_no_nan(*this, rhs)};
+    if (result < 0) return std::partial_ordering::less;
+    if (result > 0) return std::partial_ordering::greater;
+    return std::partial_ordering::equivalent;
+}
+
+// —————————— 运算符 ——————————
+
+namespace {
+
+// 运算符用的默认上下文，语义见头文件：三个默认陷阱开着，所以出事是抛而不是静默给 NaN
+DecContext default_context() { return DecContext{}; }
+
+} // namespace
+
+BigDec BigDec::operator+() const {
+    DecContext ctx{default_context()};
+    return plus(ctx);
+}
+
+BigDec BigDec::operator-() const {
+    DecContext ctx{default_context()};
+    return minus(ctx);
+}
+
+BigDec BigDec::operator+(const BigDec &rhs) const {
+    DecContext ctx{default_context()};
+    return add(rhs, ctx);
+}
+
+BigDec BigDec::operator-(const BigDec &rhs) const {
+    DecContext ctx{default_context()};
+    return sub(rhs, ctx);
+}
+
+BigDec BigDec::operator*(const BigDec &rhs) const {
+    DecContext ctx{default_context()};
+    return mul(rhs, ctx);
+}
+
+BigDec BigDec::operator/(const BigDec &rhs) const {
+    DecContext ctx{default_context()};
+    return div(rhs, ctx);
+}
+
+BigDec BigDec::operator%(const BigDec &rhs) const {
+    DecContext ctx{default_context()};
+    return mod(rhs, ctx);
+}
+
+bool BigDec::operator==(const BigDec &rhs) const {
+    DecContext ctx{default_context()};
+    return equals(rhs, ctx);
+}
+
+std::partial_ordering BigDec::operator<=>(const BigDec &rhs) const {
+    DecContext ctx{default_context()};
+    return compare_ordering(rhs, ctx);
+}
+
+// —————————— private ——————————
+
+void BigDec::check_invariant() const {
+    assert(!coeff_.is_negative()); // 系数恒非负，符号单独存在 sign_ 里
+    // 特殊值的系数/指数不参与运算，一律归一成 0，这样 identical() 只比字段就够了
+    assert(kind_ == Kind::Finite || (coeff_.is_zero() && exp_ == 0));
+}
+
+BigDec BigDec::make_finite(const bool sign, BigInt coeff, const int64_t exp) {
+    BigDec result;
+    result.kind_ = Kind::Finite;
+    result.sign_ = sign;
+    result.coeff_ = std::move(coeff);
+    result.exp_ = exp;
+    result.check_invariant();
+    return result;
+}
+
+BigDec BigDec::fix(DecContext &ctx) const {
+    if (!is_finite()) return *this; // Inf/NaN 原样返回（我们的 NaN 没有诊断信息，无需截断）
+
+    const int64_t prec{ctx.prec()};
+    const int64_t etiny{ctx.etiny()};
+    const int64_t etop{ctx.etop()};
+
+    if (coeff_.is_zero()) {
+        // 零只需要把指数夹回 [Etiny, Emax]
+        const int64_t new_exp{std::clamp(exp_, etiny, static_cast<int64_t>(ctx.emax()))};
+        if (new_exp == exp_) return *this;
+        ctx.raise(DecCondition::Clamped);
+        return make_finite(sign_, BigInt(0), new_exp);
+    }
+
+    const int64_t digits{static_cast<int64_t>(digit_count())};
+    // 结果允许的最小指数：再小就说明有效数字超过了 prec 位
+    int64_t exp_min{digits + exp_ - prec};
+    if (exp_min > etop) {
+        // 等价于 adjusted() > Emax
+        const BigDec ans{raise_overflow(ctx, sign_)};
+        ctx.raise(DecCondition::Inexact);
+        ctx.raise(DecCondition::Rounded);
+        return ans;
+    }
+
+    const bool subnormal{exp_min < etiny};
+    if (subnormal) exp_min = etiny;
+
+    if (exp_ < exp_min) {
+        int64_t keep{digits + exp_ - exp_min};
+        BigInt source{coeff_};
+        if (keep < 0) {
+            // 整个值比最小可表示的那一位还小，换成 1 再舍，指数由 exp_min 给出
+            source = BigInt(1);
+            keep = 0;
+        }
+        auto [kept, decision]{
+            split_and_decide(source, static_cast<size_t>(keep), sign_, ctx.rounding())
+        };
+        if (decision > 0) {
+            kept = kept + BigInt(1);
+            // 进位可能让位数多出一位（999 -> 1000），这时砍掉末位、指数加一
+            if (static_cast<int64_t>(kept.num_decimal_digits()) > prec) {
+                kept = kept.floor_div(BigInt(10));
+                ++exp_min;
+            }
+        }
+        const BigDec ans{
+            exp_min > etop ? raise_overflow(ctx, sign_)
+                           : make_finite(sign_, std::move(kept), exp_min)
+        };
+
+        // 信号的先后顺序按规范来，别调换：陷阱开着的时候，先抛出来的那个才是用户看到的
+        if (decision != 0 && subnormal) ctx.raise(DecCondition::Underflow);
+        if (subnormal) ctx.raise(DecCondition::Subnormal);
+        if (decision != 0) ctx.raise(DecCondition::Inexact);
+        ctx.raise(DecCondition::Rounded);
+        if (ans.is_zero()) ctx.raise(DecCondition::Clamped); // 下溢到 0
+        return ans;
+    }
+
+    if (subnormal) ctx.raise(DecCondition::Subnormal);
+    return *this; // 本来就表示得下，原样返回
+}
+
+BigDec BigDec::pad_to_exponent(const int64_t exp) const {
+    assert(is_finite());
+    assert(exp <= exp_);
+    if (coeff_.is_zero()) return make_finite(sign_, BigInt(0), exp);
+    return make_finite(sign_, coeff_ * pow10(exp_ - exp), exp);
+}
+
+int64_t BigDec::ln_exp_bound() const {
+    // 0.1 <= x <= 10 时用不等式 1-1/x <= ln(x) <= x-1 卡；出了这个范围光看指数就够了
+    const int64_t adj{adjusted()};
+    if (adj >= 1) return int64_digits(adj * 23 / 10) - 1; // 23/10 是 ln(10) 的下界
+    if (adj <= -2) return int64_digits((-1 - adj) * 23 / 10) - 1;
+
+    // 下面两支里 exp_ 必然 <= 0，10^-exp_ 的规模跟系数本身相当，不会炸开
+    if (adj == 0) { // 1 < self < 10
+        const std::string num{(coeff_ - pow10(-exp_)).to_decimal_string()};
+        const std::string den{coeff_.to_decimal_string()};
+        return static_cast<int64_t>(num.size()) - static_cast<int64_t>(den.size()) -
+               (num < den ? 1 : 0);
+    }
+    // adj == -1，也就是 0.1 <= self < 1
+    return exp_ + static_cast<int64_t>((pow10(-exp_) - coeff_).to_decimal_string().size()) - 1;
+}
+
+int64_t BigDec::log10_exp_bound() const {
+    const int64_t adj{adjusted()};
+    if (adj >= 1) return int64_digits(adj) - 1;
+    if (adj <= -2) return int64_digits(-1 - adj) - 1;
+
+    if (adj == 0) { // 1 < self < 10；2.31 是 1/log10(e) 的上界
+        const std::string num{(coeff_ - pow10(-exp_)).to_decimal_string()};
+        const std::string den{(coeff_ * BigInt(231)).to_decimal_string()};
+        return static_cast<int64_t>(num.size()) - static_cast<int64_t>(den.size()) -
+               (num < den ? 1 : 0) + 2;
+    }
+    const std::string num{(pow10(-exp_) - coeff_).to_decimal_string()};
+    return static_cast<int64_t>(num.size()) + exp_ - (num < "231" ? 1 : 0) - 1;
 }
 
 BigInt BigDec::integer_value() const {
@@ -1078,135 +1274,28 @@ std::optional<BigDec> BigDec::power_exact(const BigDec &other, const int64_t p) 
     return make_finite(false, xc * pow10(zeros), *result_exp);
 }
 
-BigDec BigDec::pow(const BigDec &rhs, DecContext &ctx) const {
-    if (const std::optional<BigDec> nan{check_nans(*this, rhs, ctx)}) return *nan;
+std::optional<std::pair<BigInt, BigDec>>
+BigDec::trunc_divmod(const BigDec &rhs, const int64_t prec) const {
+    assert(is_finite() && !rhs.is_nan() && !rhs.is_zero());
 
-    // 0 ** 0 无意义；其余 x ** 0 一律是 1
-    if (rhs.is_zero()) {
-        if (is_zero()) return raise_invalid(ctx);
-        return make_finite(false, BigInt(1), 0);
+    // 余数的"理想指数"：两个操作数指数里较小的那个（除数为无穷时就是被除数自己的指数）
+    const int64_t ideal_exp{rhs.is_infinite() ? exp_ : std::min(exp_, rhs.exp_)};
+
+    if (coeff_.is_zero() || rhs.is_infinite() || adjusted() - rhs.adjusted() <= -2) {
+        // |self| 比 |rhs| 至少小一个数量级（或者被除数是 0、除数是无穷），截断商必然是 0。
+        // ideal_exp 恒不大于自己的指数，所以这里只是补零，不会真舍掉什么
+        return std::pair{BigInt(0), pad_to_exponent(ideal_exp)};
     }
+    if (adjusted() - rhs.adjusted() > prec) return std::nullopt; // 商位数必然超过 prec
 
-    // 结果为负，当且仅当底数为负且指数是奇整数
-    bool result_sign{false};
-    BigDec base{*this};
-    if (sign_) {
-        if (rhs.is_integral()) {
-            if (!rhs.is_even_integer()) result_sign = true;
-        } else if (!is_zero()) {
-            // 负数的非整数次幂不是实数。(-0) ** 非整数 不算，按 0 ** 非整数 处理
-            return raise_invalid(ctx);
-        }
-        base = copy_negate(); // 底数取绝对值，符号已经单独记在 result_sign 里
-    }
-
-    // 0 ** 正数 = 0，0 ** 负数 = Infinity
-    if (base.is_zero())
-        return rhs.sign_ ? infinity(result_sign) : make_finite(result_sign, BigInt(0), 0);
-    // Infinity ** 正数 = Infinity，Infinity ** 负数 = 0
-    if (base.is_infinite())
-        return rhs.sign_ ? make_finite(result_sign, BigInt(0), 0) : infinity(result_sign);
-
-    const int64_t p{ctx.prec()};
-    const BigDec one{from_bigint(BigInt(1))};
-
-    // 1 ** y 的值恒是 1，但结果的标度和触发的信号取决于底数自己的指数和 y 长什么样
-    if (cmp_no_nan(base, one) == 0) {
-        int64_t exp{0};
-        if (rhs.is_integral()) {
-            // 直接取 int(rhs) 有风险（可能是 1E+999999999），先跟 prec 比一下再说
-            const int64_t multiplier{
-                rhs.sign_ ? 0
-                : cmp_no_nan(rhs, from_bigint(BigInt(p))) > 0
-                    ? p
-                    : dec_math::to_int64(rhs.integer_value()).value()
-            };
-            const BigInt exp_big{BigInt(base.exp_) * BigInt(multiplier)};
-            if (exp_big < BigInt(1 - p)) {
-                exp = 1 - p;
-                ctx.raise(DecCondition::Rounded);
-            } else {
-                exp = dec_math::to_int64(exp_big).value(); // 不小于 1-p，必然装得下
-            }
-        } else {
-            ctx.raise(DecCondition::Inexact);
-            ctx.raise(DecCondition::Rounded);
-            exp = 1 - p;
-        }
-        return make_finite(result_sign, pow10(-exp), exp);
-    }
-
-    const int64_t base_adj{base.adjusted()};
-
-    // x ** ±Infinity：看 |x| 在 1 的哪一侧
-    if (rhs.is_infinite()) {
-        if ((!rhs.sign_) == (base_adj < 0)) return make_finite(result_sign, BigInt(0), 0);
-        return infinity(result_sign);
-    }
-
-    // 先用一个很粗的界筛掉必然溢出/下溢的情形，免得精确路径去算天文数字
-    std::optional<BigDec> ans;
-    bool exact{false};
-    const int64_t bound{base.log10_exp_bound() + rhs.adjusted()};
-    if ((base_adj >= 0) == !rhs.sign_) {
-        if (bound >= int64_digits(ctx.emax()))
-            ans = make_finite(result_sign, BigInt(1), static_cast<int64_t>(ctx.emax()) + 1);
-    } else {
-        if (bound >= int64_digits(-ctx.etiny()))
-            ans = make_finite(result_sign, BigInt(1), ctx.etiny() - 1);
-    }
-
-    // 多算一位去试精确解：结果精确的话，后面就不用走 exp(y*log(x)) 那条又慢又只能逼近的路
-    if (!ans) {
-        ans = base.power_exact(rhs, p + 1);
-        if (ans) {
-            if (result_sign) ans = ans->copy_negate();
-            exact = true;
-        }
-    }
-
-    if (!ans) {
-        // 一般情形：x**y 按 exp(y*log(x)) 算，同样是每次多算三位直到能定夺舍入方向
-        const BigInt yc{rhs.sign_ ? -rhs.coeff_ : rhs.coeff_};
-        int64_t extra{3};
-        BigInt coeff;
-        int64_t exp{0};
-        while (true) {
-            std::tie(coeff, exp) =
-                dec_math::dpower(base.coeff_, base.exp_, yc, rhs.exp_, p + extra);
-            if (is_roundable(coeff, p)) break;
-            extra += 3;
-        }
-        ans = make_finite(result_sign, std::move(coeff), exp);
-    }
-
-    if (!exact || rhs.is_integral()) return ans->fix(ctx);
-
-    // 指数不是整数时，规范要求即使结果精确也报 Inexact（落进次正规区还要报 Underflow）。
-    // fix 不报这些，又不能直接在 fix 前后补（会打乱信号优先级），于是先在一个陷阱全关、
-    // 标志位清空的副本上 fix，再按优先级把信号补报到真上下文上
-    BigDec padded{*ans};
-    if (static_cast<int64_t>(padded.digit_count()) <= p) {
-        // 补零补到 prec+1 位，保证 Rounded 一定会被触发
-        const int64_t pad{p + 1 - static_cast<int64_t>(padded.digit_count())};
-        padded = make_finite(padded.sign_, padded.coeff_ * pow10(pad), padded.exp_ - pad);
-    }
-    DecContext scratch{ctx};
-    scratch.traps().clear();
-    scratch.flags().clear();
-    const BigDec fixed{padded.fix(scratch)};
-
-    scratch.raise(DecCondition::Inexact);
-    if (scratch.flags().has(DecCondition::Subnormal)) scratch.raise(DecCondition::Underflow);
-
-    if (scratch.flags().has(DecCondition::Overflow)) ctx.raise(DecCondition::Overflow);
-    for (const DecCondition condition :
-         {DecCondition::Underflow,
-          DecCondition::Subnormal,
-          DecCondition::Inexact,
-          DecCondition::Rounded,
-          DecCondition::Clamped}) {
-        if (scratch.flags().has(condition)) ctx.raise(condition);
-    }
-    return fixed;
+    // 两边对齐到同一个指数（也就是 ideal_exp）之后，就是两个整数的带余除法
+    BigInt a{coeff_};
+    BigInt b{rhs.coeff_};
+    if (exp_ >= rhs.exp_)
+        a = a * pow10(exp_ - rhs.exp_);
+    else
+        b = b * pow10(rhs.exp_ - exp_);
+    const BigInt magnitude{a.floor_div(b)};
+    if (static_cast<int64_t>(magnitude.num_decimal_digits()) > prec) return std::nullopt;
+    return std::pair{magnitude, make_finite(sign_, a - magnitude * b, ideal_exp)};
 }

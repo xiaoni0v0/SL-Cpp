@@ -1437,6 +1437,58 @@ TEST_SUITE("BigDec——幂运算与超越函数") {
     }
 }
 
+TEST_SUITE("BigDec——operator 就是配一个默认上下文调同名具名方法") {
+
+    TEST_CASE("结果跟显式传默认上下文逐个一致") {
+        // 挑不会触发默认那三个陷阱的值：默认上下文下 operator 出事是抛，不是静默给 NaN
+        constexpr const char *const pool[]{
+            "0", "-0", "1", "-1", "2.5", "-2.5", "0.1", "1.50", "100", "-7", "1E+10", "1E-10"
+        };
+        for (const char *const a_s : pool) {
+            const BigDec a{d(a_s)};
+            CAPTURE(a_s);
+            DecContext c1;
+            CHECK((+a).identical(a.plus(c1)));
+            DecContext c2;
+            CHECK((-a).identical(a.minus(c2)));
+            for (const char *const b_s : pool) {
+                const BigDec b{d(b_s)};
+                CAPTURE(b_s);
+                DecContext c3;
+                CHECK((a + b).identical(a.add(b, c3)));
+                DecContext c4;
+                CHECK((a - b).identical(a.sub(b, c4)));
+                DecContext c5;
+                CHECK((a * b).identical(a.mul(b, c5)));
+                DecContext c6;
+                CHECK((a == b) == a.equals(b, c6));
+                DecContext c7;
+                CHECK((a <=> b) == a.compare_ordering(b, c7));
+                if (b.is_zero()) continue; // 除以零在默认上下文下是抛，下面单独测
+                DecContext c8;
+                CHECK((a / b).identical(a.div(b, c8)));
+                DecContext c9;
+                CHECK((a % b).identical(a.mod(b, c9)));
+            }
+        }
+    }
+
+    TEST_CASE("默认上下文的三个陷阱是开着的，所以 operator 出事是抛而不是静默给 NaN") {
+        CHECK_THROWS_AS((void) (d("1") / d("0")), DecTrapped);
+        CHECK_THROWS_AS((void) (d("0") / d("0")), DecTrapped);
+        CHECK_THROWS_AS((void) (d("1") % d("0")), DecTrapped);
+        CHECK_THROWS_AS((void) (d("0") * d("Infinity")), DecTrapped);
+        CHECK_THROWS_AS((void) (d("Infinity") - d("Infinity")), DecTrapped);
+        CHECK_THROWS_AS((void) (d("1E+999999") * d("10")), DecTrapped); // Overflow
+        CHECK_THROWS_AS((void) (d("sNaN") + d("1")), DecTrapped);
+        // 序比较遇 NaN 同样触发 InvalidOperation；== 遇安静 NaN 则照常返回 false
+        CHECK_THROWS_AS((void) (d("NaN") < d("1")), DecTrapped);
+        CHECK_FALSE(d("NaN") == d("NaN"));
+        // Inexact/Rounded 默认不设陷阱，正常算
+        CHECK((d("1") / d("3")).to_string() == "0.3333333333333333333333333333");
+    }
+}
+
 TEST_SUITE("BigDec——生成的用例表铺不到的窄路径") {
 
     TEST_CASE("// 的商也要过 fix：位数够但指数域不够时报 Overflow") {

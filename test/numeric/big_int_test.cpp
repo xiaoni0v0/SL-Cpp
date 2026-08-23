@@ -1180,6 +1180,34 @@ TEST_SUITE("BigInt——bit_length 与 to_double 的窄路径") {
     }
 }
 
+TEST_SUITE("BigInt——operator 与同名具名方法等价") {
+
+    TEST_CASE("一元、二元、位运算、移位、比较：两种写法逐个对齐") {
+        const auto vals{interesting_values()};
+        for (const auto &a : vals) {
+            CAPTURE(a.to_decimal_string());
+            CHECK((+a) == a.plus());
+            CHECK((-a) == a.minus());
+            CHECK((~a) == a.bit_not());
+            for (const long long k : {0LL, 1LL, 31LL, 64LL, 100LL}) {
+                CAPTURE(k);
+                CHECK((a << k) == a.shift_left(k));
+                CHECK((a >> k) == a.shift_right(k));
+            }
+            for (const auto &b : vals) {
+                CHECK((a + b) == a.add(b));
+                CHECK((a - b) == a.sub(b));
+                CHECK((a * b) == a.mul(b));
+                CHECK((a & b) == a.bit_and(b));
+                CHECK((a | b) == a.bit_or(b));
+                CHECK((a ^ b) == a.bit_xor(b));
+                CHECK((a == b) == a.equals(b));
+                CHECK((a <=> b) == a.compare_ordering(b));
+            }
+        }
+    }
+}
+
 TEST_SUITE("BigInt——跟 Python int 的交叉验证") {
 
     TEST_CASE("加减乘") {

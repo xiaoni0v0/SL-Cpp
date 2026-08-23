@@ -138,7 +138,20 @@ def main():
     # 尾数和指数都取一批边界值组合，期望值直接由 Python 的 int(mantissa) * 10**exp 给出。
     # 指数恒非负（BigInt 不收负指数，那类归 big_int_test.cpp 里的手写用例管）
     sci_lines = []
-    sci_mantissas = [0, 1, -1, 7, -7, 10, 100, 12345, -12345, 2**63, -(2**63) - 1, 10**30]
+    sci_mantissas = [
+        0,
+        1,
+        -1,
+        7,
+        -7,
+        10,
+        100,
+        12345,
+        -12345,
+        2**63,
+        -(2**63) - 1,
+        10**30,
+    ]
     for m in sci_mantissas:
         for e in (0, 1, 2, 9, 18, 19, 40, 100, 300):
             for form in ("e", "E", "e+"):
