@@ -22,8 +22,7 @@ class BigInt {
     [[nodiscard]] BigInt promoted() const;
     // 能装进 int64_t 就收缩回小路径，否则原样返回。所有慢路径算完的地方都要过这一步
     [[nodiscard]] static BigInt shrink(BigInt big);
-    // Debug 断言：核实"能装进 int64_t 就必然是小路径"等内部不变量。
-    // 只在依赖它的入口调用，不放进 shrink() 内部（会互相递归）
+    // Debug 断言：核实"能装进 int64_t 就必然是小路径"等内部不变量（别放进 shrink，会互相递归）
     void check_invariant() const;
 
     // 无穷位补码视角下前 limb_count 个 limb（负数高位补 1）。调用方保证走大路径、
@@ -44,10 +43,7 @@ class BigInt {
     // —————————— 构造 ——————————
 
     // 语法 `[+-]?digits([eE][+-]?digits)?`，不合法抛 std::invalid_argument。
-    // 指数必须非负（`1e-9` 不是整数；`100e-1` 值虽是整数 10 也不收，只看写法不看值），
-    // 且不设上限——`1e999999999` 会真去造一个十亿位的数。SL 字面量另有 65536 的指数上限，
-    // 那条归 lexer 管：它只约束 e 记法、不约束手写的等长字面量，是源码形态的政策
-    // （"不允许前导零"同理，这里 "007" 照常给 7）
+    // 指数必须非负（只看写法不看值）且不设上限——SL 字面量 65536 的指数上限与前导零限制归 lexer 管
     [[nodiscard]] static BigInt from_decimal_string(const std::string &s);
 
     // —————————— 转换 ——————————
@@ -86,7 +82,6 @@ class BigInt {
     [[nodiscard]] BigInt sub(const BigInt &rhs) const;
     [[nodiscard]] BigInt mul(const BigInt &rhs) const;
     // SL 的 //、%：向负无穷取整，语义同 Python。除数为 0 抛 std::domain_error
-    // （转成 SL 的 MathError 是调用方的事，BigInt 不认识 SL 的异常体系）
     [[nodiscard]] BigInt floor_div(const BigInt &divisor) const;
     [[nodiscard]] BigInt mod(const BigInt &divisor) const;
     // exponent < 0 抛 std::domain_error（SL 里 int ** 负数是 decimal）；结果不设规模上限

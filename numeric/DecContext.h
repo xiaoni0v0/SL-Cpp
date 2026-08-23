@@ -36,8 +36,7 @@ enum class DecCondition : uint8_t {
     ConversionSyntax,   // 字符串不是合法的 decimal
     DivisionImpossible, // 整除的结果位数超过 prec
     DivisionUndefined,  // 0 / 0
-    InvalidContext,     // 上下文字段本身不合法。BigDec 不产生它（setter 当场挡住），
-                        // 留着给调用方校验用户传进来的字段用
+    InvalidContext,     // 上下文字段本身不合法；BigDec 不产生它，留给调用方校验用户字段用
 };
 
 // 前 kDecSignalCount 项是信号本身，后面的都折算到 InvalidOperation
@@ -88,8 +87,7 @@ class DecContext {
     int32_t emin_{-999999};
 
   public:
-    // 各字段的取值上限。取这个量级是为了让 etiny()/etop() 以及 exp ± exp、exp ± prec
-    // 这类中间算式在 int64_t 里怎么算都溢不出来
+    // 各字段取值上限。取这个量级让 etiny()/etop()、exp ± exp、exp ± prec 在 int64_t 里溢不出来
     static constexpr int32_t kMaxPrec{999999999};
     static constexpr int32_t kMaxExp{999999999};
 

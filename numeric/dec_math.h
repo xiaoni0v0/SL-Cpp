@@ -6,12 +6,11 @@
 
 #include "BigInt.h"
 
-// decimal 超越函数（ln / log10 / exp / **）用的整数层定点算法，逐个对应 Python `_pydecimal`
-// 里的同名辅助函数。这一层只跟整数打交道：算出"带 p 位精度、误差不超过 1 ulp 的近似值"，
-// "要不要再多算几位才能定下舍入方向"由上层（BigDec）循环判断。
+// decimal 超越函数（ln/log10/exp/**）的整数层定点算法，对应 Python `_pydecimal` 同名函数。
+// 只跟整数打交道：算出带 p 位精度、误差 ≤ 1 ulp 的近似值，"要不要再多算几位"由上层循环判断。
 //
-// 算法用定点整数模拟实数：z 用 round(z * M) 表示，M 通常取 10^p 或 2^k。误差界都是
-// Python 那边论证过的，改这里任何常数（尤其 kTaylorL）都会拆掉上层"算到能定夺为止"的循环。
+// 定点整数模拟实数：z 用 round(z*M) 表示，M 通常取 10^p 或 2^k。误差界都是 Python 论证过的，
+// 改任何常数（尤其 kTaylorL）都会拆掉上层"算到能定夺为止"的循环。
 namespace dec_math {
 
 // 泰勒展开前的参数缩减深度，Python 里 _ilog/_iexp 的默认参数 L

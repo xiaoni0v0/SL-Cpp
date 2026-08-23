@@ -24,17 +24,17 @@ BigInt pow10(const int64_t k) {
 }
 
 std::optional<int64_t> to_int64(const BigInt &x) {
-    // 位长卡在 62 而不是 63：63 位的值里只有 INT64_MIN 装得下，为这一个特例放宽不值当
+    // 位长卡在 62 而非 63：63 位里只有 INT64_MIN 装得下，不为这一个特例放宽
     if (x.bit_length() > 62) return std::nullopt;
-    // 能过上面那关的值必然在小路径上，to_decimal_string 就是一次 std::to_string
+    // 能过这关的值必在小路径，to_decimal_string 就是一次 std::to_string
     return std::stoll(x.to_decimal_string());
 }
 
 BigInt div_nearest(const BigInt &a, const BigInt &b) {
     assert(!b.is_negative() && !b.is_zero());
     const BigInt q{a.floor_div(b)};
-    const BigInt r{a - q * b}; // 向负无穷取整，因此恒有 0 <= r < b
-    // 2r 超过 b 就该进位；正好等于 b（恰好一半）时看 q 的奇偶，奇数才进，也就是取偶
+    const BigInt r{a - q * b}; // 向负无穷取整，恒有 0 <= r < b
+    // 2r > b 进位；2r == b（恰好一半）时看 q 奇偶，奇数才进（就近取偶）
     return r * BigInt(2) + BigInt(q.is_odd() ? 1 : 0) > b ? q + BigInt(1) : q;
 }
 
@@ -90,8 +90,8 @@ BigInt log10_digits(const int64_t p) {
     static std::string digits{"23025850929940456840179914546843642076011014886"};
 
     if (static_cast<size_t>(p) >= digits.size()) {
-        // 一次多算 3 位，直到多出来的那几位不全是 0（全是 0 说明还没定下来）。
-        // ilog 出来的位数只比 m 略少，不可能短到连 tail 位都不够——用 assert 把假设钉住
+        // 一次多算 3 位，直到多出来的那几位不全为 0（全 0 说明还没定下来）。
+        // ilog 位数只比 m 略少，不可能短到连 tail 位都不够——用 assert 钉住
         int64_t extra{3};
         std::string computed;
         while (true) {
@@ -191,8 +191,7 @@ BigInt iexp(const BigInt &x, const BigInt &m) {
 std::pair<BigInt, int64_t> dexp(const BigInt &c, const int64_t e, int64_t p) {
     p += 2; // 拿 M = 10^(p+2) 去调 iexp，也就是多算三位
 
-    // log(10) 要跟着多算 c*10^e 的调整后指数那么多位。位数跟 Python 一样把负号也算进去
-    // （它写 len(str(c))）——c 为负时只会多算一位、更保守，照抄以免跟参考实现分叉
+    // log(10) 要多算 c*10^e 的调整后指数那么多位；位数跟 Python 一样把负号也算进去（照抄以免分叉）
     const int64_t c_len{static_cast<int64_t>(c.num_decimal_digits()) + (c.is_negative() ? 1 : 0)};
     const int64_t extra{std::max<int64_t>(0, e + c_len - 1)};
     const int64_t q{p + extra};
@@ -218,14 +217,12 @@ dpower(const BigInt &xc, const int64_t xe, const BigInt &yc, const int64_t ye, c
 
     // y*log(x) = yc*lxc*10^(-p-b-1+ye) = pc * 10^(-p-1)
     const int64_t shift{ye - b};
-    // b 的定义是 digits(yc) + ye，所以 shift 恒等于 -digits(yc) <= -1；shift >= 0 这一支
-    // 永远走不到，留着只是跟 Python 的写法（不假设这条恒等式）保持一致
+    // shift 恒为 -digits(yc) <= -1，>= 0 这支走不到，留着只跟 Python 写法保持一致
     assert(shift < 0);
     const BigInt pc{shift >= 0 ? lxc * yc * pow10(shift) : div_nearest(lxc * yc, pow10(-shift))};
 
     if (pc.is_zero()) {
-        // 结果贴着 1。这里特意给一个不正好等于 1 的近似值——上层要靠"末几位不是 5000…"判断
-        // 能不能定下舍入方向，正好是 1 会让它永远判不出来
+        // 结果贴着 1：给一个不正好等于 1 的近似值，否则上层"末几位不是 5000…"永远判不出方向
         const bool greater_than_one{
             (static_cast<int64_t>(xc.num_decimal_digits()) + xe >= 1) == !yc.is_negative()
         };

@@ -334,8 +334,7 @@ BigInt BigInt::from_decimal_string(const std::string &s) {
     if (digits_begin == digits_end)
         throw std::invalid_argument("BigInt::from_decimal_string: no digits");
 
-    // 科学计数法后缀。指数只能非负：BigInt 是整数类型，`1e-9` 不是整数；`100e-1` 数值上虽是
-    // 整数 10，同样不收——合不合法只看写法，不看算出来的值（同 SL.md 2.1.4 对字面量的规定）
+    // 指数只能非负（只看写法不看值：`100e-1` 数值是整数也不收）
     int64_t exponent{0};
     if (i < s.size() && (s[i] == 'e' || s[i] == 'E')) {
         ++i;
@@ -347,8 +346,7 @@ BigInt BigInt::from_decimal_string(const std::string &s) {
         while (i < s.size() && is_digit(s[i])) ++i;
         if (exp_begin == i)
             throw std::invalid_argument("BigInt::from_decimal_string: no exponent digits");
-        // 先跳过前导 0，再按剩下的位数挡掉装不进 int64_t 的（19 位就可能溢出）。挡的是
-        // "指数本身表示不了"，不是"指数太大算不动"——后者不设限，见头文件
+        // 跳过前导 0 后按剩余位数挡掉装不进 int64_t 的；指数太大算不动不设限，见头文件
         size_t exp_digits{exp_begin};
         while (exp_digits + 1 < i && s[exp_digits] == '0') ++exp_digits;
         if (i - exp_digits > 18)
@@ -370,11 +368,9 @@ BigInt BigInt::from_decimal_string(const std::string &s) {
         if (carry) limbs.push_back(static_cast<uint32_t>(carry));
     }
     BigInt mantissa{shrink(from_magnitude(std::move(limbs), neg))};
-    // 尾数为 0 时结果恒是 0，别去算 10^exponent：那一步的代价只跟指数走，"0e1000000" 会白算
-    // 三秒多，而指数不设上限（见头文件），再大一档就是分钟级
+    // 尾数为 0 时恒为 0，别真去算 10^exponent（代价只跟指数走，指数不设上限）
     if (exponent == 0 || mantissa.is_zero()) return mantissa;
-    // 乘 10^exponent，而不是先把零拼进数字串再解析：上面那个逐位 *10 的循环是 O(位数²)，
-    // 同量级下比 pow 慢一个数量级（10^65536：138ms vs 11ms）
+    // 乘 10^exponent，而不是拼零再解析：逐位 *10 是 O(位数²)，比 pow 慢一个数量级
     return mantissa.mul(BigInt(10).pow(BigInt(exponent)));
 }
 
