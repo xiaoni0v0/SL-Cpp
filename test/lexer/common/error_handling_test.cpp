@@ -48,6 +48,10 @@ TEST_SUITE("SyntaxError 本身的行为") {
         CHECK_THROWS_AS(lex(U"/* unterminated"), SyntaxError); // 未闭合块注释
         CHECK_THROWS_AS(lex(U"\"\\q\""), SyntaxError);         // 未知转义
         CHECK_THROWS_AS(lex(U"when"), SyntaxError);            // 保留字
+        CHECK_THROWS_AS(lex(U"1e"), SyntaxError);              // 科学计数法缺指数数字
+        CHECK_THROWS_AS(lex(U"1e-9"), SyntaxError);            // int 不收负指数
+        CHECK_THROWS_AS(lex(U"1e10000"), SyntaxError);         // int 指数超上限
+        CHECK_THROWS_AS(lex(U"1e01"), SyntaxError);            // 指数前导零
         const std::u32string bad_char{static_cast<char32_t>(0x20AC)};
         CHECK_THROWS_AS(lex(bad_char), SyntaxError); // 无法识别的字符
     }

@@ -256,6 +256,7 @@ add_executable(SL_Cpp_Lexer_Tests
         test/lexer/04_literals/none_bool_g_l_ellipsis_test.cpp
         test/lexer/04_literals/int_test.cpp
         test/lexer/04_literals/float_test.cpp
+        test/lexer/04_literals/scientific_notation_test.cpp
         test/lexer/04_literals/string_test.cpp
         test/lexer/04_literals/raw_string_test.cpp
         # 运算符与符号

@@ -1,8 +1,8 @@
-// SL.md 字面量——float：`123.45`，暂不支持科学计数法；
-// 整数、小数部分都不能省略，`1.`、`.1` 不是合法的 float 字面量。
+// SL.md 字面量——float：`123.45`；整数、小数部分都不能省略，`1.`、`.1` 不是合法的 float 字面量。
 //
 // 点号和数字更复杂的交互（`1.0..1.2` 这类）放在 05_operators/dot_disambiguation_test.cpp，
-// 这里只测 float 字面量本身的基本形状。
+// 科学计数法后缀（`1.5e-3`）放在 scientific_notation_test.cpp，这里只测 float 字面量本身的
+// 基本形状。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
@@ -50,9 +50,9 @@ TEST_SUITE("float") {
 
     TEST_CASE("浮点数后紧跟下划线非法") { CHECK_THROWS_AS(lex(U"1.5_"), SyntaxError); }
 
-    TEST_CASE("科学计数法暂不支持：e 会被当成后面紧跟的标识符开头，从而触发数字后紧跟字母的错误") {
-        CHECK_THROWS_AS(lex(U"1e10"), SyntaxError);
-        CHECK_THROWS_AS(lex(U"1.5e-3"), SyntaxError);
+    TEST_CASE("带科学计数法后缀仍然是 float（细则见 scientific_notation_test.cpp）") {
+        CHECK(lex_dump(U"1.5e-3") == "LITERAL_FLOAT(1.5e-3)");
+        CHECK(lex_dump(U"1.0e10") == "LITERAL_FLOAT(1.0e10)");
     }
 
     TEST_CASE(

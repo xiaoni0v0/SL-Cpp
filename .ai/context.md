@@ -924,6 +924,11 @@ Code），但"建立"这个操作每次执行都必须构造全新的 Function �
   （`BigDec::try_from_string` 本来就按 IBM 语法收指数，`BigInt::from_decimal_string` 也补上了）
   都做完了。parser/analyzer 那边还没跟进（`AstNodeLiteralFloat` 该不该趁机改名成
   `AstNodeLiteralDecimal`、`StaticEvaler` 的 `is_numeric`/`node_to_double` 等还是老的 float 语义）。
+  接线时有一条义务别漏：decimal 字面量的指数 lexer 不设上限（**故意的**——上下文的 Emin/Emax
+  运行时可变，而构造不舍入，词法期无从卡起），于是 `1.0e2000000000` 这种超出 `BigDec::kMaxExponent`
+  的写法能过词法、到 `try_from_string` 才返回 `nullopt`，**由转换那一层报 SyntaxError**。这条不下沉
+  到 lexer：`kMaxExponent` 是 numeric 的表示上限、不是源码形态的政策，抄一份到 lexer 会静默失配
+  （跟 int 那条 9999 性质不同，那条挡的是写法上的不对称，手写等长字面量照样放行）。
 - 移位量为负时怎么办待拍板（`int` 和 raw 两边一起定）：建议抛 `ValueError`，不要"反向移位"，
   理由见上面 `raw_int`/`raw_float` 一节。
 - `BigDec` 还缺 `hash`（要跟数值相等的 `int` 一致，得先归一标度）和 `int(decimal)`（取整方向 SL.md

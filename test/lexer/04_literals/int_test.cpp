@@ -1,4 +1,5 @@
-// SL.md 字面量——int：`123`，暂不支持二进制/八进制/十六进制
+// SL.md 字面量——int：`123`，暂不支持二进制/八进制/十六进制。
+// 科学计数法后缀（`1e9` 也是 int）放在 scientific_notation_test.cpp
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
