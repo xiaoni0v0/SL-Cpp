@@ -7,7 +7,7 @@
  */
 enum class TokenType {
 #define X(name) name,
-#include "x_token_type.h"
+#include "x_token_type.inc"
 
 #undef X
 };

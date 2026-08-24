@@ -41,7 +41,7 @@ EXCLUDE_DIR_PATTERNS = [
     "decimal_for_reference",
 ]
 # 排除的文件名（x_*.h 是内联 X-Macro 头文件，可按需增删）
-EXCLUDE_FILE_PATTERNS = ["x_*.h"]
+EXCLUDE_FILE_PATTERNS = []
 
 
 class Formatter(NamedTuple):

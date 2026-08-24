@@ -124,9 +124,9 @@ add_executable(SL main.cpp
         lexer/Lexer.cpp
         lexer/Lexer.h
         lexer/token.h
-        lexer/x_keyword.h
-        lexer/x_reservedword.h
-        lexer/x_token_type.h
+        lexer/x_keyword.inc
+        lexer/x_reservedword.inc
+        lexer/x_token_type.inc
 
         # builtins
         builtins/exceptions/EncodingError.h
@@ -140,7 +140,7 @@ add_executable(SL main.cpp
         parser/Parser.h
         parser/ast_nodes/ast_nodes.h
         parser/ast_nodes/to_json.cpp
-        parser/ast_nodes/x_ast_nodes.h
+        parser/ast_nodes/x_ast_nodes.inc
         parser/ast_nodes/details/ast_node.h
         parser/ast_nodes/details/ast_node_class.h
         parser/ast_nodes/details/ast_node_control_flows.h
@@ -234,9 +234,9 @@ add_executable(SL_Cpp_Lexer_Tests
         lexer/Lexer.cpp
         lexer/Lexer.h
         lexer/token.h
-        lexer/x_keyword.h
-        lexer/x_reservedword.h
-        lexer/x_token_type.h
+        lexer/x_keyword.inc
+        lexer/x_reservedword.inc
+        lexer/x_token_type.inc
         utils/string_utils.cpp
         utils/string_utils.h
 
@@ -281,16 +281,16 @@ add_executable(SL_Cpp_Parser_Tests
         lexer/Lexer.cpp
         lexer/Lexer.h
         lexer/token.h
-        lexer/x_keyword.h
-        lexer/x_reservedword.h
-        lexer/x_token_type.h
+        lexer/x_keyword.inc
+        lexer/x_reservedword.inc
+        lexer/x_token_type.inc
         utils/string_utils.cpp
         utils/string_utils.h
         parser/Parser.cpp
         parser/Parser.h
         parser/ast_nodes/ast_nodes.h
         parser/ast_nodes/to_json.cpp
-        parser/ast_nodes/x_ast_nodes.h
+        parser/ast_nodes/x_ast_nodes.inc
         parser/ast_nodes/details/ast_node.h
         parser/ast_nodes/details/ast_node_class.h
         parser/ast_nodes/details/ast_node_control_flows.h
@@ -359,9 +359,9 @@ add_executable(SL_Cpp_Analyzer_Tests
         lexer/Lexer.cpp
         lexer/Lexer.h
         lexer/token.h
-        lexer/x_keyword.h
-        lexer/x_reservedword.h
-        lexer/x_token_type.h
+        lexer/x_keyword.inc
+        lexer/x_reservedword.inc
+        lexer/x_token_type.inc
         utils/string_utils.cpp
         utils/string_utils.h
         numeric/BigDec.cpp
@@ -376,7 +376,7 @@ add_executable(SL_Cpp_Analyzer_Tests
         parser/Parser.h
         parser/ast_nodes/ast_nodes.h
         parser/ast_nodes/to_json.cpp
-        parser/ast_nodes/x_ast_nodes.h
+        parser/ast_nodes/x_ast_nodes.inc
         parser/ast_nodes/details/ast_node.h
         parser/ast_nodes/details/ast_node_class.h
         parser/ast_nodes/details/ast_node_control_flows.h

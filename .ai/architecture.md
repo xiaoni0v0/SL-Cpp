@@ -187,6 +187,6 @@ Python 内置的 int）产出，`big_dec_test.cpp`/`big_int_test.cpp` 逐条比�
 
 ## X-macro 清单文件
 
-除了 `x_ast_nodes.h`，还有 `lexer/x_token_type.h`（全部 `TokenType` 枚举值）、`lexer/x_keyword.h`
-（关键字文本 → `TokenType` 映射）、`lexer/x_reservedword.h`（保留字但非关键字，如 `_G`/`_L`）。加新
+除了 `x_ast_nodes.h`，还有 `../lexer/x_token_type.inc`（全部 `TokenType` 枚举值）、`../lexer/x_keyword.inc`
+（关键字文本 → `TokenType` 映射）、`../lexer/x_reservedword.inc`（保留字但非关键字，如 `_G`/`_L`）。加新
 关键字/token 类型时这几个文件要一起改，具体加在哪由这个 token 的性质决定（是不是关键字、是不是保留字）。

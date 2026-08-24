@@ -202,7 +202,7 @@ Token Lexer::read_identifier_keyword_reservedword() {
     // 工具：关键字字符串到对应 TokenType 的映射
     static const std::unordered_map<std::u32string, TokenType> KEYWORDS_MAPPING{
 #define X(a, b) {U"" #a, TokenType::b},
-#include "x_keyword.h"
+#include "x_keyword.inc"
 
 #undef X
     };
@@ -210,7 +210,7 @@ Token Lexer::read_identifier_keyword_reservedword() {
     // 工具：保留字字符串到对应 TokenType 的映射
     static const std::unordered_map<std::u32string, TokenType> RESERVEDWORDS_MAPPING{
 #define X(a, b) {U"" #a, TokenType::b},
-#include "x_reservedword.h"
+#include "x_reservedword.inc"
 
 #undef X
     };
@@ -471,7 +471,7 @@ std::vector<Token> Lexer::tokenize() && {
 std::string Lexer::get_typename_by_tokentype(const TokenType type) {
     static constexpr const char *const TOKEN_TYPE_MAPPING[]{
 #define X(name) #name,
-#include "x_token_type.h"
+#include "x_token_type.inc"
 
 #undef X
     };

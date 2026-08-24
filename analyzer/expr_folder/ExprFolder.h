@@ -18,7 +18,7 @@ class ExprFolder {
     static void visit(AstNode &node);
 
 #define X(nt) static void visit(nt &node);
-#include "../../parser/ast_nodes/x_ast_nodes.h"
+#include "../../parser/ast_nodes/x_ast_nodes.inc"
 
 #undef X
 

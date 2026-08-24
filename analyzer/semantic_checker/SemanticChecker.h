@@ -51,7 +51,7 @@ class SemanticChecker {
     void check(const AstNode &node);
 
 #define X(nt) void check(const nt &node);
-#include "../../parser/ast_nodes/x_ast_nodes.h"
+#include "../../parser/ast_nodes/x_ast_nodes.inc"
 
 #undef X
 
