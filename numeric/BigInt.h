@@ -43,7 +43,7 @@ class BigInt {
     // —————————— 构造 ——————————
 
     // 语法 `[+-]?digits([eE][+-]?digits)?`，不合法抛 std::invalid_argument。
-    // 指数必须非负（只看写法不看值）且不设上限——SL 字面量 65536 的指数上限与前导零限制归 lexer 管
+    // 指数必须非负（只看写法不看值）且不设上限——SL 字面量 9999 的指数上限与前导零限制归 lexer 管
     [[nodiscard]] static BigInt from_decimal_string(const std::string &s);
 
     // —————————— 转换 ——————————

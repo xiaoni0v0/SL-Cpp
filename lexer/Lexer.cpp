@@ -128,8 +128,6 @@ Token Lexer::read_raw_string() {
 }
 
 Token Lexer::read_number() {
-    static constexpr int64_t kMaxIntExponent{65536}; // 结果为 int 时的 e 指数上限
-
     const int start_row{row_}, start_col{col_};
 
     // 读一串数字
@@ -168,7 +166,7 @@ Token Lexer::read_number() {
 
         const std::u32string exponent_digits{read_digits(false, "the exponent")};
         if (exponent_digits.empty()) {
-            error("missing exponent digits in numeric literal", start_row, start_col);
+            error("missing exponent digits in numeric literal", row_, col_);
         }
         num_literal += exponent_digits;
 
@@ -178,20 +176,9 @@ Token Lexer::read_number() {
             if (exponent_negative) {
                 error("a negative exponent needs a fractional part", start_row, start_col);
             }
-            // 上限 65536
-            int64_t exponent_value{0};
-            for (const char32_t c : exponent_digits) {
-                exponent_value = exponent_value * 10 + (c - U'0');
-                if (exponent_value > kMaxIntExponent) break;
-            }
-            if (exponent_value > kMaxIntExponent) {
-                error(
-                    std::format(
-                        "exponent of an integer literal may not exceed {}", kMaxIntExponent
-                    ),
-                    start_row,
-                    start_col
-                );
+            // <= 9999，也即位数 <= 4
+            if (exponent_digits.size() > 4) {
+                error("exponent of an integer literal may not exceed 9999", start_row, start_col);
             }
         }
     }
