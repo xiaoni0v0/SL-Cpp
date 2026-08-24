@@ -5,8 +5,11 @@
 
 #include <cassert>
 #include <format>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 char32_t Lexer::peek(const size_t offset) const {
     const size_t idx{pos_ + offset};
@@ -125,23 +128,72 @@ Token Lexer::read_raw_string() {
 }
 
 Token Lexer::read_number() {
+    static constexpr int64_t kMaxIntExponent{65536}; // 结果为 int 时的 e 指数上限
+
     const int start_row{row_}, start_col{col_};
 
-    std::u32string num_literal;
-    bool is_float{false};
+    // 读一串数字
+    const auto read_digits{
+        [&](const bool allow_leading_zeros, const std::string_view part) -> std::u32string {
+            std::u32string digits;
+            while (!is_eof() && is_digit(peek())) digits += advance();
+            if (!allow_leading_zeros && digits.size() > 1 && digits[0] == U'0') {
+                error(
+                    std::format("leading zeros in {} are not permitted", part), start_row, start_col
+                );
+            }
+            return digits;
+        }
+    };
 
-    while (!is_eof() && is_digit(peek())) num_literal += advance();
+    std::u32string num_literal{read_digits(false, "the integer part")};
+    bool is_decimal{false}; // 带小数点即为 decimal，否则是 int
 
-    // 整数部分不允许前导零（单独一个 "0" 除外）
-    if (num_literal.size() > 1 && num_literal[0] == U'0') {
-        error("leading zeros in decimal literals are not permitted", start_row, start_col);
+    // 只有小数点后紧跟数字才当作小数部分；否则不消耗这个 '.'，留给下一个 token
+    if (peek() == U'.' && is_digit(peek(1))) {
+        is_decimal = true;
+        num_literal += advance();
+        num_literal += read_digits(true, "the fractional part"); // 小数部分不限前导零
     }
 
-    // 只有小数点后紧跟数字才当作 float 的一部分；否则不消耗这个 '.'，留给下一个 token
-    if (peek() == U'.' && is_digit(peek(1))) {
-        is_float = true;
+    // 科学计数法后缀 `[eE][+-]?digits`
+    if (peek() == U'e' || peek() == U'E') {
         num_literal += advance();
-        while (!is_eof() && is_digit(peek())) num_literal += advance();
+
+        bool exponent_negative{false};
+        if (peek() == U'+' || peek() == U'-') {
+            exponent_negative = peek() == U'-';
+            num_literal += advance();
+        }
+
+        const std::u32string exponent_digits{read_digits(false, "the exponent")};
+        if (exponent_digits.empty()) {
+            error("missing exponent digits in numeric literal", start_row, start_col);
+        }
+        num_literal += exponent_digits;
+
+        // int 的 e 有范围
+        if (!is_decimal) {
+            // >= 0
+            if (exponent_negative) {
+                error("a negative exponent needs a fractional part", start_row, start_col);
+            }
+            // 上限 65536
+            int64_t exponent_value{0};
+            for (const char32_t c : exponent_digits) {
+                exponent_value = exponent_value * 10 + (c - U'0');
+                if (exponent_value > kMaxIntExponent) break;
+            }
+            if (exponent_value > kMaxIntExponent) {
+                error(
+                    std::format(
+                        "exponent of an integer literal may not exceed {}", kMaxIntExponent
+                    ),
+                    start_row,
+                    start_col
+                );
+            }
+        }
     }
 
     // 数字后面紧跟字母或下划线，非法
@@ -152,7 +204,7 @@ Token Lexer::read_number() {
     }
 
     return {
-        is_float ? TokenType::LITERAL_FLOAT : TokenType::LITERAL_INT,
+        is_decimal ? TokenType::LITERAL_FLOAT : TokenType::LITERAL_INT,
         start_row,
         start_col,
         num_literal

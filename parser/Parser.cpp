@@ -12,8 +12,10 @@
 #include <optional>
 #include <ranges>
 
+namespace {
+
 // token 类型转换为一元运算符类型
-static std::optional<AstNodeOpUnary::OpType> token_type_to_unary_op_type(const TokenType t) {
+std::optional<AstNodeOpUnary::OpType> token_type_to_unary_op_type(const TokenType t) {
     using enum TokenType;
     using enum AstNodeOpUnary::OpType;
 
@@ -32,7 +34,7 @@ static std::optional<AstNodeOpUnary::OpType> token_type_to_unary_op_type(const T
 }
 
 // token 类型转换为二元运算符类型（不含比较运算符）
-static std::optional<AstNodeOpBinary::OpType> token_type_to_binary_op_type(const TokenType t) {
+std::optional<AstNodeOpBinary::OpType> token_type_to_binary_op_type(const TokenType t) {
     using enum TokenType;
     using enum AstNodeOpBinary::OpType;
 
@@ -61,7 +63,7 @@ static std::optional<AstNodeOpBinary::OpType> token_type_to_binary_op_type(const
 
 // token 类型是否属于比较组（== != < <= > >=），是则转换成对应的 AstNodeCompare::OpType，否则
 // nullopt
-static std::optional<AstNodeCompare::OpType> token_type_to_compare_op_type(const TokenType t) {
+std::optional<AstNodeCompare::OpType> token_type_to_compare_op_type(const TokenType t) {
     using enum TokenType;
     using enum AstNodeCompare::OpType;
 
@@ -82,7 +84,7 @@ static std::optional<AstNodeCompare::OpType> token_type_to_compare_op_type(const
 // 运算符绑定力表
 // 对中缀/后缀运算符，返回 {lbp, rbp}
 // {-1,-1} 表示不是中缀/后缀运算符
-static std::pair<int, int> infix_bp(const TokenType type) {
+std::pair<int, int> infix_bp(const TokenType type) {
     using enum TokenType;
 
     switch (type) {
@@ -150,7 +152,7 @@ static std::pair<int, int> infix_bp(const TokenType type) {
 }
 
 // token 类型是否是复合赋值 op=，是则转换成对应的二元运算符，否则 nullopt
-static std::optional<AstNodeOpBinary::OpType> assign_compound_to_binary(const TokenType op) {
+std::optional<AstNodeOpBinary::OpType> assign_compound_to_binary(const TokenType op) {
     using enum TokenType;
     using enum AstNodeOpBinary::OpType;
 
@@ -173,6 +175,8 @@ static std::optional<AstNodeOpBinary::OpType> assign_compound_to_binary(const To
         return std::nullopt;
     }
 }
+
+} // namespace
 
 const Token &Parser::peek() const { return pos_ < tokens_.size() ? tokens_[pos_] : tokens_.back(); }
 
