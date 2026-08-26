@@ -6,7 +6,7 @@ X(LITERAL_G)        // _G
 X(LITERAL_L)        // _L
 X(LITERAL_ELLIPSIS) // ...
 X(LITERAL_INT)      // 123
-X(LITERAL_FLOAT)    // 123.45
+X(LITERAL_DECIMAL)  // 123.45
 X(LITERAL_STR)      // "Hello" 'Hello'
 
 // 标识符

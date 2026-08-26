@@ -108,7 +108,7 @@ class StaticEvaler {
 
     /**
      * node 是不是一个纯字面量：
-     *   None/bool/int/float/str/Ellipsis 天然是；
+     *   None/bool/int/decimal/str/Ellipsis 天然是；
      *   tuple/list 要求每个元素递归满足；
      *   dict、_G/_L 恒不是。
      */
@@ -120,7 +120,7 @@ class StaticEvaler {
     [[nodiscard]] static bool is_int(const AstNode &node);
     // 是不是 bool 或 int。四则运算、比较会把 bool 折算成 int 再算，用这个
     [[nodiscard]] static bool is_int_family(const AstNode &node);
-    // 是不是 bool 或 int 或 float
+    // 是不是 bool 或 int 或 decimal
     [[nodiscard]] static bool is_numeric(const AstNode &node);
     // node -> int64_t。调用方保证 is_int_family(node)
     [[nodiscard]] static std::optional<int64_t> node_to_int64(const AstNode &node);
@@ -138,7 +138,8 @@ class StaticEvaler {
 
     [[nodiscard]] static AstNodePtr make_bool(Position pos, bool value);
     [[nodiscard]] static AstNodePtr make_int(Position pos, int64_t value);
-    [[nodiscard]] static AstNodePtr make_float(Position pos, double value); // ±inf/NaN 返回 nullptr
+    [[nodiscard]] static AstNodePtr
+    make_decimal(Position pos, double value); // ±inf/NaN 返回 nullptr
     // 字面量之间的值相等。调用方保证 is_literal_pure(a) 且 is_literal_pure(b)
     [[nodiscard]] static bool literal_equal(const AstNode &a, const AstNode &b);
     // 字面量之间的值比较。调用方保证 is_literal_pure(a) 且 is_literal_pure(b)

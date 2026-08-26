@@ -28,9 +28,9 @@ TEST_SUITE("StaticEvaler 数值算术") {
         CHECK(fold_json(U"-True") == int_lit("-1"));
     }
 
-    TEST_CASE("/ 恒产出 float，即使两边都是 int") {
-        CHECK(fold_json(U"7 / 2") == float_lit("3.5"));
-        CHECK(fold_json(U"6 / 2") == float_lit("3.0"));
+    TEST_CASE("/ 恒产出 decimal，即使两边都是 int") {
+        CHECK(fold_json(U"7 / 2") == decimal_lit("3.5"));
+        CHECK(fold_json(U"6 / 2") == decimal_lit("3.0"));
     }
 
     TEST_CASE("// 和 % 都是 int 时恒产出 int，向负无穷取整（SL.md 原例）") {
@@ -48,9 +48,9 @@ TEST_SUITE("StaticEvaler 数值算术") {
         CHECK(fold_json(U"-7 % -2") == int_lit("-1"));
     }
 
-    TEST_CASE("掺了 float 的 // 和 %，按浮点向负无穷取整") {
-        CHECK(fold_json(U"7.5 // 2") == float_lit("3.0"));
-        CHECK(fold_json(U"-7.5 % 2") == float_lit("0.5"));
+    TEST_CASE("掺了 decimal 的 // 和 %，按浮点向负无穷取整") {
+        CHECK(fold_json(U"7.5 // 2") == decimal_lit("3.0"));
+        CHECK(fold_json(U"-7.5 % 2") == decimal_lit("0.5"));
     }
 
     TEST_CASE("除以 0 一律不折，交给运行时报 MathError") {
@@ -76,8 +76,8 @@ TEST_SUITE("StaticEvaler 数值算术") {
             fold_json(U"1.0 / 0.0") == nlohmann::json{
                                            {"type", "OpBinary"},
                                            {"op", "/"},
-                                           {"left", float_lit("1.0")},
-                                           {"right", float_lit("0.0")}
+                                           {"left", decimal_lit("1.0")},
+                                           {"right", decimal_lit("0.0")}
                                        }
         );
     }
@@ -88,20 +88,20 @@ TEST_SUITE("StaticEvaler 数值算术") {
         CHECK(fold_json(U"5 ** 0") == int_lit("1"));
     }
 
-    TEST_CASE("** 指数为负，结果是 float") { CHECK(fold_json(U"2 ** -1") == float_lit("0.5")); }
+    TEST_CASE("** 指数为负，结果是 decimal") { CHECK(fold_json(U"2 ** -1") == decimal_lit("0.5")); }
 
     TEST_CASE("+x/-x/~x 对字面量取值，~ 只对 bool/int 有意义") {
         CHECK(fold_json(U"-5") == int_lit("-5"));
         CHECK(fold_json(U"- -5") == int_lit("5"));
         CHECK(fold_json(U"~5") == int_lit("-6"));
         CHECK(fold_json(U"~0") == int_lit("-1"));
-        CHECK(fold_json(U"-1.5") == float_lit("-1.5"));
+        CHECK(fold_json(U"-1.5") == decimal_lit("-1.5"));
     }
 
-    TEST_CASE("~ 对 float 不折，交给运行时报错") {
+    TEST_CASE("~ 对 decimal 不折，交给运行时报错") {
         CHECK(
             fold_json(U"~1.5") ==
-            nlohmann::json{{"type", "OpUnary"}, {"op", "~"}, {"operand", float_lit("1.5")}}
+            nlohmann::json{{"type", "OpUnary"}, {"op", "~"}, {"operand", decimal_lit("1.5")}}
         );
     }
 
@@ -178,7 +178,9 @@ TEST_SUITE("StaticEvaler 数值算术——int64_t 边界") {
         );
     }
 
-    TEST_CASE("** 指数非负但结果溢出：不折，不能退化成 float（SL.md 规定这种情况结果必须是 int）") {
+    TEST_CASE(
+        "** 指数非负但结果溢出：不折，不能退化成 decimal（SL.md 规定这种情况结果必须是 int）"
+    ) {
         CHECK(
             fold_json(U"10 ** 100") == nlohmann::json{
                                            {"type", "OpBinary"},

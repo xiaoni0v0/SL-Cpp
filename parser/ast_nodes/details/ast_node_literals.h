@@ -45,11 +45,11 @@ struct AstNodeLiteralInt : AstNode {
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
-// float。raw_ 的形状在构造时校验，不合法即 InternalError
-struct AstNodeLiteralFloat : AstNode {
+// decimal。raw_ 的形状在构造时校验，不合法即 InternalError
+struct AstNodeLiteralDecimal : AstNode {
     const std::u32string raw_;
 
-    explicit AstNodeLiteralFloat(Position pos, std::u32string raw);
+    explicit AstNodeLiteralDecimal(Position pos, std::u32string raw);
 
   private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;

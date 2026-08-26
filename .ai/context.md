@@ -501,8 +501,8 @@ double 折 `0.1 + 0.2` 会得到 `0.30000000000000004`，那是**错值**，不�
 **结果为 bool 的比较照折**：比较不舍入，它唯一查上下文的场合是 NaN 触发信号，而 NaN 只能由构造
 调用产生，调用本身就不参与折叠。
 
-`StaticEvaler` 里整套 float 折叠（`node_to_double`/`std::pow`/`std::fmod`/`make_float`）都要按这条
-清理，不是改改名就完事。
+`StaticEvaler` 里整套二进制浮点折叠（`node_to_double`/`std::pow`/`std::fmod`/`make_decimal`）都要
+按这条清理，不是改改名就完事。
 
 ### 反向运算符名用 `__rop_xxx__`，不是 Python 式的 `__op_rxxx__`
 
@@ -864,9 +864,9 @@ SL.md 一直没规定 `007`/`00` 合不合法，是真实的规范空白，已�
 
 ### 字面量 `raw_` 的形状校验归节点构造函数，且 AST 层面负数是合法字面量
 
-两件事，同一个起因：`SemanticChecker` 原先管着 `AstNodeLiteralInt`/`AstNodeLiteralFloat` 的 `raw_`
-形状（纯数字、前导零、科学计数法后缀），而 `Analyzer` 的顺序是**先 check 后 fold、只 check 这一次**，
-于是 `StaticEvaler::make_int`/`make_float` 折出来的字面量节点从来没有任何人校验过。
+两件事，同一个起因：`SemanticChecker` 原先管着 `AstNodeLiteralInt`/`AstNodeLiteralDecimal` 的
+`raw_` 形状（纯数字、前导零、科学计数法后缀），而 `Analyzer` 的顺序是**先 check 后 fold、只 check
+这一次**，于是 `StaticEvaler::make_int`/`make_decimal` 折出来的字面量节点从来没有任何人校验过。
 
 **校验挪进构造函数**（`parser/ast_nodes/details/ast_node_literals.cpp`）。挑中这一处、而不是把
 `SemanticChecker` 里那四十来处 `InternalError` 类断言一起搬，是因为它同时占齐三条：只看自己的字段、
@@ -952,10 +952,12 @@ Code），但"建立"这个操作每次执行都必须构造全新的 Function �
   向下取整？SL 的 `//` 已经定死"永远向负无穷"，`int()` 若选截断，语言里就有两种取整方向了。
 - 科学计数法字面量：lexer（`Lexer::read_number`，含 int 指数上限 9999）、`numeric/` 两个类
   （`BigDec::try_from_string` 本来就按 IBM 语法收指数，`BigInt::from_decimal_string` 也补上了）
-  都做完了。parser/analyzer 那边还没跟进（`AstNodeLiteralFloat` 该不该趁机改名成
-  `AstNodeLiteralDecimal`、`StaticEvaler` 的 `is_numeric`/`node_to_double` 等还是老的 float 语义）。
-  （`AstNodeLiteral{Int,Float}` 的 `raw_` 形状校验已经跟进，见上面"字面量 `raw_` 的形状校验归节点
-  构造函数"一节。）接线时有一条义务别漏：decimal 字面量的指数 lexer 不设上限（**故意的**——上下文的 Emin/Emax
+  都做完了。parser/analyzer 那边跟进了两件：`AstNodeLiteral{Int,Decimal}` 的 `raw_` 形状校验
+  （见上面"字面量 `raw_` 的形状校验归节点构造函数"一节），以及 `float`/`Float` 这套旧名字全面改成
+  `decimal`/`Decimal`（`AstNodeLiteralDecimal`、`TokenType::LITERAL_DECIMAL`、JSON 里的
+  `"LiteralDecimal"`、`StaticEvaler::make_decimal`）。剩 `StaticEvaler` 的**逻辑**没跟进
+  （`is_numeric`/`node_to_double` 等还是拿 `double` 算，是老的二进制浮点语义，只是名字换了）。
+  接线时有一条义务别漏：decimal 字面量的指数 lexer 不设上限（**故意的**——上下文的 Emin/Emax
   运行时可变，而构造不舍入，词法期无从卡起），于是 `1.0e2000000000` 这种超出 `BigDec::kMaxExponent`
   的写法能过词法、到 `try_from_string` 才返回 `nullopt`，**由转换那一层报 SyntaxError**。这条不下沉
   到 lexer：`kMaxExponent` 是 numeric 的表示上限、不是源码形态的政策，抄一份到 lexer 会静默失配
@@ -971,8 +973,8 @@ Code），但"建立"这个操作每次执行都必须构造全新的 Function �
   `operator<<` 的超大位移是干净的 `bad_alloc`，`>>` 有 O(1) 短路，`from_decimal_string` 的零尾数也
   短路了（见上面对应的决策一节），这几个都不受影响。这是 VM 层的资源
   guard 议题（要不要在解释器调用 `pow` 之前就卡一个指数上限），不是 `BigInt` 自己该管的，先记在这。
-- `StaticEvaler` 里那整套 float 折叠（`node_to_double`/`std::pow`/`std::fmod`/`make_float`）还没清
-  掉。按"结果为 decimal 的常量折叠一律禁掉"那一节的结论，这些不是改改名的事，要整段删；`decimal`
-  接进前端时一起做。
+- `StaticEvaler` 里那整套二进制浮点折叠（`node_to_double`/`std::pow`/`std::fmod`/`make_decimal`）
+  还没清掉。按"结果为 decimal 的常量折叠一律禁掉"那一节的结论，这些不是改改名的事（名字已经改过
+  一轮了，逻辑没动），要整段删；`decimal` 接进前端时一起做。
 - `decimal` 的 NaN 没有诊断信息（Python 的 `Decimal('NaN123')` 那种 payload），`BigDec` 直接把带
   payload 的字符串判为不合法。要不要补由以后需要时再说——静默丢掉比拒绝更糟，所以现在是拒绝。

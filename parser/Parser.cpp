@@ -455,10 +455,10 @@ AstNodePtr Parser::parse_non_op() {
         // int
         expect(LITERAL_INT); // 消耗整数字面量
         return std::make_unique<AstNodeLiteralInt>(pos, lexeme);
-    case LITERAL_FLOAT:
-        // float
-        expect(LITERAL_FLOAT); // 消耗浮点数字面量
-        return std::make_unique<AstNodeLiteralFloat>(pos, lexeme);
+    case LITERAL_DECIMAL:
+        // decimal
+        expect(LITERAL_DECIMAL); // 消耗 decimal 字面量
+        return std::make_unique<AstNodeLiteralDecimal>(pos, lexeme);
     case LITERAL_STR:
         // str
         expect(LITERAL_STR); // 消耗字符串字面量

@@ -83,12 +83,12 @@ TEST_SUITE("StaticEvaler 位运算") {
         );
     }
 
-    TEST_CASE("float 不参与位运算，不折") {
+    TEST_CASE("decimal 不参与位运算，不折") {
         CHECK(
             fold_json(U"1.0 & 1") == nlohmann::json{
                                          {"type", "OpBinary"},
                                          {"op", "&"},
-                                         {"left", float_lit("1.0")},
+                                         {"left", decimal_lit("1.0")},
                                          {"right", int_lit("1")}
                                      }
         );

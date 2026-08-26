@@ -43,7 +43,7 @@ TEST_SUITE("StaticEvaler 复合表达式折叠") {
 
     TEST_CASE("全体子表达式都是字面量：折成最后一条") {
         CHECK(fold_json(U"{1; 2; 3}") == int_lit("3"));
-        CHECK(fold_json(U"{1; 'a'; True; None; 3.14}") == float_lit("3.14")); // 类型可以互不相同
+        CHECK(fold_json(U"{1; 'a'; True; None; 3.14}") == decimal_lit("3.14")); // 类型可以互不相同
     }
 
     TEST_CASE("最后一条折出来是容器字面量，同样能折") {

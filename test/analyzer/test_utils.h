@@ -39,8 +39,8 @@ inline nlohmann::json int_lit(const std::string &raw) {
     return nlohmann::json{{"type", "LiteralInt"}, {"raw", raw}};
 }
 
-inline nlohmann::json float_lit(const std::string &raw) {
-    return nlohmann::json{{"type", "LiteralFloat"}, {"raw", raw}};
+inline nlohmann::json decimal_lit(const std::string &raw) {
+    return nlohmann::json{{"type", "LiteralDecimal"}, {"raw", raw}};
 }
 
 inline nlohmann::json bool_lit(const bool value) {

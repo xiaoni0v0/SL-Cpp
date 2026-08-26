@@ -60,12 +60,12 @@ TEST_SUITE("折叠产物重新 check 也能过——负 int") {
     }
 }
 
-TEST_SUITE("折叠产物重新 check 也能过——负 float") {
+TEST_SUITE("折叠产物重新 check 也能过——负 decimal") {
 
     TEST_CASE("一元负号") {
-        CHECK(fold_and_recheck(U"-1.5") == float_lit("-1.5"));
-        CHECK(fold_and_recheck(U"-0.0") == float_lit("-0.0")); // 负零保留符号
-        CHECK(fold_and_recheck(U"-0.05") == float_lit("-0.05"));
+        CHECK(fold_and_recheck(U"-1.5") == decimal_lit("-1.5"));
+        CHECK(fold_and_recheck(U"-0.0") == decimal_lit("-0.0")); // 负零保留符号
+        CHECK(fold_and_recheck(U"-0.05") == decimal_lit("-0.05"));
     }
 }
 

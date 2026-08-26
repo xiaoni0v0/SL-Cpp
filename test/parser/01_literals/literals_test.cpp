@@ -1,5 +1,5 @@
 // SL.md 字面量——parser 层面：token 如何变成对应的 AstNode
-// None/bool/_G/_L/int/float/str/... 已在 lexer 测试里覆盖过 token 化本身，这里只关心 Parser 是否
+// None/bool/_G/_L/int/decimal/str/... 已在 lexer 测试里覆盖过 token 化本身，这里只关心 Parser 是否
 // 把对应 token 原样正确地包进对应的 AstNode（字符串转义等已由 Lexer 处理完毕，不再重复测）。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
@@ -42,18 +42,18 @@ TEST_SUITE("基本字面量") {
         );
     }
 
-    TEST_CASE("float：整数、小数部分都不能省略") {
+    TEST_CASE("decimal：整数、小数部分都不能省略") {
         CHECK(
-            parse_json(U"1.5") == nlohmann::json::parse(R"({"type":"LiteralFloat","raw":"1.5"})")
+            parse_json(U"1.5") == nlohmann::json::parse(R"({"type":"LiteralDecimal","raw":"1.5"})")
         );
         CHECK(
             parse_json(U"123.45") ==
-            nlohmann::json::parse(R"({"type":"LiteralFloat","raw":"123.45"})")
+            nlohmann::json::parse(R"({"type":"LiteralDecimal","raw":"123.45"})")
         );
     }
 
     TEST_CASE(
-        "`1.`/`.1` 词法上都不是合法 float（词法层拆成 INT+DOT / DOT+INT），"
+        "`1.`/`.1` 词法上都不是合法 decimal（词法层拆成 INT+DOT / DOT+INT），"
         "语法层也各自因为别的原因解析失败"
     ) {
         // "1." 词法为 LITERAL_INT(1) SIGN_DOT，语法层把 '.' 当属性访问，

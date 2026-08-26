@@ -658,7 +658,7 @@ TEST_SUITE("BigInt——pow") {
     }
 
     TEST_CASE(
-        "负指数抛 std::domain_error（SL 里 int ** 负数不再是 int，是 float，不归 BigInt 管）"
+        "负指数抛 std::domain_error（SL 里 int ** 负数不再是 int，是 decimal，不归 BigInt 管）"
     ) {
         CHECK_THROWS_AS((void) d("2").pow(d("-1")), std::domain_error);
     }

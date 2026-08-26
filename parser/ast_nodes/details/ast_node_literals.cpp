@@ -77,13 +77,13 @@ AstNodeLiteralInt::AstNodeLiteralInt(const Position pos, std::u32string raw)
     require_digits(mantissa, true, "the integer part", pos);
 }
 
-AstNodeLiteralFloat::AstNodeLiteralFloat(const Position pos, std::u32string raw)
+AstNodeLiteralDecimal::AstNodeLiteralDecimal(const Position pos, std::u32string raw)
     : AstNode{pos}, raw_{std::move(raw)} {
     // ∀ e
     const std::u32string_view mantissa{strip_exponent(strip_sign(raw_), true, 0, pos)};
     const size_t dot{mantissa.find(U'.')};
     if (dot == std::u32string_view::npos)
-        error_internal("float literal raw text is missing a '.'", pos);
+        error_internal("decimal literal raw text is missing a '.'", pos);
     require_digits(mantissa.substr(0, dot), true, "the integer part", pos);
     require_digits(mantissa.substr(dot + 1), false, "the fractional part", pos);
 }

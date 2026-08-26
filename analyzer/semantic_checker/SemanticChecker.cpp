@@ -293,7 +293,7 @@ void SemanticChecker::check(const AstNodeLiteralGL &) {}
 
 void SemanticChecker::check(const AstNodeLiteralInt &) {}
 
-void SemanticChecker::check(const AstNodeLiteralFloat &) {}
+void SemanticChecker::check(const AstNodeLiteralDecimal &) {}
 
 void SemanticChecker::check(const AstNodeLiteralStr &) {}
 

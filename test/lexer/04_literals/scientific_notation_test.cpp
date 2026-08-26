@@ -31,7 +31,8 @@ bool has(const std::string &haystack, const std::string &needle) {
 
 // 期望某个源码整体被读成单个字面量 token，且 token 文本跟源码逐字一致
 std::string sole_literal(const std::u32string &source, const bool is_decimal) {
-    return std::string{is_decimal ? "LITERAL_FLOAT(" : "LITERAL_INT("} + u32_to_utf8(source) + ")";
+    return std::string{is_decimal ? "LITERAL_DECIMAL(" : "LITERAL_INT("} + u32_to_utf8(source) +
+           ")";
 }
 
 } // namespace
@@ -65,20 +66,20 @@ TEST_SUITE("科学计数法——尾数不带小数点，整体是 int") {
 TEST_SUITE("科学计数法——尾数带小数点，整体是 decimal") {
 
     TEST_CASE("基本形状，指数可正可负") {
-        CHECK(lex_dump(U"1.0e9") == "LITERAL_FLOAT(1.0e9)");
-        CHECK(lex_dump(U"1.0E9") == "LITERAL_FLOAT(1.0E9)");
-        CHECK(lex_dump(U"1.0e+9") == "LITERAL_FLOAT(1.0e+9)");
-        CHECK(lex_dump(U"1.5e-3") == "LITERAL_FLOAT(1.5e-3)");
-        CHECK(lex_dump(U"1.5E-3") == "LITERAL_FLOAT(1.5E-3)");
-        CHECK(lex_dump(U"0.0e0") == "LITERAL_FLOAT(0.0e0)");
+        CHECK(lex_dump(U"1.0e9") == "LITERAL_DECIMAL(1.0e9)");
+        CHECK(lex_dump(U"1.0E9") == "LITERAL_DECIMAL(1.0E9)");
+        CHECK(lex_dump(U"1.0e+9") == "LITERAL_DECIMAL(1.0e+9)");
+        CHECK(lex_dump(U"1.5e-3") == "LITERAL_DECIMAL(1.5e-3)");
+        CHECK(lex_dump(U"1.5E-3") == "LITERAL_DECIMAL(1.5E-3)");
+        CHECK(lex_dump(U"0.0e0") == "LITERAL_DECIMAL(0.0e0)");
     }
 
     TEST_CASE("标度原样保留：末尾零、前导零都不归一（标度是 decimal 值的一部分）") {
-        CHECK(lex_dump(U"1.00e9") == "LITERAL_FLOAT(1.00e9)");
-        CHECK(lex_dump(U"1.000e3") == "LITERAL_FLOAT(1.000e3)");
-        CHECK(lex_dump(U"0.05e3") == "LITERAL_FLOAT(0.05e3)");
-        CHECK(lex_dump(U"0.0001e3") == "LITERAL_FLOAT(0.0001e3)");
-        CHECK(lex_dump(U"1.50e-3") == "LITERAL_FLOAT(1.50e-3)");
+        CHECK(lex_dump(U"1.00e9") == "LITERAL_DECIMAL(1.00e9)");
+        CHECK(lex_dump(U"1.000e3") == "LITERAL_DECIMAL(1.000e3)");
+        CHECK(lex_dump(U"0.05e3") == "LITERAL_DECIMAL(0.05e3)");
+        CHECK(lex_dump(U"0.0001e3") == "LITERAL_DECIMAL(0.0001e3)");
+        CHECK(lex_dump(U"1.50e-3") == "LITERAL_DECIMAL(1.50e-3)");
     }
 }
 
@@ -95,9 +96,9 @@ TEST_SUITE("科学计数法——int 侧指数的两条限制，decimal 侧都�
     }
 
     TEST_CASE("同一个数值补上 `.0` 写成 decimal 就合法") {
-        CHECK(lex_dump(U"1.0e-9") == "LITERAL_FLOAT(1.0e-9)");
-        CHECK(lex_dump(U"100.0e-1") == "LITERAL_FLOAT(100.0e-1)");
-        CHECK(lex_dump(U"1.0e-0") == "LITERAL_FLOAT(1.0e-0)");
+        CHECK(lex_dump(U"1.0e-9") == "LITERAL_DECIMAL(1.0e-9)");
+        CHECK(lex_dump(U"100.0e-1") == "LITERAL_DECIMAL(100.0e-1)");
+        CHECK(lex_dump(U"1.0e-0") == "LITERAL_DECIMAL(1.0e-0)");
     }
 
     TEST_CASE("指数上限 9999：贴着边界两侧各测一遍") {
@@ -137,9 +138,9 @@ TEST_SUITE("科学计数法——int 侧指数的两条限制，decimal 侧都�
     }
 
     TEST_CASE("decimal 侧的指数不设上限") {
-        CHECK(lex_dump(U"1.0e10000") == "LITERAL_FLOAT(1.0e10000)");
-        CHECK(lex_dump(U"1.0e999999") == "LITERAL_FLOAT(1.0e999999)");
-        CHECK(lex_dump(U"1.0e-999999") == "LITERAL_FLOAT(1.0e-999999)");
+        CHECK(lex_dump(U"1.0e10000") == "LITERAL_DECIMAL(1.0e10000)");
+        CHECK(lex_dump(U"1.0e999999") == "LITERAL_DECIMAL(1.0e999999)");
+        CHECK(lex_dump(U"1.0e-999999") == "LITERAL_DECIMAL(1.0e-999999)");
     }
 }
 
@@ -152,13 +153,13 @@ TEST_SUITE("科学计数法——前导零：三个部位各自的规矩") {
         CHECK(has(lex_error(U"01e5"), "leading zeros in the integer part are not permitted"));
         // 单独一个 0 合法
         CHECK(lex_dump(U"0e5") == "LITERAL_INT(0e5)");
-        CHECK(lex_dump(U"0.5e2") == "LITERAL_FLOAT(0.5e2)");
+        CHECK(lex_dump(U"0.5e2") == "LITERAL_DECIMAL(0.5e2)");
     }
 
     TEST_CASE("小数部分不受限") {
-        CHECK(lex_dump(U"1.05e3") == "LITERAL_FLOAT(1.05e3)");
-        CHECK(lex_dump(U"1.000e3") == "LITERAL_FLOAT(1.000e3)");
-        CHECK(lex_dump(U"0.00001e3") == "LITERAL_FLOAT(0.00001e3)");
+        CHECK(lex_dump(U"1.05e3") == "LITERAL_DECIMAL(1.05e3)");
+        CHECK(lex_dump(U"1.000e3") == "LITERAL_DECIMAL(1.000e3)");
+        CHECK(lex_dump(U"0.00001e3") == "LITERAL_DECIMAL(0.00001e3)");
     }
 
     TEST_CASE("指数部分不许前导零，报错指名 exponent；单独一个 0 合法") {
@@ -168,7 +169,7 @@ TEST_SUITE("科学计数法——前导零：三个部位各自的规矩") {
         CHECK_THROWS_AS(lex(U"1.0e-007"), SyntaxError);
         CHECK(has(lex_error(U"1e01"), "leading zeros in the exponent are not permitted"));
         CHECK(lex_dump(U"1e0") == "LITERAL_INT(1e0)");
-        CHECK(lex_dump(U"1.0e-0") == "LITERAL_FLOAT(1.0e-0)");
+        CHECK(lex_dump(U"1.0e-0") == "LITERAL_DECIMAL(1.0e-0)");
     }
 
     TEST_CASE("前导零的检查早于指数上限的检查——上限只数位数，靠的正是这个顺序") {
@@ -234,7 +235,7 @@ TEST_SUITE("科学计数法——与点号 / range / Ellipsis 的交界") {
         CHECK(lex_dump(U"1.E9") == "LITERAL_INT(1) SIGN_DOT IDENTIFIER(E9)");
     }
 
-    TEST_CASE("指数之后的点不归数字管（跟 float 后面的点同一条规矩）") {
+    TEST_CASE("指数之后的点不归数字管（跟 decimal 后面的点同一条规矩）") {
         CHECK(lex_dump(U"1e9.5") == "LITERAL_INT(1e9) SIGN_DOT LITERAL_INT(5)");
         CHECK(
             lex_dump(U"1e9.f()") ==
@@ -242,16 +243,19 @@ TEST_SUITE("科学计数法——与点号 / range / Ellipsis 的交界") {
         );
         CHECK(
             lex_dump(U"1.5e3.f()") ==
-            "LITERAL_FLOAT(1.5e3) SIGN_DOT IDENTIFIER(f) SIGN_LPAREN SIGN_RPAREN"
+            "LITERAL_DECIMAL(1.5e3) SIGN_DOT IDENTIFIER(f) SIGN_LPAREN SIGN_RPAREN"
         );
     }
 
     TEST_CASE("range：两端都能是科学计数法，不需要空格") {
         CHECK(lex_dump(U"1e9..2e9") == "LITERAL_INT(1e9) SIGN_DOTDOT LITERAL_INT(2e9)");
         CHECK(lex_dump(U"0e0..1e1") == "LITERAL_INT(0e0) SIGN_DOTDOT LITERAL_INT(1e1)");
-        CHECK(lex_dump(U"1.5e3..2.5e3") == "LITERAL_FLOAT(1.5e3) SIGN_DOTDOT LITERAL_FLOAT(2.5e3)");
         CHECK(
-            lex_dump(U"1.0e-3..1.0e3") == "LITERAL_FLOAT(1.0e-3) SIGN_DOTDOT LITERAL_FLOAT(1.0e3)"
+            lex_dump(U"1.5e3..2.5e3") == "LITERAL_DECIMAL(1.5e3) SIGN_DOTDOT LITERAL_DECIMAL(2.5e3)"
+        );
+        CHECK(
+            lex_dump(U"1.0e-3..1.0e3") ==
+            "LITERAL_DECIMAL(1.0e-3) SIGN_DOTDOT LITERAL_DECIMAL(1.0e3)"
         );
     }
 
@@ -293,7 +297,7 @@ TEST_SUITE("科学计数法——token 文本与位置") {
 
     TEST_CASE("跨行的科学计数法位置正确") {
         const auto tokens{lex(U"1e3\n  2.0e-4")};
-        REQUIRE(tokens.size() == 4); // INT NEWLINE FLOAT EOF
+        REQUIRE(tokens.size() == 4); // INT NEWLINE DECIMAL EOF
         CHECK(tokens[0].row == 1);
         CHECK(tokens[0].col == 1);
         CHECK(tokens[2].row == 2);
@@ -356,31 +360,31 @@ TEST_SUITE("科学计数法——组合扫描与代码片段") {
     TEST_CASE("赋值、算术、调用、容器里都能正确切分") {
         CHECK(lex_dump(U"x = 1e9") == "IDENTIFIER(x) SIGN_ASSIGN LITERAL_INT(1e9)");
         CHECK(lex_dump(U"1e9+1") == "LITERAL_INT(1e9) SIGN_PLUS LITERAL_INT(1)");
-        CHECK(lex_dump(U"2.5e-3*4") == "LITERAL_FLOAT(2.5e-3) SIGN_STAR LITERAL_INT(4)");
+        CHECK(lex_dump(U"2.5e-3*4") == "LITERAL_DECIMAL(2.5e-3) SIGN_STAR LITERAL_INT(4)");
         CHECK(lex_dump(U"f(1e3)") == "IDENTIFIER(f) SIGN_LPAREN LITERAL_INT(1e3) SIGN_RPAREN");
         CHECK(
             lex_dump(U"[1e3, 2.0e-2]") == "SIGN_LBRACKET LITERAL_INT(1e3) SIGN_COMMA "
-                                          "LITERAL_FLOAT(2.0e-2) SIGN_RBRACKET"
+                                          "LITERAL_DECIMAL(2.0e-2) SIGN_RBRACKET"
         );
         CHECK(lex_dump(U"1e3;2e3") == "LITERAL_INT(1e3) SIGN_SEMICOLON LITERAL_INT(2e3)");
     }
 
     TEST_CASE("负号是独立的一元运算符，不属于字面量") {
         CHECK(lex_dump(U"-1e9") == "SIGN_MINUS LITERAL_INT(1e9)");
-        CHECK(lex_dump(U"-1.0e-9") == "SIGN_MINUS LITERAL_FLOAT(1.0e-9)");
+        CHECK(lex_dump(U"-1.0e-9") == "SIGN_MINUS LITERAL_DECIMAL(1.0e-9)");
         CHECK(lex_dump(U"- 1e9") == "SIGN_MINUS LITERAL_INT(1e9)");
     }
 
     TEST_CASE("相邻两个科学计数法字面量之间不会互相污染") {
         CHECK(lex_dump(U"1e3 1e4") == "LITERAL_INT(1e3) LITERAL_INT(1e4)");
         CHECK(lex_dump(U"1e3,2e3") == "LITERAL_INT(1e3) SIGN_COMMA LITERAL_INT(2e3)");
-        CHECK(lex_dump(U"1.0e3 2.0e-3") == "LITERAL_FLOAT(1.0e3) LITERAL_FLOAT(2.0e-3)");
+        CHECK(lex_dump(U"1.0e3 2.0e-3") == "LITERAL_DECIMAL(1.0e3) LITERAL_DECIMAL(2.0e-3)");
     }
 
     TEST_CASE("紧贴除号：`/` 和 `//` 都不会跟指数抢字符") {
         CHECK(lex_dump(U"1e3/2e3") == "LITERAL_INT(1e3) SIGN_SLASH LITERAL_INT(2e3)");
         CHECK(lex_dump(U"1e3//2e3") == "LITERAL_INT(1e3) SIGN_DOUBLESLASH LITERAL_INT(2e3)");
-        CHECK(lex_dump(U"1.0e3//2") == "LITERAL_FLOAT(1.0e3) SIGN_DOUBLESLASH LITERAL_INT(2)");
+        CHECK(lex_dump(U"1.0e3//2") == "LITERAL_DECIMAL(1.0e3) SIGN_DOUBLESLASH LITERAL_INT(2)");
     }
 
     TEST_CASE("注释和字符串里的科学计数法只是普通文本，不参与词法判定") {

@@ -49,7 +49,7 @@ inline std::string lex_dump(const std::u32string &source) {
         oss << Lexer::get_typename_by_tokentype(tok.type);
         switch (tok.type) {
         case TokenType::LITERAL_INT:
-        case TokenType::LITERAL_FLOAT:
+        case TokenType::LITERAL_DECIMAL:
         case TokenType::LITERAL_STR:
         case TokenType::IDENTIFIER:
             oss << '(' << escape_for_dump(tok.lexeme) << ')';

@@ -99,7 +99,7 @@ void ExprFolder::visit(AstNodeLiteralGL &) {}
 
 void ExprFolder::visit(AstNodeLiteralInt &) {}
 
-void ExprFolder::visit(AstNodeLiteralFloat &) {}
+void ExprFolder::visit(AstNodeLiteralDecimal &) {}
 
 void ExprFolder::visit(AstNodeLiteralStr &) {}
 

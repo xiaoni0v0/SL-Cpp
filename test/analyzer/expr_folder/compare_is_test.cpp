@@ -6,7 +6,7 @@
 
 TEST_SUITE("StaticEvaler 比较") {
 
-    TEST_CASE("数字之间的大小/相等比较，跨 bool/int/float 提升") {
+    TEST_CASE("数字之间的大小/相等比较，跨 bool/int/decimal 提升") {
         CHECK(fold_json(U"1 < 2") == bool_lit(true));
         CHECK(fold_json(U"2 <= 2") == bool_lit(true));
         CHECK(fold_json(U"1 == 1.0") == bool_lit(true));

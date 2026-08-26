@@ -371,12 +371,12 @@ json AstNodeLiteralInt::to_json_impl(const bool include_pos) const {
     return json{{"type", "LiteralInt"}, {"raw", u32_to_utf8(raw_)}};
 }
 
-json AstNodeLiteralFloat::to_json_impl(const bool include_pos) const {
+json AstNodeLiteralDecimal::to_json_impl(const bool include_pos) const {
     if (include_pos)
         return json{
-            {"type", "LiteralFloat"}, {"pos", pos_to_json(pos_)}, {"raw", u32_to_utf8(raw_)}
+            {"type", "LiteralDecimal"}, {"pos", pos_to_json(pos_)}, {"raw", u32_to_utf8(raw_)}
         };
-    return json{{"type", "LiteralFloat"}, {"raw", u32_to_utf8(raw_)}};
+    return json{{"type", "LiteralDecimal"}, {"raw", u32_to_utf8(raw_)}};
 }
 
 json AstNodeLiteralStr::to_json_impl(const bool include_pos) const {

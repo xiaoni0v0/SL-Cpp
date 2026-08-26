@@ -16,7 +16,7 @@ TEST_SUITE("点号消歧：设计阶段给出的六个例子") {
     TEST_CASE("`1.0.f()` 表示调用 1.0 的 f 方法") {
         CHECK(
             lex_dump(U"1.0.f()") ==
-            "LITERAL_FLOAT(1.0) SIGN_DOT IDENTIFIER(f) SIGN_LPAREN SIGN_RPAREN"
+            "LITERAL_DECIMAL(1.0) SIGN_DOT IDENTIFIER(f) SIGN_LPAREN SIGN_RPAREN"
         );
     }
 
@@ -32,11 +32,11 @@ TEST_SUITE("点号消歧：设计阶段给出的六个例子") {
     }
 
     TEST_CASE("`1.0..1.2` 表示 range(1.0, 1.2)") {
-        CHECK(lex_dump(U"1.0..1.2") == "LITERAL_FLOAT(1.0) SIGN_DOTDOT LITERAL_FLOAT(1.2)");
+        CHECK(lex_dump(U"1.0..1.2") == "LITERAL_DECIMAL(1.0) SIGN_DOTDOT LITERAL_DECIMAL(1.2)");
     }
 
     TEST_CASE("`.....1.0` 表示 (Ellipsis) .. (1.0)（5 个点 = 3+2，紧接 1.0）") {
-        CHECK(lex_dump(U".....1.0") == "LITERAL_ELLIPSIS SIGN_DOTDOT LITERAL_FLOAT(1.0)");
+        CHECK(lex_dump(U".....1.0") == "LITERAL_ELLIPSIS SIGN_DOTDOT LITERAL_DECIMAL(1.0)");
     }
 }
 
@@ -66,15 +66,15 @@ TEST_SUITE("点号消歧：额外边界情况") {
 
     TEST_CASE("三个点后紧跟数字：先贪婪吃成 Ellipsis，再单独读数字，不会把点当成数字的一部分") {
         CHECK(lex_dump(U"...5") == "LITERAL_ELLIPSIS LITERAL_INT(5)");
-        CHECK(lex_dump(U"...5.5") == "LITERAL_ELLIPSIS LITERAL_FLOAT(5.5)");
+        CHECK(lex_dump(U"...5.5") == "LITERAL_ELLIPSIS LITERAL_DECIMAL(5.5)");
     }
 
     TEST_CASE("数字紧跟三个点：数字侧只认紧邻自己的单个点，不会把三个点误吃成小数点") {
         CHECK(lex_dump(U"5...") == "LITERAL_INT(5) LITERAL_ELLIPSIS");
     }
 
-    TEST_CASE("两个数字中间夹恰好一个点：小数点，产出一个 float") {
-        CHECK(lex_dump(U"1.5") == "LITERAL_FLOAT(1.5)");
+    TEST_CASE("两个数字中间夹恰好一个点：小数点，产出一个 decimal") {
+        CHECK(lex_dump(U"1.5") == "LITERAL_DECIMAL(1.5)");
     }
 
     TEST_CASE(

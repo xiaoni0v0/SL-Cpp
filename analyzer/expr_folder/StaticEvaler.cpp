@@ -409,9 +409,9 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpUnary &node) {
         if (!negated) return nullptr;
         return make_int(node.pos_, *negated);
     }
-    // float
+    // decimal
     const double v{node_to_double(operand)};
-    return make_float(node.pos_, node.op_ == Pos ? v : -v);
+    return make_decimal(node.pos_, node.op_ == Pos ? v : -v);
 }
 
 AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpBinary &node) {
@@ -439,7 +439,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpBinary &node) {
             if (!result) return nullptr;
             return make_int(node.pos_, *result);
         }
-        return make_float(node.pos_, node_to_double(l) + node_to_double(r));
+        return make_decimal(node.pos_, node_to_double(l) + node_to_double(r));
 
     case Sub:
         if (is_both_int) {
@@ -449,7 +449,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpBinary &node) {
             if (!result) return nullptr;
             return make_int(node.pos_, *result);
         }
-        return make_float(node.pos_, node_to_double(l) - node_to_double(r));
+        return make_decimal(node.pos_, node_to_double(l) - node_to_double(r));
 
     case Mul:
         if (is_both_int) {
@@ -459,12 +459,12 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpBinary &node) {
             if (!result) return nullptr;
             return make_int(node.pos_, *result);
         }
-        return make_float(node.pos_, node_to_double(l) * node_to_double(r));
+        return make_decimal(node.pos_, node_to_double(l) * node_to_double(r));
 
     case Div: {
         const double rv{node_to_double(r)};
         if (rv == 0.0) return nullptr; // MathError，交给运行时
-        return make_float(node.pos_, node_to_double(l) / rv);
+        return make_decimal(node.pos_, node_to_double(l) / rv);
     }
 
     case DivFloor: {
@@ -482,7 +482,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpBinary &node) {
         }
         const double rv{node_to_double(r)};
         if (rv == 0.0) return nullptr;
-        return make_float(node.pos_, std::floor(node_to_double(l) / rv));
+        return make_decimal(node.pos_, std::floor(node_to_double(l) / rv));
     }
 
     case Mod: {
@@ -500,7 +500,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpBinary &node) {
         if (rv == 0.0) return nullptr;
         double m{std::fmod(node_to_double(l), rv)};
         if (m != 0.0 && (m < 0.0) != (rv < 0.0)) m += rv; // 向 y 的符号方向调整
-        return make_float(node.pos_, m);
+        return make_decimal(node.pos_, m);
     }
 
     case Pow:
@@ -514,7 +514,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpBinary &node) {
                 return nullptr; // 结果溢出，同样不折
             }
         }
-        return make_float(node.pos_, std::pow(node_to_double(l), node_to_double(r)));
+        return make_decimal(node.pos_, std::pow(node_to_double(l), node_to_double(r)));
 
     default:
         return nullptr;
@@ -581,7 +581,7 @@ bool StaticEvaler::truthy(const AstNode &literal) {
         const std::optional v{node_to_int64(*i)};
         return !v || *v != 0; // 太大了装不下则必然非零；或者能装下而且是非零
     }
-    if (const auto *f{dynamic_cast<const AstNodeLiteralFloat *>(&literal)})
+    if (const auto *f{dynamic_cast<const AstNodeLiteralDecimal *>(&literal)})
         return node_to_double(*f) != 0.0;
     if (const auto *s{dynamic_cast<const AstNodeLiteralStr *>(&literal)}) return !s->value_.empty();
     if (const auto *t{dynamic_cast<const AstNodeLiteralTuple *>(&literal)})
@@ -597,7 +597,7 @@ bool StaticEvaler::is_literal_pure(const AstNode &node) {
     if (dynamic_cast<const AstNodeLiteralNone *>(&node) ||
         dynamic_cast<const AstNodeLiteralBool *>(&node) ||
         dynamic_cast<const AstNodeLiteralInt *>(&node) ||
-        dynamic_cast<const AstNodeLiteralFloat *>(&node) ||
+        dynamic_cast<const AstNodeLiteralDecimal *>(&node) ||
         dynamic_cast<const AstNodeLiteralStr *>(&node) ||
         dynamic_cast<const AstNodeLiteralEllipsis *>(&node))
         return true;
@@ -624,7 +624,7 @@ bool StaticEvaler::is_int_family(const AstNode &node) {
 }
 
 bool StaticEvaler::is_numeric(const AstNode &node) {
-    return is_int_family(node) || dynamic_cast<const AstNodeLiteralFloat *>(&node);
+    return is_int_family(node) || dynamic_cast<const AstNodeLiteralDecimal *>(&node);
 }
 
 std::optional<int64_t> StaticEvaler::node_to_int64(const AstNode &node) {
@@ -650,8 +650,8 @@ double StaticEvaler::node_to_double(const AstNode &node) {
     if (const auto *i{dynamic_cast<const AstNodeLiteralInt *>(&node)})
         return std::strtod(u32_to_utf8(i->raw_).c_str(), nullptr);
 
-    // float
-    const auto &f{dynamic_cast<const AstNodeLiteralFloat &>(node)};
+    // decimal
+    const auto &f{dynamic_cast<const AstNodeLiteralDecimal &>(node)};
     return std::strtod(u32_to_utf8(f.raw_).c_str(), nullptr);
 }
 
@@ -663,15 +663,16 @@ AstNodePtr StaticEvaler::make_int(const Position pos, const int64_t value) {
     return std::make_unique<AstNodeLiteralInt>(pos, utf8_to_u32(std::to_string(value)));
 }
 
-AstNodePtr StaticEvaler::make_float(const Position pos, const double value) {
-    if (!std::isfinite(value)) return nullptr; // ±inf/NaN 写不出合法的 float 字面量，交给运行时处理
-    return std::make_unique<AstNodeLiteralFloat>(pos, utf8_to_u32(double_to_string(value)));
+AstNodePtr StaticEvaler::make_decimal(const Position pos, const double value) {
+    if (!std::isfinite(value))
+        return nullptr; // ±inf/NaN 写不出合法的 decimal 字面量，交给运行时处理
+    return std::make_unique<AstNodeLiteralDecimal>(pos, utf8_to_u32(double_to_string(value)));
 }
 
 bool StaticEvaler::literal_equal(const AstNode &a, const AstNode &b) {
     assert(is_literal_pure(a) && is_literal_pure(b));
 
-    // bool/int/float
+    // bool/int/decimal
     if (is_numeric(a) && is_numeric(b)) {
         if (is_int_family(a) && is_int_family(b)) {
             return literal_compare_int(promote_as_int(a), promote_as_int(b)) ==
@@ -724,7 +725,7 @@ bool StaticEvaler::literal_equal(const AstNode &a, const AstNode &b) {
 std::partial_ordering StaticEvaler::literal_compare(const AstNode &a, const AstNode &b) {
     assert(is_literal_pure(a) && is_literal_pure(b));
 
-    // bool/int/float
+    // bool/int/decimal
     if (is_numeric(a) && is_numeric(b)) {
         if (is_int_family(a) && is_int_family(b)) {
             return literal_compare_int(

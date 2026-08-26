@@ -189,7 +189,7 @@ TEST_SUITE(
     }
 
     TEST_CASE(
-        "tuple * n 恒不折：纯 int/float/str/bool/None/Ellipsis 组成也一样（以前的版本会因为"
+        "tuple * n 恒不折：纯 int/decimal/str/bool/None/Ellipsis 组成也一样（以前的版本会因为"
         "'内容深度不可变'而折，这是已经改掉的错误行为）"
     ) {
         CHECK(
@@ -209,7 +209,7 @@ TEST_SUITE(
                 {"left",
                  {{"type", "LiteralTuple"},
                   {"items",
-                   {float_lit("1.5"),
+                   {decimal_lit("1.5"),
                     str_lit("a"),
                     bool_lit(true),
                     none_lit(),

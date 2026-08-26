@@ -191,7 +191,7 @@ Token Lexer::read_number() {
     }
 
     return {
-        is_decimal ? TokenType::LITERAL_FLOAT : TokenType::LITERAL_INT,
+        is_decimal ? TokenType::LITERAL_DECIMAL : TokenType::LITERAL_INT,
         start_row,
         start_col,
         num_literal
@@ -491,7 +491,7 @@ std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
     case TokenType::LITERAL_L:               return "'_L'";
     case TokenType::LITERAL_ELLIPSIS:        return "'...'";
     case TokenType::LITERAL_INT:             return "an integer literal";
-    case TokenType::LITERAL_FLOAT:           return "a float literal";
+    case TokenType::LITERAL_DECIMAL:         return "a decimal literal";
     case TokenType::LITERAL_STR:             return "a string literal";
 
     case TokenType::IDENTIFIER:              return "an identifier";
