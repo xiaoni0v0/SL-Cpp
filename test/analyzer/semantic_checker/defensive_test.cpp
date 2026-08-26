@@ -4,8 +4,9 @@
 // SemanticChecker，用来确认这些断言本身在真的遇到畸形输入时确实会正确报错，而不是静默放过或者
 // 直接崩溃。
 //
-// int/float 字面量 raw_ 的形状校验同样是防御性的，但自成一个话题（还牵着科学计数法的一串规则），
-// 放在 literal_test.cpp。
+// int/float 字面量 raw_ 的形状校验同样是防御性的，但它归节点自己的构造函数管、不归 SemanticChecker
+// 管（常量折叠造出来的字面量节点不会再经过 SemanticChecker），测试在
+// test/parser/01_literals/literal_raw_test.cpp。
 #include "test_utils.h"
 
 #include <doctest/doctest.h>

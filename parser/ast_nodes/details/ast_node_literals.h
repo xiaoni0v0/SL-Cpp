@@ -35,23 +35,21 @@ struct AstNodeLiteralGL : AstNode {
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
-// int
+// int。raw_ 的形状在构造时校验，不合法即 InternalError
 struct AstNodeLiteralInt : AstNode {
-    std::u32string raw_;
+    const std::u32string raw_;
 
-    explicit AstNodeLiteralInt(const Position pos, std::u32string raw)
-        : AstNode{pos}, raw_{std::move(raw)} {}
+    explicit AstNodeLiteralInt(Position pos, std::u32string raw);
 
   private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
-// float
+// float。raw_ 的形状在构造时校验，不合法即 InternalError
 struct AstNodeLiteralFloat : AstNode {
-    std::u32string raw_;
+    const std::u32string raw_;
 
-    explicit AstNodeLiteralFloat(const Position pos, std::u32string raw)
-        : AstNode{pos}, raw_{std::move(raw)} {}
+    explicit AstNodeLiteralFloat(Position pos, std::u32string raw);
 
   private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;

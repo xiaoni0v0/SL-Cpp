@@ -862,6 +862,36 @@ SL.md 一直没规定 `007`/`00` 合不合法，是真实的规范空白，已�
 整数部分同样受限，小数部分不受限）。理由：一是给以后要加的 `0x`/`0o`/`0b` 前缀预留解释空间——现在
 放开，以后加前缀就是破坏性变更；二是避免"`0` 开头被当成八进制"这个 C 系语言的经典坑。
 
+### 字面量 `raw_` 的形状校验归节点构造函数，且 AST 层面负数是合法字面量
+
+两件事，同一个起因：`SemanticChecker` 原先管着 `AstNodeLiteralInt`/`AstNodeLiteralFloat` 的 `raw_`
+形状（纯数字、前导零、科学计数法后缀），而 `Analyzer` 的顺序是**先 check 后 fold、只 check 这一次**，
+于是 `StaticEvaler::make_int`/`make_float` 折出来的字面量节点从来没有任何人校验过。
+
+**校验挪进构造函数**（`parser/ast_nodes/details/ast_node_literals.cpp`）。挑中这一处、而不是把
+`SemanticChecker` 里那四十来处 `InternalError` 类断言一起搬，是因为它同时占齐三条：只看自己的字段、
+构造之后 `raw_` 再也不会被改（`const`，全仓库无一处赋值），以及存在一个 `SemanticChecker` 看不见的
+生产者。其余的搬不动：节点成员是 public 的，`ExprFolder` 拿着树里槽位的引用整棵子树往里换，构造
+函数拦不住构造之后的赋值，检查最后还得在 `SemanticChecker` 留一份，变成两处都写。
+
+分界线因此定为：**构造函数管"这个节点自己的字段合不合法"、且只有实现出 bug 才会违反的
+（`InternalError` 类）；`SemanticChecker` 管"要看上下文"或者"是用户写错了"（`SyntaxError` 类）**。
+重名、形参顺序、doc 槽位这几条虽然也是纯自省的，但它们是给用户看的诊断，留在 `SemanticChecker`——
+让 AST 承担用户诊断等于把哑数据结构变成半个前端。
+
+`InternalError` 要文件路径而节点只带行列，这里用 `"<file>"` 占位。不是拿不到，是不想让每个节点都
+拖一份文件名；这类错误本来就写着"编译器自己有 bug"，行列足够定位。
+
+**`raw_` 允许一个前导负号**。SL.md 说负数不是字面量，那是**文法**层面的话（词法阶段 `-1` 是一元
+负号加上 `1`）；折叠之后 `-1` 就是一个 int 字面量节点，两句话不冲突。正号不接受——没有任何生产者
+会写出来，收窄没成本。真正的不变量是 **`check(fold(x))` 必须过**：`check` 描述的是"一棵合法 AST
+长什么样"，不是"Parser 刚吐出来的树长什么样"。这条不写进 SL.md（SL.md 描述语言，这是实现约定），
+测试在 `test/analyzer/recheck_after_fold_test.cpp`。
+
+顺带一提，除了 `SemanticChecker`，其余代码早就是这么认的：`literal_compare_int` 开头就判
+`raw_[0] == U'-'`，`string_to_int64` 的注释写着"可以带一个前导 `-`"，折叠测试断言的就是
+`int_lit("-1")`。
+
 ### 字节码 / `Code` 对象设计（供以后字节码化参考，不是当前实现）
 
 分层 Lexer → Parser → Analyzer → Executor，字节码化以后要加但不是现在，先把树遍历语义定完整。这套
@@ -924,7 +954,8 @@ Code），但"建立"这个操作每次执行都必须构造全新的 Function �
   （`BigDec::try_from_string` 本来就按 IBM 语法收指数，`BigInt::from_decimal_string` 也补上了）
   都做完了。parser/analyzer 那边还没跟进（`AstNodeLiteralFloat` 该不该趁机改名成
   `AstNodeLiteralDecimal`、`StaticEvaler` 的 `is_numeric`/`node_to_double` 等还是老的 float 语义）。
-  接线时有一条义务别漏：decimal 字面量的指数 lexer 不设上限（**故意的**——上下文的 Emin/Emax
+  （`AstNodeLiteral{Int,Float}` 的 `raw_` 形状校验已经跟进，见上面"字面量 `raw_` 的形状校验归节点
+  构造函数"一节。）接线时有一条义务别漏：decimal 字面量的指数 lexer 不设上限（**故意的**——上下文的 Emin/Emax
   运行时可变，而构造不舍入，词法期无从卡起），于是 `1.0e2000000000` 这种超出 `BigDec::kMaxExponent`
   的写法能过词法、到 `try_from_string` 才返回 `nullopt`，**由转换那一层报 SyntaxError**。这条不下沉
   到 lexer：`kMaxExponent` 是 numeric 的表示上限、不是源码形态的政策，抄一份到 lexer 会静默失配

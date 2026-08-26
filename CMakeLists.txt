@@ -147,6 +147,7 @@ add_executable(SL main.cpp
         parser/ast_nodes/details/ast_node_decorators.h
         parser/ast_nodes/details/ast_node_func.h
         parser/ast_nodes/details/ast_node_import.h
+        parser/ast_nodes/details/ast_node_literals.cpp
         parser/ast_nodes/details/ast_node_literals.h
         parser/ast_nodes/details/ast_node_misc.h
         parser/ast_nodes/details/ast_node_multi_exprs.h
@@ -297,6 +298,7 @@ add_executable(SL_Cpp_Parser_Tests
         parser/ast_nodes/details/ast_node_decorators.h
         parser/ast_nodes/details/ast_node_func.h
         parser/ast_nodes/details/ast_node_import.h
+        parser/ast_nodes/details/ast_node_literals.cpp
         parser/ast_nodes/details/ast_node_literals.h
         parser/ast_nodes/details/ast_node_misc.h
         parser/ast_nodes/details/ast_node_multi_exprs.h
@@ -311,6 +313,7 @@ add_executable(SL_Cpp_Parser_Tests
         # 测试代码
         # 字面量
         test/parser/01_literals/literals_test.cpp
+        test/parser/01_literals/literal_raw_test.cpp
         # 运算符
         test/parser/02_operators/precedence_test.cpp
         test/parser/02_operators/compare_is_assign_test.cpp
@@ -383,6 +386,7 @@ add_executable(SL_Cpp_Analyzer_Tests
         parser/ast_nodes/details/ast_node_decorators.h
         parser/ast_nodes/details/ast_node_func.h
         parser/ast_nodes/details/ast_node_import.h
+        parser/ast_nodes/details/ast_node_literals.cpp
         parser/ast_nodes/details/ast_node_literals.h
         parser/ast_nodes/details/ast_node_misc.h
         parser/ast_nodes/details/ast_node_multi_exprs.h
@@ -402,6 +406,7 @@ add_executable(SL_Cpp_Analyzer_Tests
         test/analyzer/test_utils.h
         test/analyzer/semantic_checker/test_utils.h
         test/analyzer/main_test.cpp
+        test/analyzer/recheck_after_fold_test.cpp
 
         # 测试代码：expr_folder
         test/analyzer/expr_folder/arithmetic_test.cpp
@@ -423,7 +428,6 @@ add_executable(SL_Cpp_Analyzer_Tests
         test/analyzer/semantic_checker/lvalue_test.cpp
         test/analyzer/semantic_checker/dict_call_test.cpp
         test/analyzer/semantic_checker/import_test.cpp
-        test/analyzer/semantic_checker/literal_test.cpp
         test/analyzer/semantic_checker/defensive_test.cpp
         test/analyzer/semantic_checker/single_expr_test.cpp
 )

@@ -3,7 +3,6 @@
 #include "../../parser/ast_nodes/ast_nodes.h"
 
 #include <string>
-#include <string_view>
 
 class SemanticChecker {
     const AstNode &root_;
@@ -27,26 +26,6 @@ class SemanticChecker {
     void require_not_null(const AstNodePtr &node, Position pos) const;
     // 名字不能是 ""（Parser 保证，触发即 InternalError）
     void require_not_null(const std::u32string &name, Position pos) const;
-
-    /**
-     * int/float 字面量 raw_ 拆出来的某一段必须是非空的纯十进制数字串
-     * @param no_leading_zero 是否禁止前导零（单独一个 "0" 除外）
-     * @param part            这一段的名字，只用来拼报错信息
-     */
-    void require_digits(
-        const std::u32string &raw, bool no_leading_zero, std::string_view part, Position pos
-    ) const;
-
-    /**
-     * 校验 int/float 字面量 raw_ 末尾的科学计数法后缀 `[eE][+-]?digits`
-     * @param allow_negative_exponent 指数能不能带负号（int 不行，decimal 行）
-     * @param max_exponent_digits     指数位数上限，0 表示不限
-     * @return 尾数（没有后缀就原样返回）
-     */
-    [[nodiscard]] std::u32string require_exponent(
-        const std::u32string &raw, bool allow_negative_exponent, size_t max_exponent_digits,
-        Position pos
-    ) const;
 
     // vector 元素个数不能少于 min_size（Parser 保证，触发即 InternalError）
     template <typename T>
