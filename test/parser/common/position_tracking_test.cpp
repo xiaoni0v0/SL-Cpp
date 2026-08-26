@@ -20,7 +20,7 @@ TEST_SUITE("位置追踪——AstNode::pos_ 基本行为") {
     }
 
     TEST_CASE("多条顶层表达式：行号正确递增") {
-        const AstNodeProgramPtr program{parse_program(U"x = 1\ny = 2")};
+        const AstNodeProgramPtr program{parse_as_file(U"x = 1\ny = 2")};
         REQUIRE(program->exprs_.size() == 2);
         CHECK(program->exprs_[0]->pos_.row == 1);
         CHECK(program->exprs_[1]->pos_.row == 2);

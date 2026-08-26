@@ -52,7 +52,7 @@ int Executor::run() const {
     // 2. 解析器（token 数组 -> AST）
     AstNodeProgramPtr ast;
     try {
-        ast = Parser{std::move(tokens), file_path}.parse_program();
+        ast = Parser{std::move(tokens), file_path}.parse_as_file();
         std::cout << ast->to_json().dump(2) << std::endl << std::endl;
     } catch (SLException &e) {
         std::cerr << e.what() << std::endl;

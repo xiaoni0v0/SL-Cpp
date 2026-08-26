@@ -1341,7 +1341,7 @@ Parser::Parser(std::vector<Token> tokens, std::string file_path)
     }
 }
 
-AstNodeProgramPtr Parser::parse_program() && {
+AstNodeProgramPtr Parser::parse_as_file() && {
     const Position start_pos{peek().row, peek().col};
 
     // 解析一个若干个表达式
@@ -1353,7 +1353,7 @@ AstNodeProgramPtr Parser::parse_program() && {
     return std::make_unique<AstNodeProgram>(start_pos, std::move(exprs));
 }
 
-AstNodePtr Parser::parse_single_expr() && {
+AstNodePtr Parser::parse_as_single_expr() && {
     // 只跳空行，不跳 ';'，换行是软终止
     const auto reject_semicolon{[this] {
         if (check(TokenType::SIGN_SEMICOLON))

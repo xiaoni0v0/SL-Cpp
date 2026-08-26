@@ -37,7 +37,7 @@ TEST_SUITE("跨分组组合——装饰器/类/函数/for/try/字典展开/is �
             U"        return result\n"
             U"    }\n"
             U"}";
-        CHECK_NOTHROW(parse_program(source));
+        CHECK_NOTHROW(parse_as_file(source));
 
         // 注意：这里必须用 = 而不是 const auto
         // root{parse_json(source)}——花括号初始化一个已经构造好的 json 对象会被 nlohmann 的
@@ -103,7 +103,7 @@ TEST_SUITE("跨分组组合——{}/()/[] 混着嵌套时 paren_depth_ 的一致
         // f( [ { 'a' : 1 \n + 2 } ] )：dict 进入时把 paren_depth_ 清零，不管外层是 f( 还是 [
         // 嵌了几层， 'a' 对应的 value 在换行处都应该老老实实结束，不能被外层的括号深度带偏而把 "+
         // 2" 接续进来
-        CHECK_THROWS_AS(parse_program(U"f([{'a': 1\n+ 2}])"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"f([{'a': 1\n+ 2}])"), SyntaxError);
     }
 
     TEST_CASE(
@@ -111,7 +111,7 @@ TEST_SUITE("跨分组组合——{}/()/[] 混着嵌套时 paren_depth_ 的一致
         "（parse_brace 的 dict 分支必须在 finish_dict 返回之后才恢复 paren_depth_，不能提前）"
     ) {
         const std::u32string source{U"f({'a': 1}, x\n+ y)"};
-        CHECK_NOTHROW(parse_program(source));
+        CHECK_NOTHROW(parse_as_file(source));
         CHECK(
             parse_json(source) ==
             nlohmann::json{
@@ -145,7 +145,7 @@ TEST_SUITE("跨分组组合——{}/()/[] 混着嵌套时 paren_depth_ 的一致
         const std::u32string source = U"for (state = {'count': 0}\n"
                                       U"     state.count < 10\n"
                                       U"     state.count += 1) body";
-        CHECK_NOTHROW(parse_program(source));
+        CHECK_NOTHROW(parse_as_file(source));
 
         const auto root = parse_json(source);
         CHECK(root["type"] == "ForCond");
@@ -178,7 +178,7 @@ TEST_SUITE("跨分组组合——深层嵌套结构里报错位置依然精确")
                                       U"]\n"
                                       U"}";
         try {
-            parse_program(source);
+            parse_as_file(source);
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -192,7 +192,7 @@ TEST_SUITE("跨分组组合——表达式位置的通用性（默认值/实参/
 
     TEST_CASE("形参默认值本身是一个匿名函数（func 是普通表达式，能出现在任何表达式能出现的位置）") {
         const std::u32string source{U"func f(x, cb = func(y) { return y + 1 }) { return cb(x) }"};
-        CHECK_NOTHROW(parse_program(source));
+        CHECK_NOTHROW(parse_as_file(source));
 
         const auto j = parse_json(source);
         const auto &default_value{j["params"]["positional"][1]["default_value"]};

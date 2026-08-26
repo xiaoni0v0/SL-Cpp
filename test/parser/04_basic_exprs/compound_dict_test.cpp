@@ -110,19 +110,19 @@ TEST_SUITE("{} 判别规则") {
     }
 
     TEST_CASE("{a, b} 两不像：既不是字典也不是合法复合表达式，必须报错（SL 没有集合字面量语法）") {
-        CHECK_THROWS_AS(parse_program(U"{a, b}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{a, b}"), SyntaxError);
     }
 
     TEST_CASE("字典项之间只能用逗号分隔：';' 或单独的换行都不行") {
-        CHECK_THROWS_AS(parse_program(U"{k: v; k2: v2}"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"{k: v\nk2: v2}"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"{**d; x}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{k: v; k2: v2}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{k: v\nk2: v2}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{**d; x}"), SyntaxError);
     }
 
     TEST_CASE("残缺的键值对报错") {
-        CHECK_THROWS_AS(parse_program(U"{k:}"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"{: v}"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"{k: v,,}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{k:}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{: v}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{k: v,,}"), SyntaxError);
     }
 }
 
@@ -176,8 +176,8 @@ TEST_SUITE("字典展开项：按表达式本身是不是 ** 展开判定（不�
     }
 
     TEST_CASE("第二项及以后既不是 ** 展开也没有冒号，必须报错，不能被静默当成合法展开项") {
-        CHECK_THROWS_AS(parse_program(U"{k: v, x}"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"{k: v, x, y: z}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{k: v, x}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{k: v, x, y: z}"), SyntaxError);
     }
 
     TEST_CASE("展开项外面套分组括号是透明的：{(**d)} 就是 {**d}（与 f((**d)) ≡ f(**d) 一致）") {
@@ -193,20 +193,20 @@ TEST_SUITE("字典展开项：按表达式本身是不是 ** 展开判定（不�
         // （其中的展开节点位于非法位置，由语义层按 SL.md 拒绝，不是语法层的事）
         CHECK(parse_json(U"{**d + x}")["type"] == "Compound");
         // 已确定是字典后（有 k: v 项），后续项是 '**d + x' 这种根不是展开、又没冒号的表达式 → 报错
-        CHECK_THROWS_AS(parse_program(U"{k: v, **d + x}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{k: v, **d + x}"), SyntaxError);
     }
 
     TEST_CASE("加括号的展开项跟不加括号的一样不能带 value") {
-        CHECK_THROWS_AS(parse_program(U"{(**d): v}"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"{**d: v}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{(**d): v}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{**d: v}"), SyntaxError);
     }
 }
 
 TEST_SUITE("复合表达式内部也必须有合法分隔符") {
 
     TEST_CASE("判别用的 first 和后续表达式之间没有分隔符必须报错，跟顶层 a b 同一个错误") {
-        CHECK_THROWS_AS(parse_program(U"{k v}"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"{a b; c}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{k v}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{a b; c}"), SyntaxError);
     }
 
     TEST_CASE("first 和后续表达式之间只要有合法分隔符（换行/分号）就没问题") {
@@ -228,8 +228,8 @@ TEST_SUITE("复合表达式内部也必须有合法分隔符") {
 TEST_SUITE("字典与复合表达式的其他边缘情况") {
 
     TEST_CASE("未闭合的 {} 抛异常") {
-        CHECK_THROWS_AS(parse_program(U"{a; b"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"{k: v"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{a; b"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{k: v"), SyntaxError);
     }
 
     TEST_CASE("字典值可以是复合表达式，复合表达式里也可以嵌字典") {
@@ -264,7 +264,7 @@ TEST_SUITE("字典与复合表达式的其他边缘情况") {
     TEST_CASE("前导 ';' 强制判为复合表达式，即使后面长得像字典的 'k: v' 也不能被判成字典") {
         // 一旦见到前导 ';'，字典这个可能性就被排除了；剩下的 "a : b" 不是合法的复合表达式项
         // （单条表达式后面不能直接跟 ':'），必须报错，不能被静默解析成 {a: b} 这样的字典
-        CHECK_THROWS_AS(parse_program(U"{; a : b}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{; a : b}"), SyntaxError);
     }
 
     TEST_CASE("前导 ';' 本身只是个空的起始分隔符，不影响后面正常的复合表达式") {
@@ -408,8 +408,8 @@ TEST_SUITE("{} 内部是独立的语句语境：块内换行不受外层括号�
         // v 后面换行紧跟 '+'：块内语境若没有正确屏蔽外层括号的深度，会被误当成延续行
         // 合并成 "v + w"；正确行为是换行终止了这个 value，后面单独的 '+ w' 不构成
         // 合法的字典收尾，必须报错——跟没有外层调用包裹时的顶层 {k: v\n+ w} 完全一致
-        CHECK_THROWS_AS(parse_program(U"{k: v\n+ w}"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"f({k: v\n+ w})"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{k: v\n+ w}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"f({k: v\n+ w})"), SyntaxError);
     }
 
     TEST_CASE("字典值是复合表达式、整体又在调用实参里：逐层语境正确切换") {
@@ -447,13 +447,13 @@ TEST_SUITE("{} 内部是独立的语句语境：块内换行不受外层括号�
     }
 
     TEST_CASE("顶层（无外层括号）'}' 后面的换行则正常终止语句，'.c' 不能开启新语句") {
-        CHECK_THROWS_AS(parse_program(U"{a; b}\n.c"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"{a; b}\n.c"), SyntaxError);
     }
 
     TEST_CASE("块内语句该报的错照报：{} 写进括号里不会放松块内的分隔符要求") {
         // 括号内的 {a b}（两个语句之间既无换行也无 ';'）跟顶层一样必须报错
-        CHECK_THROWS_AS(parse_program(U"f({a b})"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"f({a b})"), SyntaxError);
         // 括号内的 {; a : b} 跟顶层一样：前导 ';' 强制复合表达式，'a : b' 不合法
-        CHECK_THROWS_AS(parse_program(U"f({; a : b})"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"f({; a : b})"), SyntaxError);
     }
 }

@@ -124,17 +124,17 @@ TEST_SUITE("class") {
     }
 
     TEST_CASE("类是普通表达式，可以直接赋值给变量") {
-        CHECK_NOTHROW(parse_program(U"x = class {}"));
+        CHECK_NOTHROW(parse_as_file(U"x = class {}"));
     }
 
     TEST_CASE("未闭合基类列表/类体报错") {
-        CHECK_THROWS_AS(parse_program(U"class C(Base {}"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"class C {"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"class C(Base {}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"class C {"), SyntaxError);
     }
 
     TEST_CASE("基类列表未闭合的消息明确说'base class list'，位置指向多出来的 '{'（不是 EOF）") {
         try {
-            parse_program(U"class C(Base {}");
+            parse_as_file(U"class C(Base {}");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -210,7 +210,7 @@ TEST_SUITE("class——捕获列表") {
 
     TEST_CASE("捕获列表未闭合的消息明确说'capture list'，位置指向多出来的 '{'（不是 EOF）") {
         try {
-            parse_program(U"class C[x {}");
+            parse_as_file(U"class C[x {}");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};

@@ -15,7 +15,7 @@ void Analyzer::analyze_program(AstNodeProgram &root, std::string file_path) {
 }
 
 void Analyzer::analyze_single_expr(AstNodePtr &expr, std::string file_path) {
-    assert(expr); // 调用方保证非空（Parser::parse_single_expr 的产物一定非空）
+    assert(expr); // 调用方保证非空
 
     SemanticChecker{*expr, std::move(file_path)}.check();
     ExprFolder::fold_expr(expr);

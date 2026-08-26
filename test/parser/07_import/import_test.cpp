@@ -44,22 +44,22 @@ TEST_SUITE("import 关键字形态") {
     }
 
     TEST_CASE("各段都是标识符 token，不是表达式，字面量非法") {
-        CHECK_THROWS_AS(parse_program(U"import 5"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"import 'math'"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"import a.5"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"import a.'b'"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"import 5"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"import 'math'"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"import a.5"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"import a.'b'"), SyntaxError);
     }
 
     TEST_CASE("段名不能是关键字/保留字") {
-        CHECK_THROWS_AS(parse_program(U"import class"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"import os.class"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"import as"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"import import"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"import class"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"import os.class"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"import as"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"import import"), SyntaxError);
     }
 
     TEST_CASE("点号后面必须还有一段") {
-        CHECK_THROWS_AS(parse_program(U"import a."), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"import a.b."), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"import a."), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"import a.b."), SyntaxError);
     }
 
     TEST_CASE("'..' 是独立的 Range 运算符 token，不是两个 '.'：段名到此为止") {
@@ -74,8 +74,8 @@ TEST_SUITE("import 关键字形态") {
     }
 
     TEST_CASE("缺少名字时报错") {
-        CHECK_THROWS_AS(parse_program(U"import"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"import ."), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"import"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"import ."), SyntaxError);
     }
 
     TEST_CASE("import 后面允许换行（跟 global/del 一致）") {
@@ -93,7 +93,7 @@ TEST_SUITE("import 关键字形态") {
     TEST_CASE("'.' 前只在括号内允许换行（顶层换行就是表达式结束，同 x\\n.y）") {
         CHECK(parse_json(U"(import a\n.b)") == import_kw(nlohmann::json::array({"a", "b"})));
         // 顶层：import a 到此为止，下一行的 .b 单独成句，是语法错误
-        CHECK_THROWS_AS(parse_program(U"import a\n.b"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"import a\n.b"), SyntaxError);
     }
 
     TEST_CASE("import a 整体和其他基本表达式一样参与后缀运算符链（点号除外，被段名吃掉了）") {
@@ -173,9 +173,9 @@ TEST_SUITE("import 调用形态") {
     }
 
     TEST_CASE("实参可以是任意表达式，一概不校验，留给运行时") {
-        CHECK_NOTHROW(parse_program(U"import(f() + g())"));
-        CHECK_NOTHROW(parse_program(U"import(if (b) a else c)"));
-        CHECK_NOTHROW(parse_program(U"import(1, 2, 3, whatever=None)"));
+        CHECK_NOTHROW(parse_as_file(U"import(f() + g())"));
+        CHECK_NOTHROW(parse_as_file(U"import(if (b) a else c)"));
+        CHECK_NOTHROW(parse_as_file(U"import(1, 2, 3, whatever=None)"));
     }
 
     TEST_CASE("实参分组规则跟普通函数调用共用同一套：位置实参不能出现在关键字实参之后") {

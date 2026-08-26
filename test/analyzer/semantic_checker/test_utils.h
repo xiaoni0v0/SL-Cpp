@@ -14,14 +14,14 @@
 // 解析整份源码并跑一遍 SemanticChecker；不抛异常就是通过，调用方一般配
 // CHECK_NOTHROW/CHECK_THROWS_AS 用。
 inline void check_program(const std::u32string &source) {
-    AstNodeProgramPtr program{parse_program(source)};
+    AstNodeProgramPtr program{parse_as_file(source)};
     SemanticChecker{*program, "<test>"}.check();
 }
 
 // 按 eval(code) 的方式解析并检查：整份源码必须恰好是一条表达式，且检查时外层环境为空
 // （不在任何 Program 内、不在任何循环内）。不抛异常就是通过。
 inline void check_single_expr(const std::u32string &source) {
-    const AstNodePtr expr{parse_single_expr(source)};
+    const AstNodePtr expr{parse_as_single_expr(source)};
     SemanticChecker{*expr, "<test>"}.check();
 }
 

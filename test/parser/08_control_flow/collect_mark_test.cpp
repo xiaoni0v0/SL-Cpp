@@ -83,13 +83,13 @@ TEST_SUITE("收集模式记号——非法组合") {
 
     TEST_CASE("$$ 必须连写，$ $ 不是 $$") {
         // 第二个 $ 既不是 * 也不是 '('，卡在等待 '(' 这一步
-        CHECK_THROWS_AS(parse_program(U"for $ $ (i : xs) body"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"for $ $ ** (i : xs) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for $ $ (i : xs) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for $ $ ** (i : xs) body"), SyntaxError);
     }
 
     TEST_CASE("记号不能重复，也不能出现在括号之后") {
-        CHECK_THROWS_AS(parse_program(U"for $ $$ (i : xs) body"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"for $ * * (i : xs) body"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"for (i : xs) $ body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for $ $$ (i : xs) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for $ * * (i : xs) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (i : xs) $ body"), SyntaxError);
     }
 }

@@ -144,7 +144,7 @@ TEST_SUITE("for——步进模式") {
 
     TEST_CASE("槽之间缺分隔符报错，位置指向下一槽开头（不是上一槽结尾）") {
         try {
-            parse_program(U"for (i = 0 i < 10; i += 1) body");
+            parse_as_file(U"for (i = 0 i < 10; i += 1) body");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -157,14 +157,14 @@ TEST_SUITE("for——步进模式") {
         "换行不能替代 ';' 来标记空槽：只写两个换行分隔的槽就直接收尾必须报错，"
         "不能把第三槽悄悄当成空的接受掉"
     ) {
-        CHECK_THROWS_AS(parse_program(U"for (a\nb\n) body"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"for (a\n) body"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"for (; c\n) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (a\nb\n) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (a\n) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (; c\n) body"), SyntaxError);
     }
 
     TEST_CASE("空槽换行报错的消息说明白要补 ';'，位置指向那个不该出现的 ')'") {
         try {
-            parse_program(U"for (a\nb\n) body");
+            parse_as_file(U"for (a\nb\n) body");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -221,16 +221,16 @@ TEST_SUITE("for——步进模式") {
     }
 
     TEST_CASE("只用一个显式 ';' 就想收尾（少了第二个分隔符/第三槽）必须报错") {
-        CHECK_THROWS_AS(parse_program(U"for (;) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (;) body"), SyntaxError);
     }
 
     TEST_CASE("for () 彻底为空报错，提示改用 for (;;) 或 while (cond)") {
-        CHECK_THROWS_AS(parse_program(U"for () body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for () body"), SyntaxError);
     }
 
     TEST_CASE("裸单表达式当条件不受语法支持（未被 SL.md 授权）：for (cond) body 必须报错") {
-        CHECK_THROWS_AS(parse_program(U"for (x > 0) body"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"for $ (x > 0) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (x > 0) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for $ (x > 0) body"), SyntaxError);
     }
 }
 
@@ -291,19 +291,19 @@ TEST_SUITE("for——迭代模式") {
     }
 
     TEST_CASE("元组目标不带外层括号会被当成步进模式解析，进而因为缺分隔符报错") {
-        CHECK_THROWS_AS(parse_program(U"for (a, b : pairs) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (a, b : pairs) body"), SyntaxError);
     }
 
     TEST_CASE("未闭合括号/缺 body 报错") {
-        CHECK_THROWS_AS(parse_program(U"for (x : xs"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"for (x : xs)"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (x : xs"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (x : xs)"), SyntaxError);
     }
 }
 
 TEST_SUITE("for——cond 槽禁止裸的普通赋值（init/inc 不受限）") {
 
     TEST_CASE("中间 cond 槽裸 = 报错") {
-        CHECK_THROWS_AS(parse_program(U"for (i = 0; i = 10; i += 1) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (i = 0; i = 10; i += 1) body"), SyntaxError);
     }
 
     TEST_CASE("中间 cond 槽裸复合赋值不受限") {
@@ -338,7 +338,7 @@ TEST_SUITE("for——cond 槽禁止裸的普通赋值（init/inc 不受限）") 
     }
 
     TEST_CASE("init/inc 槽裸赋值不受限（本来就是为赋值而生）") {
-        CHECK_NOTHROW(parse_program(U"for (i = 0; c; i = i + 1) body"));
+        CHECK_NOTHROW(parse_as_file(U"for (i = 0; c; i = i + 1) body"));
     }
 }
 

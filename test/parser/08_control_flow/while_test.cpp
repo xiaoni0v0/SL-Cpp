@@ -62,15 +62,15 @@ TEST_SUITE("while") {
     }
 
     TEST_CASE("缺少括号/未闭合/缺 body 都报错") {
-        CHECK_THROWS_AS(parse_program(U"while c) body"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"while (c"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"while (c)"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"while c) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"while (c"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"while (c)"), SyntaxError);
     }
 }
 
 TEST_SUITE("while——cond 禁止裸的普通赋值") {
 
-    TEST_CASE("裸 = 报错") { CHECK_THROWS_AS(parse_program(U"while (x = 1) body"), SyntaxError); }
+    TEST_CASE("裸 = 报错") { CHECK_THROWS_AS(parse_as_file(U"while (x = 1) body"), SyntaxError); }
 
     TEST_CASE("裸复合赋值不受限") {
         CHECK(

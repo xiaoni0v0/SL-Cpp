@@ -84,7 +84,7 @@ TEST_SUITE("func——基本形状") {
     }
 
     TEST_CASE("函数是普通表达式，可以直接赋值给变量") {
-        CHECK_NOTHROW(parse_program(U"x = func() {}"));
+        CHECK_NOTHROW(parse_as_file(U"x = func() {}"));
     }
 }
 
@@ -157,14 +157,14 @@ TEST_SUITE("func——形参") {
     TEST_CASE("形参列表为空") { CHECK(parse_json(U"func f() {}")["params"] == all_params()); }
 
     TEST_CASE("缺少括号/未闭合报错") {
-        CHECK_THROWS_AS(parse_program(U"func f {}"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"func f(a {}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"func f {}"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"func f(a {}"), SyntaxError);
     }
 
     TEST_CASE("形参列表未闭合的消息明确说'parameter list'，位置指向多出来的 '{'（不是 EOF）") {
         // "func f(a {}" -> f(1)u(2)n(3)c(4) (5)f(6)((7)a(8) (9){(10)}(11)
         try {
-            parse_program(U"func f(a {}");
+            parse_as_file(U"func f(a {}");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -249,7 +249,7 @@ TEST_SUITE("func——捕获列表") {
     TEST_CASE("捕获列表未闭合的消息明确说'capture list'，位置指向多出来的 '{'（不是 EOF）") {
         // "func f[x {}" -> f(1)u(2)n(3)c(4) (5)f(6)[(7)x(8) (9){(10)}(11)
         try {
-            parse_program(U"func f[x {}");
+            parse_as_file(U"func f[x {}");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};

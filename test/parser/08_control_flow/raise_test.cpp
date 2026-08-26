@@ -31,7 +31,7 @@ TEST_SUITE("raise") {
     }
 
     TEST_CASE("不同于 return，raise 后面的表达式不可省略") {
-        CHECK_THROWS_AS(parse_program(U"raise"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"raise;"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"raise"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"raise;"), SyntaxError);
     }
 }

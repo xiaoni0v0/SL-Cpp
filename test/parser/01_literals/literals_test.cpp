@@ -58,9 +58,9 @@ TEST_SUITE("基本字面量") {
     ) {
         // "1." 词法为 LITERAL_INT(1) SIGN_DOT，语法层把 '.' 当属性访问，
         // 但后面紧跟 EOF、没有属性名，expect(IDENTIFIER) 失败
-        CHECK_THROWS_AS(parse_program(U"1."), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"1."), SyntaxError);
         // ".1" 词法为 SIGN_DOT LITERAL_INT(1)，语法层一个表达式不能以裸 '.' 开头
-        CHECK_THROWS_AS(parse_program(U".1"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U".1"), SyntaxError);
     }
 
     TEST_CASE("负数不是字面量：一元负号和整数是分开的运算") {
@@ -200,8 +200,8 @@ TEST_SUITE("元组") {
     }
 
     TEST_CASE("未闭合的元组/分组抛异常") {
-        CHECK_THROWS_AS(parse_program(U"(1, 2"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"(1"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"(1, 2"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"(1"), SyntaxError);
     }
 
     TEST_CASE(
@@ -209,7 +209,7 @@ TEST_SUITE("元组") {
         "还看不出来是分组表达式还是元组时不能咬定是元组；位置都应该指向 EOF（缺的是收尾括号）"
     ) {
         try {
-            parse_program(U"(1, 2"); // 见过逗号，确定是元组；"(1, 2" 共 5 个字符，EOF 在第 6 列
+            parse_as_file(U"(1, 2"); // 见过逗号，确定是元组；"(1, 2" 共 5 个字符，EOF 在第 6 列
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -217,7 +217,7 @@ TEST_SUITE("元组") {
             CHECK(msg.find("1:6:") != std::string::npos);
         }
         try {
-            parse_program(
+            parse_as_file(
                 U"(1"
             ); // 没见过逗号，分不清是分组表达式还是元组；"(1" 共 2 个字符，EOF 在第 3 列
             FAIL("应当抛出异常");
@@ -273,7 +273,7 @@ TEST_SUITE("列表") {
     TEST_CASE("未闭合的列表抛异常，消息明确说是列表，位置指向 EOF") {
         // "[1, 2" 共 5 个字符，EOF 在第 6 列
         try {
-            parse_program(U"[1, 2");
+            parse_as_file(U"[1, 2");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -343,7 +343,7 @@ TEST_SUITE("字典") {
     TEST_CASE("未闭合的字典抛异常（走的是通用 expect('}') 报错，不是字典专属措辞），位置指向 EOF") {
         // "{'a': 1" 共 7 个字符，EOF 在第 8 列
         try {
-            parse_program(U"{'a': 1");
+            parse_as_file(U"{'a': 1");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};

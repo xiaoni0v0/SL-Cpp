@@ -51,41 +51,41 @@ void decimal_raw_throws(const std::u32string &raw, const std::string &message_su
 TEST_SUITE("字面量 raw_ 校验——正例走真实源码，Lexer 吐出来的东西构造函数一律接受") {
 
     TEST_CASE("普通 int / decimal 字面量") {
-        CHECK_NOTHROW(parse_program(U"0"));
-        CHECK_NOTHROW(parse_program(U"123"));
-        CHECK_NOTHROW(parse_program(U"123456789012345678901234567890"));
-        CHECK_NOTHROW(parse_program(U"0.0"));
-        CHECK_NOTHROW(parse_program(U"123.45"));
-        CHECK_NOTHROW(parse_program(U"0.05"));
+        CHECK_NOTHROW(parse_as_file(U"0"));
+        CHECK_NOTHROW(parse_as_file(U"123"));
+        CHECK_NOTHROW(parse_as_file(U"123456789012345678901234567890"));
+        CHECK_NOTHROW(parse_as_file(U"0.0"));
+        CHECK_NOTHROW(parse_as_file(U"123.45"));
+        CHECK_NOTHROW(parse_as_file(U"0.05"));
     }
 
     TEST_CASE("科学计数法：尾数不带小数点，是 int") {
-        CHECK_NOTHROW(parse_program(U"1e9"));
-        CHECK_NOTHROW(parse_program(U"1E9"));
-        CHECK_NOTHROW(parse_program(U"1e+9"));
-        CHECK_NOTHROW(parse_program(U"0e0"));
-        CHECK_NOTHROW(parse_program(U"123e4"));
-        CHECK_NOTHROW(parse_program(U"1e9999")); // 恰好是上限
+        CHECK_NOTHROW(parse_as_file(U"1e9"));
+        CHECK_NOTHROW(parse_as_file(U"1E9"));
+        CHECK_NOTHROW(parse_as_file(U"1e+9"));
+        CHECK_NOTHROW(parse_as_file(U"0e0"));
+        CHECK_NOTHROW(parse_as_file(U"123e4"));
+        CHECK_NOTHROW(parse_as_file(U"1e9999")); // 恰好是上限
     }
 
     TEST_CASE("科学计数法：尾数带小数点，是 decimal，指数可正可负") {
-        CHECK_NOTHROW(parse_program(U"1.0e9"));
-        CHECK_NOTHROW(parse_program(U"1.5e-3"));
-        CHECK_NOTHROW(parse_program(U"1.5E-3"));
-        CHECK_NOTHROW(parse_program(U"1.00e+9"));
-        CHECK_NOTHROW(parse_program(U"0.05e3"));
-        CHECK_NOTHROW(parse_program(U"1.0e-0"));
-        CHECK_NOTHROW(parse_program(U"1.0e999999")); // decimal 侧不设指数上限
+        CHECK_NOTHROW(parse_as_file(U"1.0e9"));
+        CHECK_NOTHROW(parse_as_file(U"1.5e-3"));
+        CHECK_NOTHROW(parse_as_file(U"1.5E-3"));
+        CHECK_NOTHROW(parse_as_file(U"1.00e+9"));
+        CHECK_NOTHROW(parse_as_file(U"0.05e3"));
+        CHECK_NOTHROW(parse_as_file(U"1.0e-0"));
+        CHECK_NOTHROW(parse_as_file(U"1.0e999999")); // decimal 侧不设指数上限
     }
 
     TEST_CASE("科学计数法出现在各种表达式位置上") {
-        CHECK_NOTHROW(parse_program(U"x = 1e9"));
-        CHECK_NOTHROW(parse_program(U"1e9 + 2.5e-3"));
-        CHECK_NOTHROW(parse_program(U"[1e3, 2.0e-2]"));
-        CHECK_NOTHROW(parse_program(U"f(1e3, k = 2.0e-2)"));
-        CHECK_NOTHROW(parse_program(U"for (i = 0; i < 1e3; i += 1) {}"));
-        CHECK_NOTHROW(parse_single_expr(U"1e9"));
-        CHECK_NOTHROW(parse_single_expr(U"1.5e-3"));
+        CHECK_NOTHROW(parse_as_file(U"x = 1e9"));
+        CHECK_NOTHROW(parse_as_file(U"1e9 + 2.5e-3"));
+        CHECK_NOTHROW(parse_as_file(U"[1e3, 2.0e-2]"));
+        CHECK_NOTHROW(parse_as_file(U"f(1e3, k = 2.0e-2)"));
+        CHECK_NOTHROW(parse_as_file(U"for (i = 0; i < 1e3; i += 1) {}"));
+        CHECK_NOTHROW(parse_as_single_expr(U"1e9"));
+        CHECK_NOTHROW(parse_as_single_expr(U"1.5e-3"));
     }
 }
 

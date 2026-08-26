@@ -401,7 +401,7 @@ add_executable(SL_Cpp_Analyzer_Tests
         analyzer/semantic_checker/SemanticChecker.cpp
         analyzer/semantic_checker/SemanticChecker.h
 
-        # 测试工具（复用 Parser 测试的 parse_program/parse_json 等）
+        # 测试工具（复用 Parser 测试的 parse_as_file/parse_json 等）
         test/parser/test_utils.h
         test/analyzer/test_utils.h
         test/analyzer/semantic_checker/test_utils.h

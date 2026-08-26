@@ -57,7 +57,7 @@ TEST_SUITE("del") {
     }
 
     TEST_CASE("del 后面必须有一个表达式，缺失时报错") {
-        CHECK_THROWS_AS(parse_program(U"del"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"del\n"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"del"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"del\n"), SyntaxError);
     }
 }

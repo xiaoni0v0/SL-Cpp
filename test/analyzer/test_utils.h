@@ -15,7 +15,7 @@
 // 也会被剪掉，因为 Program 的值只看 return（见 SL.md 程序与函数体的值由 return
 // 决定），不看最后一条表达式的值）， 这里只关心"这一条表达式本身折成了什么"，不想被剪掉。
 inline nlohmann::json fold_json(const std::u32string &source) {
-    AstNodeProgramPtr program{parse_program(source)};
+    AstNodeProgramPtr program{parse_as_file(source)};
     if (program->exprs_.size() != 1) {
         throw std::runtime_error(
             "fold_json: expected exactly 1 top-level expr, got " +
@@ -30,7 +30,7 @@ inline nlohmann::json fold_json(const std::u32string &source) {
 // fold_json 只看恰好一条顶层表达式折出来的样子；这个用来测多条顶层表达式之间的折叠交互
 // （比如 AstNodeProgram::prune_program 原地精简 exprs_）。
 inline nlohmann::json fold_program_json(const std::u32string &source) {
-    AstNodeProgramPtr program{parse_program(source)};
+    AstNodeProgramPtr program{parse_as_file(source)};
     ExprFolder::fold(*program);
     return nlohmann::json(program->to_json());
 }

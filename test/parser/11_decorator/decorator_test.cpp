@@ -111,5 +111,5 @@ TEST_SUITE("装饰器——通用形式") {
         );
     }
 
-    TEST_CASE("装饰器后面缺表达式报错") { CHECK_THROWS_AS(parse_program(U"@dec"), SyntaxError); }
+    TEST_CASE("装饰器后面缺表达式报错") { CHECK_THROWS_AS(parse_as_file(U"@dec"), SyntaxError); }
 }

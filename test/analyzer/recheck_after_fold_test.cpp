@@ -17,7 +17,7 @@ namespace {
 // 折叠走 ExprFolder::fold_expr 而不是整份 Program 的入口，免得折成纯字面量之后被 prune 掉，
 // 那样重新 check 的就是一棵空树，测了等于没测。
 nlohmann::json fold_and_recheck(const std::u32string &source) {
-    AstNodeProgramPtr program{parse_program(source)};
+    AstNodeProgramPtr program{parse_as_file(source)};
     SemanticChecker{*program, "<test>"}.check();
     if (program->exprs_.size() != 1) {
         throw std::runtime_error(
@@ -79,7 +79,7 @@ TEST_SUITE("折叠产物重新 check 也能过——嵌在别的结构里") {
     }
 
     TEST_CASE("整份 Program 走 Analyzer 的正式入口，再整棵重新 check") {
-        AstNodeProgramPtr program{parse_program(U"x = 2 - 3\ny = -1.5\nfunc f() { return -x }")};
+        AstNodeProgramPtr program{parse_as_file(U"x = 2 - 3\ny = -1.5\nfunc f() { return -x }")};
         SemanticChecker{*program, "<test>"}.check();
         ExprFolder::fold(*program);
         CHECK_NOTHROW(SemanticChecker{*program, "<test>"}.check());

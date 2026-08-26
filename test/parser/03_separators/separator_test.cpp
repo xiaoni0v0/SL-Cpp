@@ -71,7 +71,7 @@ TEST_SUITE("表达式分隔符——标准例子") {
     }
 
     TEST_CASE("x\\n.m()：第一行 x 已经是完整表达式，不合并；第二条以 '.' 开头解析失败，抛异常") {
-        CHECK_THROWS_AS(parse_program(U"x\n.m()"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"x\n.m()"), SyntaxError);
     }
 
     TEST_CASE("(x\\n.m()\\n)：括号未闭合，表达式不完整，持续合并直到收尾") {
@@ -138,7 +138,7 @@ TEST_SUITE("表达式分隔符——标准例子") {
         "if (x == 10) x = 100;\\nelse x = 200：显式分号是硬终止，不会合并，"
         "第二条以 else 开头解析失败，抛异常"
     ) {
-        CHECK_THROWS_AS(parse_program(U"if (x == 10) x = 100;\nelse x = 200"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"if (x == 10) x = 100;\nelse x = 200"), SyntaxError);
     }
 }
 
@@ -181,11 +181,11 @@ TEST_SUITE("表达式分隔符——其他续行场景（try/except/finally 同 
     }
 
     TEST_CASE("显式分号切断 try 和 except 的合并，第二条以 except 开头解析失败") {
-        CHECK_THROWS_AS(parse_program(U"try a;\nexcept (E) b"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"try a;\nexcept (E) b"), SyntaxError);
     }
 
     TEST_CASE("elif 同理可以跨行合并：if (a) x\\nelif (b) y\\nelse z") {
-        const AstNodeProgramPtr program{parse_program(U"if (a) x\nelif (b) y\nelse z")};
+        const AstNodeProgramPtr program{parse_as_file(U"if (a) x\nelif (b) y\nelse z")};
         REQUIRE(program->exprs_.size() == 1);
         const auto *if_node{dynamic_cast<AstNodeIf *>(program->exprs_[0].get())};
         REQUIRE(if_node != nullptr);
@@ -231,7 +231,7 @@ TEST_SUITE("表达式分隔符——分号/换行的基本切分") {
     ) {
         // "a b" -> a(1) (2)b(3)：报错时 peek() 停在 'b'，位置应指向 'b' 而不是 'a' 或行首
         try {
-            parse_program(U"a b");
+            parse_as_file(U"a b");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -241,6 +241,6 @@ TEST_SUITE("表达式分隔符——分号/换行的基本切分") {
     }
 
     TEST_CASE("未闭合括号一路合并到 EOF 仍不完整，抛异常（而不是死循环）") {
-        CHECK_THROWS_AS(parse_program(U"(1 +\n2"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"(1 +\n2"), SyntaxError);
     }
 }

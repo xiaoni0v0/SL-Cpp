@@ -159,16 +159,16 @@ class Parser {
     explicit Parser(std::vector<Token> tokens, std::string file_path = "<unknown>");
 
     /**
-     * 把整个输入解析成一份 Program（一份文件、`eval_isolated` 现构造出来的那份文件）。
+     * 把整个输入当作一整份文件解析（`eval_isolated` 现构造出来的那份文件也走这里）
      * 只能调用一次（右值限定）
      * @return Program 根节点
      */
-    [[nodiscard]] AstNodeProgramPtr parse_program() &&;
+    [[nodiscard]] AstNodeProgramPtr parse_as_file() &&;
 
     /**
-     * 把整个输入解析成恰好一条表达式（`eval` 的解析入口）
+     * 把整个输入当作恰好一条表达式解析（`eval` 的解析入口）
      * 只能调用一次（右值限定）
      * @return 这条表达式的节点
      */
-    [[nodiscard]] AstNodePtr parse_single_expr() &&;
+    [[nodiscard]] AstNodePtr parse_as_single_expr() &&;
 };
