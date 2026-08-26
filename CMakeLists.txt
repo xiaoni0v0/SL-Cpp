@@ -423,6 +423,7 @@ add_executable(SL_Cpp_Analyzer_Tests
         test/analyzer/semantic_checker/lvalue_test.cpp
         test/analyzer/semantic_checker/dict_call_test.cpp
         test/analyzer/semantic_checker/import_test.cpp
+        test/analyzer/semantic_checker/literal_test.cpp
         test/analyzer/semantic_checker/defensive_test.cpp
         test/analyzer/semantic_checker/single_expr_test.cpp
 )

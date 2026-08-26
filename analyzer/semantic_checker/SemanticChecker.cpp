@@ -5,6 +5,7 @@
 #include "../../utils/string_utils.h"
 
 #include <cassert>
+#include <format>
 #include <unordered_set>
 
 void SemanticChecker::error(const std::string &msg, const Position pos) const {
@@ -24,13 +25,42 @@ void SemanticChecker::require_not_null(const std::u32string &name, const Positio
 }
 
 void SemanticChecker::require_digits(
-    const std::u32string &raw, const bool no_leading_zero, const Position pos
+    const std::u32string &raw, const bool no_leading_zero, const std::string_view part,
+    const Position pos
 ) const {
-    if (raw.empty()) error_internal("literal raw text is missing digits", pos);
+    if (raw.empty())
+        error_internal(std::format("literal raw text is missing digits in {}", part), pos);
     for (const char32_t c : raw)
-        if (!is_digit(c)) error_internal("literal raw text contains a non-digit character", pos);
+        if (!is_digit(c))
+            error_internal(
+                std::format("literal raw text contains a non-digit character in {}", part), pos
+            );
     if (no_leading_zero && raw.size() > 1 && raw[0] == U'0')
-        error_internal("literal raw text has a leading zero", pos);
+        error_internal(std::format("literal raw text has a leading zero in {}", part), pos);
+}
+
+std::u32string SemanticChecker::require_exponent(
+    const std::u32string &raw, const bool allow_negative_exponent, const size_t max_exponent_digits,
+    const Position pos
+) const {
+    const size_t marker{raw.find_first_of(U"eE")};  // 找 e/E
+    if (marker == std::u32string::npos) return raw; // 没有 e/E
+
+    size_t exponent_begin{marker + 1};
+    if (exponent_begin < raw.size() &&
+        (raw[exponent_begin] == U'+' || raw[exponent_begin] == U'-')) {
+        // 不允许负指数
+        if (raw[exponent_begin] == U'-' && !allow_negative_exponent)
+            error_internal("literal raw text has a negative exponent", pos);
+        ++exponent_begin;
+    }
+
+    const std::u32string exponent{raw.substr(exponent_begin)};
+    require_digits(exponent, true, "the exponent", pos);
+    if (max_exponent_digits != 0 && exponent.size() > max_exponent_digits)
+        error_internal("literal raw text has an out-of-range exponent", pos);
+
+    return raw.substr(0, marker);
 }
 
 void SemanticChecker::check(const AstNode &node) {
@@ -303,15 +333,18 @@ void SemanticChecker::check(const AstNodeLiteralBool &) {}
 void SemanticChecker::check(const AstNodeLiteralGL &) {}
 
 void SemanticChecker::check(const AstNodeLiteralInt &node) {
-    require_digits(node.raw_, true, node.pos_);
+    // 0 <= e <= 9999
+    const std::u32string mantissa{require_exponent(node.raw_, false, 4, node.pos_)};
+    require_digits(mantissa, true, "the integer part", node.pos_);
 }
 
 void SemanticChecker::check(const AstNodeLiteralFloat &node) {
-    const size_t dot{node.raw_.find(U'.')};
+    const std::u32string mantissa{require_exponent(node.raw_, true, 0, node.pos_)};
+    const size_t dot{mantissa.find(U'.')};
     if (dot == std::u32string::npos)
         error_internal("float literal raw text is missing a '.'", node.pos_);
-    require_digits(node.raw_.substr(0, dot), true, node.pos_);
-    require_digits(node.raw_.substr(dot + 1), false, node.pos_);
+    require_digits(mantissa.substr(0, dot), true, "the integer part", node.pos_);
+    require_digits(mantissa.substr(dot + 1), false, "the fractional part", node.pos_);
 }
 
 void SemanticChecker::check(const AstNodeLiteralStr &) {}
