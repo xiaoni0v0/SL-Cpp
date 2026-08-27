@@ -4,15 +4,27 @@
 #include "ast_nodes/ast_nodes.h"
 
 #include <functional>
-#include <optional>
 #include <string>
 #include <vector>
 
 class Parser {
     const std::vector<Token> tokens_;
-    size_t pos_{0};      // 当前 token 的索引
-    int paren_depth_{0}; // 未闭合的 '(' 和 '[' 深度（不含 '{'）
+    size_t pos_{0};           // 当前 token 的索引
+    int paren_depth_{0};      // 未闭合的 '(' 和 '[' 深度（不含 '{'）
+    int for_header_depth_{0}; // 步进 for 头部那层括号的深度，0 表示当前不在任何 for 头部里
     const std::string file_path_;
+
+    // 一对括号状态。'{' 块内换行重新充当表达式分隔符，进块得整体存好清零、出块还原；
+    // 这两个字段必须一起动，分开存会失配
+    struct BracketState {
+        int paren_depth;
+        int for_header_depth;
+    };
+
+    // 进 '{' 块：存下当前的括号状态并清零，返回存下来的旧值
+    [[nodiscard]] BracketState enter_brace();
+    // 出 '{' 块：还原 enter_brace 存下的状态
+    void leave_brace(BracketState saved);
 
     // 往后看 token
     [[nodiscard]] const Token &peek() const;
@@ -28,7 +40,7 @@ class Parser {
     const Token &expect(TokenType expected_type);
     // 无条件跳过 NEWLINE
     void skip_newline();
-    // 仅在 paren_depth_ > 0（括号内）时跳过 NEWLINE
+    // 仅在括号内跳过 NEWLINE。步进 for 头部那一层除外：那里换行是槽分隔符，不是空白
     void skip_paren_newline();
     // 无条件跳过 NEWLINE 和 ';'
     void skip_terminator();

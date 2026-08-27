@@ -68,6 +68,28 @@ TEST_SUITE("while") {
     }
 }
 
+TEST_SUITE("while——括号里的换行是空白，不像步进 for 的头部那样分隔") {
+
+    // while 只有一个槽，没有槽边界要分，所以这对括号就是普通括号：换行随便折。
+    // 对照 for_test.cpp 里"步进模式头部的换行按软终止分隔"那一组——同样的两行，那边会被切成两槽
+    TEST_CASE("cond 跨行照旧当空白，不切断") {
+        CHECK(
+            parse_json(U"while (\nx\n+ 1\n) body") == nlohmann::json{
+                                                          {"type", "ForCond"},
+                                                          {"collect", "none"},
+                                                          {"init", nullptr},
+                                                          {"cond",
+                                                           {{"type", "OpBinary"},
+                                                            {"op", "+"},
+                                                            {"left", ident("x")},
+                                                            {"right", int_lit("1")}}},
+                                                          {"inc", nullptr},
+                                                          {"body", ident("body")}
+                                                      }
+        );
+    }
+}
+
 TEST_SUITE("while——cond 禁止裸的普通赋值") {
 
     TEST_CASE("裸 = 报错") { CHECK_THROWS_AS(parse_as_file(U"while (x = 1) body"), SyntaxError); }
