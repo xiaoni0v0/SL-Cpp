@@ -389,23 +389,6 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
             continue;
         }
 
-        // in（成员测试，不支持链式）
-        if (op == TokenType::KW_IN) {
-            skip_newline();
-            left = std::make_unique<AstNodeOpBinary>(
-                start_pos,
-                AstNodeOpBinary::OpType::In,
-                std::move(left),
-                parse_expr_pratt(rbp),
-                op_pos
-            );
-            skip_paren_newline();
-            if (check(TokenType::KW_IN)) {
-                error("'in' does not chain; add parentheses if that is really what you mean");
-            }
-            continue;
-        }
-
         // is（链式，自成一组）
         if (op == TokenType::KW_IS) {
             left = parse_chain_is(std::move(left), start_pos, op_pos);
@@ -791,6 +774,12 @@ AstNodePtr Parser::parse_if() {
 }
 
 AstNodePtr Parser::parse_for() {
+    // 工具：一个槽在 ';'、换行、')' 前结束；当前位置直接就是它们，说明这个槽是空的
+    const auto at_slot_boundary{[&]() -> bool {
+        return check(TokenType::SIGN_SEMICOLON) || check(TokenType::NEWLINE) ||
+               check(TokenType::SIGN_RPAREN);
+    }};
+
     // 工具：解析 for 头部（不含两侧括号），按规则切成若干槽
     auto parse_for_slots{[&]() -> std::vector<AstNodePtr> {
         std::vector<AstNodePtr> slots;
@@ -799,33 +788,25 @@ AstNodePtr Parser::parse_for() {
         if (check(TokenType::SIGN_RPAREN)) return slots; // 空：for ()
 
         while (true) {
-            // 当前位置直接是分隔符或 ')' 就是个空槽。
             // 第二个槽按条件解析（禁止裸的普通赋值）——合法的头部只要有第二个槽就一定是步进模式
-            const bool empty{
-                check(TokenType::SIGN_SEMICOLON) || check(TokenType::NEWLINE) ||
-                check(TokenType::SIGN_RPAREN)
-            };
             slots.push_back(
-                empty               ? nullptr
+                at_slot_boundary()  ? nullptr
                 : slots.size() == 1 ? parse_expr_as_cond()
                                     : parse_expr()
             );
+            // 槽读完了，当前位置必须是个边界（换行没被当成空白吃掉，此处它还在，直接看得见）
+            if (!at_slot_boundary()) {
+                error("expected ';' or newline to separate the expressions in a for header");
+            }
 
-            // 分隔符：';' 是硬分隔，换行是软分隔（换行没被当成空白吃掉，此处它还在，直接看得见）。
-            // ';' 前后的换行都归这个分隔符，允许把 ';' 单独写一行
-            const bool had_newline{check(TokenType::NEWLINE)};
-            skip_newline();
-
+            skip_newline(); // ';' 前后的换行都归这个分隔符，允许把 ';' 单独写一行
             if (check(TokenType::SIGN_SEMICOLON)) {
-                expect(TokenType::SIGN_SEMICOLON); // 消耗 ';'
+                advance(); // 消耗 ';'。它划出的空槽算数，所以下一轮接着读
                 skip_newline();
                 continue;
             }
-            // 紧挨 ')' 之前的换行只是排版，不再多划出一个槽
+            // 光靠换行分隔时，紧挨 ')' 之前的换行只是排版，不再多划出一个槽
             if (check(TokenType::SIGN_RPAREN)) return slots;
-            if (!had_newline) {
-                error("expected ';' or newline to separate the expressions in a for header");
-            }
         }
     }};
 
@@ -836,23 +817,18 @@ AstNodePtr Parser::parse_for() {
 
     // 头部这一层括号里换行是槽分隔符（见 SL.md 的 for 表达式一节），不像别处的括号那样当空白
     expect_open(Bracket::ForHeader);
-    std::vector<AstNodePtr> slots{parse_for_slots()};
+    std::vector slots{parse_for_slots()};
 
     // 槽数只能是 3（步进模式）或 1（迭代模式）。趁 peek 还停在 ')' 上先判完，报错位置才有意义
-    if (slots.empty()) {
-        error(
-            "empty for header (for an infinite loop use `for (;;)`; for a plain condition use "
-            "`while (cond)`)"
-        );
-    }
-    if (slots.size() != 1 && slots.size() != 3) {
+    if (slots.empty()) error("empty for header");
+    if (!(slots.size() == 1 || slots.size() == 3)) {
         error(
             "a for header needs 3 slots (`init; cond; inc`) or 1 (`target in iterable`); an empty "
             "slot must be marked with ';', a newline alone is not enough"
         );
     }
 
-    // 一个槽即迭代模式：这个槽必须是一棵以 in 为根的树，把它的两个孩子取出来当 target/iterable
+    // 一个槽即迭代模式：这个槽必须是一棵以 in 为根的树
     AstNodeOpBinary *in_node{nullptr};
     if (slots.size() == 1) {
         in_node = dynamic_cast<AstNodeOpBinary *>(slots[0].get());

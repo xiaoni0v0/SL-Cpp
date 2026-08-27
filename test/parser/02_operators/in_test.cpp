@@ -1,5 +1,6 @@
 // SL.md 的运算符一节——`in`（成员测试，优先级 55）。
-// 它夹在比较组（60）和 `is`（50）之间，两边都不混链，自己也不支持链式。
+// 它夹在比较组（60）和 `is`（50）之间，两边都不混链；自己也不像它们那样收成链节点，
+// 连写就是普通的左结合。
 // 它同时是迭代 for 的判别依据（`for (target in iterable)`），那部分在
 // 08_control_flow/for_test.cpp。
 #include "../../../builtins/exceptions/SyntaxError.h"
@@ -51,20 +52,17 @@ TEST_SUITE("in 运算符") {
     }
 }
 
-TEST_SUITE("in 不支持链式") {
+TEST_SUITE("in 不主动支持链式，但连写也不报错") {
 
-    TEST_CASE("`a in b in c` 直接报错，不像 Python 那样隐式展开成 and") {
-        try {
-            parse_as_file(U"a in b in c");
-            FAIL("应当抛出异常");
-        } catch (const SyntaxError &e) {
-            const std::string msg{e.what()};
-            CHECK(msg.find("does not chain") != std::string::npos);
-        }
+    // 比较组和 is 各自会把连写收成一个链节点（`a < b <= c`、`a is b is c`），in 不参与这套：
+    // 它就是个普通的左结合二元运算符，连写就按左结合叠上去，语法层不拦
+    TEST_CASE("`a in b in c` 就是 `(a in b) in c`") {
+        CHECK(parse_json(U"a in b in c") == in_op(in_op(ident("a"), ident("b")), ident("c")));
+        CHECK(parse_json(U"a in b in c") == parse_json(U"(a in b) in c"));
+        // 结果通常在运行期抛 TypeError，但那是运行期的事，跟解析无关
     }
 
-    TEST_CASE("自己加括号就行，报错只针对裸的连写") {
-        CHECK(parse_json(U"(a in b) in c") == in_op(in_op(ident("a"), ident("b")), ident("c")));
+    TEST_CASE("加括号能改结合方向") {
         CHECK(parse_json(U"a in (b in c)") == in_op(ident("a"), in_op(ident("b"), ident("c"))));
     }
 }
