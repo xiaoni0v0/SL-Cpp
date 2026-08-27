@@ -13,11 +13,12 @@ class Parser {
     size_t pos_{0}; // 当前 token 的索引
     const std::string file_path_;
 
-    // 一层未闭合的括号，按它内部的换行怎么算来分（'(' 和 '[' 无需区分，报错措辞由 expect 的参数定）
+    // 一层未闭合的括号
     enum class Bracket {
-        Plain,     // '(' / '['：换行只是排版，当空白跳掉
-        ForHeader, // 步进 for 头部的 '('：换行分隔 init/cond/inc 三槽
-        Block,     // '{'：块内换行重新充当表达式分隔符
+        Paren,     // ( )
+        Square,    // [ ]
+        Brace,     // { }
+        ForHeader, // 步进 for 头部的 ( )
     };
 
     std::stack<Bracket> brackets_; // 所有未闭合的括号，栈顶是最内层
@@ -35,9 +36,9 @@ class Parser {
     // 消耗对应类型 token，否则抛出异常
     const Token &expect(TokenType expected_type);
     // 消耗一个左括号并入栈。每个左括号都得走这里、每个右括号走 expect_close，配对关系一眼可见
-    const Token &expect_open(TokenType expected_type, Bracket kind);
-    // 消耗一个右括号并出栈
-    const Token &expect_close(TokenType expected_type);
+    const Token &expect_open(Bracket kind);
+    // 消耗一个右括号并出栈，顺便核对弹出的跟传进来的是同一种
+    const Token &expect_close(Bracket kind);
     // 无条件跳过 NEWLINE
     void skip_newline();
     // 仅当最内层那对括号是 Bracket::Plain 时跳过 NEWLINE
