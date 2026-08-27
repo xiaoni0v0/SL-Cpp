@@ -4,27 +4,23 @@
 #include "ast_nodes/ast_nodes.h"
 
 #include <functional>
+#include <stack>
 #include <string>
 #include <vector>
 
 class Parser {
     const std::vector<Token> tokens_;
-    size_t pos_{0};           // 当前 token 的索引
-    int paren_depth_{0};      // 未闭合的 '(' 和 '[' 深度（不含 '{'）
-    int for_header_depth_{0}; // 步进 for 头部那层括号的深度，0 表示当前不在任何 for 头部里
+    size_t pos_{0}; // 当前 token 的索引
     const std::string file_path_;
 
-    // 一对括号状态。'{' 块内换行重新充当表达式分隔符，进块得整体存好清零、出块还原；
-    // 这两个字段必须一起动，分开存会失配
-    struct BracketState {
-        int paren_depth;
-        int for_header_depth;
+    // 一层未闭合的括号，按它内部的换行怎么算来分（'(' 和 '[' 无需区分，报错措辞由 expect 的参数定）
+    enum class Bracket {
+        Plain,     // '(' / '['：换行只是排版，当空白跳掉
+        ForHeader, // 步进 for 头部的 '('：换行分隔 init/cond/inc 三槽
+        Block,     // '{'：块内换行重新充当表达式分隔符
     };
 
-    // 进 '{' 块：存下当前的括号状态并清零，返回存下来的旧值
-    [[nodiscard]] BracketState enter_brace();
-    // 出 '{' 块：还原 enter_brace 存下的状态
-    void leave_brace(BracketState saved);
+    std::stack<Bracket> brackets_; // 所有未闭合的括号，栈顶是最内层
 
     // 往后看 token
     [[nodiscard]] const Token &peek() const;
@@ -38,9 +34,13 @@ class Parser {
     void check_terminator() const;
     // 消耗对应类型 token，否则抛出异常
     const Token &expect(TokenType expected_type);
+    // 消耗一个左括号并入栈。每个左括号都得走这里、每个右括号走 expect_close，配对关系一眼可见
+    const Token &expect_open(TokenType expected_type, Bracket kind);
+    // 消耗一个右括号并出栈
+    const Token &expect_close(TokenType expected_type);
     // 无条件跳过 NEWLINE
     void skip_newline();
-    // 仅在括号内跳过 NEWLINE。步进 for 头部那一层除外：那里换行是槽分隔符，不是空白
+    // 仅当最内层那对括号是 Bracket::Plain 时跳过 NEWLINE
     void skip_paren_newline();
     // 无条件跳过 NEWLINE 和 ';'
     void skip_terminator();
@@ -140,7 +140,7 @@ class Parser {
     [[nodiscard]] AstNodePtr parse_global();
 
     /**
-     * 完成一堆逗号连成的一串的剩余部分，可能空。不消耗括号、不涉及 paren_depth_。
+     * 完成一堆逗号连成的一串的剩余部分，可能空。不消耗括号、不动括号栈。
      * 说白了它的功能就是跳过逗号并控制何时结束，不管每一项怎么解析。
      * @param close      结束括号 token 类型
      * @param parse_item 回调函数，对每一项怎么解析
@@ -150,15 +150,15 @@ class Parser {
 
     // 以下 finish_* 同样按 x_ast_nodes.h 的先后排列
 
-    // 完成解析捕获列表。消耗括号、管理 paren_depth_
+    // 完成解析捕获列表。消耗括号、管理括号栈
     [[nodiscard]] std::vector<OneCapture> finish_captures();
-    // 完成解析形参列表。消耗括号、管理 paren_depth_
+    // 完成解析形参列表。消耗括号、管理括号栈
     [[nodiscard]] AstNodeFunc::AllParams finish_func_params();
-    // 完成字典剩余部分。当前已被判为字典、第一项已解析为 first。不消耗括号、不涉及 paren_depth_
+    // 完成字典剩余部分。当前已被判为字典、第一项已解析为 first。不消耗括号、不动括号栈
     [[nodiscard]] AstNodePtr finish_dict(Position start_pos, AstNodePtr first);
-    // 完成函数调用 f(...)。消耗括号、管理 paren_depth_
+    // 完成函数调用 f(...)。消耗括号、管理括号栈
     [[nodiscard]] std::unique_ptr<AstNodeCall> finish_call(AstNodePtr obj, Position start_pos);
-    // 完成索引 x[...]。消耗括号、管理 paren_depth_
+    // 完成索引 x[...]。消耗括号、管理括号栈
     [[nodiscard]] AstNodePtr finish_index(AstNodePtr obj, Position start_pos);
 
   public:

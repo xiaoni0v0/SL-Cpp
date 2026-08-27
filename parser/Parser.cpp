@@ -233,24 +233,27 @@ const Token &Parser::expect(const TokenType expected_type) {
     return advance();
 }
 
+const Token &Parser::expect_open(const TokenType expected_type, const Bracket kind) {
+    const Token &token{expect(expected_type)};
+    brackets_.push(kind);
+    return token;
+}
+
+const Token &Parser::expect_close(const TokenType expected_type) {
+    const Token &token{expect(expected_type)};
+    assert(!brackets_.empty()); // 每个 expect_close 都对应着一个先行的 expect_open
+    brackets_.pop();
+    return token;
+}
+
 void Parser::skip_newline() {
     while (check(TokenType::NEWLINE)) advance();
 }
 
 void Parser::skip_paren_newline() {
-    // 步进 for 头部那一层括号里换行是槽分隔符，不能当空白跳掉（见 SL.md 的 for 表达式一节）
-    if (paren_depth_ == for_header_depth_) return;
-    while (paren_depth_ > 0 && check(TokenType::NEWLINE)) advance();
-}
-
-Parser::BracketState Parser::enter_brace() {
-    const BracketState saved{paren_depth_, for_header_depth_};
-    paren_depth_ = 0, for_header_depth_ = 0;
-    return saved;
-}
-
-void Parser::leave_brace(const BracketState saved) {
-    paren_depth_ = saved.paren_depth, for_header_depth_ = saved.for_header_depth;
+    // 仅当最内层那对括号是 Bracket::Plain 时跳过 NEWLINE
+    if (brackets_.empty() || brackets_.top() != Bracket::Plain) return;
+    while (check(TokenType::NEWLINE)) advance();
 }
 
 void Parser::skip_terminator() {
@@ -565,8 +568,9 @@ AstNodePtr Parser::parse_non_op() {
         return parse_decorator();
 
     case END_OF_FILE:
-        // 括号内多半是没闭合
-        if (paren_depth_ > 0) error("unexpected end of file (unclosed bracket)");
+        // 最内层还开着圆/方括号，多半是没闭合
+        if (!brackets_.empty() && brackets_.top() != Bracket::Block)
+            error("unexpected end of file (unclosed bracket)");
         // 否则是缺了表达式
         error("unexpected end of file (expected an expression)");
 
@@ -660,12 +664,12 @@ AstNodePtr Parser::parse_class(
     // 可选基类列表 (BaseClass1, ...)
     std::vector<AstNodePtr> bases;
     if (check(TokenType::SIGN_LPAREN)) {
-        expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
+        expect_open(TokenType::SIGN_LPAREN, Bracket::Plain); // 消耗 '('
 
         finish_comma_batch(TokenType::SIGN_RPAREN, [&] { bases.push_back(parse_expr()); });
 
         if (!check(TokenType::SIGN_RPAREN)) error("expected ')' to close base class list");
-        expect(TokenType::SIGN_RPAREN), paren_depth_--; // 消耗 ')'
+        expect_close(TokenType::SIGN_RPAREN); // 消耗 ')'
 
         skip_newline();
     }
@@ -686,11 +690,9 @@ AstNodePtr Parser::parse_class(
 
     // 类体：{ ... }（同函数体：块内换行重新充当语句分隔符）
     const Position body_pos{peek().row, peek().col};
-    const BracketState saved{enter_brace()};
-    expect(TokenType::SIGN_LBRACE); // 消耗 '{'
+    expect_open(TokenType::SIGN_LBRACE, Bracket::Block); // 消耗 '{'
     std::vector body{parse_exprs()};
-    expect(TokenType::SIGN_RBRACE); // 消耗 '}'
-    leave_brace(saved);
+    expect_close(TokenType::SIGN_RBRACE); // 消耗 '}'
 
     return std::make_unique<AstNodeClass>(
         start_pos,
@@ -713,9 +715,9 @@ AstNodePtr Parser::parse_if() {
     // 解析一个 if/elif 子句的条件和主体：if/elif (cond) body
     auto parse_cond_and_body{[&]() -> AstNodeIf::AstNodeCondAndExpr {
         skip_newline();
-        expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
+        expect_open(TokenType::SIGN_LPAREN, Bracket::Plain); // 消耗 '('
         AstNodePtr cond{parse_expr_as_cond()};
-        expect(TokenType::SIGN_RPAREN), paren_depth_--; // 消耗 ')'
+        expect_close(TokenType::SIGN_RPAREN); // 消耗 ')'
         skip_newline();
         AstNodePtr body{parse_expr()};
         return {std::move(cond), std::move(body)};
@@ -747,11 +749,9 @@ AstNodePtr Parser::parse_for() {
     expect(TokenType::KW_FOR); // 消耗 'for'
     skip_newline();
     const CollectMark collect{parse_collect_mark()};
-    // 头部这一层括号里换行是槽分隔符（见 SL.md 的 for 表达式一节），不像别处的括号那样当空白。
-    // 嵌套的 for 头部会覆盖它，所以离开时还原成外层的值而不是清零
-    const int outer_for_header_depth{for_header_depth_};
-    expect(TokenType::SIGN_LPAREN), paren_depth_++, for_header_depth_ = paren_depth_; // 消耗 '('
-    skip_newline(); // 紧跟 '(' 的换行不分隔任何东西
+
+    expect_open(TokenType::SIGN_LPAREN, Bracket::ForHeader); // 消耗 '('
+    skip_newline();                                          // 紧跟 '(' 的换行不分隔任何东西
 
     // 解析 for 头部的一个槽
     auto parse_slot{[&](const bool as_cond) -> AstNodePtr {
@@ -769,13 +769,14 @@ AstNodePtr Parser::parse_for() {
     if (check_over_newline(TokenType::SIGN_COLON)) {
         skip_newline();
         expect(TokenType::SIGN_COLON); // 消耗 ':'
-        // ':' 之后只剩 iterable 一个槽，没有槽边界要分了，换行退回普通括号里的待遇（同 while 的
-        // 条件）。target 那一槽没这个待遇：它得靠换行之后的 ':' 才认得出是迭代模式
-        for_header_depth_ = outer_for_header_depth;
+        // ':' 之后只剩 iterable 一个槽，没有槽边界要分了，这一层就地降级成普通括号，换行退回
+        // 空白待遇（同 while 的条件）。target 那一槽没这个待遇：它得靠换行之后的 ':' 才认得出
+        // 是迭代模式
+        brackets_.top() = Bracket::Plain;
         skip_newline();
         AstNodePtr iterable{parse_expr()};
         skip_newline();
-        expect(TokenType::SIGN_RPAREN), paren_depth_--; // 消耗 ')'
+        expect_close(TokenType::SIGN_RPAREN); // 消耗 ')'
         skip_newline();
         AstNodePtr body{parse_expr()};
         return std::make_unique<AstNodeForIter>(
@@ -818,9 +819,8 @@ AstNodePtr Parser::parse_for() {
     AstNodePtr cond{parse_slot(true)};
     consume_sep();
     AstNodePtr inc{parse_slot(false)};
-    skip_newline(); // 紧挨 ')' 之前的换行同样不分隔任何东西
-    expect(TokenType::SIGN_RPAREN), paren_depth_--,
-        for_header_depth_ = outer_for_header_depth; // 消耗 ')'
+    skip_newline();                       // 紧挨 ')' 之前的换行同样不分隔任何东西
+    expect_close(TokenType::SIGN_RPAREN); // 消耗 ')'
     skip_newline();
     AstNodePtr body{parse_expr()};
 
@@ -834,9 +834,9 @@ AstNodePtr Parser::parse_while() {
     expect(TokenType::KW_WHILE); // 消耗 'while'
     skip_newline();
     const CollectMark collect{parse_collect_mark()};
-    expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
+    expect_open(TokenType::SIGN_LPAREN, Bracket::Plain); // 消耗 '('
     AstNodePtr cond{parse_expr_as_cond()};
-    expect(TokenType::SIGN_RPAREN), paren_depth_--; // 消耗 ')'
+    expect_close(TokenType::SIGN_RPAREN); // 消耗 ')'
     skip_newline();
     AstNodePtr body{parse_expr()};
 
@@ -870,14 +870,14 @@ AstNodePtr Parser::parse_try() {
     // 解析一个 except 子句的异常列表和主体：except (Exc1, Exc2, ...) body
     auto parse_excs_and_body{[&]() -> AstNodeTry::AstNodeExceptAndExpr {
         skip_newline();
-        expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
+        expect_open(TokenType::SIGN_LPAREN, Bracket::Plain); // 消耗 '('
 
         // 解析 Exception1, ...
         std::vector<AstNodePtr> excs;
         finish_comma_batch(TokenType::SIGN_RPAREN, [&] { excs.push_back(parse_expr()); });
         if (excs.empty()) error("except requires at least one exception type");
 
-        expect(TokenType::SIGN_RPAREN), paren_depth_--; // 消耗 ')'
+        expect_close(TokenType::SIGN_RPAREN); // 消耗 ')'
         skip_newline();
         AstNodePtr body{parse_expr()};
         return {std::move(excs), std::move(body)};
@@ -991,11 +991,9 @@ AstNodePtr Parser::parse_func(
 
     // 函数体：{ ... }（块内换行重新充当语句分隔符）
     const Position body_pos{peek().row, peek().col};
-    const BracketState saved{enter_brace()};
-    expect(TokenType::SIGN_LBRACE); // 消耗 '{'
+    expect_open(TokenType::SIGN_LBRACE, Bracket::Block); // 消耗 '{'
     std::vector body{parse_exprs()};
-    expect(TokenType::SIGN_RBRACE); // 消耗 '}'
-    leave_brace(saved);
+    expect_close(TokenType::SIGN_RBRACE); // 消耗 '}'
 
     return std::make_unique<AstNodeFunc>(
         start_pos,
@@ -1044,7 +1042,7 @@ AstNodePtr Parser::parse_import() {
 AstNodePtr Parser::parse_paren_or_tuple() {
     const Position start_pos{peek().row, peek().col};
 
-    expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
+    expect_open(TokenType::SIGN_LPAREN, Bracket::Plain); // 消耗 '('
 
     std::vector<AstNodePtr> items;
     const bool has_seen_comma{finish_comma_batch(TokenType::SIGN_RPAREN, [&] {
@@ -1056,7 +1054,7 @@ AstNodePtr Parser::parse_paren_or_tuple() {
             has_seen_comma ? "expected ')' to close tuple" : "expected ')' to close the parentheses"
         );
     }
-    expect(TokenType::SIGN_RPAREN), paren_depth_--; // 消耗 ')'
+    expect_close(TokenType::SIGN_RPAREN); // 消耗 ')'
 
     // 恰好一项且没见过 ','：(expr) 是分组，不是元组，直接返回内部表达式本身
     if (items.size() == 1 && !has_seen_comma) return std::move(items[0]);
@@ -1067,13 +1065,13 @@ AstNodePtr Parser::parse_paren_or_tuple() {
 AstNodePtr Parser::parse_list() {
     const Position start_pos{peek().row, peek().col};
 
-    expect(TokenType::SIGN_LBRACKET), paren_depth_++; // 消耗 '['
+    expect_open(TokenType::SIGN_LBRACKET, Bracket::Plain); // 消耗 '['
 
     std::vector<AstNodePtr> items;
     finish_comma_batch(TokenType::SIGN_RBRACKET, [&] { items.push_back(parse_expr()); });
 
     if (!check(TokenType::SIGN_RBRACKET)) error("expected ']' to close list literal");
-    expect(TokenType::SIGN_RBRACKET), paren_depth_--; // 消耗 ']'
+    expect_close(TokenType::SIGN_RBRACKET); // 消耗 ']'
 
     return std::make_unique<AstNodeLiteralList>(start_pos, std::move(items));
 }
@@ -1081,17 +1079,13 @@ AstNodePtr Parser::parse_list() {
 AstNodePtr Parser::parse_brace() {
     const Position start_pos{peek().row, peek().col};
 
-    expect(TokenType::SIGN_LBRACE); // 消耗 '{'
-
-    const BracketState saved{enter_brace()};
+    expect_open(TokenType::SIGN_LBRACE, Bracket::Block); // 消耗 '{'
 
     skip_newline();
     // 一见到 '}'（空块）或 ';' 就已经确定是复合表达式
     if (check(TokenType::SIGN_RBRACE) || check(TokenType::SIGN_SEMICOLON)) {
         std::vector exprs{parse_exprs()};
-        expect(TokenType::SIGN_RBRACE); // 消耗 '}'
-
-        leave_brace(saved);
+        expect_close(TokenType::SIGN_RBRACE); // 消耗 '}'
         return std::make_unique<AstNodeCompound>(start_pos, std::move(exprs));
     }
 
@@ -1102,8 +1096,7 @@ AstNodePtr Parser::parse_brace() {
     if (dynamic_cast<AstNodeDoubleStar *>(first.get()) ||
         check_over_newline(TokenType::SIGN_COLON)) {
         AstNodePtr dict{finish_dict(start_pos, std::move(first))};
-        expect(TokenType::SIGN_RBRACE); // 消耗 '}'
-        leave_brace(saved);
+        expect_close(TokenType::SIGN_RBRACE); // 消耗 '}'
         return dict;
     }
 
@@ -1115,8 +1108,7 @@ AstNodePtr Parser::parse_brace() {
     exprs.push_back(std::move(first));
 
     for (AstNodePtr &expr : parse_exprs()) exprs.push_back(std::move(expr));
-    expect(TokenType::SIGN_RBRACE); // 消耗 '}'
-    leave_brace(saved);
+    expect_close(TokenType::SIGN_RBRACE); // 消耗 '}'
     return std::make_unique<AstNodeCompound>(start_pos, std::move(exprs));
 }
 
@@ -1181,13 +1173,13 @@ std::vector<OneCapture> Parser::finish_captures() {
         return c;
     }};
 
-    expect(TokenType::SIGN_LBRACKET), paren_depth_++; // 消耗 '['
+    expect_open(TokenType::SIGN_LBRACKET, Bracket::Plain); // 消耗 '['
 
     std::vector<OneCapture> captures;
     finish_comma_batch(TokenType::SIGN_RBRACKET, [&] { captures.push_back(parse_one_capture()); });
 
     if (!check(TokenType::SIGN_RBRACKET)) error("expected ']' to close capture list");
-    expect(TokenType::SIGN_RBRACKET), paren_depth_--; // 消耗 ']'
+    expect_close(TokenType::SIGN_RBRACKET); // 消耗 ']'
 
     // 留给语义层检查的：捕获列表的标识符查重
     return captures;
@@ -1219,7 +1211,7 @@ AstNodeFunc::AllParams Parser::finish_func_params() {
         return p;
     }};
 
-    expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
+    expect_open(TokenType::SIGN_LPAREN, Bracket::Plain); // 消耗 '('
 
     // 这里只保证至多一个 *args、至多一个 **kwargs 且必须是最后一项
     // 留给语义层检查的：
@@ -1255,7 +1247,7 @@ AstNodeFunc::AllParams Parser::finish_func_params() {
 
     if (!check(TokenType::SIGN_RPAREN)) error("expected ')' to close parameter list");
 
-    expect(TokenType::SIGN_RPAREN), paren_depth_--; // 消耗 ')'
+    expect_close(TokenType::SIGN_RPAREN); // 消耗 ')'
 
     return result;
 }
@@ -1290,7 +1282,7 @@ AstNodePtr Parser::finish_dict(const Position start_pos, AstNodePtr first) {
 
 std::unique_ptr<AstNodeCall> Parser::finish_call(AstNodePtr obj, const Position start_pos) {
     const Position paren_pos{peek().row, peek().col};
-    expect(TokenType::SIGN_LPAREN), paren_depth_++; // 消耗 '('
+    expect_open(TokenType::SIGN_LPAREN, Bracket::Plain); // 消耗 '('
 
     // 实参
     std::vector<AstNodePtr> positional_args;
@@ -1325,7 +1317,7 @@ std::unique_ptr<AstNodeCall> Parser::finish_call(AstNodePtr obj, const Position 
     });
 
     if (!check(TokenType::SIGN_RPAREN)) error("expected ')' to close function call");
-    expect(TokenType::SIGN_RPAREN), paren_depth_--; // 消耗 ')'
+    expect_close(TokenType::SIGN_RPAREN); // 消耗 ')'
 
     return std::make_unique<AstNodeCall>(
         start_pos, std::move(obj), std::move(positional_args), std::move(keyword_args), paren_pos
@@ -1334,7 +1326,7 @@ std::unique_ptr<AstNodeCall> Parser::finish_call(AstNodePtr obj, const Position 
 
 AstNodePtr Parser::finish_index(AstNodePtr obj, const Position start_pos) {
     const Position bracket_pos{peek().row, peek().col};
-    expect(TokenType::SIGN_LBRACKET), paren_depth_++; // 消耗 '['
+    expect_open(TokenType::SIGN_LBRACKET, Bracket::Plain); // 消耗 '['
 
     std::vector<AstNodePtr> args;
     finish_comma_batch(TokenType::SIGN_RBRACKET, [&] { args.push_back(parse_expr()); });
@@ -1344,7 +1336,7 @@ AstNodePtr Parser::finish_index(AstNodePtr obj, const Position start_pos) {
 
     if (!check(TokenType::SIGN_RBRACKET)) error("expected ']' to close index expression");
 
-    expect(TokenType::SIGN_RBRACKET), paren_depth_--; // 消耗 ']'
+    expect_close(TokenType::SIGN_RBRACKET); // 消耗 ']'
 
     return std::make_unique<AstNodeIndex>(start_pos, std::move(obj), std::move(args), bracket_pos);
 }
