@@ -178,7 +178,11 @@ std::optional<AstNodeOpBinary::OpType> assign_compound_to_binary(const TokenType
 
 } // namespace
 
-const Token &Parser::peek() const { return pos_ < tokens_.size() ? tokens_[pos_] : tokens_.back(); }
+const Token &Parser::peek() const {
+    assert(pos_ < tokens_.size());
+
+    return tokens_[pos_];
+}
 
 const Token &Parser::advance() {
     assert(pos_ < tokens_.size());
@@ -187,12 +191,16 @@ const Token &Parser::advance() {
 }
 
 bool Parser::check(const TokenType type) const {
-    return pos_ < tokens_.size() && tokens_[pos_].type == type;
+    assert(pos_ < tokens_.size());
+
+    return tokens_[pos_].type == type;
 }
 
-bool Parser::check_over_newline(const TokenType type, const std::optional<size_t> start) const {
+bool Parser::check_over_newline(const TokenType type, const size_t offset) const {
+    assert(pos_ + offset < tokens_.size());
+
     const size_t len{tokens_.size()};
-    for (size_t i{start.value_or(pos_)}; i < len; i++) {
+    for (size_t i{pos_ + offset}; i < len; i++) {
         if (tokens_[i].type != TokenType::NEWLINE) {
             return tokens_[i].type == type;
         }
@@ -1268,7 +1276,7 @@ std::unique_ptr<AstNodeCall> Parser::finish_call(AstNodePtr obj, const Position 
     enum class ArgsGroup { Positional, Keyword } group{ArgsGroup::Positional};
     finish_comma_batch(TokenType::SIGN_RPAREN, [&] {
         // 关键字传参的判定：当前是 IDENTIFIER，且跳过其后可能的换行紧跟 '='
-        if (check(TokenType::IDENTIFIER) && check_over_newline(TokenType::SIGN_ASSIGN, pos_ + 1)) {
+        if (check(TokenType::IDENTIFIER) && check_over_newline(TokenType::SIGN_ASSIGN, 1)) {
             group = ArgsGroup::Keyword;
             std::u32string name{expect(TokenType::IDENTIFIER).lexeme}; // 消耗标识符
             skip_newline();
