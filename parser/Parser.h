@@ -47,6 +47,7 @@ class Parser {
     void skip_terminator();
 
     [[noreturn]] void error(const std::string &msg) const;
+    [[noreturn]] void error(const std::string &msg, Position pos) const;
     [[noreturn]] void error_internal(const std::string &msg, Position pos = {-1, -1}) const;
 
     /**

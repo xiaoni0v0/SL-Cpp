@@ -294,6 +294,10 @@ void Parser::error(const std::string &msg) const {
     throw SyntaxError{file_path_, token.row, token.col, msg};
 }
 
+void Parser::error(const std::string &msg, const Position pos) const {
+    throw SyntaxError{file_path_, pos.row, pos.col, msg};
+}
+
 void Parser::error_internal(const std::string &msg, const Position pos) const {
     throw InternalError{file_path_, pos.row, pos.col, msg};
 }
@@ -788,15 +792,15 @@ AstNodePtr Parser::parse_for() {
         if (check(TokenType::SIGN_RPAREN)) return slots; // 空：for ()
 
         while (true) {
-            // 第二个槽按条件解析（禁止裸的普通赋值）——合法的头部只要有第二个槽就一定是步进模式
             slots.push_back(
                 at_slot_boundary()  ? nullptr
                 : slots.size() == 1 ? parse_expr_as_cond()
                                     : parse_expr()
             );
-            // 槽读完了，当前位置必须是个边界（换行没被当成空白吃掉，此处它还在，直接看得见）
+
+            // 槽读完了，当前位置必须是个边界
             if (!at_slot_boundary()) {
-                error("expected ';' or newline to separate the expressions in a for header");
+                error("expected ';' or newline between for header slots");
             }
 
             skip_newline(); // ';' 前后的换行都归这个分隔符，允许把 ';' 单独写一行
@@ -817,50 +821,40 @@ AstNodePtr Parser::parse_for() {
 
     // 头部这一层括号里换行是槽分隔符（见 SL.md 的 for 表达式一节），不像别处的括号那样当空白
     expect_open(Bracket::ForHeader);
+    const Position start_pos_header{peek().row, peek().col};
     std::vector slots{parse_for_slots()};
+    expect_close(Bracket::ForHeader);
 
-    // 槽数只能是 3（步进模式）或 1（迭代模式）。趁 peek 还停在 ')' 上先判完，报错位置才有意义
-    if (slots.empty()) error("empty for header");
-    if (!(slots.size() == 1 || slots.size() == 3)) {
-        error(
-            "a for header needs 3 slots (`init; cond; inc`) or 1 (`target in iterable`); an empty "
-            "slot must be marked with ';', a newline alone is not enough"
-        );
-    }
+    skip_newline();
+    AstNodePtr body{parse_expr()};
 
     // 一个槽即迭代模式：这个槽必须是一棵以 in 为根的树
-    AstNodeOpBinary *in_node{nullptr};
     if (slots.size() == 1) {
-        in_node = dynamic_cast<AstNodeOpBinary *>(slots[0].get());
-        if (!in_node || in_node->op_ != AstNodeOpBinary::OpType::In) {
-            error(
-                "a one-slot for header must be `target in iterable` (for a plain condition use "
-                "`while (cond)`)"
+        if (const auto in_node{dynamic_cast<AstNodeOpBinary *>(slots[0].get())};
+            in_node && in_node->op_ == AstNodeOpBinary::OpType::In) {
+            return std::make_unique<AstNodeForIter>(
+                start_pos,
+                collect,
+                std::move(in_node->left_),
+                std::move(in_node->right_),
+                std::move(body)
             );
         }
     }
 
-    expect_close(Bracket::ForHeader);
-    skip_newline();
-    AstNodePtr body{parse_expr()};
-
-    if (in_node) {
-        return std::make_unique<AstNodeForIter>(
+    // 三个槽即步进模式：步进模式
+    if (slots.size() == 3) {
+        return std::make_unique<AstNodeForCond>(
             start_pos,
             collect,
-            std::move(in_node->left_),
-            std::move(in_node->right_),
+            std::move(slots[0]),
+            std::move(slots[1]),
+            std::move(slots[2]),
             std::move(body)
         );
     }
-    return std::make_unique<AstNodeForCond>(
-        start_pos,
-        collect,
-        std::move(slots[0]),
-        std::move(slots[1]),
-        std::move(slots[2]),
-        std::move(body)
-    );
+
+    error("for header must be `init; cond; inc` or `target in iterable`", start_pos_header);
 }
 
 AstNodePtr Parser::parse_while() {

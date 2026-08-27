@@ -181,7 +181,7 @@ TEST_SUITE("for——步进模式") {
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
-            CHECK(msg.find("separate the expressions in a for header") != std::string::npos);
+            CHECK(msg.find("between for header slots") != std::string::npos);
             CHECK(msg.find("1:12:") != std::string::npos);
         }
     }
@@ -195,14 +195,15 @@ TEST_SUITE("for——步进模式") {
         CHECK_THROWS_AS(parse_as_file(U"for (; c\n) body"), SyntaxError);
     }
 
-    TEST_CASE("空槽换行报错的消息说明白要补 ';'，位置指向那个不该出现的 ')'") {
+    TEST_CASE("槽数不对报的是“头部该长什么样”，位置指向头部开头而不是收尾的 ')'") {
         try {
             parse_as_file(U"for (a\nb\n) body");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
-            CHECK(msg.find("must be marked with ';'") != std::string::npos);
-            CHECK(msg.find("3:1:") != std::string::npos);
+            // 把两种合法形状直接摆出来，`init; cond; inc` 自带分号，比逐条解释短也更好用
+            CHECK(msg.find("`init; cond; inc`") != std::string::npos);
+            CHECK(msg.find("1:6:") != std::string::npos);
         }
     }
 
@@ -257,7 +258,7 @@ TEST_SUITE("for——步进模式") {
         CHECK_THROWS_AS(parse_as_file(U"for (;) body"), SyntaxError);
     }
 
-    TEST_CASE("for () 彻底为空报错，提示改用 for (;;) 或 while (cond)") {
+    TEST_CASE("for () 彻底为空：0 个槽，跟其他槽数不对的情形报同一句") {
         CHECK_THROWS_AS(parse_as_file(U"for () body"), SyntaxError);
     }
 
@@ -415,14 +416,14 @@ TEST_SUITE("for——头部的槽数只能是 3 或 1") {
     // 模式判定不再靠前瞻找记号，而是先把头部切成槽、数个数：3 个槽是步进模式，1 个槽是迭代模式
     // （且那个槽必须以 in 为根）。其余槽数一律报错。
 
-    TEST_CASE("2 个槽：报错，消息提醒空槽得用 ';' 划出来") {
+    TEST_CASE("2 个槽：报错，消息把两种合法形状都摆出来") {
         try {
             parse_as_file(U"for (a\nb) body");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
-            CHECK(msg.find("3 slots") != std::string::npos);
-            CHECK(msg.find("marked with ';'") != std::string::npos);
+            CHECK(msg.find("`init; cond; inc`") != std::string::npos);
+            CHECK(msg.find("`target in iterable`") != std::string::npos);
         }
         CHECK_THROWS_AS(parse_as_file(U"for (a; b) body"), SyntaxError);
     }
@@ -432,14 +433,13 @@ TEST_SUITE("for——头部的槽数只能是 3 或 1") {
         CHECK_THROWS_AS(parse_as_file(U"for (a\nb\nc\nd) body"), SyntaxError);
     }
 
-    TEST_CASE("1 个槽但根不是 in：报错，提示改用 while") {
+    TEST_CASE("1 个槽但根不是 in：报错，跟槽数不对报的是同一句") {
         try {
             parse_as_file(U"for (x > 0) body");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
             CHECK(msg.find("`target in iterable`") != std::string::npos);
-            CHECK(msg.find("while (cond)") != std::string::npos);
         }
         CHECK_THROWS_AS(parse_as_file(U"for (f(x)) body"), SyntaxError);
         // 根是二元运算符、但不是 in：查的是 in 这个具体运算符，不是"根是不是二元运算符"
