@@ -43,7 +43,7 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
                 Position{0, 0}, std::move(ops), std::move(operands), std::move(op_positions)
             )
         )};
-        check_throws_internal_error_with(*program, "mismatched count");
+        check_throws_internal_error_with(*program, "operands/ops count mismatch");
     }
 
     TEST_CASE("AstNodeCompare：operands_ 少于 2 个") {

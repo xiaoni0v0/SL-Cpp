@@ -186,7 +186,7 @@ Token Lexer::read_number() {
     // 数字后面紧跟字母或下划线，非法
     if (is_alpha(peek()) || peek() == U'_') {
         error(
-            std::format("invalid numeric literal, unexpected character '{}'", u32_to_utf8(peek()))
+            std::format("unexpected character '{}' after a numeric literal", u32_to_utf8(peek()))
         );
     }
 

@@ -106,8 +106,8 @@ TEST_SUITE("if——cond 槽禁止裸的普通赋值") {
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
-            CHECK(msg.find("bare assignment") != std::string::npos);
-            CHECK(msg.find("wrap it in an extra pair of parentheses") != std::string::npos);
+            CHECK(msg.find("bare '='") != std::string::npos);
+            CHECK(msg.find("add parentheses") != std::string::npos);
             CHECK(msg.find("1:7:") != std::string::npos); // '='
         }
     }

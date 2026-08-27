@@ -220,7 +220,7 @@ void Parser::check_terminator() const {
     case TokenType::SIGN_RBRACE:
         break;
     default:
-        error("expected newline or ';' after expression (newline recommended)");
+        error("expected newline or ';' after expression");
     }
 }
 
@@ -620,10 +620,7 @@ AstNodePtr Parser::parse_expr_as_cond() {
 
     skip_paren_newline();
     if (peek().type == TokenType::SIGN_ASSIGN) {
-        error(
-            "bare assignment '=' is not allowed directly here "
-            "(did you mean '=='? or wrap it in an extra pair of parentheses if intentional)"
-        );
+        error("bare '=' is not allowed in a condition; use '==' or add parentheses");
     }
 
     // 复合赋值 x op= y 允许裸写
@@ -1372,12 +1369,12 @@ AstNodePtr Parser::finish_index(AstNodePtr obj, const Position start_pos) {
 Parser::Parser(std::vector<Token> tokens, std::string file_path)
     : tokens_{std::move(tokens)}, file_path_{std::move(file_path)} {
     // 1. 空的肯定不行
-    if (tokens_.empty()) error_internal("Bad tokens: empty token list");
+    if (tokens_.empty()) error_internal("bad token list: empty");
 
     // 2. 最后必须是 END_OF_FILE
     if (tokens_.back().type != TokenType::END_OF_FILE) {
         error_internal(
-            "Bad tokens: missing END_OF_FILE token at the end",
+            "bad token list: missing END_OF_FILE at the end",
             {tokens_.back().row, tokens_.back().col}
         );
     }
@@ -1389,7 +1386,7 @@ Parser::Parser(std::vector<Token> tokens, std::string file_path)
             [](const Token &t) -> bool { return t.type == TokenType::END_OF_FILE; }
         )};
         it != tokens_.end() - 1) {
-        error_internal("Bad tokens: unexpected END_OF_FILE", {it->row, it->col});
+        error_internal("bad token list: unexpected END_OF_FILE", {it->row, it->col});
     }
 }
 

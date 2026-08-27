@@ -424,7 +424,8 @@ void SemanticChecker::check(const AstNodeCompare &node) {
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    if (node.operands_.size() != node.ops_.size() + 1) error_internal("mismatched count", pos);
+    if (node.operands_.size() != node.ops_.size() + 1)
+        error_internal("operands/ops count mismatch", pos);
     require_not_null(node.operands_, 2, pos);
     require_same_size(node.ops_, node.op_positions_, pos);
     for (const auto &operand : node.operands_) check_not_null(operand, pos);
@@ -441,7 +442,7 @@ void SemanticChecker::check(const AstNodeIs &node) {
 
     require_not_null(node.operands_, 2, node.pos_);
     if (node.operands_.size() != node.op_positions_.size() + 1)
-        error_internal("mismatched count", pos);
+        error_internal("operands/op positions count mismatch", pos);
     for (const auto &operand : node.operands_) check_not_null(operand, pos);
 
     ctx_ = saved;
