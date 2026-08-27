@@ -56,6 +56,7 @@ std::optional<AstNodeOpBinary::OpType> token_type_to_binary_op_type(const TokenT
     case KW_AND:           return And;
     case KW_OR:            return Or;
     case SIGN_DOTDOT:      return Range;
+    case KW_IN:            return In;
     // clang-format on
     default:
         return std::nullopt;
@@ -128,6 +129,8 @@ std::pair<int, int> infix_bp(const TokenType type) {
         return {60, 61};
     case KW_IS:
         return {50, 51}; // is（自成一组的链式比较，不与上面 6 者混链）
+    case KW_IN:
+        return {55, 56}; // in
     case KW_AND:
         return {30, 31}; // and
     case KW_OR:
@@ -383,6 +386,23 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         // 比较运算（链式，== != < <= > >= 一组）
         if (const auto compare_op{token_type_to_compare_op_type(op)}) {
             left = parse_chain_compare(std::move(left), start_pos, *compare_op, op_pos);
+            continue;
+        }
+
+        // in（成员测试，不支持链式）
+        if (op == TokenType::KW_IN) {
+            skip_newline();
+            left = std::make_unique<AstNodeOpBinary>(
+                start_pos,
+                AstNodeOpBinary::OpType::In,
+                std::move(left),
+                parse_expr_pratt(rbp),
+                op_pos
+            );
+            skip_paren_newline();
+            if (check(TokenType::KW_IN)) {
+                error("'in' does not chain; add parentheses if that is really what you mean");
+            }
             continue;
         }
 
@@ -771,87 +791,99 @@ AstNodePtr Parser::parse_if() {
 }
 
 AstNodePtr Parser::parse_for() {
+    // 工具：解析 for 头部（不含两侧括号），按规则切成若干槽
+    auto parse_for_slots{[&]() -> std::vector<AstNodePtr> {
+        std::vector<AstNodePtr> slots;
+
+        skip_newline();
+        if (check(TokenType::SIGN_RPAREN)) return slots; // 空：for ()
+
+        while (true) {
+            // 当前位置直接是分隔符或 ')' 就是个空槽。
+            // 第二个槽按条件解析（禁止裸的普通赋值）——合法的头部只要有第二个槽就一定是步进模式
+            const bool empty{
+                check(TokenType::SIGN_SEMICOLON) || check(TokenType::NEWLINE) ||
+                check(TokenType::SIGN_RPAREN)
+            };
+            slots.push_back(
+                empty               ? nullptr
+                : slots.size() == 1 ? parse_expr_as_cond()
+                                    : parse_expr()
+            );
+
+            // 分隔符：';' 是硬分隔，换行是软分隔（换行没被当成空白吃掉，此处它还在，直接看得见）。
+            // ';' 前后的换行都归这个分隔符，允许把 ';' 单独写一行
+            const bool had_newline{check(TokenType::NEWLINE)};
+            skip_newline();
+
+            if (check(TokenType::SIGN_SEMICOLON)) {
+                expect(TokenType::SIGN_SEMICOLON); // 消耗 ';'
+                skip_newline();
+                continue;
+            }
+            // 紧挨 ')' 之前的换行只是排版，不再多划出一个槽
+            if (check(TokenType::SIGN_RPAREN)) return slots;
+            if (!had_newline) {
+                error("expected ';' or newline to separate the expressions in a for header");
+            }
+        }
+    }};
+
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_FOR); // 消耗 'for'
     skip_newline();
     const CollectMark collect{parse_collect_mark()};
 
+    // 头部这一层括号里换行是槽分隔符（见 SL.md 的 for 表达式一节），不像别处的括号那样当空白
     expect_open(Bracket::ForHeader);
-    skip_newline(); // 紧跟 '(' 的换行不分隔任何东西
+    std::vector<AstNodePtr> slots{parse_for_slots()};
 
-    // 解析 for 头部的一个槽
-    auto parse_slot{[&](const bool as_cond) -> AstNodePtr {
-        if (check(TokenType::SIGN_SEMICOLON) || check(TokenType::NEWLINE) ||
-            check(TokenType::SIGN_RPAREN))
-            // 遇到 ';', NEWLINE, ')' 则槽为空，返回 nullptr
-            return nullptr;
-        return as_cond ? parse_expr_as_cond() : parse_expr();
-    }};
-
-    // 先读第一个槽（可能为空）。它要么是迭代目标（后跟 ':'），要么是步进模式的 init
-    AstNodePtr first{parse_slot(false)};
-
-    // 第一个槽后紧跟 ':' → 迭代模式：for [$] (target : iterable) body
-    if (check_over_newline(TokenType::SIGN_COLON)) {
-        skip_newline();
-        expect(TokenType::SIGN_COLON); // 消耗 ':'
-        // ':' 之后只剩 iterable 一个槽，没有槽边界要分了，这一层就地降级成普通括号，换行退回
-        // 空白待遇（同 while 的条件）。target 那一槽没这个待遇：它得靠换行之后的 ':' 才认得出
-        // 是迭代模式
-        brackets_.top() = Bracket::Paren;
-        skip_newline();
-        AstNodePtr iterable{parse_expr()};
-        skip_newline();
-        expect_close(Bracket::Paren); // 上面刚把这一层降级过，所以按 Paren 关
-        skip_newline();
-        AstNodePtr body{parse_expr()};
-        return std::make_unique<AstNodeForIter>(
-            start_pos, collect, std::move(first), std::move(iterable), std::move(body)
-        );
-    }
-
-    // 第一个槽为空、且直接紧跟 ')'，即整个头部彻底为空：for ()
-    if (!first && check_over_newline(TokenType::SIGN_RPAREN)) {
+    // 槽数只能是 3（步进模式）或 1（迭代模式）。趁 peek 还停在 ')' 上先判完，报错位置才有意义
+    if (slots.empty()) {
         error(
             "empty for header (for an infinite loop use `for (;;)`; for a plain condition use "
             "`while (cond)`)"
         );
     }
+    if (slots.size() != 1 && slots.size() != 3) {
+        error(
+            "a for header needs 3 slots (`init; cond; inc`) or 1 (`target in iterable`); an empty "
+            "slot must be marked with ';', a newline alone is not enough"
+        );
+    }
 
-    // 否则为步进模式：for [$] (init SEP cond SEP inc) body，first 即 init
-    auto consume_sep{[&] {
-        // 换行在这一层没被当成空白吃掉，此处它还在，直接看得见
-        const bool had_newline{check(TokenType::NEWLINE)};
-        skip_newline(); // ';' 前后的换行都归这个分隔符，允许把 ';' 单独写一行
-
-        if (check(TokenType::SIGN_SEMICOLON)) {
-            expect(TokenType::SIGN_SEMICOLON); // 消耗 ';'
-            skip_newline();
-            return;
-        }
-        if (!had_newline) {
-            error("expected ';' or newline to separate the expressions in a for header");
-        }
-        // 光靠换行分隔，之后又直接是 ')'，说明后面这一槽整个是空的
-        if (check(TokenType::SIGN_RPAREN)) {
+    // 一个槽即迭代模式：这个槽必须是一棵以 in 为根的树，把它的两个孩子取出来当 target/iterable
+    AstNodeOpBinary *in_node{nullptr};
+    if (slots.size() == 1) {
+        in_node = dynamic_cast<AstNodeOpBinary *>(slots[0].get());
+        if (!in_node || in_node->op_ != AstNodeOpBinary::OpType::In) {
             error(
-                "an empty slot in a for header must be marked with ';', a newline alone is not "
-                "enough"
+                "a one-slot for header must be `target in iterable` (for a plain condition use "
+                "`while (cond)`)"
             );
         }
-    }};
+    }
 
-    consume_sep();
-    AstNodePtr cond{parse_slot(true)};
-    consume_sep();
-    AstNodePtr inc{parse_slot(false)};
-    skip_newline(); // 紧挨 ')' 之前的换行同样不分隔任何东西
     expect_close(Bracket::ForHeader);
     skip_newline();
     AstNodePtr body{parse_expr()};
 
+    if (in_node) {
+        return std::make_unique<AstNodeForIter>(
+            start_pos,
+            collect,
+            std::move(in_node->left_),
+            std::move(in_node->right_),
+            std::move(body)
+        );
+    }
     return std::make_unique<AstNodeForCond>(
-        start_pos, collect, std::move(first), std::move(cond), std::move(inc), std::move(body)
+        start_pos,
+        collect,
+        std::move(slots[0]),
+        std::move(slots[1]),
+        std::move(slots[2]),
+        std::move(body)
     );
 }
 

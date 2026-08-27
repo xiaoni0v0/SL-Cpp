@@ -120,7 +120,7 @@ TEST_SUITE("符号：贪婪最长匹配（多字符优先于短的）") {
     }
 
     TEST_CASE("SL.md 举的正例：for $ (i : ls) { i ** 2 } 可以完全不加空白地压缩") {
-        CHECK(lex_dump(U"for $ (i : ls) { i ** 2 }") == lex_dump(U"for$(i:ls){i**2}"));
+        CHECK(lex_dump(U"for $ (i in ls) { i ** 2 }") == lex_dump(U"for$(i in ls){i**2}"));
     }
 }
 

@@ -15,7 +15,6 @@ TEST_SUITE("保留字") {
         CHECK_THROWS_AS(lex(U"yield"), SyntaxError);
         CHECK_THROWS_AS(lex(U"async"), SyntaxError);
         CHECK_THROWS_AS(lex(U"await"), SyntaxError);
-        CHECK_THROWS_AS(lex(U"in"), SyntaxError);
         CHECK_THROWS_AS(lex(U"const"), SyntaxError);
         CHECK_THROWS_AS(lex(U"static"), SyntaxError);
         CHECK_THROWS_AS(lex(U"with"), SyntaxError);
@@ -24,6 +23,8 @@ TEST_SUITE("保留字") {
         CHECK_THROWS_AS(lex(U"local"), SyntaxError);
         CHECK_THROWS_AS(lex(U"assert"), SyntaxError);
     }
+
+    TEST_CASE("in 不再是保留字，已经升级成关键字") { CHECK(lex_dump(U"in") == "KW_IN"); }
 
     TEST_CASE("match 不再是保留字（match/case 改名成 when/case 之后），现在是普通标识符") {
         CHECK(lex_dump(U"match") == "IDENTIFIER(match)");

@@ -500,6 +500,7 @@ std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
     case TokenType::KW_AND:                  return "'and'";
     case TokenType::KW_OR:                   return "'or'";
     case TokenType::KW_IS:                   return "'is'";
+    case TokenType::KW_IN:                   return "'in'";
     case TokenType::KW_DEL:                  return "'del'";
     case TokenType::KW_GLOBAL:               return "'global'";
     case TokenType::KW_IF:                   return "'if'";
@@ -518,7 +519,6 @@ std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
     case TokenType::KW_CLASS:                return "'class'";
 
     case TokenType::RW_ASSERT:               return "'assert'";
-    case TokenType::RW_IN:                   return "'in'";
     case TokenType::RW_WHEN:                 return "'when'";
     case TokenType::RW_CASE:                 return "'case'";
     case TokenType::RW_YIELD:                return "'yield'";

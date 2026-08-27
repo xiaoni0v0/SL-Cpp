@@ -410,35 +410,97 @@ TEST_SUITE("for——步进模式头部的换行按软终止分隔") {
     }
 }
 
+TEST_SUITE("for——头部的槽数只能是 3 或 1") {
+
+    // 模式判定不再靠前瞻找记号，而是先把头部切成槽、数个数：3 个槽是步进模式，1 个槽是迭代模式
+    // （且那个槽必须以 in 为根）。其余槽数一律报错。
+
+    TEST_CASE("2 个槽：报错，消息提醒空槽得用 ';' 划出来") {
+        try {
+            parse_as_file(U"for (a\nb) body");
+            FAIL("应当抛出异常");
+        } catch (const SyntaxError &e) {
+            const std::string msg{e.what()};
+            CHECK(msg.find("3 slots") != std::string::npos);
+            CHECK(msg.find("marked with ';'") != std::string::npos);
+        }
+        CHECK_THROWS_AS(parse_as_file(U"for (a; b) body"), SyntaxError);
+    }
+
+    TEST_CASE("4 个槽：报错") {
+        CHECK_THROWS_AS(parse_as_file(U"for (a; b; c; d) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (a\nb\nc\nd) body"), SyntaxError);
+    }
+
+    TEST_CASE("1 个槽但根不是 in：报错，提示改用 while") {
+        try {
+            parse_as_file(U"for (x > 0) body");
+            FAIL("应当抛出异常");
+        } catch (const SyntaxError &e) {
+            const std::string msg{e.what()};
+            CHECK(msg.find("`target in iterable`") != std::string::npos);
+            CHECK(msg.find("while (cond)") != std::string::npos);
+        }
+        CHECK_THROWS_AS(parse_as_file(U"for (f(x)) body"), SyntaxError);
+        // 根是二元运算符、但不是 in：查的是 in 这个具体运算符，不是"根是不是二元运算符"
+        CHECK_THROWS_AS(parse_as_file(U"for (a + b) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (a and b) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (a .. b) body"), SyntaxError);
+    }
+
+    TEST_CASE("in 出现在 3 槽头部里就只是个普通运算符，不触发迭代模式") {
+        CHECK(
+            parse_json(U"for (x in xs; c; d) body") == nlohmann::json{
+                                                           {"type", "ForCond"},
+                                                           {"collect", "none"},
+                                                           {"init",
+                                                            {{"type", "OpBinary"},
+                                                             {"op", "in"},
+                                                             {"left", ident("x")},
+                                                             {"right", ident("xs")}}},
+                                                           {"cond", ident("c")},
+                                                           {"inc", ident("d")},
+                                                           {"body", ident("body")}
+                                                       }
+        );
+    }
+
+    TEST_CASE("空槽照旧要用 ';' 划出来，划出来之后槽数就够了") {
+        CHECK_THROWS_AS(parse_as_file(U"for (a\nb\n) body"), SyntaxError);
+        CHECK_NOTHROW(parse_as_file(U"for (a\nb\n;) body"));
+        CHECK_NOTHROW(parse_as_file(U"for (;;) body"));
+    }
+}
+
 TEST_SUITE("for——迭代模式") {
 
     TEST_CASE("基本迭代") {
         CHECK(
-            parse_json(U"for (x : xs) body") == nlohmann::json{
-                                                    {"type", "ForIter"},
-                                                    {"collect", "none"},
-                                                    {"target", ident("x")},
-                                                    {"iterable", ident("xs")},
-                                                    {"body", ident("body")}
-                                                }
+            parse_json(U"for (x in xs) body") == nlohmann::json{
+                                                     {"type", "ForIter"},
+                                                     {"collect", "none"},
+                                                     {"target", ident("x")},
+                                                     {"iterable", ident("xs")},
+                                                     {"body", ident("body")}
+                                                 }
         );
     }
 
     TEST_CASE("收集模式迭代") {
         CHECK(
-            parse_json(U"for $ (x : xs) body") == nlohmann::json{
-                                                      {"type", "ForIter"},
-                                                      {"collect", "$"},
-                                                      {"target", ident("x")},
-                                                      {"iterable", ident("xs")},
-                                                      {"body", ident("body")}
-                                                  }
+            parse_json(U"for $ (x in xs) body") == nlohmann::json{
+                                                       {"type", "ForIter"},
+                                                       {"collect", "$"},
+                                                       {"target", ident("x")},
+                                                       {"iterable", ident("xs")},
+                                                       {"body", ident("body")}
+                                                   }
         );
     }
 
     TEST_CASE("目标可以是解构元组/列表（语法层放行任意左值形状，交语义层校验）") {
         CHECK(
-            parse_json(U"for ((a, b) : pairs) body") ==
+            parse_json(U"for ((a, b) in pairs) body") ==
             nlohmann::json{
                 {"type", "ForIter"},
                 {"collect", "none"},
@@ -450,7 +512,7 @@ TEST_SUITE("for——迭代模式") {
             }
         );
         CHECK(
-            parse_json(U"for ([a, *b] : xs) body") ==
+            parse_json(U"for ([a, *b] in xs) body") ==
             nlohmann::json{
                 {"type", "ForIter"},
                 {"collect", "none"},
@@ -467,31 +529,50 @@ TEST_SUITE("for——迭代模式") {
     }
 
     TEST_CASE("元组目标不带外层括号会被当成步进模式解析，进而因为缺分隔符报错") {
-        CHECK_THROWS_AS(parse_as_file(U"for (a, b : pairs) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (a, b in pairs) body"), SyntaxError);
     }
 
     TEST_CASE("未闭合括号/缺 body 报错") {
-        CHECK_THROWS_AS(parse_as_file(U"for (x : xs"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"for (x : xs)"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (x in xs"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (x in xs)"), SyntaxError);
     }
 }
 
-TEST_SUITE("for——迭代模式里 ':' 之后的换行不分隔") {
+TEST_SUITE("for——迭代模式的头部同样按槽切分，`in` 不再是分界记号") {
 
-    // ':' 之后只剩 iterable 一个槽，没有槽边界要分了，换行退回普通括号里的待遇（同 while 的条件）
+    // 迭代模式现在就是"恰好一个槽、且这个槽以 in 为根"，头部里换行的待遇跟步进模式完全一样：
+    // 换行处左侧能构成完整表达式就切一刀。所以 in 两侧的换行是不对称的——
+    // in 之后可以换行（in 已消耗，右操作数会跨行找），in 之前不行（左边已经完整，一刀切成两槽）。
+    // 这跟同样两行写在块里的结果一致，不再是 ':' 时代那种"认出模式之后整段降级"的特殊待遇。
 
-    TEST_CASE("iterable 跨行照旧当空白，不切断") {
-        // 必须用 = 拷贝初始化，不能用 {}——见 .ai/notes/json-test-brace-init-trap.md
-        const auto node = parse_json(U"for (x : a\n+ b) body");
-        CHECK(node["type"] == "ForIter");
-        CHECK(node["target"] == ident("x"));
-        CHECK(node["iterable"] == binary("+", ident("a"), ident("b")));
+    TEST_CASE("in 之后可以换行") {
+        CHECK(
+            parse_json(U"for (x in\nxs) body") == nlohmann::json{
+                                                      {"type", "ForIter"},
+                                                      {"collect", "none"},
+                                                      {"target", ident("x")},
+                                                      {"iterable", ident("xs")},
+                                                      {"body", ident("body")}
+                                                  }
+        );
+        CHECK_NOTHROW(parse_as_file(U"for (\nx in\n\n\nxs\n) body"));
     }
 
-    TEST_CASE("target 那一槽仍然按换行分隔：它得靠换行之后的 ':' 才认得出是迭代模式") {
-        // 于是 `a` 换行 `.b` 会被切成步进模式的 init 和 cond，后者 '.' 起不了头，报错——
-        // 跟同样两行写在块里的结果一致
-        CHECK_THROWS_AS(parse_as_file(U"for (a\n.b : xs) body"), SyntaxError);
+    TEST_CASE("in 之前不能换行：左边已经完整，换行把它切成了两个槽") {
+        CHECK_THROWS_AS(parse_as_file(U"for (x\nin xs) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"for (x\n\n\nin xs) body"), SyntaxError);
+    }
+
+    TEST_CASE("iterable 里的换行也照槽的规矩切，不再当空白") {
+        // `a` 换行 `+ b`：左边已完整 -> 切成两槽 -> 槽数是 2 -> 报错。
+        // 想跨行写长的 iterable，把运算符留在行尾（`a +` 换行 `b`）或者自己加一层括号
+        CHECK_THROWS_AS(parse_as_file(U"for (x in a\n+ b) body"), SyntaxError);
+        CHECK_NOTHROW(parse_as_file(U"for (x in a +\nb) body"));
+        CHECK_NOTHROW(parse_as_file(U"for (x in (a\n+ b)) body"));
+    }
+
+    TEST_CASE("target 那一槽同理：`a` 换行 `.b` 切成两槽，'.' 起不了头") {
+        CHECK_THROWS_AS(parse_as_file(U"for (a\n.b in xs) body"), SyntaxError);
     }
 }
 
@@ -562,40 +643,13 @@ TEST_SUITE("for——$ 与 for 之间不需要空白（SL.md）") {
 
     TEST_CASE("迭代模式 for$ 无空格") {
         CHECK(
-            parse_json(U"for$(x : xs) body") == nlohmann::json{
-                                                    {"type", "ForIter"},
-                                                    {"collect", "$"},
-                                                    {"target", ident("x")},
-                                                    {"iterable", ident("xs")},
-                                                    {"body", ident("body")}
-                                                }
-        );
-    }
-}
-
-TEST_SUITE("for——迭代模式 : 前允许换行") {
-
-    TEST_CASE(": 紧跟前导换行，仍能正确识别为迭代模式") {
-        CHECK(
-            parse_json(U"for (x\n: xs) body") == nlohmann::json{
+            parse_json(U"for$(x in xs) body") == nlohmann::json{
                                                      {"type", "ForIter"},
-                                                     {"collect", "none"},
+                                                     {"collect", "$"},
                                                      {"target", ident("x")},
                                                      {"iterable", ident("xs")},
                                                      {"body", ident("body")}
                                                  }
-        );
-    }
-
-    TEST_CASE(": 前有多个空行也同样正确") {
-        CHECK(
-            parse_json(U"for (x\n\n\n: xs) body") == nlohmann::json{
-                                                         {"type", "ForIter"},
-                                                         {"collect", "none"},
-                                                         {"target", ident("x")},
-                                                         {"iterable", ident("xs")},
-                                                         {"body", ident("body")}
-                                                     }
         );
     }
 }

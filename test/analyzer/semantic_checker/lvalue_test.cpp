@@ -80,21 +80,21 @@ TEST_SUITE("SemanticChecker 左值检查") {
 TEST_SUITE("SemanticChecker for 迭代目标左值检查") {
 
     TEST_CASE("标识符/索引/属性访问都是合法的迭代目标") {
-        CHECK_NOTHROW(check_program(U"for (x : xs) body"));
-        CHECK_NOTHROW(check_program(U"for (a[0] : xs) body"));
-        CHECK_NOTHROW(check_program(U"for (a.b : xs) body"));
+        CHECK_NOTHROW(check_program(U"for (x in xs) body"));
+        CHECK_NOTHROW(check_program(U"for (a[0] in xs) body"));
+        CHECK_NOTHROW(check_program(U"for (a.b in xs) body"));
     }
 
     TEST_CASE("元组/列表解构是合法的迭代目标") {
-        CHECK_NOTHROW(check_program(U"for ((a, b) : xs) body"));
-        CHECK_NOTHROW(check_program(U"for ([a, *b] : xs) body"));
+        CHECK_NOTHROW(check_program(U"for ((a, b) in xs) body"));
+        CHECK_NOTHROW(check_program(U"for ([a, *b] in xs) body"));
     }
 
     TEST_CASE("字面量不是合法的迭代目标") {
-        check_throws_with(U"for (1 : xs) body", "lvalue expected before assignment");
+        check_throws_with(U"for (1 in xs) body", "lvalue expected before assignment");
     }
 
     TEST_CASE("调用表达式不是合法的迭代目标") {
-        check_throws_with(U"for (f() : xs) body", "lvalue expected before assignment");
+        check_throws_with(U"for (f() in xs) body", "lvalue expected before assignment");
     }
 }

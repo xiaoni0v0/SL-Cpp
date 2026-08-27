@@ -18,6 +18,7 @@ TEST_SUITE("关键字") {
         CHECK(lex_dump(U"and") == "KW_AND");
         CHECK(lex_dump(U"or") == "KW_OR");
         CHECK(lex_dump(U"is") == "KW_IS");
+        CHECK(lex_dump(U"in") == "KW_IN");
         CHECK(lex_dump(U"del") == "KW_DEL");
         CHECK(lex_dump(U"global") == "KW_GLOBAL");
         CHECK(lex_dump(U"if") == "KW_IF");

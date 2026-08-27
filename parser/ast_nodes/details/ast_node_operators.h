@@ -59,7 +59,7 @@ struct AstNodeOpUnary : AstNode {
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
-// 二元运算符：+  -  *  /  //  %  **  &  |  ^  <<  >>  and  or  ..
+// 二元运算符：+  -  *  /  //  %  **  &  |  ^  <<  >>  and  or  ..  in
 struct AstNodeOpBinary : AstNode {
     enum class OpType {
         // 算术
@@ -80,7 +80,9 @@ struct AstNodeOpBinary : AstNode {
         And,
         Or,
         // ..
-        Range
+        Range,
+        // 成员测试
+        In
     };
 
     OpType op_;

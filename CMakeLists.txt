@@ -317,6 +317,7 @@ add_executable(SL_Cpp_Parser_Tests
         # 运算符
         test/parser/02_operators/precedence_test.cpp
         test/parser/02_operators/compare_is_assign_test.cpp
+        test/parser/02_operators/in_test.cpp
         # 表达式分隔符
         test/parser/03_separators/separator_test.cpp
         # 基本表达式（{} 判别规则）

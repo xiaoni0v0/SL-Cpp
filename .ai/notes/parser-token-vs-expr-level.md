@@ -14,7 +14,7 @@
 `global identifier` 属于前者：`identifier` 就是紧跟着的一个标识符 token，没有任何歧义，直接
 `expect(IDENTIFIER)` 最省事也最明确——语义层不需要再费一次 `dynamic_cast` 去确认这是不是标识符。
 
-`for` 迭代模式的 `lvalue`（`for (lvalue : iterable) ...`）属于后者：当前 token 只是槽位开头，得
+`for` 迭代模式的 `lvalue`（`for (lvalue in iterable) ...`）属于后者：当前 token 只是槽位开头，得
 读到 `:`/`;`/`)` 才能判断这一段到底是迭代模式的 `lvalue` 还是步进模式的 `init`，没法提前收紧。
 `del target` 语法上允许标识符或属性访问/索引等多种形状，也是"语法先按表达式解析、语义层限定形状"
 的合理场景（`check_lvalue`/`check_lvalue_pure` 承担这一步）。

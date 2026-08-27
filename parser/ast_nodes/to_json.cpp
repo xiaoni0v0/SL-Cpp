@@ -101,6 +101,7 @@ const char *op_str(const AstNodeOpBinary::OpType op) {
     case AstNodeOpBinary::OpType::And:      return "and";
     case AstNodeOpBinary::OpType::Or:       return "or";
     case AstNodeOpBinary::OpType::Range:    return "..";
+    case AstNodeOpBinary::OpType::In:       return "in";
     // clang-format on
     default:
         return "<unknown>";
