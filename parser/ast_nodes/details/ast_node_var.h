@@ -12,6 +12,8 @@ struct AstNodeIdentifier : AstNode {
     explicit AstNodeIdentifier(const Position pos, std::u32string identifier)
         : AstNode{pos}, identifier_{std::move(identifier)} {}
 
+    SL_AST_NODE_ACCEPT
+
   private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
@@ -23,6 +25,8 @@ struct AstNodeDel : AstNode {
     explicit AstNodeDel(const Position pos, AstNodePtr target)
         : AstNode{pos}, target_{std::move(target)} {}
 
+    SL_AST_NODE_ACCEPT
+
   private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
@@ -33,6 +37,8 @@ struct AstNodeGlobal : AstNode {
 
     explicit AstNodeGlobal(const Position pos, std::u32string identifier)
         : AstNode{pos}, identifier_{std::move(identifier)} {}
+
+    SL_AST_NODE_ACCEPT
 
   private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;

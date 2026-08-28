@@ -16,6 +16,8 @@ struct AstNodeDecorator : AstNode {
     explicit AstNodeDecorator(const Position pos, AstNodePtr decorator, AstNodePtr target)
         : AstNode{pos}, decorator_{std::move(decorator)}, target_{std::move(target)} {}
 
+    SL_AST_NODE_ACCEPT
+
   private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };

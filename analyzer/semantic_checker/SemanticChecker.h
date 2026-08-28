@@ -4,7 +4,7 @@
 
 #include <string>
 
-class SemanticChecker {
+class SemanticChecker : public AstConstVisitor {
     const AstNode &root_;
     const std::string file_path_;
 
@@ -41,10 +41,9 @@ class SemanticChecker {
         if (a.size() != b.size()) error_internal("mismatched array sizes", pos);
     }
 
-    // 检查节点，dispatch
     void check(const AstNode &node);
 
-#define X(nt) void check(const nt &node);
+#define X(nt) void visit(const nt &node) override;
 #include "../../parser/ast_nodes/x_ast_nodes.inc"
 
 #undef X

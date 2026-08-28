@@ -19,6 +19,8 @@ struct AstNodeImportKw : AstNode {
     explicit AstNodeImportKw(const Position pos, std::vector<std::u32string> segments)
         : AstNode{pos}, segments_{std::move(segments)} {}
 
+    SL_AST_NODE_ACCEPT
+
   private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
@@ -35,6 +37,8 @@ struct AstNodeImportCall : AstNode {
     )
         : AstNode{pos}, positional_args_{std::move(positional_args)},
           keyword_args_{std::move(keyword_args)}, paren_pos_{paren_pos} {}
+
+    SL_AST_NODE_ACCEPT
 
   private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;

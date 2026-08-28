@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../ast_visitor.h"
+
 #include <compare>
 #include <memory>
 #include <nlohmann/json.hpp>
@@ -29,6 +31,10 @@ struct AstNode {
     [[nodiscard]] json to_json(const bool include_pos = false) const {
         return to_json_impl(include_pos);
     }
+
+    // 双分派的前半程
+    virtual void accept(AstVisitor &visitor) = 0;
+    virtual void accept(AstConstVisitor &visitor) const = 0;
 
   private:
     [[nodiscard]] virtual json to_json_impl(bool include_pos) const = 0;

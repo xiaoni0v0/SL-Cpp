@@ -2,27 +2,16 @@
 
 #include "StaticEvaler.h"
 
-#include <cassert>
 #include <utility>
 
 void ExprFolder::visit_and_replace(AstNodePtr &node) {
     if (!node) return;
-    visit(*node);
+    visit_any(*node);
     // 折到不动为止
     while (AstNodePtr folded{StaticEvaler::fold(*node)}) node = std::move(folded);
 }
 
-void ExprFolder::visit(AstNode &node) {
-    AstNode *const p{&node}; // 变成指针再 dynamic_cast
-
-#define X(nt)                                                                                      \
-    if (auto *n{dynamic_cast<nt *>(p)}) return visit(*n);
-#include "../../parser/ast_nodes/x_ast_nodes.inc"
-
-#undef X
-
-    assert(!"Unknown node type");
-}
+void ExprFolder::visit_any(AstNode &node) { node.accept(*this); }
 
 void ExprFolder::visit(AstNodeClass &node) {
     for (auto &deco : node.decorators_) visit_and_replace(deco);
@@ -184,6 +173,6 @@ void ExprFolder::visit(AstNodeImportCall &node) {
     for (auto &kw : node.keyword_args_) visit_and_replace(kw.value_);
 }
 
-void ExprFolder::fold(AstNodeProgram &root) { visit(root); }
+void ExprFolder::fold(AstNodeProgram &root) { ExprFolder{}.visit(root); }
 
-void ExprFolder::fold_expr(AstNodePtr &node) { visit_and_replace(node); }
+void ExprFolder::fold_expr(AstNodePtr &node) { ExprFolder{}.visit_and_replace(node); }

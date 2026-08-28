@@ -3,7 +3,6 @@
 #include "../../builtins/exceptions/InternalError.h"
 #include "../../builtins/exceptions/SyntaxError.h"
 
-#include <cassert>
 #include <unordered_set>
 
 void SemanticChecker::error(const std::string &msg, const Position pos) const {
@@ -22,19 +21,9 @@ void SemanticChecker::require_not_null(const std::u32string &name, const Positio
     if (name.empty()) error_internal("unexpected empty name", pos);
 }
 
-void SemanticChecker::check(const AstNode &node) {
-    const AstNode *const p{&node}; // 变成指针再 dynamic_cast
+void SemanticChecker::check(const AstNode &node) { node.accept(*this); }
 
-#define X(nt)                                                                                      \
-    if (const auto *n{dynamic_cast<const nt *>(p)}) return check(*n);
-#include "../../parser/ast_nodes/x_ast_nodes.inc"
-
-#undef X
-
-    assert(!"Unknown node type");
-}
-
-void SemanticChecker::check(const AstNodeClass &node) {
+void SemanticChecker::visit(const AstNodeClass &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -64,7 +53,7 @@ void SemanticChecker::check(const AstNodeClass &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeIf &node) {
+void SemanticChecker::visit(const AstNodeIf &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -81,7 +70,7 @@ void SemanticChecker::check(const AstNodeIf &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeForCond &node) {
+void SemanticChecker::visit(const AstNodeForCond &node) {
     const Position pos{node.pos_};
 
     if (node.collect_.container_ == CollectMark::Container::None && node.collect_.expand_)
@@ -100,7 +89,7 @@ void SemanticChecker::check(const AstNodeForCond &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeForIter &node) {
+void SemanticChecker::visit(const AstNodeForIter &node) {
     const Position pos{node.pos_};
 
     if (node.collect_.container_ == CollectMark::Container::None && node.collect_.expand_)
@@ -118,21 +107,21 @@ void SemanticChecker::check(const AstNodeForIter &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeBreak &node) {
+void SemanticChecker::visit(const AstNodeBreak &node) {
     if (ctx_.loop_depth == 0) error("break outside loop", node.pos_);
     // finally 体内禁止 break 跳出 finally 范围
     if (ctx_.finally_loop_depth >= 0 && ctx_.loop_depth == ctx_.finally_loop_depth)
         error("break inside finally is not allowed", node.pos_);
 }
 
-void SemanticChecker::check(const AstNodeContinue &node) {
+void SemanticChecker::visit(const AstNodeContinue &node) {
     if (ctx_.loop_depth == 0) error("continue outside loop", node.pos_);
     // finally 体内禁止 continue 跳出 finally 范围
     if (ctx_.finally_loop_depth >= 0 && ctx_.loop_depth == ctx_.finally_loop_depth)
         error("continue inside finally is not allowed", node.pos_);
 }
 
-void SemanticChecker::check(const AstNodeReturn &node) {
+void SemanticChecker::visit(const AstNodeReturn &node) {
     // return 的作用对象是离它最近的 Program，外层一个 Program 都没有就无处可去
     if (!ctx_.in_program) error("return outside program", node.pos_);
 
@@ -148,7 +137,7 @@ void SemanticChecker::check(const AstNodeReturn &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeTry &node) {
+void SemanticChecker::visit(const AstNodeTry &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -174,7 +163,7 @@ void SemanticChecker::check(const AstNodeTry &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeRaise &node) {
+void SemanticChecker::visit(const AstNodeRaise &node) {
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -184,7 +173,7 @@ void SemanticChecker::check(const AstNodeRaise &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeDecorator &node) {
+void SemanticChecker::visit(const AstNodeDecorator &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -197,7 +186,7 @@ void SemanticChecker::check(const AstNodeDecorator &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeFunc &node) {
+void SemanticChecker::visit(const AstNodeFunc &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -258,12 +247,12 @@ void SemanticChecker::check(const AstNodeFunc &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeImportKw &node) {
+void SemanticChecker::visit(const AstNodeImportKw &node) {
     require_not_null(node.segments_, 1, node.pos_);
     for (const auto &segment : node.segments_) require_not_null(segment, node.pos_);
 }
 
-void SemanticChecker::check(const AstNodeImportCall &node) {
+void SemanticChecker::visit(const AstNodeImportCall &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -285,19 +274,19 @@ void SemanticChecker::check(const AstNodeImportCall &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeLiteralNone &) {}
+void SemanticChecker::visit(const AstNodeLiteralNone &) {}
 
-void SemanticChecker::check(const AstNodeLiteralBool &) {}
+void SemanticChecker::visit(const AstNodeLiteralBool &) {}
 
-void SemanticChecker::check(const AstNodeLiteralGL &) {}
+void SemanticChecker::visit(const AstNodeLiteralGL &) {}
 
-void SemanticChecker::check(const AstNodeLiteralInt &) {}
+void SemanticChecker::visit(const AstNodeLiteralInt &) {}
 
-void SemanticChecker::check(const AstNodeLiteralDecimal &) {}
+void SemanticChecker::visit(const AstNodeLiteralDecimal &) {}
 
-void SemanticChecker::check(const AstNodeLiteralStr &) {}
+void SemanticChecker::visit(const AstNodeLiteralStr &) {}
 
-void SemanticChecker::check(const AstNodeLiteralTuple &node) {
+void SemanticChecker::visit(const AstNodeLiteralTuple &node) {
     const Context saved{ctx_};
     ctx_.can_star = true;
     ctx_.can_double_star = false;
@@ -307,7 +296,7 @@ void SemanticChecker::check(const AstNodeLiteralTuple &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeLiteralList &node) {
+void SemanticChecker::visit(const AstNodeLiteralList &node) {
     const Context saved{ctx_};
     ctx_.can_star = true;
     ctx_.can_double_star = false;
@@ -317,7 +306,7 @@ void SemanticChecker::check(const AstNodeLiteralList &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeLiteralDict &node) {
+void SemanticChecker::visit(const AstNodeLiteralDict &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -341,9 +330,9 @@ void SemanticChecker::check(const AstNodeLiteralDict &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeLiteralEllipsis &) {}
+void SemanticChecker::visit(const AstNodeLiteralEllipsis &) {}
 
-void SemanticChecker::check(const AstNodeProgram &node) {
+void SemanticChecker::visit(const AstNodeProgram &node) {
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -354,7 +343,7 @@ void SemanticChecker::check(const AstNodeProgram &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeCompound &node) {
+void SemanticChecker::visit(const AstNodeCompound &node) {
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -364,7 +353,7 @@ void SemanticChecker::check(const AstNodeCompound &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeStar &node) {
+void SemanticChecker::visit(const AstNodeStar &node) {
     const Position pos{node.pos_};
 
     if (!ctx_.can_star)
@@ -379,7 +368,7 @@ void SemanticChecker::check(const AstNodeStar &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeDoubleStar &node) {
+void SemanticChecker::visit(const AstNodeDoubleStar &node) {
     const Position pos{node.pos_};
 
     if (!ctx_.can_double_star)
@@ -394,7 +383,7 @@ void SemanticChecker::check(const AstNodeDoubleStar &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeOpUnary &node) {
+void SemanticChecker::visit(const AstNodeOpUnary &node) {
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -404,7 +393,7 @@ void SemanticChecker::check(const AstNodeOpUnary &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeOpBinary &node) {
+void SemanticChecker::visit(const AstNodeOpBinary &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -417,7 +406,7 @@ void SemanticChecker::check(const AstNodeOpBinary &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeCompare &node) {
+void SemanticChecker::visit(const AstNodeCompare &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -433,7 +422,7 @@ void SemanticChecker::check(const AstNodeCompare &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeIs &node) {
+void SemanticChecker::visit(const AstNodeIs &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -448,7 +437,7 @@ void SemanticChecker::check(const AstNodeIs &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeAssign &node) {
+void SemanticChecker::visit(const AstNodeAssign &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -461,7 +450,7 @@ void SemanticChecker::check(const AstNodeAssign &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeCompoundAssign &node) {
+void SemanticChecker::visit(const AstNodeCompoundAssign &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -474,7 +463,7 @@ void SemanticChecker::check(const AstNodeCompoundAssign &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeCall &node) {
+void SemanticChecker::visit(const AstNodeCall &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -500,7 +489,7 @@ void SemanticChecker::check(const AstNodeCall &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeIndex &node) {
+void SemanticChecker::visit(const AstNodeIndex &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -516,7 +505,7 @@ void SemanticChecker::check(const AstNodeIndex &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeAttr &node) {
+void SemanticChecker::visit(const AstNodeAttr &node) {
     const Position pos{node.pos_};
 
     const Context saved{ctx_};
@@ -529,11 +518,11 @@ void SemanticChecker::check(const AstNodeAttr &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeIdentifier &node) {
+void SemanticChecker::visit(const AstNodeIdentifier &node) {
     require_not_null(node.identifier_, node.pos_);
 }
 
-void SemanticChecker::check(const AstNodeDel &node) {
+void SemanticChecker::visit(const AstNodeDel &node) {
     const Context saved{ctx_};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -548,7 +537,7 @@ void SemanticChecker::check(const AstNodeDel &node) {
     ctx_ = saved;
 }
 
-void SemanticChecker::check(const AstNodeGlobal &node) {
+void SemanticChecker::visit(const AstNodeGlobal &node) {
     require_not_null(node.identifier_, node.pos_);
     if (ctx_.local_scope_depth == 0) error("global outside function/class body", node.pos_);
 }

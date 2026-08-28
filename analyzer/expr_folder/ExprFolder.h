@@ -5,31 +5,22 @@
 /**
  * 遍历 AST，折叠/精简表达式：常量折叠、死分支/死循环消除、复合表达式与 Program 的死语句剪枝
  */
-class ExprFolder {
+class ExprFolder : public AstVisitor {
     /**
      * 先把 node 子节点递归处理好，再把 node 自己反复送给 StaticEvaler 折到不能再折为止
      * @param node 可空
      */
-    static void visit_and_replace(AstNodePtr &node);
+    void visit_and_replace(AstNodePtr &node);
 
-    /**
-     * 各种 visit 的入口，按节点类型分派
-     */
-    static void visit(AstNode &node);
+    // 双分派的后半程：转给节点的 accept，由它挑到下面对应的 visit
+    void visit_any(AstNode &node);
 
-#define X(nt) static void visit(nt &node);
+#define X(nt) void visit(nt &node) override;
 #include "../../parser/ast_nodes/x_ast_nodes.inc"
 
 #undef X
 
   public:
-    ExprFolder() = delete;
-    ~ExprFolder() = delete;
-    ExprFolder(const ExprFolder &) = delete;
-    ExprFolder(ExprFolder &&) = delete;
-    ExprFolder &operator=(const ExprFolder &) = delete;
-    ExprFolder &operator=(ExprFolder &&) = delete;
-
     /**
      * 折整份 Program：除了逐条折叠，还会做 Program 级别的死语句剪枝
      * @param root Program 根节点，原地修改

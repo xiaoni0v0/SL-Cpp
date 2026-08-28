@@ -139,6 +139,7 @@ add_executable(SL main.cpp
         parser/Parser.cpp
         parser/Parser.h
         parser/ast_nodes/ast_nodes.h
+        parser/ast_nodes/ast_visitor.h
         parser/ast_nodes/to_json.cpp
         parser/ast_nodes/x_ast_nodes.inc
         parser/ast_nodes/details/ast_node.h
@@ -290,6 +291,7 @@ add_executable(SL_Cpp_Parser_Tests
         parser/Parser.cpp
         parser/Parser.h
         parser/ast_nodes/ast_nodes.h
+        parser/ast_nodes/ast_visitor.h
         parser/ast_nodes/to_json.cpp
         parser/ast_nodes/x_ast_nodes.inc
         parser/ast_nodes/details/ast_node.h
@@ -379,6 +381,7 @@ add_executable(SL_Cpp_Analyzer_Tests
         parser/Parser.cpp
         parser/Parser.h
         parser/ast_nodes/ast_nodes.h
+        parser/ast_nodes/ast_visitor.h
         parser/ast_nodes/to_json.cpp
         parser/ast_nodes/x_ast_nodes.inc
         parser/ast_nodes/details/ast_node.h

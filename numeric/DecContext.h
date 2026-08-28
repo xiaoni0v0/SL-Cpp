@@ -67,7 +67,7 @@ class DecSignalSet {
 };
 
 // 某个信号在 traps 里、于是被抛出来。what() 是条件名，具体条件从 condition() 取
-class DecTrapped final : public std::runtime_error {
+class DecTrapped : public std::runtime_error {
     DecCondition condition_;
 
   public:
