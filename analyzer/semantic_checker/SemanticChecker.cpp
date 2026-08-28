@@ -17,7 +17,7 @@ void SemanticChecker::require_not_null(const AstNodePtr &node, const Position po
     if (!node) error_internal("unexpected null node", pos);
 }
 
-void SemanticChecker::require_not_null(const std::u32string &name, const Position pos) const {
+void SemanticChecker::require_not_empty(const std::u32string &name, const Position pos) const {
     if (name.empty()) error_internal("unexpected empty name", pos);
 }
 
@@ -32,12 +32,12 @@ void SemanticChecker::visit(const AstNodeClass &node) {
 
     for (const auto &deco : node.decorators_) check_not_null(deco, pos);
     require_same_size(node.decorators_, node.decorator_positions_, pos);
-    if (node.name_) require_not_null(*node.name_, pos);
+    if (node.name_) require_not_empty(*node.name_, pos);
     for (const auto &base : node.bases_) check_not_null(base, pos);
 
     std::unordered_set<std::u32string> names;
     for (const auto &capture : node.captures_) {
-        require_not_null(capture.identifier_, pos);
+        require_not_empty(capture.identifier_, pos);
         // 如果是已经存在
         if (!names.insert(capture.identifier_).second) error("duplicate name in capture list", pos);
         check_nullable(capture.value_expr_);
@@ -60,7 +60,7 @@ void SemanticChecker::visit(const AstNodeIf &node) {
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    require_not_null(node.clauses_, 1, pos);
+    require_min_size(node.clauses_, 1, pos);
     for (const auto &clause : node.clauses_) {
         check_not_null(clause.cond_, pos);
         check_not_null(clause.body_, pos);
@@ -150,7 +150,7 @@ void SemanticChecker::visit(const AstNodeTry &node) {
         error("try must have at least one except or finally", node.pos_);
     }
     for (const auto &clause : node.except_clauses_) {
-        require_not_null(clause.exceptions_, 1, pos);
+        require_min_size(clause.exceptions_, 1, pos);
         for (const auto &exc : clause.exceptions_) check_not_null(exc, pos);
         check_not_null(clause.body_, pos);
     }
@@ -195,7 +195,7 @@ void SemanticChecker::visit(const AstNodeFunc &node) {
 
     for (const auto &deco : node.decorators_) check_not_null(deco, pos);
     require_same_size(node.decorators_, node.decorator_positions_, pos);
-    if (node.name_) require_not_null(*node.name_, pos);
+    if (node.name_) require_not_empty(*node.name_, pos);
 
     std::unordered_set<std::u32string> names;
 
@@ -207,14 +207,14 @@ void SemanticChecker::visit(const AstNodeFunc &node) {
 
     // 捕获
     for (const auto &capture : node.captures_) {
-        require_not_null(capture.identifier_, pos), ensure_unique(capture.identifier_);
+        require_not_empty(capture.identifier_, pos), ensure_unique(capture.identifier_);
         check_nullable(capture.value_expr_);
     }
 
     // 形参
     bool has_seen_default{false};
     for (const auto &param : node.params_.positional_) {
-        require_not_null(param.identifier_, pos), ensure_unique(param.identifier_);
+        require_not_empty(param.identifier_, pos), ensure_unique(param.identifier_);
         if (param.default_value_)
             has_seen_default = true;
         else // 如果当前这个没有默认值，且前边的某个有默认值
@@ -223,16 +223,16 @@ void SemanticChecker::visit(const AstNodeFunc &node) {
         check_nullable(param.default_value_);
     }
     if (node.params_.var_args_name_) {
-        require_not_null(*node.params_.var_args_name_, pos),
+        require_not_empty(*node.params_.var_args_name_, pos),
             ensure_unique(*node.params_.var_args_name_);
     }
     for (const auto &param : node.params_.kw_only_) {
-        require_not_null(param.identifier_, pos), ensure_unique(param.identifier_);
+        require_not_empty(param.identifier_, pos), ensure_unique(param.identifier_);
         check_nullable(param.type_annotation_);
         check_nullable(param.default_value_);
     }
     if (node.params_.var_kwargs_name_) {
-        require_not_null(*node.params_.var_kwargs_name_, pos),
+        require_not_empty(*node.params_.var_kwargs_name_, pos),
             ensure_unique(*node.params_.var_kwargs_name_);
     }
 
@@ -248,8 +248,8 @@ void SemanticChecker::visit(const AstNodeFunc &node) {
 }
 
 void SemanticChecker::visit(const AstNodeImportKw &node) {
-    require_not_null(node.segments_, 1, node.pos_);
-    for (const auto &segment : node.segments_) require_not_null(segment, node.pos_);
+    require_min_size(node.segments_, 1, node.pos_);
+    for (const auto &segment : node.segments_) require_not_empty(segment, node.pos_);
 }
 
 void SemanticChecker::visit(const AstNodeImportCall &node) {
@@ -264,7 +264,7 @@ void SemanticChecker::visit(const AstNodeImportCall &node) {
 
     // 关键字组：关键字实参、**expr
     for (const auto &kw : node.keyword_args_) {
-        if (kw.kind_ == OneKwArg::Kind::Keyword) require_not_null(kw.keyword_, pos);
+        if (kw.kind_ == OneKwArg::Kind::Keyword) require_not_empty(kw.keyword_, pos);
 
         ctx_.can_star = false;
         ctx_.can_double_star = kw.kind_ == OneKwArg::Kind::DoubleStar;
@@ -415,7 +415,7 @@ void SemanticChecker::visit(const AstNodeCompare &node) {
 
     if (node.operands_.size() != node.ops_.size() + 1)
         error_internal("operands/ops count mismatch", pos);
-    require_not_null(node.operands_, 2, pos);
+    require_min_size(node.operands_, 2, pos);
     require_same_size(node.ops_, node.op_positions_, pos);
     for (const auto &operand : node.operands_) check_not_null(operand, pos);
 
@@ -429,7 +429,7 @@ void SemanticChecker::visit(const AstNodeIs &node) {
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    require_not_null(node.operands_, 2, node.pos_);
+    require_min_size(node.operands_, 2, node.pos_);
     if (node.operands_.size() != node.op_positions_.size() + 1)
         error_internal("operands/op positions count mismatch", pos);
     for (const auto &operand : node.operands_) check_not_null(operand, pos);
@@ -479,7 +479,7 @@ void SemanticChecker::visit(const AstNodeCall &node) {
 
     // 关键字组：关键字实参、**expr
     for (const auto &kw : node.keyword_args_) {
-        if (kw.kind_ == OneKwArg::Kind::Keyword) require_not_null(kw.keyword_, pos);
+        if (kw.kind_ == OneKwArg::Kind::Keyword) require_not_empty(kw.keyword_, pos);
 
         ctx_.can_star = false;
         ctx_.can_double_star = kw.kind_ == OneKwArg::Kind::DoubleStar;
@@ -498,7 +498,7 @@ void SemanticChecker::visit(const AstNodeIndex &node) {
 
     check_not_null(node.object_, pos);
 
-    require_not_null(node.args_, 1, pos);
+    require_min_size(node.args_, 1, pos);
     ctx_.can_star = true;
     for (const auto &a : node.args_) check_not_null(a, pos);
 
@@ -513,13 +513,13 @@ void SemanticChecker::visit(const AstNodeAttr &node) {
     ctx_.can_double_star = false;
 
     check_not_null(node.object_, pos);
-    require_not_null(node.attr_, pos);
+    require_not_empty(node.attr_, pos);
 
     ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeIdentifier &node) {
-    require_not_null(node.identifier_, node.pos_);
+    require_not_empty(node.identifier_, node.pos_);
 }
 
 void SemanticChecker::visit(const AstNodeDel &node) {
@@ -538,7 +538,7 @@ void SemanticChecker::visit(const AstNodeDel &node) {
 }
 
 void SemanticChecker::visit(const AstNodeGlobal &node) {
-    require_not_null(node.identifier_, node.pos_);
+    require_not_empty(node.identifier_, node.pos_);
     if (ctx_.local_scope_depth == 0) error("global outside function/class body", node.pos_);
 }
 

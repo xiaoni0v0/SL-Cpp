@@ -84,7 +84,7 @@ class StaticEvaler {
     // + ：数值相加或 str/tuple/list 拼接
     [[nodiscard]] static AstNodePtr fold_add(AstNodeOpBinary &node);
     // * ：数值相乘或 str/tuple/list 重复
-    [[nodiscard]] static AstNodePtr fold_mul(AstNodeOpBinary &node);
+    [[nodiscard]] static AstNodePtr fold_mul(const AstNodeOpBinary &node);
 
     // 纯数值算术
 

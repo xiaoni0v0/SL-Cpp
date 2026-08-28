@@ -151,8 +151,6 @@ class Parser {
      */
     bool finish_comma_batch(TokenType close, const std::function<void()> &parse_item);
 
-    // 以下 finish_* 同样按 x_ast_nodes.h 的先后排列
-
     // 完成解析捕获列表。消耗括号、管理括号栈
     [[nodiscard]] std::vector<OneCapture> finish_captures();
     // 完成解析形参列表。消耗括号、管理括号栈

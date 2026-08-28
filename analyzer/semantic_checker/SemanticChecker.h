@@ -25,12 +25,12 @@ class SemanticChecker : public AstConstVisitor {
     // 节点不能是 nullptr（Parser 保证，触发即 InternalError）
     void require_not_null(const AstNodePtr &node, Position pos) const;
     // 名字不能是 ""（Parser 保证，触发即 InternalError）
-    void require_not_null(const std::u32string &name, Position pos) const;
+    void require_not_empty(const std::u32string &name, Position pos) const;
 
     // vector 元素个数不能少于 min_size（Parser 保证，触发即 InternalError）
     template <typename T>
     void
-    require_not_null(const std::vector<T> &vec, const size_t min_size, const Position pos) const {
+    require_min_size(const std::vector<T> &vec, const size_t min_size, const Position pos) const {
         if (vec.size() < min_size) error_internal("too few elements", pos);
     }
 

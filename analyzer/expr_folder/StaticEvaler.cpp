@@ -358,7 +358,7 @@ AstNodePtr StaticEvaler::fold_add(AstNodeOpBinary &node) {
     return nullptr;
 }
 
-AstNodePtr StaticEvaler::fold_mul(AstNodeOpBinary &node) {
+AstNodePtr StaticEvaler::fold_mul(const AstNodeOpBinary &node) {
     const AstNode &l{*node.left_}, &r{*node.right_};
     if (!is_literal_pure(l) || !is_literal_pure(r)) return nullptr;
 

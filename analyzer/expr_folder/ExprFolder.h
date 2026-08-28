@@ -6,6 +6,8 @@
  * 遍历 AST，折叠/精简表达式：常量折叠、死分支/死循环消除、复合表达式与 Program 的死语句剪枝
  */
 class ExprFolder : public AstVisitor {
+    explicit ExprFolder() = default;
+
     /**
      * 先把 node 子节点递归处理好，再把 node 自己反复送给 StaticEvaler 折到不能再折为止
      * @param node 可空
