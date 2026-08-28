@@ -796,13 +796,12 @@ AstNodePtr Parser::parse_for() {
                 error("expected ';' or newline between for header slots");
             }
 
-            skip_newline(); // ';' 前后的换行都归这个分隔符，允许把 ';' 单独写一行
+            skip_newline();
             if (check(TokenType::SIGN_SEMICOLON)) {
-                advance(); // 消耗 ';'。它划出的空槽算数，所以下一轮接着读
+                expect(TokenType::SIGN_SEMICOLON); // 消耗 ';'
                 skip_newline();
                 continue;
             }
-            // 光靠换行分隔时，紧挨 ')' 之前的换行只是排版，不再多划出一个槽
             if (check(TokenType::SIGN_RPAREN)) return slots;
         }
     }};
@@ -812,7 +811,6 @@ AstNodePtr Parser::parse_for() {
     skip_newline();
     const CollectMark collect{parse_collect_mark()};
 
-    // 头部这一层括号里换行是槽分隔符（见 SL.md 的 for 表达式一节），不像别处的括号那样当空白
     expect_open(Bracket::ForHeader);
     const Position start_pos_header{peek().row, peek().col};
     std::vector slots{parse_for_slots()};
@@ -847,7 +845,7 @@ AstNodePtr Parser::parse_for() {
         );
     }
 
-    error("for header must be `init; cond; inc` or `target in iterable`", start_pos_header);
+    error("for header must be (init; cond; inc) or (target in iterable)", start_pos_header);
 }
 
 AstNodePtr Parser::parse_while() {

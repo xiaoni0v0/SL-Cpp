@@ -201,8 +201,8 @@ TEST_SUITE("for——步进模式") {
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
-            // 把两种合法形状直接摆出来，`init; cond; inc` 自带分号，比逐条解释短也更好用
-            CHECK(msg.find("`init; cond; inc`") != std::string::npos);
+            // 把两种合法形状直接摆出来，init; cond; inc 自带分号，比逐条解释短也更好用
+            CHECK(msg.find("(init; cond; inc)") != std::string::npos);
             CHECK(msg.find("1:6:") != std::string::npos);
         }
     }
@@ -422,8 +422,8 @@ TEST_SUITE("for——头部的槽数只能是 3 或 1") {
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
-            CHECK(msg.find("`init; cond; inc`") != std::string::npos);
-            CHECK(msg.find("`target in iterable`") != std::string::npos);
+            CHECK(msg.find("(init; cond; inc)") != std::string::npos);
+            CHECK(msg.find("(target in iterable)") != std::string::npos);
         }
         CHECK_THROWS_AS(parse_as_file(U"for (a; b) body"), SyntaxError);
     }
@@ -439,7 +439,7 @@ TEST_SUITE("for——头部的槽数只能是 3 或 1") {
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
-            CHECK(msg.find("`target in iterable`") != std::string::npos);
+            CHECK(msg.find("(target in iterable)") != std::string::npos);
         }
         CHECK_THROWS_AS(parse_as_file(U"for (f(x)) body"), SyntaxError);
         // 根是二元运算符、但不是 in：查的是 in 这个具体运算符，不是"根是不是二元运算符"
