@@ -289,13 +289,9 @@ void Parser::skip_terminator() {
     while (check(TokenType::NEWLINE) || check(TokenType::SIGN_SEMICOLON)) advance();
 }
 
-void Parser::error(const std::string &msg) const {
-    const Token &token{peek()};
-    throw SyntaxError{file_path_, token.row, token.col, msg};
-}
-
-void Parser::error(const std::string &msg, const Position pos) const {
-    throw SyntaxError{file_path_, pos.row, pos.col, msg};
+void Parser::error(const std::string &msg, std::optional<Position> pos) const {
+    if (!pos) pos = {peek().row, peek().col};
+    throw SyntaxError{file_path_, pos->row, pos->col, msg};
 }
 
 void Parser::error_internal(const std::string &msg, const Position pos) const {

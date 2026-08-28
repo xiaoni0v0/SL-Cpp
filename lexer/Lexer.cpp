@@ -29,10 +29,10 @@ char32_t Lexer::advance() {
 
 bool Lexer::is_eof() const { return pos_ >= source_.size(); }
 
-void Lexer::error(const std::string &msg) const { throw SyntaxError{file_path_, row_, col_, msg}; }
-
-void Lexer::error(const std::string &msg, const int row, const int col) const {
-    throw SyntaxError{file_path_, row, col, msg};
+void Lexer::error(const std::string &msg, std::optional<int> row, std::optional<int> col) const {
+    if (!row) row = row_;
+    if (!col) col = col_;
+    throw SyntaxError{file_path_, *row, *col, msg};
 }
 
 void Lexer::skip_spaces() {

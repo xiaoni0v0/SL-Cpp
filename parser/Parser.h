@@ -4,6 +4,7 @@
 #include "ast_nodes/ast_nodes.h"
 
 #include <functional>
+#include <optional>
 #include <stack>
 #include <string>
 #include <vector>
@@ -46,8 +47,8 @@ class Parser {
     // 无条件跳过 NEWLINE 和 ';'
     void skip_terminator();
 
-    [[noreturn]] void error(const std::string &msg) const;
-    [[noreturn]] void error(const std::string &msg, Position pos) const;
+    [[noreturn]] void
+    error(const std::string &msg, std::optional<Position> pos = std::nullopt) const;
     [[noreturn]] void error_internal(const std::string &msg, Position pos = {-1, -1}) const;
 
     /**

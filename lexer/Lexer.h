@@ -2,6 +2,7 @@
 
 #include "token.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -18,10 +19,11 @@ class Lexer {
     char32_t advance();
     // 是否读完了
     [[nodiscard]] bool is_eof() const;
-    // 抛出 SyntaxError 异常
-    [[noreturn]] void error(const std::string &msg) const;
     // 抛出 SyntaxError 异常，提供行列
-    [[noreturn]] void error(const std::string &msg, int row, int col) const;
+    [[noreturn]] void error(
+        const std::string &msg, std::optional<int> row = std::nullopt,
+        std::optional<int> col = std::nullopt
+    ) const;
 
     // 跳过空白（不含换行）
     void skip_spaces();

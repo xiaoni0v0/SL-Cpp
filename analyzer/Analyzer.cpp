@@ -6,9 +6,6 @@
 #include <cassert>
 #include <utility>
 
-// 先检查。SemanticChecker 可能报错，但绝不修改树
-// 再折叠。ExprFolder 可能修改树，但绝不报错
-
 void Analyzer::analyze_program(AstNodeProgram &root, std::string file_path) {
     SemanticChecker{root, std::move(file_path)}.check();
     ExprFolder::fold(root);
