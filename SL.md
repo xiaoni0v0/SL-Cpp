@@ -907,7 +907,7 @@ func f() {}
 若确实需要对某个类型（包括类自身尚未定义完毕、无法写成普通注解的自引用场景）做运行时类型检查，
 可直接在函数体内手动 `isinstance` 检查。
 
-类型注解是 `TypeVar`（表达多个形参/返回值位置的类型必须彼此一致）时，调用时的一致性检查规则见 4.2.28。
+类型注解是 `TypeVar`（表达多个形参/返回值位置的类型必须彼此一致）时，调用时的一致性检查规则见 4.2.27。
 
 以上涉及函数定义时检查的地方，都在整个函数表达式的捕获、全部形参的注解与默认值、返回类型全部求值完毕之后统一进行。
 
@@ -951,10 +951,10 @@ func f() {}
     3. 否则若 `isinstance(v, classmethod)`，直接存入描述器表（绑定 `cls` 由 `classmethod` 自己的 `get` 负责）；
     4. 否则若 `v` 就是 `unsupported` 这个类本身，将 `unsupported(name)`（`name` 为收集到的这个变量名）存入描述器表；
     5. 否则若 `isinstance(v, unsupported)`，直接存入描述器表；
-    6. 否则若 `isinstance(v, protocols.Callable)`，将 `MethodDescriptor(v)` 存入描述器表；
+    6. 否则若 `v` 是函数对象，或 `isinstance(v, FuncGroup)`，将 `MethodDescriptor(v)` 存入描述器表；
        `MethodDescriptor` 是 `Descriptor` 的子类，`get(self, obj)` 按 `obj` 分两种情况：
        - 经由实例访问（`isinstance(obj, type)` 为假）返回一个把 `obj` 绑定为第一参数的可调用对象；
-       - 经由类访问（`isinstance(obj, type)` 为真）不绑定，直接返回它持有的那个函数本身。
+       - 经由类访问（`isinstance(obj, type)` 为真）不绑定，直接返回它持有的那个对象本身。
     7. 否则原样存入属性表。
 
    这一步是描述器表唯一的建立时机，此后该表不再变化（见 3.9.1.1）。
@@ -1061,7 +1061,7 @@ f(*args, x=1, **extra) # 调用时展开
 
 SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Function Group）对象实现运行时 dispatch，而非通过同名函数定义。
 
-见 4.2.26。
+见 4.2.25。
 
 ### 3.8 运算符重载
 
@@ -1568,7 +1568,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.1.15 `exit(code=0)`
 
-抛出 `SystemExit(code)`（见 4.2.27）。该异常未被捕获、一路传播到解释器顶层时，解释器终止，退出码为 `code`。
+抛出 `SystemExit(code)`（见 4.2.26）。该异常未被捕获、一路传播到解释器顶层时，解释器终止，退出码为 `code`。
 
 要求 `code` 为 int 或 `None`，其中 `None` 被视为 0。
 
@@ -1858,11 +1858,7 @@ decimal.DecimalException
 （`name` 即 `some_attr`）存入描述器表，见 3.4.8；
 写 `some_attr = unsupported('自定义消息')` 时使用给定实例，不再改写。
 
-#### 4.2.24 Function
-
-`func` 表达式建立的对象的类。实现 `__op_call__`。
-
-#### 4.2.25 super
+#### 4.2.24 super
 
 `super(cls, obj)`。
 
@@ -1873,7 +1869,7 @@ decimal.DecimalException
 在属性表中找到则原样返回；
 全部找不到则 `AttributeError`。
 
-#### 4.2.26 FuncGroup(*functions, name=None)
+#### 4.2.25 FuncGroup(*functions, name=None)
 
 以下例子说明 FuncGroup 的用法：
 
@@ -1891,7 +1887,7 @@ f(1, 2) # 输出 4
 f(1.0)  # 抛出 DispatchError
 ```
 
-#### 4.2.27 异常类
+#### 4.2.26 异常类
 
 只列全局的一批常用异常，其余更细分的见 4.3.3 `exceptions` 模块。
 
@@ -1914,7 +1910,7 @@ BaseException
     └── ImportError                  - 模块导入失败（找不到模块/包，或名字有歧义）
 ```
 
-#### 4.2.28 TypeVar
+#### 4.2.27 TypeVar
 
 `TypeVar(bound=None)`。用作类型注解，见 3.4.7。
 
@@ -2004,7 +2000,6 @@ $$
 \text{object}\left\{\begin{array}{l}
 \text{NoneType} \\
 \text{type} \\
-\text{Function} \\
 \text{staticmethod} \\
 \text{super} \\
 \text{SingletonType} \\

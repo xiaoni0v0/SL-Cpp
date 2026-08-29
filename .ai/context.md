@@ -357,10 +357,14 @@ A 文件里的函数被 B 文件调用时全局变量会跑到 B 上去，是动
 `int` 的行为。故内置描述器（`MethodDescriptor`/`property`/`classmethod`）持有的函数不放进自己的
 属性表，走解释器内部引用；`staticmethod` 不在此列，它不是描述器，`v.func` 是货真价实的属性。
 
-**`MethodDescriptor` 不是内置类**：它是 SL 本体（类体收集属性那步）产生的类，不在 4.2、也不在内置
-表里，源码中写不出这个名字，只能通过 `attrs(cls, 'descriptors')` 拿到它的实例。凡是这种"解释器
-自己造、用户按名字够不到"的类都别往 4.2/4.4 里加——那两处是"内置表里有哪些名字"的清单，不是"运行期
-存在哪些类"的清单。
+**函数对象的类和 `MethodDescriptor` 都不是内置名字**：类一定存在，但不进内置表、不进 4.2/4.4；
+源码里写不出这个名字。函数对象的类用 `type` 从任意 `func` 表达式的值上取；`MethodDescriptor`
+只能通过 `attrs(cls, 'descriptors')` 拿到它的实例。凡是这种"解释器自己造、用户按名字够不到"
+的类都别往 4.2/4.4 里加——那两处是"内置表里有哪些名字"的清单，不是"运行期存在哪些类"的清单。
+
+**类体收集方法不按 `protocols.Callable`**：只把函数对象和 `FuncGroup` 的实例包成 `MethodDescriptor`。
+类、带 `__op_call__` 的实例等其它可调用对象进属性表、不绑定 `self`。装饰器也不先查 `Callable`，
+直接按 3.5 调用。
 
 `MethodDescriptor.get(self, obj)` 跟 `property`/`classmethod` 一样必须分 `isinstance(obj, type)`
 两路：经由实例访问才把 `obj` 绑成第一参数，经由类访问（`C.method`）不绑定、直接返回持有的函数。
