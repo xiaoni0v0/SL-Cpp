@@ -26,7 +26,7 @@ void SemanticChecker::check(const AstNode &node) { node.accept(*this); }
 void SemanticChecker::visit(const AstNodeClass &node) {
     const Position pos{node.pos_};
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
@@ -45,18 +45,16 @@ void SemanticChecker::visit(const AstNodeClass &node) {
 
     check_doc(node.doc_);
 
-    ctx_.local_scope_depth++;
+    ctx_.in_local_scope = true;
     ctx_.loop_depth = 0;
     ctx_.finally_loop_depth = -1;
     check_not_null(node.body_, pos);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeIf &node) {
     const Position pos{node.pos_};
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
@@ -66,8 +64,6 @@ void SemanticChecker::visit(const AstNodeIf &node) {
         check_not_null(clause.body_, pos);
     }
     check_nullable(node.else_expr_);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeForCond &node) {
@@ -76,7 +72,7 @@ void SemanticChecker::visit(const AstNodeForCond &node) {
     if (node.collect_.container_ == CollectMark::Container::None && node.collect_.expand_)
         error_internal("expand flag without a collect container", pos);
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
@@ -85,8 +81,6 @@ void SemanticChecker::visit(const AstNodeForCond &node) {
     check_nullable(node.inc_);
     ctx_.loop_depth++;
     check_not_null(node.body_, pos);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeForIter &node) {
@@ -95,7 +89,7 @@ void SemanticChecker::visit(const AstNodeForIter &node) {
     if (node.collect_.container_ == CollectMark::Container::None && node.collect_.expand_)
         error_internal("expand flag without a collect container", pos);
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
@@ -103,8 +97,6 @@ void SemanticChecker::visit(const AstNodeForIter &node) {
     check_not_null(node.iterable_, pos);
     ctx_.loop_depth++;
     require_not_null(node.body_, node.pos_), check(*node.body_);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeBreak &node) {
@@ -128,19 +120,17 @@ void SemanticChecker::visit(const AstNodeReturn &node) {
     // finally 体内禁止 return
     if (ctx_.finally_loop_depth >= 0) error("return inside finally is not allowed", node.pos_);
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
     check_nullable(node.value_);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeTry &node) {
     const Position pos{node.pos_};
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
@@ -159,37 +149,31 @@ void SemanticChecker::visit(const AstNodeTry &node) {
     // 保存此时的 loop_depth 作为 finally 拦截的基准
     ctx_.finally_loop_depth = ctx_.loop_depth;
     check_nullable(node.finally_expr_);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeRaise &node) {
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
     check_not_null(node.value_, node.pos_);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeDecorator &node) {
     const Position pos{node.pos_};
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
     check_not_null(node.decorator_, pos);
     check_not_null(node.target_, pos);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeFunc &node) {
     const Position pos{node.pos_};
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
@@ -239,12 +223,10 @@ void SemanticChecker::visit(const AstNodeFunc &node) {
     check_nullable(node.return_type_);
     check_doc(node.doc_);
 
-    ctx_.local_scope_depth++;
+    ctx_.in_local_scope = true;
     ctx_.loop_depth = 0;
     ctx_.finally_loop_depth = -1;
     check(*node.body_);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeImportKw &node) {
@@ -255,7 +237,7 @@ void SemanticChecker::visit(const AstNodeImportKw &node) {
 void SemanticChecker::visit(const AstNodeImportCall &node) {
     const Position pos{node.pos_};
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
 
     // 位置组：位置传参、*expr
     ctx_.can_star = true;
@@ -270,8 +252,6 @@ void SemanticChecker::visit(const AstNodeImportCall &node) {
         ctx_.can_double_star = kw.kind_ == OneKwArg::Kind::DoubleStar;
         check_not_null(kw.value_, pos);
     }
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeLiteralNone &) {}
@@ -287,29 +267,25 @@ void SemanticChecker::visit(const AstNodeLiteralDecimal &) {}
 void SemanticChecker::visit(const AstNodeLiteralStr &) {}
 
 void SemanticChecker::visit(const AstNodeLiteralTuple &node) {
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = true;
     ctx_.can_double_star = false;
 
     for (const auto &item : node.items_) check_not_null(item, node.pos_);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeLiteralList &node) {
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = true;
     ctx_.can_double_star = false;
 
     for (const auto &item : node.items_) check_not_null(item, node.pos_);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeLiteralDict &node) {
     const Position pos{node.pos_};
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
@@ -326,31 +302,25 @@ void SemanticChecker::visit(const AstNodeLiteralDict &node) {
         else
             check_not_null(v, pos);
     }
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeLiteralEllipsis &) {}
 
 void SemanticChecker::visit(const AstNodeProgram &node) {
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
     ctx_.in_program = true;
 
     for (const auto &e : node.exprs_) check_not_null(e, node.pos_);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeCompound &node) {
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
     for (const auto &e : node.exprs_) check_not_null(e, node.pos_);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeStar &node) {
@@ -359,13 +329,11 @@ void SemanticChecker::visit(const AstNodeStar &node) {
     if (!ctx_.can_star)
         error("* can only appear in tuple, list, index, or function call arguments", pos);
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
     check_not_null(node.operand_, pos);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeDoubleStar &node) {
@@ -374,42 +342,36 @@ void SemanticChecker::visit(const AstNodeDoubleStar &node) {
     if (!ctx_.can_double_star)
         error("** can only appear in dict literal or function call arguments", pos);
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
     check_not_null(node.operand_, pos);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeOpUnary &node) {
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
     check_not_null(node.operand_, node.pos_);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeOpBinary &node) {
     const Position pos{node.pos_};
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
     check_not_null(node.left_, pos);
     check_not_null(node.right_, pos);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeCompare &node) {
     const Position pos{node.pos_};
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
@@ -418,14 +380,12 @@ void SemanticChecker::visit(const AstNodeCompare &node) {
     require_min_size(node.operands_, 2, pos);
     require_same_size(node.ops_, node.op_positions_, pos);
     for (const auto &operand : node.operands_) check_not_null(operand, pos);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeIs &node) {
     const Position pos{node.pos_};
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
@@ -433,40 +393,34 @@ void SemanticChecker::visit(const AstNodeIs &node) {
     if (node.operands_.size() != node.op_positions_.size() + 1)
         error_internal("operands/op positions count mismatch", pos);
     for (const auto &operand : node.operands_) check_not_null(operand, pos);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeAssign &node) {
     const Position pos{node.pos_};
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
     require_not_null(node.target_, pos), check_lvalue(*node.target_);
     check_not_null(node.value_, pos);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeCompoundAssign &node) {
     const Position pos{node.pos_};
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
     require_not_null(node.target_, pos), check_lvalue_pure(*node.target_);
     check_not_null(node.value_, pos);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeCall &node) {
     const Position pos{node.pos_};
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
 
     ctx_.can_star = false;
     ctx_.can_double_star = false;
@@ -485,14 +439,12 @@ void SemanticChecker::visit(const AstNodeCall &node) {
         ctx_.can_double_star = kw.kind_ == OneKwArg::Kind::DoubleStar;
         check_not_null(kw.value_, pos);
     }
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeIndex &node) {
     const Position pos{node.pos_};
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
@@ -501,21 +453,17 @@ void SemanticChecker::visit(const AstNodeIndex &node) {
     require_min_size(node.args_, 1, pos);
     ctx_.can_star = true;
     for (const auto &a : node.args_) check_not_null(a, pos);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeAttr &node) {
     const Position pos{node.pos_};
 
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
     check_not_null(node.object_, pos);
     require_not_empty(node.attr_, pos);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeIdentifier &node) {
@@ -523,7 +471,7 @@ void SemanticChecker::visit(const AstNodeIdentifier &node) {
 }
 
 void SemanticChecker::visit(const AstNodeDel &node) {
-    const Context saved{ctx_};
+    const ContextGuard guard{*this};
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
@@ -533,13 +481,11 @@ void SemanticChecker::visit(const AstNodeDel &node) {
     if (!dynamic_cast<const AstNodeIdentifier *>(node.target_.get()) &&
         !dynamic_cast<const AstNodeAttr *>(node.target_.get()))
         error("del target must be an identifier or attribute access", node.target_->pos_);
-
-    ctx_ = saved;
 }
 
 void SemanticChecker::visit(const AstNodeGlobal &node) {
     require_not_empty(node.identifier_, node.pos_);
-    if (ctx_.local_scope_depth == 0) error("global outside function/class body", node.pos_);
+    if (!ctx_.in_local_scope) error("global outside function/class body", node.pos_);
 }
 
 void SemanticChecker::check_not_null(const AstNodePtr &node, const Position pos) {

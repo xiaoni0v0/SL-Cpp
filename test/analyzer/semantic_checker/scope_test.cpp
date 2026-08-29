@@ -1,4 +1,4 @@
-// SemanticChecker：break/continue（loop_depth）、return/global（local_scope_depth）的作用域跟踪。
+// SemanticChecker：break/continue（loop_depth）、return/global（in_local_scope）的作用域跟踪。
 #include "test_utils.h"
 
 #include <doctest/doctest.h>
@@ -63,7 +63,7 @@ TEST_SUITE("SemanticChecker 作用域跟踪") {
     }
 
     TEST_CASE("函数体内的顶层表达式仍是该函数自己的局部作用域，for/while body 本身不额外算一层") {
-        // for/while 不引入新的 local_scope_depth，只有 func/class 才算；顶层 for 循环体里的 global
+        // for/while 不会把 in_local_scope 置 true，只有 func/class 才算；顶层 for 循环体里的 global
         // 非法
         CHECK_THROWS_AS(check_program(U"while (True) { global x }"), SyntaxError);
         CHECK_THROWS_AS(check_program(U"for (;;) { global x }"), SyntaxError);

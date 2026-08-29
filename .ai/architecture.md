@@ -70,7 +70,8 @@
 ## SemanticChecker 与 ExprFolder 的职责边界
 
 - `SemanticChecker` **只读不改**，靠 `Context`（`can_star`/`can_double_star`/`loop_depth`/
-  `finally_loop_depth`/`local_scope_depth` 等）跨节点传递语境限制，违规抛异常。
+  `finally_loop_depth`/`in_local_scope` 等，配 `ContextGuard` 做 RAII 存还原）跨节点传递语境限制，
+  违规抛异常。
 - `ExprFolder` **原地改**，`fold_*` 系列只处理"能不能折成编译期已知的字面量"，死分支/死循环消除、
   `Compound`/`Program` 剪枝也在这里。折叠不追求覆盖每个运算符——`is`、`dict` 的运算、`str` 的 `%`
   格式化等依赖运行时对象同一性/协议判等的场景故意不折，交给以后的执行器。

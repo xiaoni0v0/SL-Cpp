@@ -9,13 +9,23 @@ class SemanticChecker : public AstConstVisitor {
     const std::string file_path_;
 
     struct Context {
-        int local_scope_depth{0};   // 是否身处 func 体或 class 体的局部作用域内
         int loop_depth{0};          // for、while 共用
         int finally_loop_depth{-1}; // 身处 finally 体时的外层 loop_depth（-1 表示不在 finally 内）
+        bool in_local_scope{false}; // 是否身处 func 体或 class 体的局部作用域内
         bool in_program{false};     // 外层有没有 Program
         bool can_star{false};
         bool can_double_star{false};
     } ctx_;
+
+    // 构造时快照 ctx_，析构时物归原样
+    struct [[nodiscard]] ContextGuard {
+        SemanticChecker &checker_;
+        Context saved_;
+        explicit ContextGuard(SemanticChecker &checker) : checker_{checker}, saved_{checker.ctx_} {}
+        ~ContextGuard() { checker_.ctx_ = saved_; }
+        ContextGuard(const ContextGuard &) = delete;
+        ContextGuard &operator=(const ContextGuard &) = delete;
+    };
 
     // 报错：SyntaxError
     [[noreturn]] void error(const std::string &msg, Position pos) const;
