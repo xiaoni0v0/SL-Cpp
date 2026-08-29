@@ -788,19 +788,19 @@ AstNodePtr Parser::parse_for() {
     }};
 
     std::vector<AstNodePtr> slots;
-    AstNodePtr target; // 迭代目标，头部里写了 as 才有
+    AstNodePtr target;
 
-    // 头部按槽切分。紧贴 '(' 的换行不分隔任何东西，所以 for () 直接就是 0 个槽
+    // 头部按槽切分
     skip_newline();
     for (bool has_next_slot{!check(TokenType::SIGN_RPAREN)}; has_next_slot;) {
-        // 槽本身。空槽（`for (;;)` 那种）留 nullptr；第 2 个槽是步进模式的 cond，禁止裸的 '='
+        // 槽本身
         slots.push_back(
             at_slot_boundary()  ? nullptr
             : slots.size() == 1 ? parse_expr_as_cond()
                                 : parse_expr()
         );
 
-        // 迭代模式的 as target（写不写都行；不写就是每轮的值直接丢弃）
+        // 迭代模式的 as target
         if (check(TokenType::KW_AS)) {
             expect(TokenType::KW_AS); // 消耗 'as'
             skip_newline();           // as 之后必有目标，换行并入下一行
@@ -810,9 +810,9 @@ AstNodePtr Parser::parse_for() {
         // 槽读完了，当前位置必须是个边界
         if (!at_slot_boundary()) error("expected ';' or newline between for header slots");
 
-        // 两种分隔符的收尾方式不同，这是头部切分规则的关键：
-        // ';' 显式划出一个槽，它后面一定还有一个槽（可能是空的）；
-        // 换行只是软分隔，后面紧跟 ')' 就说明它是收尾的换行，不再多切一个空槽出来
+        // 两种分隔符的收尾方式不同：
+        // - ';' 显式划出一个槽，它后面一定还有一个槽（可能是空的）；
+        // - 换行只是软分隔，后面紧跟 ')' 就说明它是收尾的换行，不再多切一个空槽出来
         skip_newline();
         if (check(TokenType::SIGN_SEMICOLON)) {
             expect(TokenType::SIGN_SEMICOLON); // 消耗 ';'
