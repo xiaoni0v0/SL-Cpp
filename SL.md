@@ -32,6 +32,7 @@ SL 是一种面向对象的编程语言。特点是：
 - `None`, `True`, `False`
 - `_G`, `_L`
 - `not`, `and`, `or`, `is`, `in`
+- `as`
 - `del`
 - `global`
 - `if`, `elif`, `else`
@@ -41,6 +42,7 @@ SL 是一种面向对象的编程语言。特点是：
 - `try`, `except`, `finally`
 - `class`
 - `import`
+- `eval`
 
 以下列出的是 SL 的**保留字**，目前不是关键字，不能作为标识符使用，对应 token 出现在代码中将无条件引发 `SyntaxError`：
 
@@ -50,7 +52,6 @@ SL 是一种面向对象的编程语言。特点是：
 - `with`
 - `async`, `await`
 - `define`
-- `as`
 - `const`
 - `static`
 - `local`
@@ -285,22 +286,22 @@ if (cond1) expr1 ⟦elif (cond2) expr2 ...⟧ ⟦else expr3⟧
 语法：
 
 1. 步进模式：`for ⟦collect⟧ (init; cond; inc) expr`
-2. 迭代模式：`for ⟦collect⟧ (lvalue in iterable) expr`
+2. 迭代模式：`for ⟦collect⟧ (iterable ⟦as lvalue⟧) expr`
 
-括号里的内容一律按**槽**切分：`;` 分隔一个槽，换行也分隔一个槽（按 2.2.1 的规则——换行处左侧
-若已能构成完整表达式就分隔，否则并入下一行继续解析）；紧跟 `(` 之后与紧挨 `)` 之前的换行不分隔
-任何东西。槽可以为空，但空槽必须由 `;` 划出来，光靠换行不够。
+括号里的内容一律按槽切分：`;` 分隔一个槽，换行也分隔一个槽
+（按 2.2.1 的规则，换行处左侧若已能构成完整表达式就分隔，否则并入下一行继续解析）；
+槽可以为空，但空槽必须由 `;` 划出来。
 
 切出来的槽数只能是 3 或 1，否则抛出 `SyntaxError`：
 
 - 3 个槽即步进模式，依次是 `init`、`cond`、`inc`；
-- 1 个槽即迭代模式，且这个槽必须是一个以 `in` 为根的表达式（2.1.5），
-  其左操作数即 `lvalue`、右操作数即 `iterable`；否则抛出 `SyntaxError`。
+- 1 个槽即迭代模式，槽的内容就是 `iterable`。
 
 其中：
 
 1. `init`, `cond`, `inc` 为表达式或为空；
-2. `lvalue` 为左值（定义见 2.1.5，可以是解构形式），`iterable` 为表达式；
+2. `iterable` 为表达式；`lvalue` 为左值（定义见 2.1.5，可以是解构形式），
+   不写 `as` 则每轮迭代出来的值直接丢弃；
 3. `expr` 为表达式；
 4. `collect` 为**收集模式记号**，只能是 `$`、`$ *`、`$$`、`$$ **` 四者之一，其余组合抛出 `SyntaxError`；
    不带 `collect` 为计数模式，带则为收集模式。
@@ -349,13 +350,13 @@ if (cond1) expr1 ⟦elif (cond2) expr2 ...⟧ ⟦else expr3⟧
 语法：
 
 ```
-try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
+try expr1 ⟦except (Exception1, ... ⟦as lvalue⟧) expr2 ...⟧ ⟦finally expr3⟧
 ```
 
 `except` 子句可以有 0 个或多个，每个 `except` 内 `Exception` 有 1 个或多个；`finally` 可选；
 但 `except` 和 `finally` 不能同时省略。
 
-其中 `expr1`、`expr2`、`expr3`、`Exception` 均为表达式。
+其中 `expr1`、`expr2`、`expr3`、`Exception` 均为表达式；`lvalue` 为左值（定义见 2.1.5）。
 
 ##### 2.2.6.8 `raise` 表达式
 
@@ -445,6 +446,14 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 - `decorator` 部分按运算符正常优先级贪心解析，因此 `@d(args) target` 中装饰器是 `d(args)` 整体（带参装饰器）；
 - `expr` 是整串 `@` 之后的一整条表达式，装饰器结合得比一切运算符都松，如 `@d x = y` 即 `d((x = y))`；
 - `@` 可以连用：`@d1 @d2 expr` 即 `d1(d2(expr))`，值与求值顺序见 3.4.9。
+
+#### 2.2.10 `eval` 表达式
+
+`eval` 是表达式。
+
+语法：`eval(code)`，其中 `code` 为表达式，括号不可省略。
+
+其语义见 3.4.10。
 
 ## 3 语义
 
@@ -722,11 +731,12 @@ try expr1 ⟦except (Exception1, ...) expr2 ...⟧ ⟦finally expr3⟧
 1. 步进模式 `for ⟦collect⟧ (init cond inc) expr`：
    若 `init`、`inc` 为空，对其求值实为跳过；若 `cond` 为空，对其求值实为返回 `True`。
    先对 `init` 求值并丢弃，然后不断重复：对 `cond` 求值，真值成立则按上述方式处理 `expr`，再对 `inc` 求值并丢弃；否则跳出循环。
-2. 迭代模式 `for ⟦collect⟧ (lvalue in iterable) expr`：
+2. 迭代模式 `for ⟦collect⟧ (iterable ⟦as lvalue⟧) expr`：
    要求 `iterable` 满足可迭代协议（`protocols.Iterable`，见 4.3.2.4），否则抛出 `TypeError`。
    不断从 `iterable` 取出一个元素，按 3.3 对赋值运算符规定的规则
    （简单赋值/属性赋值/元素赋值/解构赋值之一，视 `lvalue` 具体形状而定）
    赋给 `lvalue`，然后按上述方式处理 `expr`，直到迭代结束。
+   不写 `as` 时不做这次赋值，取出的元素直接丢弃，其余不变。
 
 `expr` 中可含有 `break` 和 `continue`，其行为以及对 `for` 的值的影响见下文。
 
@@ -804,23 +814,15 @@ for $$ ** (d in [{1: 2}, {3: 4}]) d # {1: 2, 3: 4}
 `expr3` 里不允许出现试图跳出这段求值范围的 `return`/`break`/`continue`，违者抛出 `SyntaxError`；
 完整落在 `expr3` 内部的循环、`expr3` 内定义的函数不受影响。
 
-异常对象的绑定（`__except__`）：
-
-当异常匹配某个 `except`，在对其 `expr2` 求值前，完成以下：
-
-1. 若当前作用域已存在 `__except__`，先将其原值临时保存（被 shadow）；
-2. 将被捕获的异常对象赋给 `__except__`；
-3. 在 `expr2` 求值结束、退出该 `except` 子句时（进入 `finally` 之前），恢复 `__except__`：
-    - 若进入前已存在，则恢复为其原值；
-    - 若进入前不存在，则解除该变量（相当于 `del __except__`）。
-
-因此，在 `except` 子句内写 `raise __except__` 即可重新抛出当前异常。
+异常对象的绑定：
+当异常匹配某个带 `as lvalue` 的 `except`，在对其 `expr2` 求值前，把被捕获的异常对象按 3.3 对赋值运算符规定的规则赋给 `lvalue`。
+不写 `as` 则不绑定任何东西。
 
 ##### 3.4.6.8 `raise` 表达式的值
 
 `raise expr`，表示在当前位置抛出异常。`expr` 需要是 `BaseException`（或其子类）的对象，否则抛出 `TypeError`。
 
-若要重新抛出当前正在处理的异常，请在 `except` 子句内使用 `raise __except__`。
+若要重新抛出当前正在处理的异常，请用 `except` 子句的 `as` 把它绑定下来再抛，如 `except (E as e) { raise e }`。
 
 由于对 `raise` 求值会抛出异常并中止当前求值，一切试图利用 `raise` 的值的表达式都得不到求值，因此其值毫无意义。
 但为了统一，规定其值为 `None`。
@@ -994,6 +996,18 @@ class MyClass {
     not_method = @staticmethod outer # 等价于 not_method = staticmethod(outer)
 }
 ```
+
+#### 3.4.10 `eval` 表达式的值
+
+先对 `code` 求值，要求其为 `str`，否则抛出 `TypeError`。
+
+随后在求值这一刻按 2.2.1 的规则解析它，且必须恰好解析出一个表达式，否则抛出 `SyntaxError`。
+多条表达式需用复合表达式包裹（如 `eval('{ a; b }')`）。
+
+`eval` 是内联语义：`eval(code)` 的值等价于把整个 `eval` 表达式原位替换为 `code` 解析出的那条表达式之后的值。
+`code` 在 `eval` 所在的那一帧里求值，因此其中的赋值、`del`、`global` 都实际作用于该帧。
+
+`eval` 与 `eval_isolated`（4.1.13）的分工：前者共享所在帧的作用域，后者另起一份独立的文件和全局帧。
 
 ### 3.5 调用
 
@@ -1292,7 +1306,7 @@ SL 只有 2 种**作用域**：
 - **回收**：帧对象本身占用的内存被释放，是垃圾回收层面的事，只要还有引用指向这个帧对象就不会发生，跟这个帧是死是活无关。
 
 多数情况下弹出即死亡、两者同时发生，函数调用、类体执行结束弹出时，会立刻解除对自己那份局部字典的引用（该字段置为 `None`）。
-但全局帧（不管是当前脚本的，还是 `import` 导入的模块、`eval_isolated` 临时构造出的那种，见 3.4.5/4.1.14）
+但全局帧（不管是当前脚本的，还是 `import` 导入的模块、`eval_isolated` 临时构造出的那种，见 3.4.5/4.1.13）
 弹出之后不会死亡，局部字典（也就是这份文件自己的 `_G`）会一直保留、继续存在，不区分是不是被缓存。
 
 注意不死亡和不被回收是两回事：一个不死亡的帧，只要没有任何东西再引用它，仍会被当作普通垃圾回收。
@@ -1533,22 +1547,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 返回 `None`。
 
-#### 4.1.13 `eval(code)`
-
-`code` 为 `str`，在调用这一刻按 2.2.1 的规则解析，且必须**恰好解析出一个表达式**，否则抛出 `SyntaxError`（见 3.11）。
-多条表达式需用复合表达式包裹（如 `eval('{ a; b }')`）。
-
-`eval` 是内联语义，`eval('code')` 等价于把整个调用原位替换为 `code`。
-
-解析、检查 `code` 时，它的静态外层环境是空的，既不在任何 Program 内，也不在任何循环内，故：
-
-- `return` 要求有“离它最近的 Program”（3.4.6.6）——没有，故 `SyntaxError`；
-- `break`、`continue` 要求处在 `for`/`while` 的 `expr` 部分（3.4.6.4、3.4.6.5）——没有，故 `SyntaxError`；
-- `raise`、`global`、`import`、赋值、`del`、`try` 等不要求任何外层构造，照常可用。
-
-`eval` 与 `eval_isolated`（4.1.14）的分工：前者共享调用处的作用域，后者另起一份独立的文件和全局帧。
-
-#### 4.1.14 `eval_isolated(code, globals=None)`
+#### 4.1.13 `eval_isolated(code, globals=None)`
 
 `code` 为 `str`，在调用这一刻按 2.2.1 的规则解析为若干条表达式，构成一个全新的、独立的文件。
 解析失败则抛出 `SyntaxError`（见 3.11），可在调用处正常捕获。
@@ -1566,7 +1565,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 `code` 里对全局变量的读写都实际发生在这个 `dict` 上，调用结束后调用处仍持有同一个对象，能看到 `code` 造成的全部改动。
 不传时新建一个空 `dict` 作为 `_G`，调用结束后即弃用。
 
-#### 4.1.15 `exit(code=0)`
+#### 4.1.14 `exit(code=0)`
 
 抛出 `SystemExit(code)`（见 4.2.26）。该异常未被捕获、一路传播到解释器顶层时，解释器终止，退出码为 `code`。
 
