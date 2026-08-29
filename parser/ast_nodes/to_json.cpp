@@ -202,15 +202,15 @@ json AstNodeForIter::to_json_impl(const bool include_pos) const {
             {"type", "ForIter"},
             {"pos", pos_to_json(pos_)},
             {"collect", collect_to_json(collect_)},
-            {"target", target_->to_json(include_pos)},
             {"iterable", iterable_->to_json(include_pos)},
+            {"target", target_ ? target_->to_json(include_pos) : json(nullptr)},
             {"body", body_->to_json(include_pos)}
         };
     return json{
         {"type", "ForIter"},
         {"collect", collect_to_json(collect_)},
-        {"target", target_->to_json(include_pos)},
         {"iterable", iterable_->to_json(include_pos)},
+        {"target", target_ ? target_->to_json(include_pos) : json(nullptr)},
         {"body", body_->to_json(include_pos)}
     };
 }
@@ -243,7 +243,9 @@ json AstNodeTry::to_json_impl(const bool include_pos) const {
         auto exceptions = json::array();
         for (const auto &exc : clause.exceptions_) exceptions.push_back(exc->to_json(include_pos));
         except_clauses.push_back(
-            {{"exceptions", std::move(exceptions)}, {"body", clause.body_->to_json(include_pos)}}
+            {{"exceptions", std::move(exceptions)},
+             {"target", clause.target_ ? clause.target_->to_json(include_pos) : json(nullptr)},
+             {"body", clause.body_->to_json(include_pos)}}
         );
     }
 
@@ -284,6 +286,14 @@ json AstNodeDecorator::to_json_impl(const bool include_pos) const {
         {"decorator", decorator_->to_json(include_pos)},
         {"target", target_->to_json(include_pos)}
     };
+}
+
+json AstNodeEval::to_json_impl(const bool include_pos) const {
+    if (include_pos)
+        return json{
+            {"type", "Eval"}, {"pos", pos_to_json(pos_)}, {"code", code_->to_json(include_pos)}
+        };
+    return json{{"type", "Eval"}, {"code", code_->to_json(include_pos)}};
 }
 
 json AstNodeFunc::to_json_impl(const bool include_pos) const {

@@ -131,6 +131,8 @@ class Parser {
     );
     // import（关键字形态出 AstNodeImportKw，调用形态出 AstNodeImportCall）
     [[nodiscard]] AstNodePtr parse_import();
+    // eval(code)
+    [[nodiscard]] AstNodePtr parse_eval();
     // 分组 (expr) 或者元组 (expr1, expr2)
     [[nodiscard]] AstNodePtr parse_paren_or_tuple();
     // 列表 [expr1, expr2]

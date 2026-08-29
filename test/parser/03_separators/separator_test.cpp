@@ -156,6 +156,7 @@ TEST_SUITE("表达式分隔符——其他续行场景（try/except/finally 同 
                        {"except_clauses",
                         nlohmann::json::array(
                             {{{"exceptions", nlohmann::json::array({ident("E")})},
+                              {"target", nullptr},
                               {"body", ident("b")}}}
                         )},
                        {"finally_expr", nullptr}}}

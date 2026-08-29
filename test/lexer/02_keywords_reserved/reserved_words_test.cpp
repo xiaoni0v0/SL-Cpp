@@ -11,7 +11,6 @@ TEST_SUITE("保留字") {
         "这几个之前分词器漏掉/没跟上改名的）"
     ) {
         CHECK_THROWS_AS(lex(U"define"), SyntaxError);
-        CHECK_THROWS_AS(lex(U"as"), SyntaxError);
         CHECK_THROWS_AS(lex(U"yield"), SyntaxError);
         CHECK_THROWS_AS(lex(U"async"), SyntaxError);
         CHECK_THROWS_AS(lex(U"await"), SyntaxError);
@@ -25,6 +24,10 @@ TEST_SUITE("保留字") {
     }
 
     TEST_CASE("in 不再是保留字，已经升级成关键字") { CHECK(lex_dump(U"in") == "KW_IN"); }
+
+    TEST_CASE("as 不再是保留字，已经升级成关键字（for 的迭代目标、except 的绑定目标都用它）") {
+        CHECK(lex_dump(U"as") == "KW_AS");
+    }
 
     TEST_CASE("match 不再是保留字（match/case 改名成 when/case 之后），现在是普通标识符") {
         CHECK(lex_dump(U"match") == "IDENTIFIER(match)");

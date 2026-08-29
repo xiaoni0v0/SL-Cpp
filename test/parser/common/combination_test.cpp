@@ -29,7 +29,7 @@ TEST_SUITE("跨分组组合——装饰器/类/函数/for/try/字典展开/is �
             U"    @cached\n"
             U"    func process[state](self, items, **opts) {\n"
             U"        result = {}\n"
-            U"        for $ (item in items)\n"
+            U"        for $ (items as item)\n"
             U"            try result[item.key] = {**opts, 'value': item.value, 'flag': item.kind "
             U"is 'ok'}\n"
             U"            except (ValueError, KeyError) raise Exception('propagate')\n"

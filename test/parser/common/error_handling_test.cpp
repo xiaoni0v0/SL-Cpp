@@ -101,8 +101,8 @@ TEST_SUITE("Parser 的 SyntaxError 行为") {
         CHECK_THROWS_AS(parse_as_file(U"{k: v, x}"), SyntaxError);    // 字典展开项判定错误
         CHECK_THROWS_AS(parse_as_file(U"if (x = 1) y"), SyntaxError); // cond 槽裸赋值
         CHECK_THROWS_AS(
-            parse_as_file(U"for (x > 0) body"), SyntaxError
-        );                                                          // for-cond-only 不受语法支持
+            parse_as_file(U"for (a; b) body"), SyntaxError
+        );                                                          // for 头部槽数只能是 3 或 1
         CHECK_THROWS_AS(parse_as_file(U"global 5"), SyntaxError);   // global 后面不是标识符
         CHECK_THROWS_AS(parse_as_file(U"raise"), SyntaxError);      // raise 缺表达式
         CHECK_THROWS_AS(parse_as_file(U"a b"), SyntaxError);        // 缺表达式分隔符

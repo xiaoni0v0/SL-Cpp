@@ -345,6 +345,8 @@ add_executable(SL_Cpp_Parser_Tests
         test/parser/10_class/class_test.cpp
         # 装饰器
         test/parser/11_decorator/decorator_test.cpp
+        # eval
+        test/parser/12_eval/eval_test.cpp
         # 跨分组：位置追踪、报错
         test/parser/common/position_tracking_test.cpp
         test/parser/common/error_handling_test.cpp

@@ -563,6 +563,8 @@ AstNodePtr Parser::parse_non_op() {
         return parse_global();
     case KW_IMPORT:
         return parse_import();
+    case KW_EVAL:
+        return parse_eval();
 
     // 控制流
     case KW_IF:
@@ -777,7 +779,11 @@ AstNodePtr Parser::parse_for() {
                check(TokenType::SIGN_RPAREN);
     }};
 
-    // 工具：解析 for 头部（不含两侧括号），按规则切成若干槽
+    // 迭代目标
+    AstNodePtr target;
+    Position target_pos{};
+
+    // 工具：解析 for 头部（不含两侧括号），按规则切成若干槽，顺带接住那个可选的 as
     auto parse_for_slots{[&]() -> std::vector<AstNodePtr> {
         std::vector<AstNodePtr> slots;
 
@@ -790,6 +796,16 @@ AstNodePtr Parser::parse_for() {
                 : slots.size() == 1 ? parse_expr_as_cond()
                                     : parse_expr()
             );
+
+            // 迭代模式的 as target（写不写都行；不写就是每轮的值直接丢弃）
+            // 用 while 而不是 if：目标解析完又碰到 as，是 `xs as a as b` 这种重复，要报得准
+            while (check(TokenType::KW_AS)) {
+                if (target) error("duplicate 'as' in for header");
+                target_pos = {peek().row, peek().col};
+                expect(TokenType::KW_AS); // 消耗 'as'
+                skip_newline();           // as 之后必有目标，换行并入下一行
+                target = parse_expr();
+            }
 
             // 槽读完了，当前位置必须是个边界
             if (!at_slot_boundary()) {
@@ -819,21 +835,18 @@ AstNodePtr Parser::parse_for() {
     skip_newline();
     AstNodePtr body{parse_expr()};
 
-    // 一个槽即迭代模式：这个槽必须是一棵以 in 为根的树
+    // as 只属于迭代模式，步进模式的三个槽里出现就是写错了
+    if (target && slots.size() != 1)
+        error("'as' is only allowed in `for (iterable as target)`", target_pos);
+
+    // 一个槽即迭代模式
     if (slots.size() == 1) {
-        if (const auto in_node{dynamic_cast<AstNodeOpBinary *>(slots[0].get())};
-            in_node && in_node->op_ == AstNodeOpBinary::OpType::In) {
-            return std::make_unique<AstNodeForIter>(
-                start_pos,
-                collect,
-                std::move(in_node->left_),
-                std::move(in_node->right_),
-                std::move(body)
-            );
-        }
+        return std::make_unique<AstNodeForIter>(
+            start_pos, collect, std::move(slots[0]), std::move(target), std::move(body)
+        );
     }
 
-    // 三个槽即步进模式：步进模式
+    // 三个槽即步进模式
     if (slots.size() == 3) {
         return std::make_unique<AstNodeForCond>(
             start_pos,
@@ -845,7 +858,7 @@ AstNodePtr Parser::parse_for() {
         );
     }
 
-    error("for header must be (init; cond; inc) or (target in iterable)", start_pos_header);
+    error("for header must be (init; cond; inc) or (iterable [as target])", start_pos_header);
 }
 
 AstNodePtr Parser::parse_while() {
@@ -886,7 +899,7 @@ AstNodePtr Parser::parse_try() {
     skip_newline();
     AstNodePtr try_expr{parse_expr()};
 
-    // 解析一个 except 子句的异常列表和主体：except (Exc1, Exc2, ...) body
+    // 解析一个 except 子句的异常列表、可选绑定目标和主体：except (Exc1, Exc2, ... [as target]) body
     auto parse_excs_and_body{[&]() -> AstNodeTry::AstNodeExceptAndExpr {
         skip_newline();
         expect_open(Bracket::Paren);
@@ -896,10 +909,18 @@ AstNodePtr Parser::parse_try() {
         finish_comma_batch(TokenType::SIGN_RPAREN, [&] { excs.push_back(parse_expr()); });
         if (excs.empty()) error("except requires at least one exception type");
 
+        // as target
+        AstNodePtr target;
+        if (check(TokenType::KW_AS)) {
+            expect(TokenType::KW_AS); // 消耗 'as'
+            skip_paren_newline();
+            target = parse_expr();
+        }
+
         expect_close(Bracket::Paren);
         skip_newline();
         AstNodePtr body{parse_expr()};
-        return {std::move(excs), std::move(body)};
+        return {std::move(excs), std::move(target), std::move(body)};
     }};
 
     std::vector<AstNodeTry::AstNodeExceptAndExpr> except_clauses;
@@ -1056,6 +1077,20 @@ AstNodePtr Parser::parse_import() {
     }
 
     return std::make_unique<AstNodeImportKw>(start_pos, std::move(segments));
+}
+
+AstNodePtr Parser::parse_eval() {
+    const Position start_pos{peek().row, peek().col};
+    expect(TokenType::KW_EVAL); // 消耗 'eval'
+
+    // 括号强制
+    skip_newline();
+    expect_open(Bracket::Paren);
+    skip_paren_newline();
+    AstNodePtr code{parse_expr()};
+    expect_close(Bracket::Paren);
+
+    return std::make_unique<AstNodeEval>(start_pos, std::move(code));
 }
 
 AstNodePtr Parser::parse_paren_or_tuple() {

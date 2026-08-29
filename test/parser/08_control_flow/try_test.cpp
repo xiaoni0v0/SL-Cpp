@@ -22,7 +22,9 @@ TEST_SUITE("try") {
                 {"try_expr", ident("a")},
                 {"except_clauses",
                  nlohmann::json::array(
-                     {{{"exceptions", nlohmann::json::array({ident("E")})}, {"body", ident("b")}}}
+                     {{{"exceptions", nlohmann::json::array({ident("E")})},
+                       {"target", nullptr},
+                       {"body", ident("b")}}}
                  )},
                 {"finally_expr", nullptr}
             }
@@ -39,6 +41,7 @@ TEST_SUITE("try") {
                  nlohmann::json::array(
                      {{{"exceptions",
                         nlohmann::json::array({ident("E1"), ident("E2"), ident("E3")})},
+                       {"target", nullptr},
                        {"body", ident("b")}}}
                  )},
                 {"finally_expr", nullptr}
@@ -54,8 +57,12 @@ TEST_SUITE("try") {
                 {"try_expr", ident("a")},
                 {"except_clauses",
                  nlohmann::json::array(
-                     {{{"exceptions", nlohmann::json::array({ident("E1")})}, {"body", ident("b")}},
-                      {{"exceptions", nlohmann::json::array({ident("E2")})}, {"body", ident("c")}}}
+                     {{{"exceptions", nlohmann::json::array({ident("E1")})},
+                       {"target", nullptr},
+                       {"body", ident("b")}},
+                      {{"exceptions", nlohmann::json::array({ident("E2")})},
+                       {"target", nullptr},
+                       {"body", ident("c")}}}
                  )},
                 {"finally_expr", ident("d")}
             }
@@ -100,5 +107,87 @@ TEST_SUITE("try") {
     TEST_CASE("未闭合括号/缺 body 报错") {
         CHECK_THROWS_AS(parse_as_file(U"try a except (E"), SyntaxError);
         CHECK_THROWS_AS(parse_as_file(U"try a except (E)"), SyntaxError);
+    }
+}
+
+TEST_SUITE("try——except 的 as 绑定") {
+
+    // as 在括号里，不在括号外：')' 仍然是"头部到此为止"的可靠信号，body 从哪开始永远确定。
+    // 放到括号外的话，`except (E) as a [1, 2]` 里的 `a [1, 2]` 会被贪心吃成索引左值，
+    // 跟"目标是 a、body 是列表 [1, 2]"这个意图撞车。
+
+    TEST_CASE("单个异常类型 + as") {
+        CHECK(
+            parse_json(U"try a except (E as e) b") ==
+            nlohmann::json{
+                {"type", "Try"},
+                {"try_expr", ident("a")},
+                {"except_clauses",
+                 nlohmann::json::array(
+                     {{{"exceptions", nlohmann::json::array({ident("E")})},
+                       {"target", ident("e")},
+                       {"body", ident("b")}}}
+                 )},
+                {"finally_expr", nullptr}
+            }
+        );
+    }
+
+    TEST_CASE("多个异常类型时 as 绑定的是整个子句，不是最后那个类型") {
+        CHECK(
+            parse_json(U"try a except (E1, E2 as e) b") ==
+            nlohmann::json{
+                {"type", "Try"},
+                {"try_expr", ident("a")},
+                {"except_clauses",
+                 nlohmann::json::array(
+                     {{{"exceptions", nlohmann::json::array({ident("E1"), ident("E2")})},
+                       {"target", ident("e")},
+                       {"body", ident("b")}}}
+                 )},
+                {"finally_expr", nullptr}
+            }
+        );
+    }
+
+    TEST_CASE("as 可选：不写就是不关心异常对象，target 为空") {
+        const auto result = parse_json(U"try a except (E) b");
+        CHECK(result["except_clauses"][0]["target"] == nullptr);
+    }
+
+    TEST_CASE("每个 except 子句各自独立决定写不写 as") {
+        const auto result = parse_json(U"try a except (E1 as e) b except (E2) c");
+        CHECK(result["except_clauses"][0]["target"] == ident("e"));
+        CHECK(result["except_clauses"][1]["target"] == nullptr);
+    }
+
+    TEST_CASE("目标是表达式，语法层放行任意形状（左值校验交语义层），解构也能写") {
+        CHECK(
+            parse_json(U"try a except (E as x.y) b")["except_clauses"][0]["target"]["type"] ==
+            "Attr"
+        );
+        CHECK(
+            parse_json(U"try a except (E as x[0]) b")["except_clauses"][0]["target"]["type"] ==
+            "Index"
+        );
+        CHECK(
+            parse_json(U"try a except (E as (p, q)) b")["except_clauses"][0]["target"]["type"] ==
+            "LiteralTuple"
+        );
+    }
+
+    TEST_CASE("as 之后可以换行（括号内换行照常当空白）") {
+        CHECK(parse_json(U"try a except (E as\ne) b")["except_clauses"][0]["target"] == ident("e"));
+    }
+
+    TEST_CASE("as 之后缺目标、as 写在括号外都报错") {
+        CHECK_THROWS_AS(parse_as_file(U"try a except (E as) b"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"try a except (E) as e b"), SyntaxError);
+    }
+
+    TEST_CASE("body 以 '[' 开头也不会跟目标粘在一起——as 在括号内，')' 已经把头部封死") {
+        const auto result = parse_json(U"try a except (E as e) [1, 2]");
+        CHECK(result["except_clauses"][0]["target"] == ident("e"));
+        CHECK(result["except_clauses"][0]["body"]["type"] == "LiteralList");
     }
 }

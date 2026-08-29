@@ -11,6 +11,8 @@ X(AstNodeRaise)
 
 X(AstNodeDecorator)
 
+X(AstNodeEval)
+
 X(AstNodeFunc)
 
 X(AstNodeImportKw)

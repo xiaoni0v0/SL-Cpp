@@ -93,8 +93,8 @@ void SemanticChecker::visit(const AstNodeForIter &node) {
     ctx_.can_star = false;
     ctx_.can_double_star = false;
 
-    require_not_null(node.target_, pos), check_lvalue(*node.target_);
     check_not_null(node.iterable_, pos);
+    if (node.target_) check_lvalue(*node.target_);
     ctx_.loop_depth++;
     require_not_null(node.body_, node.pos_), check(*node.body_);
 }
@@ -142,6 +142,7 @@ void SemanticChecker::visit(const AstNodeTry &node) {
     for (const auto &clause : node.except_clauses_) {
         require_min_size(clause.exceptions_, 1, pos);
         for (const auto &exc : clause.exceptions_) check_not_null(exc, pos);
+        if (clause.target_) check_lvalue(*clause.target_);
         check_not_null(clause.body_, pos);
     }
 
@@ -252,6 +253,14 @@ void SemanticChecker::visit(const AstNodeImportCall &node) {
         ctx_.can_double_star = kw.kind_ == OneKwArg::Kind::DoubleStar;
         check_not_null(kw.value_, pos);
     }
+}
+
+void SemanticChecker::visit(const AstNodeEval &node) {
+    const ContextGuard guard{*this};
+    ctx_.can_star = false;
+    ctx_.can_double_star = false;
+
+    check_not_null(node.code_, node.pos_);
 }
 
 void SemanticChecker::visit(const AstNodeLiteralNone &) {}

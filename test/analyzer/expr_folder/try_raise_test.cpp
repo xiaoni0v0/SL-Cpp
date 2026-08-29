@@ -18,6 +18,7 @@ TEST_SUITE("ExprFolder try/raise 子表达式折叠") {
                  nlohmann::json::array({nlohmann::json{
                      {"exceptions",
                       nlohmann::json::array({{{"type", "Identifier"}, {"identifier", "E"}}})},
+                     {"target", nullptr},
                      {"body", {{"type", "Identifier"}, {"identifier", "b"}}}
                  }})},
                 {"finally_expr", nullptr}

@@ -80,6 +80,8 @@ void ExprFolder::visit(AstNodeFunc &node) {
     visit(*node.body_);
 }
 
+void ExprFolder::visit(AstNodeEval &node) { visit_and_replace(node.code_); }
+
 void ExprFolder::visit(AstNodeLiteralNone &) {}
 
 void ExprFolder::visit(AstNodeLiteralBool &) {}

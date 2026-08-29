@@ -14,10 +14,12 @@
 `global identifier` 属于前者：`identifier` 就是紧跟着的一个标识符 token，没有任何歧义，直接
 `expect(IDENTIFIER)` 最省事也最明确——语义层不需要再费一次 `dynamic_cast` 去确认这是不是标识符。
 
-`for` 迭代模式的 `lvalue`（`for (lvalue in iterable) ...`）属于后者：当前 token 只是槽位开头，得
-读到 `:`/`;`/`)` 才能判断这一段到底是迭代模式的 `lvalue` 还是步进模式的 `init`，没法提前收紧。
-`del target` 语法上允许标识符或属性访问/索引等多种形状，也是"语法先按表达式解析、语义层限定形状"
-的合理场景（`check_lvalue`/`check_lvalue_pure` 承担这一步）。
+`for` 迭代模式和 `except` 的绑定目标（`for (iterable as lvalue)`、`except (E as lvalue)`）属于
+后者：目标允许标识符/属性访问/索引/解构元组或列表等多种形状，产生式不单一，只能按表达式解析、
+再由语义层 `check_lvalue` 判形状。`del target` 同理（`check_lvalue_pure` 承担这一步）。
+
+反过来，`as` 这个**记号本身**属于前者：它不是运算符，只在这两处出现，当前 token 就足够判断，
+所以 Parser 直接 `check(KW_AS)` + `expect(KW_AS)`，不需要先建个节点再回头重新解释它。
 
 ## how to apply
 

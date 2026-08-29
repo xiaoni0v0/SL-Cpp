@@ -255,7 +255,7 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
         "Parser 已经保证，这里是防御性断言）"
     ) {
         std::vector<AstNodeTry::AstNodeExceptAndExpr> except_clauses;
-        except_clauses.emplace_back(std::vector<AstNodePtr>{}, int_lit());
+        except_clauses.emplace_back(std::vector<AstNodePtr>{}, nullptr, int_lit());
         AstNodeProgramPtr program{wrap(
             std::make_unique<AstNodeTry>(
                 Position{0, 0}, int_lit(), std::move(except_clauses), nullptr
@@ -283,8 +283,8 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
             std::make_unique<AstNodeForIter>(
                 Position{0, 0},
                 CollectMark{CollectMark::Container::None, true},
-                std::make_unique<AstNodeIdentifier>(Position{0, 0}, U"i"),
                 std::make_unique<AstNodeIdentifier>(Position{0, 0}, U"xs"),
+                std::make_unique<AstNodeIdentifier>(Position{0, 0}, U"i"),
                 int_lit()
             )
         )};

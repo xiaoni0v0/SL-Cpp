@@ -501,6 +501,7 @@ std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
     case TokenType::KW_OR:                   return "'or'";
     case TokenType::KW_IS:                   return "'is'";
     case TokenType::KW_IN:                   return "'in'";
+    case TokenType::KW_AS:                   return "'as'";
     case TokenType::KW_DEL:                  return "'del'";
     case TokenType::KW_GLOBAL:               return "'global'";
     case TokenType::KW_IF:                   return "'if'";
@@ -517,6 +518,8 @@ std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
     case TokenType::KW_EXCEPT:               return "'except'";
     case TokenType::KW_FINALLY:              return "'finally'";
     case TokenType::KW_CLASS:                return "'class'";
+    case TokenType::KW_IMPORT:               return "'import'";
+    case TokenType::KW_EVAL:                 return "'eval'";
 
     case TokenType::RW_ASSERT:               return "'assert'";
     case TokenType::RW_WHEN:                 return "'when'";
@@ -526,7 +529,6 @@ std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
     case TokenType::RW_ASYNC:                return "'async'";
     case TokenType::RW_AWAIT:                return "'await'";
     case TokenType::RW_DEFINE:               return "'define'";
-    case TokenType::RW_AS:                   return "'as'";
     case TokenType::RW_CONST:                return "'const'";
     case TokenType::RW_STATIC:               return "'static'";
     case TokenType::RW_LOCAL:                return "'local'";

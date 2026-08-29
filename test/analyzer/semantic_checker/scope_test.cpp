@@ -14,15 +14,15 @@ TEST_SUITE("SemanticChecker 作用域跟踪") {
         CHECK_NOTHROW(check_program(U"while (True) break"));
         CHECK_NOTHROW(check_program(U"while (True) continue"));
         CHECK_NOTHROW(check_program(U"for (i = 0; i < 10; i += 1) break"));
-        CHECK_NOTHROW(check_program(U"for $ (x in y) continue"));
+        CHECK_NOTHROW(check_program(U"for $ (y as x) continue"));
     }
 
     TEST_CASE("四种收集模式记号都不影响任何语义检查——每轮的值合不合规是运行期的事") {
         for (const std::u32string mark : {U"", U"$", U"$ *", U"$$", U"$$ **"}) {
-            CHECK_NOTHROW(check_program(U"for " + mark + U" (i in xs) break"));
+            CHECK_NOTHROW(check_program(U"for " + mark + U" (xs as i) break"));
             CHECK_NOTHROW(check_program(U"while " + mark + U" (True) continue"));
             // 每轮的值是什么形状一律不管，$$ 也不要求写成二元组
-            CHECK_NOTHROW(check_program(U"for " + mark + U" (i in xs) i"));
+            CHECK_NOTHROW(check_program(U"for " + mark + U" (xs as i) i"));
         }
     }
 
@@ -194,8 +194,8 @@ TEST_SUITE("SemanticChecker try-finally") {
 
     TEST_CASE("for-iter 形式的循环跟 for-cond 形式一样受 finally 边界规则约束") {
         check_throws_with(
-            U"for (x in xs) { try a finally break }", "break inside finally is not allowed"
+            U"for (xs as x) { try a finally break }", "break inside finally is not allowed"
         );
-        CHECK_NOTHROW(check_program(U"try a finally { for (x in xs) { break } }"));
+        CHECK_NOTHROW(check_program(U"try a finally { for (xs as x) { break } }"));
     }
 }

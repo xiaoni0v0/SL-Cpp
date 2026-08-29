@@ -47,7 +47,7 @@ TEST_SUITE("SemanticChecker 单表达式入口") {
     }
 
     TEST_CASE("code 里自己写的循环提供外层环境，其中的 break/continue 合法") {
-        CHECK_NOTHROW(check_single_expr(U"for (i in xs) { break }"));
+        CHECK_NOTHROW(check_single_expr(U"for (xs as i) { break }"));
         CHECK_NOTHROW(check_single_expr(U"while (c) { continue }"));
         CHECK_NOTHROW(check_single_expr(U"for (i = 0; i < 3; i += 1) { break }"));
     }

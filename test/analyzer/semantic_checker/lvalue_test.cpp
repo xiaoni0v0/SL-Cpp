@@ -80,21 +80,53 @@ TEST_SUITE("SemanticChecker 左值检查") {
 TEST_SUITE("SemanticChecker for 迭代目标左值检查") {
 
     TEST_CASE("标识符/索引/属性访问都是合法的迭代目标") {
-        CHECK_NOTHROW(check_program(U"for (x in xs) body"));
-        CHECK_NOTHROW(check_program(U"for (a[0] in xs) body"));
-        CHECK_NOTHROW(check_program(U"for (a.b in xs) body"));
+        CHECK_NOTHROW(check_program(U"for (xs as x) body"));
+        CHECK_NOTHROW(check_program(U"for (xs as a[0]) body"));
+        CHECK_NOTHROW(check_program(U"for (xs as a.b) body"));
     }
 
     TEST_CASE("元组/列表解构是合法的迭代目标") {
-        CHECK_NOTHROW(check_program(U"for ((a, b) in xs) body"));
-        CHECK_NOTHROW(check_program(U"for ([a, *b] in xs) body"));
+        CHECK_NOTHROW(check_program(U"for (xs as (a, b)) body"));
+        CHECK_NOTHROW(check_program(U"for (xs as [a, *b]) body"));
     }
 
     TEST_CASE("字面量不是合法的迭代目标") {
-        check_throws_with(U"for (1 in xs) body", "lvalue expected before assignment");
+        check_throws_with(U"for (xs as 1) body", "lvalue expected before assignment");
     }
 
     TEST_CASE("调用表达式不是合法的迭代目标") {
-        check_throws_with(U"for (f() in xs) body", "lvalue expected before assignment");
+        check_throws_with(U"for (xs as f()) body", "lvalue expected before assignment");
+    }
+
+    TEST_CASE("不写 as 就没有目标可查，任何可迭代表达式都放行") {
+        CHECK_NOTHROW(check_program(U"for (xs) body"));
+        CHECK_NOTHROW(check_program(U"for (f()) body"));
+        CHECK_NOTHROW(check_program(U"for (1) body")); // 能不能真迭代是运行期的事
+    }
+
+    TEST_CASE("iterable 自身的子表达式照常参与检查") {
+        check_throws_with(U"for (break) body", "break outside loop");
+        check_throws_with(U"for (break as x) body", "break outside loop");
+    }
+}
+
+TEST_SUITE("SemanticChecker except 绑定目标左值检查") {
+
+    TEST_CASE("跟 for 的迭代目标同一套规则：标识符/索引/属性/解构都合法") {
+        CHECK_NOTHROW(check_program(U"try a except (E as e) b"));
+        CHECK_NOTHROW(check_program(U"try a except (E as x[0]) b"));
+        CHECK_NOTHROW(check_program(U"try a except (E as x.y) b"));
+        CHECK_NOTHROW(check_program(U"try a except (E as (p, q)) b"));
+    }
+
+    TEST_CASE("非左值的绑定目标报错") {
+        check_throws_with(U"try a except (E as 1) b", "lvalue expected before assignment");
+        check_throws_with(U"try a except (E as f()) b", "lvalue expected before assignment");
+    }
+
+    TEST_CASE("不写 as 就没有目标可查") { CHECK_NOTHROW(check_program(U"try a except (E) b")); }
+
+    TEST_CASE("绑定目标内部的子表达式仍然要完整 check()") {
+        check_throws_with(U"try a except (E as x[break]) b", "break outside loop");
     }
 }

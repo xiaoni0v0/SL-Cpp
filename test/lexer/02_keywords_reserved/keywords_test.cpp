@@ -19,6 +19,7 @@ TEST_SUITE("关键字") {
         CHECK(lex_dump(U"or") == "KW_OR");
         CHECK(lex_dump(U"is") == "KW_IS");
         CHECK(lex_dump(U"in") == "KW_IN");
+        CHECK(lex_dump(U"as") == "KW_AS");
         CHECK(lex_dump(U"del") == "KW_DEL");
         CHECK(lex_dump(U"global") == "KW_GLOBAL");
         CHECK(lex_dump(U"if") == "KW_IF");
@@ -36,6 +37,7 @@ TEST_SUITE("关键字") {
         CHECK(lex_dump(U"finally") == "KW_FINALLY");
         CHECK(lex_dump(U"class") == "KW_CLASS");
         CHECK(lex_dump(U"import") == "KW_IMPORT");
+        CHECK(lex_dump(U"eval") == "KW_EVAL");
     }
 
     TEST_CASE("关键字区分大小写：大小写变体一律是普通标识符") {
@@ -56,6 +58,8 @@ TEST_SUITE("关键字") {
         CHECK(lex_dump(U"whiley") == "IDENTIFIER(whiley)");
         CHECK(lex_dump(U"important") == "IDENTIFIER(important)");
         CHECK(lex_dump(U"importer") == "IDENTIFIER(importer)");
+        CHECK(lex_dump(U"asx") == "IDENTIFIER(asx)");
+        CHECK(lex_dump(U"evaluate") == "IDENTIFIER(evaluate)");
         CHECK(lex_dump(U"_G2") == "IDENTIFIER(_G2)");
         CHECK(lex_dump(U"_Lx") == "IDENTIFIER(_Lx)");
         CHECK(lex_dump(U"__G") == "IDENTIFIER(__G)");

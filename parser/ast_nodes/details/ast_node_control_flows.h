@@ -62,20 +62,19 @@ struct AstNodeForCond : AstNode {
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
-// for [collect] (target : iterable) body（迭代模式）
-// target 必须是左值（标识符/属性访问/元素访问/解构元组或列表），由语义层校验（复用 check_lvalue）
+// for [collect] (iterable [as target]) body
 struct AstNodeForIter : AstNode {
     CollectMark collect_;
-    AstNodePtr target_;
     AstNodePtr iterable_;
+    AstNodePtr target_; // nullptr 表示没有 as
     AstNodePtr body_;
 
     explicit AstNodeForIter(
-        const Position pos, const CollectMark collect, AstNodePtr target, AstNodePtr iterable,
+        const Position pos, const CollectMark collect, AstNodePtr iterable, AstNodePtr target,
         AstNodePtr body
     )
-        : AstNode{pos}, collect_{collect}, target_{std::move(target)},
-          iterable_{std::move(iterable)}, body_{std::move(body)} {}
+        : AstNode{pos}, collect_{collect}, iterable_{std::move(iterable)},
+          target_{std::move(target)}, body_{std::move(body)} {}
 
     SL_AST_NODE_ACCEPT
 
@@ -114,15 +113,17 @@ struct AstNodeReturn : AstNode {
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
-// try expr [except (Exception, ...) expr]* [finally expr]
+// try expr [except (Exception, ... [as target]) expr]* [finally expr]
 struct AstNodeTry : AstNode {
     // except 子句，作为 AstNodeTry 的组成部分
     struct AstNodeExceptAndExpr {
         std::vector<AstNodePtr> exceptions_;
+        AstNodePtr target_; // nullptr 表示没有 as
         AstNodePtr body_;
 
-        AstNodeExceptAndExpr(std::vector<AstNodePtr> exception, AstNodePtr body)
-            : exceptions_{std::move(exception)}, body_{std::move(body)} {}
+        AstNodeExceptAndExpr(std::vector<AstNodePtr> exception, AstNodePtr target, AstNodePtr body)
+            : exceptions_{std::move(exception)}, target_{std::move(target)},
+              body_{std::move(body)} {}
     };
 
     AstNodePtr try_expr_;
