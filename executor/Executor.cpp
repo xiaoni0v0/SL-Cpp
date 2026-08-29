@@ -12,14 +12,18 @@
 #include <iostream>
 #include <string>
 
-static std::string path_abspath(const std::string &path) {
+namespace {
+std::string path_abspath(const std::string &path) {
     std::error_code ec;
     return std::filesystem::absolute(path, ec).string();
 }
+} // namespace
 
 Executor::Executor(const std::string &s) : file_path{path_abspath(s)} {}
 
 int Executor::run() const {
+    const auto t0 = std::chrono::steady_clock::now();
+
     // 输入文件不存在
     if (!std::filesystem::exists(file_path)) {
         std::cerr << "Source code file \"" << file_path << "\" does not exist." << std::endl;
@@ -79,6 +83,10 @@ int Executor::run() const {
         std::cerr << "分析器崩溃了: 未知错误" << std::endl;
         return 1;
     }
+
+    std::cout << "耗时: "
+              << std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count()
+              << " 秒" << std::endl;
 
     return 0;
 }
