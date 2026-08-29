@@ -468,13 +468,15 @@ TEST_SUITE("for——头部的槽数只能是 3 或 1") {
         }
     }
 
-    TEST_CASE("一个头部里最多一个 as") {
+    TEST_CASE("一个头部里最多一个 as：第二个 as 撞在槽边界检查上，不需要单独一条规则") {
         try {
             parse_as_file(U"for (xs as a as b) body");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
-            CHECK(msg.find("duplicate 'as'") != std::string::npos);
+            CHECK(
+                msg.find("expected ';' or newline between for header slots") != std::string::npos
+            );
         }
     }
 

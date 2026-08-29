@@ -773,55 +773,6 @@ AstNodePtr Parser::parse_if() {
 }
 
 AstNodePtr Parser::parse_for() {
-    // 工具：一个槽在 ';'、换行、')' 前结束；当前位置直接就是它们，说明这个槽是空的
-    const auto at_slot_boundary{[&]() -> bool {
-        return check(TokenType::SIGN_SEMICOLON) || check(TokenType::NEWLINE) ||
-               check(TokenType::SIGN_RPAREN);
-    }};
-
-    // 迭代目标
-    AstNodePtr target;
-    Position target_pos{};
-
-    // 工具：解析 for 头部（不含两侧括号），按规则切成若干槽，顺带接住那个可选的 as
-    auto parse_for_slots{[&]() -> std::vector<AstNodePtr> {
-        std::vector<AstNodePtr> slots;
-
-        skip_newline();
-        if (check(TokenType::SIGN_RPAREN)) return slots; // 空：for ()
-
-        while (true) {
-            slots.push_back(
-                at_slot_boundary()  ? nullptr
-                : slots.size() == 1 ? parse_expr_as_cond()
-                                    : parse_expr()
-            );
-
-            // 迭代模式的 as target（写不写都行；不写就是每轮的值直接丢弃）
-            // 用 while 而不是 if：目标解析完又碰到 as，是 `xs as a as b` 这种重复，要报得准
-            while (check(TokenType::KW_AS)) {
-                if (target) error("duplicate 'as' in for header");
-                target_pos = {peek().row, peek().col};
-                expect(TokenType::KW_AS); // 消耗 'as'
-                skip_newline();           // as 之后必有目标，换行并入下一行
-                target = parse_expr();
-            }
-
-            // 槽读完了，当前位置必须是个边界
-            if (!at_slot_boundary()) {
-                error("expected ';' or newline between for header slots");
-            }
-
-            skip_newline();
-            if (check(TokenType::SIGN_SEMICOLON)) {
-                expect(TokenType::SIGN_SEMICOLON); // 消耗 ';'
-                skip_newline();
-                continue;
-            }
-            if (check(TokenType::SIGN_RPAREN)) return slots;
-        }
-    }};
-
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_FOR); // 消耗 'for'
     skip_newline();
@@ -829,7 +780,48 @@ AstNodePtr Parser::parse_for() {
 
     expect_open(Bracket::ForHeader);
     const Position start_pos_header{peek().row, peek().col};
-    std::vector slots{parse_for_slots()};
+
+    // 工具：一个槽在 ';'、换行、')' 前结束；当前位置直接就是它们，说明这个槽是空的
+    const auto at_slot_boundary{[&]() -> bool {
+        return check(TokenType::SIGN_SEMICOLON) || check(TokenType::NEWLINE) ||
+               check(TokenType::SIGN_RPAREN);
+    }};
+
+    std::vector<AstNodePtr> slots;
+    AstNodePtr target; // 迭代目标，头部里写了 as 才有
+
+    // 头部按槽切分。紧贴 '(' 的换行不分隔任何东西，所以 for () 直接就是 0 个槽
+    skip_newline();
+    for (bool has_next_slot{!check(TokenType::SIGN_RPAREN)}; has_next_slot;) {
+        // 槽本身。空槽（`for (;;)` 那种）留 nullptr；第 2 个槽是步进模式的 cond，禁止裸的 '='
+        slots.push_back(
+            at_slot_boundary()  ? nullptr
+            : slots.size() == 1 ? parse_expr_as_cond()
+                                : parse_expr()
+        );
+
+        // 迭代模式的 as target（写不写都行；不写就是每轮的值直接丢弃）
+        if (check(TokenType::KW_AS)) {
+            expect(TokenType::KW_AS); // 消耗 'as'
+            skip_newline();           // as 之后必有目标，换行并入下一行
+            target = parse_expr();
+        }
+
+        // 槽读完了，当前位置必须是个边界
+        if (!at_slot_boundary()) error("expected ';' or newline between for header slots");
+
+        // 两种分隔符的收尾方式不同，这是头部切分规则的关键：
+        // ';' 显式划出一个槽，它后面一定还有一个槽（可能是空的）；
+        // 换行只是软分隔，后面紧跟 ')' 就说明它是收尾的换行，不再多切一个空槽出来
+        skip_newline();
+        if (check(TokenType::SIGN_SEMICOLON)) {
+            expect(TokenType::SIGN_SEMICOLON); // 消耗 ';'
+            skip_newline();
+            has_next_slot = true;
+        } else {
+            has_next_slot = !check(TokenType::SIGN_RPAREN);
+        }
+    }
     expect_close(Bracket::ForHeader);
 
     skip_newline();
@@ -837,7 +829,7 @@ AstNodePtr Parser::parse_for() {
 
     // as 只属于迭代模式，步进模式的三个槽里出现就是写错了
     if (target && slots.size() != 1)
-        error("'as' is only allowed in `for (iterable as target)`", target_pos);
+        error("'as' is only allowed in `for (iterable as target)`", start_pos_header);
 
     // 一个槽即迭代模式
     if (slots.size() == 1) {
