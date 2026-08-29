@@ -428,7 +428,6 @@ void SemanticChecker::visit(const AstNodeCall &node) {
 
     // 位置组：位置传参、*expr
     ctx_.can_star = true;
-    ctx_.can_double_star = false;
     for (const auto &arg : node.positional_args_) check_not_null(arg, pos);
 
     // 关键字组：关键字实参、**expr
