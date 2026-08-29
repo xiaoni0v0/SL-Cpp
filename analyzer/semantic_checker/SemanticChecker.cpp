@@ -524,22 +524,12 @@ void SemanticChecker::check_lvalue_items(const std::vector<AstNodePtr> &items, c
     for (const auto &item : items) {
         require_not_null(item, pos);
         if (const auto *star{dynamic_cast<const AstNodeStar *>(item.get())}) {
-            // 解构时至多一个左值可以带 * 前缀
+            // 解构时每一层至多一个左值可以带 * 前缀（收集剩余元素）；* 后面本身仍是一个左值，可嵌套
             if (has_seen_star)
                 error("at most one starred lvalue allowed in destructuring", star->pos_);
             has_seen_star = true;
             require_not_null(star->operand_, pos);
-            // 星号操作数必须是纯左值，不能再是嵌套的 tuple/list 解构
-            const AstNode &operand{*star->operand_};
-            if (!dynamic_cast<const AstNodeIdentifier *>(&operand) &&
-                !dynamic_cast<const AstNodeIndex *>(&operand) &&
-                !dynamic_cast<const AstNodeAttr *>(&operand))
-                error(
-                    "identifier, attribute access, or index expression expected after * in "
-                    "destructuring",
-                    operand.pos_
-                );
-            check(operand);
+            check_lvalue(*star->operand_);
         } else {
             check_lvalue(*item);
         }

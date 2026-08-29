@@ -32,22 +32,22 @@ TEST_SUITE("SemanticChecker 左值检查") {
         check_throws_with(U"[*a, *b] = x", "at most one starred lvalue allowed in destructuring");
     }
 
-    TEST_CASE(
-        "* 后面必须是纯左值（标识符/索引/属性），不能再是嵌套的 tuple/list 解构（SL.md：\n"
-        "“其中至多一个纯左值可以带 * 前缀”，措辞明确是纯左值，跟外层元素允许嵌套左值不是一回事）"
-    ) {
-        check_throws_with(
-            U"(a, *(b, c)) = x",
-            "identifier, attribute access, or index expression expected after * in destructuring"
-        );
-        check_throws_with(
-            U"(a, *[b, c]) = x",
-            "identifier, attribute access, or index expression expected after * in destructuring"
-        );
-        // * 后面是纯左值（标识符/索引/属性）都合法
+    TEST_CASE("* 后面本身仍是一个左值，可以是嵌套的 tuple/list 解构（SL.md：解构“可嵌套”）") {
+        CHECK_NOTHROW(check_program(U"(a, *(b, c)) = x"));
+        CHECK_NOTHROW(check_program(U"(a, *[b, c]) = x"));
+        // * 后面是纯左值（标识符/索引/属性）也都合法
         CHECK_NOTHROW(check_program(U"(a, *b) = x"));
         CHECK_NOTHROW(check_program(U"(a, *b[0]) = x"));
         CHECK_NOTHROW(check_program(U"(a, *b.c) = x"));
+        // * 后面不是左值（比如字面量）仍然非法，走的是 check_lvalue 通用的报错
+        check_throws_with(U"(a, *(1, 2)) = x", "lvalue expected before assignment");
+    }
+
+    TEST_CASE("“每一层至多一个 *”按层独立算，嵌套解构内部可以各自再带一个 *") {
+        CHECK_NOTHROW(check_program(U"[a, *[b, *c]] = x"));
+        check_throws_with(
+            U"[*[*a, *b]] = x", "at most one starred lvalue allowed in destructuring"
+        );
     }
 
     TEST_CASE("复合赋值只允许简单左值（标识符/索引/属性），不允许解构") {
