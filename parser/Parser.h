@@ -107,7 +107,7 @@ class Parser {
 
     // 类
     [[nodiscard]] AstNodePtr parse_class(
-        std::vector<AstNodePtr> decorators = {}, std::vector<Position> decorator_positions = {},
+        std::vector<AstNodePtr> decorators = {}, std::vector<Position> positions_decorator = {},
         Position deco_pos = {}
     );
     // if-elif-else
@@ -126,7 +126,7 @@ class Parser {
     [[nodiscard]] AstNodePtr parse_decorator();
     // 函数
     [[nodiscard]] AstNodePtr parse_func(
-        std::vector<AstNodePtr> decorators = {}, std::vector<Position> decorator_positions = {},
+        std::vector<AstNodePtr> decorators = {}, std::vector<Position> positions_decorator = {},
         Position deco_pos = {}
     );
     // import（关键字形态出 AstNodeImportKw，调用形态出 AstNodeImportCall）

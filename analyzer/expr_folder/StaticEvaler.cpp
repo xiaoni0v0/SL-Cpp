@@ -226,16 +226,16 @@ AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
     // 前 i 环都是字面量且确定为 True 但接下来的一环没法判定：部分折叠
     std::vector<AstNodeCompare::OpType> ops;
     std::vector<AstNodePtr> operands;
-    std::vector<Position> op_positions;
+    std::vector<Position> positions_op;
     for (size_t j{i}; j < node.operands_.size(); ++j)
         operands.push_back(std::move(node.operands_[j]));
     for (size_t j{i}; j < node.ops_.size(); ++j) {
         ops.push_back(node.ops_[j]);
-        op_positions.push_back(node.op_positions_[j]);
+        positions_op.push_back(node.positions_op_[j]);
     }
     const Position new_pos{operands.front()->pos_}; // 新链自己的起始位置 = 剩下的第一个操作数
     return std::make_unique<AstNodeCompare>(
-        new_pos, std::move(ops), std::move(operands), std::move(op_positions)
+        new_pos, std::move(ops), std::move(operands), std::move(positions_op)
     );
 }
 

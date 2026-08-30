@@ -88,7 +88,7 @@ TEST_SUITE("SemanticChecker doc 槽位") {
 }
 
 // 装饰器之前完全没有语义检查层面的正面用例覆盖，只有 defensive_test.cpp
-// 里针对畸形 AST（decorators_/decorator_positions_ 数量对不上）的防御性断言。
+// 里针对畸形 AST（decorators_/positions_decorator_ 数量对不上）的防御性断言。
 TEST_SUITE("SemanticChecker 装饰器") {
 
     TEST_CASE("紧邻 func/class 的装饰器合法，含多个、含调用形式") {

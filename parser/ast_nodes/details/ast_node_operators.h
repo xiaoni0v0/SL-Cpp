@@ -52,12 +52,12 @@ struct AstNodeOpUnary : AstNode {
 
     OpType op_;
     AstNodePtr operand_;
-    Position op_pos_; // 运算符自己的位置
+    Position pos_op_; // 运算符自己的位置
 
     explicit AstNodeOpUnary(
-        const Position pos, const OpType op, AstNodePtr operand, const Position op_pos
+        const Position pos, const OpType op, AstNodePtr operand, const Position pos_op
     )
-        : AstNode{pos}, op_{op}, operand_{std::move(operand)}, op_pos_{op_pos} {}
+        : AstNode{pos}, op_{op}, operand_{std::move(operand)}, pos_op_{pos_op} {}
 
     SL_AST_NODE_ACCEPT
 
@@ -93,13 +93,13 @@ struct AstNodeOpBinary : AstNode {
 
     OpType op_;
     AstNodePtr left_, right_;
-    Position op_pos_; // 运算符自己的位置
+    Position pos_op_; // 运算符自己的位置
 
     explicit AstNodeOpBinary(
         const Position pos, const OpType op, AstNodePtr left, AstNodePtr right,
-        const Position op_pos
+        const Position pos_op
     )
-        : AstNode{pos}, op_{op}, left_{std::move(left)}, right_{std::move(right)}, op_pos_{op_pos} {
+        : AstNode{pos}, op_{op}, left_{std::move(left)}, right_{std::move(right)}, pos_op_{pos_op} {
     }
 
     SL_AST_NODE_ACCEPT
@@ -116,14 +116,14 @@ struct AstNodeCompare : AstNode {
     std::vector<OpType> ops_;
     std::vector<AstNodePtr> operands_;
     // 链中每个运算符自己的位置，跟 ops_ 一一对应
-    std::vector<Position> op_positions_;
+    std::vector<Position> positions_op_;
 
     explicit AstNodeCompare(
         const Position pos, std::vector<OpType> ops, std::vector<AstNodePtr> operands,
-        std::vector<Position> op_positions
+        std::vector<Position> positions_op
     )
         : AstNode{pos}, ops_{std::move(ops)}, operands_{std::move(operands)},
-          op_positions_{std::move(op_positions)} {}
+          positions_op_{std::move(positions_op)} {}
 
     SL_AST_NODE_ACCEPT
 
@@ -135,13 +135,13 @@ struct AstNodeCompare : AstNode {
 struct AstNodeIs : AstNode {
     // operands_.size() >= 2
     std::vector<AstNodePtr> operands_;
-    // 链中每个 'is' 自己的位置，op_positions_.size() == operands_.size() - 1
-    std::vector<Position> op_positions_;
+    // 链中每个 'is' 自己的位置，positions_op_.size() == operands_.size() - 1
+    std::vector<Position> positions_op_;
 
     explicit AstNodeIs(
-        const Position pos, std::vector<AstNodePtr> operands, std::vector<Position> op_positions
+        const Position pos, std::vector<AstNodePtr> operands, std::vector<Position> positions_op
     )
-        : AstNode{pos}, operands_{std::move(operands)}, op_positions_{std::move(op_positions)} {}
+        : AstNode{pos}, operands_{std::move(operands)}, positions_op_{std::move(positions_op)} {}
 
     SL_AST_NODE_ACCEPT
 
@@ -170,14 +170,14 @@ struct AstNodeCompoundAssign : AstNode {
     AstNodePtr value_;
     // op= 这个运算符自己的位置（不同于 pos_，后者是整个赋值表达式的起始位置，即 target_
     // 的起始位置）
-    Position op_pos_;
+    Position pos_op_;
 
     explicit AstNodeCompoundAssign(
         const Position pos, AstNodePtr target, const AstNodeOpBinary::OpType op, AstNodePtr value,
-        const Position op_pos
+        const Position pos_op
     )
         : AstNode{pos}, target_{std::move(target)}, op_{op}, value_{std::move(value)},
-          op_pos_{op_pos} {}
+          pos_op_{pos_op} {}
 
     SL_AST_NODE_ACCEPT
 

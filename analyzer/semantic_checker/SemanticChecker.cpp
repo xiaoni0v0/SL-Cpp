@@ -31,7 +31,7 @@ void SemanticChecker::visit(const AstNodeClass &node) {
     ctx_.can_double_star = false;
 
     for (const auto &deco : node.decorators_) check_not_null(deco, pos);
-    require_same_size(node.decorators_, node.decorator_positions_, pos);
+    require_same_size(node.decorators_, node.positions_decorator_, pos);
     if (node.name_) require_not_empty(*node.name_, pos);
     for (const auto &base : node.bases_) check_not_null(base, pos);
 
@@ -179,7 +179,7 @@ void SemanticChecker::visit(const AstNodeFunc &node) {
     ctx_.can_double_star = false;
 
     for (const auto &deco : node.decorators_) check_not_null(deco, pos);
-    require_same_size(node.decorators_, node.decorator_positions_, pos);
+    require_same_size(node.decorators_, node.positions_decorator_, pos);
     if (node.name_) require_not_empty(*node.name_, pos);
 
     std::unordered_set<std::u32string> names;
@@ -369,7 +369,7 @@ void SemanticChecker::visit(const AstNodeCompare &node) {
     if (node.operands_.size() != node.ops_.size() + 1)
         error_internal("operands/ops count mismatch", pos);
     require_min_size(node.operands_, 2, pos);
-    require_same_size(node.ops_, node.op_positions_, pos);
+    require_same_size(node.ops_, node.positions_op_, pos);
     for (const auto &operand : node.operands_) check_not_null(operand, pos);
 }
 
@@ -381,7 +381,7 @@ void SemanticChecker::visit(const AstNodeIs &node) {
     ctx_.can_double_star = false;
 
     require_min_size(node.operands_, 2, node.pos_);
-    if (node.operands_.size() != node.op_positions_.size() + 1)
+    if (node.operands_.size() != node.positions_op_.size() + 1)
         error_internal("operands/op positions count mismatch", pos);
     for (const auto &operand : node.operands_) check_not_null(operand, pos);
 }

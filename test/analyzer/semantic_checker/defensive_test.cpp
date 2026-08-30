@@ -37,10 +37,10 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
         operands.push_back(int_lit());
         operands.push_back(int_lit());
         operands.push_back(int_lit()); // 3 个 operand 却只有 1 个 op，应该是 2 个
-        std::vector<Position> op_positions{Position{0, 0}};
+        std::vector<Position> positions_op{Position{0, 0}};
         AstNodeProgramPtr program{wrap(
             std::make_unique<AstNodeCompare>(
-                Position{0, 0}, std::move(ops), std::move(operands), std::move(op_positions)
+                Position{0, 0}, std::move(ops), std::move(operands), std::move(positions_op)
             )
         )};
         check_throws_internal_error_with(*program, "operands/ops count mismatch");
@@ -50,10 +50,10 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
         std::vector<AstNodeCompare::OpType> ops;
         std::vector<AstNodePtr> operands;
         operands.push_back(int_lit());
-        std::vector<Position> op_positions;
+        std::vector<Position> positions_op;
         AstNodeProgramPtr program{wrap(
             std::make_unique<AstNodeCompare>(
-                Position{0, 0}, std::move(ops), std::move(operands), std::move(op_positions)
+                Position{0, 0}, std::move(ops), std::move(operands), std::move(positions_op)
             )
         )};
         check_throws_internal_error_with(*program, "too few elements");
@@ -62,10 +62,10 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
     TEST_CASE("AstNodeIs：operands_ 少于 2 个") {
         std::vector<AstNodePtr> operands;
         operands.push_back(int_lit());
-        std::vector<Position> op_positions;
+        std::vector<Position> positions_op;
         AstNodeProgramPtr program{wrap(
             std::make_unique<AstNodeIs>(
-                Position{0, 0}, std::move(operands), std::move(op_positions)
+                Position{0, 0}, std::move(operands), std::move(positions_op)
             )
         )};
         check_throws_internal_error_with(*program, "too few elements");
@@ -160,7 +160,7 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
         check_throws_internal_error_with(*class_program, "unexpected empty name");
     }
 
-    TEST_CASE("AstNodeFunc/AstNodeClass：decorators_ 和 decorator_positions_ 数量对不上") {
+    TEST_CASE("AstNodeFunc/AstNodeClass：decorators_ 和 positions_decorator_ 数量对不上") {
         std::vector<AstNodePtr> decorators;
         decorators.push_back(int_lit());
         AstNodeProgramPtr func_program{wrap(

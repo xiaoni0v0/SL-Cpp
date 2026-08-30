@@ -36,7 +36,7 @@ struct AstNodeFunc : AstNode {
     };
 
     std::vector<AstNodePtr> decorators_;        // 可空
-    std::vector<Position> decorator_positions_; // 每个装饰器自己的 '@' 位置
+    std::vector<Position> positions_decorator_; // 每个装饰器自己的 '@' 位置
     std::optional<std::u32string> name_;        // nullopt 表示匿名函数
     std::vector<OneCapture> captures_;          // 可空
     AllParams params_;
@@ -46,12 +46,12 @@ struct AstNodeFunc : AstNode {
 
     explicit AstNodeFunc(
         const Position pos, std::vector<AstNodePtr> decorators,
-        std::vector<Position> decorator_positions, std::optional<std::u32string> name,
+        std::vector<Position> positions_decorator, std::optional<std::u32string> name,
         std::vector<OneCapture> captures, AllParams params, AstNodePtr return_type, AstNodePtr doc,
         AstNodeProgramPtr body
     )
         : AstNode{pos}, decorators_{std::move(decorators)},
-          decorator_positions_{std::move(decorator_positions)}, name_{std::move(name)},
+          positions_decorator_{std::move(positions_decorator)}, name_{std::move(name)},
           captures_{std::move(captures)}, params_{std::move(params)},
           return_type_{std::move(return_type)}, doc_{std::move(doc)}, body_{std::move(body)} {}
 

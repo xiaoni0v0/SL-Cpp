@@ -31,5 +31,5 @@ struct OneKwArg {
 struct CallArgs {
     std::vector<AstNodePtr> positional_args_; // 位置组：位置实参、*expr 展开，按书写顺序
     std::vector<OneKwArg> keyword_args_;      // 关键字组：关键字实参、**expr 展开，按书写顺序
-    Position paren_pos_;                      // '(' 自己的位置
+    Position pos_paren_;                      // '(' 自己的位置
 };

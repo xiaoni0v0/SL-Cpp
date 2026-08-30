@@ -345,7 +345,7 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         }
 
         const Token &op_token{advance()}; // 消耗运算符
-        const Position op_pos{op_token.row, op_token.col};
+        const Position pos_op{op_token.row, op_token.col};
 
         // 赋值（右结合，rbp = lbp - 1 = 9）
         if (op == TokenType::SIGN_ASSIGN) {
@@ -359,14 +359,14 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         if (const auto compound_op{assign_compound_to_binary(op)}) {
             skip_newline();
             return std::make_unique<AstNodeCompoundAssign>(
-                start_pos, std::move(left), *compound_op, parse_expr_pratt(rbp), op_pos
+                start_pos, std::move(left), *compound_op, parse_expr_pratt(rbp), pos_op
             );
         }
 
         // 后缀 x?  x!
         if (op == TokenType::SIGN_QUESTION || op == TokenType::SIGN_EXCLAIM) {
             left = std::make_unique<AstNodeOpUnary>(
-                start_pos, *token_type_to_unary_op_type(op), std::move(left), op_pos
+                start_pos, *token_type_to_unary_op_type(op), std::move(left), pos_op
             );
             continue;
         }
@@ -378,20 +378,20 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
                 start_pos,
                 std::move(left),
                 expect(TokenType::IDENTIFIER).lexeme,
-                op_pos // 消耗标识符
+                pos_op // 消耗标识符
             );
             continue;
         }
 
         // 比较运算（链式，== != < <= > >= 一组）
         if (const auto compare_op{token_type_to_compare_op_type(op)}) {
-            left = parse_chain_compare(std::move(left), start_pos, *compare_op, op_pos);
+            left = parse_chain_compare(std::move(left), start_pos, *compare_op, pos_op);
             continue;
         }
 
         // is（链式，自成一组）
         if (op == TokenType::KW_IS) {
-            left = parse_chain_is(std::move(left), start_pos, op_pos);
+            left = parse_chain_is(std::move(left), start_pos, pos_op);
             continue;
         }
 
@@ -402,7 +402,7 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
             *token_type_to_binary_op_type(op),
             std::move(left),
             parse_expr_pratt(rbp),
-            op_pos
+            pos_op
         );
     }
 
@@ -417,11 +417,11 @@ AstNodePtr Parser::parse_chain_compare(
 
     std::vector<AstNodePtr> operands;
     std::vector<AstNodeCompare::OpType> ops;
-    std::vector<Position> op_positions;
+    std::vector<Position> positions_op;
 
     operands.push_back(std::move(left));
     ops.push_back(first_op);
-    op_positions.push_back(first_op_pos);
+    positions_op.push_back(first_op_pos);
 
     skip_newline();
     operands.push_back(parse_expr_pratt(operand_min_bp));
@@ -434,13 +434,13 @@ AstNodePtr Parser::parse_chain_compare(
         const Position next_op_pos{peek().row, peek().col};
         advance(); // 消耗 '<' 或 '<=' 或 '>' 或 '>=' 或 '==' 或 '!='
         ops.push_back(*next_op);
-        op_positions.push_back(next_op_pos);
+        positions_op.push_back(next_op_pos);
         skip_newline();
         operands.push_back(parse_expr_pratt(operand_min_bp));
     }
 
     return std::make_unique<AstNodeCompare>(
-        start_pos, std::move(ops), std::move(operands), std::move(op_positions)
+        start_pos, std::move(ops), std::move(operands), std::move(positions_op)
     );
 }
 
@@ -449,9 +449,9 @@ Parser::parse_chain_is(AstNodePtr left, const Position start_pos, const Position
     constexpr int operand_min_bp{51}; // (is 优先级 50) + 1，防止同组递归吞并
 
     std::vector<AstNodePtr> operands;
-    std::vector<Position> op_positions;
+    std::vector<Position> positions_op;
     operands.push_back(std::move(left));
-    op_positions.push_back(first_is_pos);
+    positions_op.push_back(first_is_pos);
 
     skip_newline();
     operands.push_back(parse_expr_pratt(operand_min_bp));
@@ -460,13 +460,13 @@ Parser::parse_chain_is(AstNodePtr left, const Position start_pos, const Position
         skip_paren_newline();
         if (!check(TokenType::KW_IS)) break;
 
-        op_positions.emplace_back(peek().row, peek().col);
+        positions_op.emplace_back(peek().row, peek().col);
         expect(TokenType::KW_IS); // 消耗 'is'
         skip_newline();
         operands.push_back(parse_expr_pratt(operand_min_bp));
     }
 
-    return std::make_unique<AstNodeIs>(start_pos, std::move(operands), std::move(op_positions));
+    return std::make_unique<AstNodeIs>(start_pos, std::move(operands), std::move(positions_op));
 }
 
 AstNodePtr Parser::parse_non_op() {
@@ -675,7 +675,7 @@ CollectMark Parser::parse_collect_mark() {
 }
 
 AstNodePtr Parser::parse_class(
-    std::vector<AstNodePtr> decorators, std::vector<Position> decorator_positions,
+    std::vector<AstNodePtr> decorators, std::vector<Position> positions_decorator,
     const Position deco_pos
 ) {
     const Position start_pos{decorators.empty() ? Position{peek().row, peek().col} : deco_pos};
@@ -725,7 +725,7 @@ AstNodePtr Parser::parse_class(
     return std::make_unique<AstNodeClass>(
         start_pos,
         std::move(decorators),
-        std::move(decorator_positions),
+        std::move(positions_decorator),
         std::move(name),
         std::move(bases),
         std::move(captures),
@@ -949,7 +949,7 @@ AstNodePtr Parser::parse_raise() {
 AstNodePtr Parser::parse_decorator() {
     // 先把连续的前缀 @decorator 全部收集起来（不预先假设后面接的是 func/class 还是任意表达式），
     std::vector<AstNodePtr> decorators;
-    std::vector<Position> decorator_positions;
+    std::vector<Position> positions_decorator;
 
     while (check(TokenType::SIGN_AT)) {
         const Position deco_pos{peek().row, peek().col};
@@ -959,28 +959,28 @@ AstNodePtr Parser::parse_decorator() {
         AstNodePtr decorator{parse_expr()};
         skip_newline();
         decorators.push_back(std::move(decorator));
-        decorator_positions.push_back(deco_pos);
+        positions_decorator.push_back(deco_pos);
     }
 
     // 紧邻 func/class
     if (check(TokenType::KW_FUNC) || check(TokenType::KW_CLASS)) {
-        const Position deco_pos{decorator_positions.front()};
+        const Position deco_pos{positions_decorator.front()};
         return check(TokenType::KW_FUNC)
-                   ? parse_func(std::move(decorators), std::move(decorator_positions), deco_pos)
-                   : parse_class(std::move(decorators), std::move(decorator_positions), deco_pos);
+                   ? parse_func(std::move(decorators), std::move(positions_decorator), deco_pos)
+                   : parse_class(std::move(decorators), std::move(positions_decorator), deco_pos);
     }
 
     // 通用形式：@d1 @d2 ... expr ≡ d1(d2(...(expr)))
     AstNodePtr target{parse_expr()};
     for (auto &&[expr, pos] :
-         std::views::zip(decorators, decorator_positions) | std::views::reverse) {
+         std::views::zip(decorators, positions_decorator) | std::views::reverse) {
         target = std::make_unique<AstNodeDecorator>(pos, std::move(expr), std::move(target));
     }
     return target;
 }
 
 AstNodePtr Parser::parse_func(
-    std::vector<AstNodePtr> decorators, std::vector<Position> decorator_positions,
+    std::vector<AstNodePtr> decorators, std::vector<Position> positions_decorator,
     const Position deco_pos
 ) {
     const Position start_pos{decorators.empty() ? Position{peek().row, peek().col} : deco_pos};
@@ -1030,7 +1030,7 @@ AstNodePtr Parser::parse_func(
     return std::make_unique<AstNodeFunc>(
         start_pos,
         std::move(decorators),
-        std::move(decorator_positions),
+        std::move(positions_decorator),
         std::move(name),
         std::move(captures),
         std::move(params),
@@ -1327,7 +1327,7 @@ AstNodePtr Parser::finish_dict(const Position start_pos, AstNodePtr first) {
 }
 
 CallArgs Parser::finish_call_args() {
-    const Position paren_pos{peek().row, peek().col};
+    const Position pos_paren{peek().row, peek().col};
     expect_open(Bracket::Paren);
 
     // 实参
@@ -1365,11 +1365,11 @@ CallArgs Parser::finish_call_args() {
     if (!check(TokenType::SIGN_RPAREN)) error("expected ')' to close function call");
     expect_close(Bracket::Paren);
 
-    return CallArgs{std::move(positional_args), std::move(keyword_args), paren_pos};
+    return CallArgs{std::move(positional_args), std::move(keyword_args), pos_paren};
 }
 
 AstNodePtr Parser::finish_index(AstNodePtr obj, const Position start_pos) {
-    const Position bracket_pos{peek().row, peek().col};
+    const Position pos_bracket{peek().row, peek().col};
     expect_open(Bracket::Square);
 
     std::vector<AstNodePtr> args;
@@ -1382,7 +1382,7 @@ AstNodePtr Parser::finish_index(AstNodePtr obj, const Position start_pos) {
 
     expect_close(Bracket::Square);
 
-    return std::make_unique<AstNodeIndex>(start_pos, std::move(obj), std::move(args), bracket_pos);
+    return std::make_unique<AstNodeIndex>(start_pos, std::move(obj), std::move(args), pos_bracket);
 }
 
 Parser::Parser(std::vector<Token> tokens, std::string file_path)

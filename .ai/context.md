@@ -151,7 +151,13 @@ git log/commit message 的职责，不是这里的。代码怎么组织、有哪
 拆成两层：`finish_call_args()` 只消耗 `(...)`、产出 `CallArgs`，不碰被调对象槽位，`import`/`eval`
 的调用形态直接调它，不再借道构造一个丢弃大半字段的 `AstNodeCall` 再拆解。
 
-### `as`：`for` 迭代目标 + `except` 绑定目标，一个关键字两处用，但只有一种含义
+**位置字段后来统一改成 `pos_` 前缀**：`paren_pos_`/`dot_pos_`/`bracket_pos_`/`op_pos_`/
+`op_positions_`/`decorator_positions_` 这批字段（分散在 `CallArgs`、`AstNodeAttr`、`AstNodeIndex`、
+`AstNodeOpUnary`/`AstNodeOpBinary`/`AstNodeCompoundAssign`、`AstNodeCompare`/`AstNodeIs`、
+`AstNodeFunc`/`AstNodeClass`）原来是 `xxx_pos_` 后缀，改成 `pos_xxx_` 前缀（复数形态相应改成
+`positions_xxx_`，如 `positions_op_`、`positions_decorator_`），理由是让"这是个位置字段"从前缀就能
+一眼认出来，也跟基类 `AstNode::pos_` 同词根开头，扫一眼字段列表就知道哪些是辅助定位用的
+`Position`、哪些是正经数据。纯改名，不涉及语义。
 
 原本这两件事分别由 `in`（`for (lvalue in iterable)`）和隐式注入的 `__except__` 承担，两处都割裂：
 

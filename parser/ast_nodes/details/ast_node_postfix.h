@@ -29,14 +29,14 @@ struct AstNodeCall : AstNode {
 struct AstNodeIndex : AstNode {
     AstNodePtr object_;
     std::vector<AstNodePtr> args_;
-    Position bracket_pos_; // '[' 自己的位置
+    Position pos_bracket_; // '[' 自己的位置
 
     explicit AstNodeIndex(
         const Position pos, AstNodePtr object, std::vector<AstNodePtr> args,
-        const Position bracket_pos
+        const Position pos_bracket
     )
         : AstNode{pos}, object_{std::move(object)}, args_{std::move(args)},
-          bracket_pos_{bracket_pos} {}
+          pos_bracket_{pos_bracket} {}
 
     SL_AST_NODE_ACCEPT
 
@@ -48,12 +48,12 @@ struct AstNodeIndex : AstNode {
 struct AstNodeAttr : AstNode {
     AstNodePtr object_;
     std::u32string attr_;
-    Position dot_pos_; // '.' 自己的位置
+    Position pos_dot_; // '.' 自己的位置
 
     explicit AstNodeAttr(
-        const Position pos, AstNodePtr object, std::u32string attr, const Position dot_pos
+        const Position pos, AstNodePtr object, std::u32string attr, const Position pos_dot
     )
-        : AstNode{pos}, object_{std::move(object)}, attr_{std::move(attr)}, dot_pos_{dot_pos} {}
+        : AstNode{pos}, object_{std::move(object)}, attr_{std::move(attr)}, pos_dot_{pos_dot} {}
 
     SL_AST_NODE_ACCEPT
 

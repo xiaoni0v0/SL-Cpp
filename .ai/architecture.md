@@ -63,10 +63,13 @@
   一个节点里区分两种语义——X-macro 分发本来就是一个类型一个重载，`variant` 会在下面再手写一层全项目
   独一份的二级分发。
 - **节点位置字段**：只有"产生式里夹着一个不属于任何子节点的裸 token"的节点类型才补一个 `Position` 字段
-  （比如 `AstNodeCall::args_.paren_pos_`、`AstNodeAttr::dot_pos_`）——节点的结束位置几乎总能从最右
-  子节点递归推出，不需要现在就存;基类 `AstNode::pos_` 只存起始位置。
+  （比如 `AstNodeCall::args_.pos_paren_`、`AstNodeAttr::pos_dot_`）——节点的结束位置几乎总能从最右
+  子节点递归推出，不需要现在就存;基类 `AstNode::pos_` 只存起始位置。**命名统一是 `pos_` 前缀**
+  （`pos_paren_`/`pos_dot_`/`pos_bracket_`/`pos_op_`，多个位置的复数形态是 `positions_` 前缀，比如
+  `AstNodeCompare::positions_op_`、`AstNodeFunc::positions_decorator_`）——不是 `xxx_pos_` 后缀，
+  这样所有"这是个位置字段"的成员在结构体里一眼能从前缀认出来，也跟基类的 `pos_` 保持同一词根开头。
 - **调用类节点共用 `CallArgs`**：`AstNodeCall`/`AstNodeImportCall`/`AstNodeEval` 的实参部分
-  （位置组/关键字组/`paren_pos_`）形状完全一致，拆成 `ast_node_misc.h` 里的 `CallArgs` 聚合体，三个
+  （位置组/关键字组/`pos_paren_`）形状完全一致，拆成 `ast_node_misc.h` 里的 `CallArgs` 聚合体，三个
   节点各自持有一份 `args_` 成员，不重复三份字段——`OneKwArg`/`OneCapture` 已经是这个模式。注意这
   只是**数据形状**共用，不是给这三个节点类型加公共基类：`AstVisitor`/`AstConstVisitor` 由
   `x_ast_nodes.inc` 生成，每个具体节点类型各自一个 `visit()` 重载，加基类砍不掉这层重复，真正能砍的
