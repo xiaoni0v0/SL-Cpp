@@ -25,8 +25,8 @@ struct AstNode {
     virtual ~AstNode() = default;
 
     /**
-     * 序列化为 JSON
-     * @param include_pos 是否把节点自身的位置信息也 dump 进去
+     * 序列化为 JSON。字段顺序跟节点结构体成员声明顺序一致。
+     * @param include_pos 是否把位置信息也 dump 进去（基类 pos_，以及各节点的 pos_xxx_）
      */
     [[nodiscard]] json to_json(const bool include_pos = false) const {
         return to_json_impl(include_pos);
