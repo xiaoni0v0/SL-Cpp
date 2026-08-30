@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Callable, NamedTuple
 from typing import List
 
-# 排除的目录名（噪音目录，可按需增删）
+# 排除的目录名
 EXCLUDE_DIR_PATTERNS = [
     ".ai",
     ".claude",
@@ -40,7 +40,7 @@ EXCLUDE_DIR_PATTERNS = [
     "cmake-build-*",
     "decimal_for_reference",
 ]
-# 排除的文件名（x_*.h 是内联 X-Macro 头文件，可按需增删）
+# 排除的文件名
 EXCLUDE_FILE_PATTERNS = []
 
 
