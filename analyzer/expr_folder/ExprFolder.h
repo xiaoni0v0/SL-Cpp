@@ -14,29 +14,27 @@ class ExprFolder : public AstVisitor {
      */
     void visit_and_replace(AstNodePtr &node);
 
-    // 双分派的后半程：转给节点的 accept，由它挑到下面对应的 visit
-    void visit_any(AstNode &node);
-
-    // 折一份 CallArgs 里的每个实参：普通函数调用、import 调用形态、eval 共用
-    void fold_call_args(CallArgs &args);
+    void visit(AstNode &node);
 
 #define X(nt) void visit(nt &node) override;
 #include "../../parser/ast_nodes/x_ast_nodes.inc"
 
 #undef X
 
+    // 折一份 CallArgs 里的每个实参
+    void fold_call_args(CallArgs &args);
+
   public:
     /**
      * 折整份 Program：除了逐条折叠，还会做 Program 级别的死语句剪枝
      * @param root Program 根节点，原地修改
      */
-    static void fold(AstNodeProgram &root);
+    static void fold_program(AstNodeProgram &root);
 
     /**
      * 对单个表达式节点递归折到不能再折为止；
      * 不按 Program 语句处理，不会触发 AstNodeProgram 级别的剪枝。
-     * 这是 `eval(code)` 的折叠入口（见 Analyzer::analyze_single_expr），测试也用它。
      * @param node 可空
      */
-    static void fold_expr(AstNodePtr &node);
+    static void fold_single_expr(AstNodePtr &node);
 };

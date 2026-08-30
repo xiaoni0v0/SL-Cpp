@@ -25,7 +25,7 @@ nlohmann::json fold_and_recheck(const std::u32string &source) {
             std::to_string(program->exprs_.size())
         );
     }
-    ExprFolder::fold_expr(program->exprs_[0]);
+    ExprFolder::fold_single_expr(program->exprs_[0]);
     SemanticChecker{*program, "<test>"}.check(); // 折完了还得能过
     return nlohmann::json(program->exprs_[0]->to_json());
 }
@@ -81,7 +81,7 @@ TEST_SUITE("折叠产物重新 check 也能过——嵌在别的结构里") {
     TEST_CASE("整份 Program 走 Analyzer 的正式入口，再整棵重新 check") {
         AstNodeProgramPtr program{parse_as_file(U"x = 2 - 3\ny = -1.5\nfunc f() { return -x }")};
         SemanticChecker{*program, "<test>"}.check();
-        ExprFolder::fold(*program);
+        ExprFolder::fold_program(*program);
         CHECK_NOTHROW(SemanticChecker{*program, "<test>"}.check());
     }
 }

@@ -47,7 +47,8 @@
  * 除此之外，and/or/not 对于字面量均折叠。
  *
  * 死分支消除：
- *   1. if/for/while 的 cond 折成的字面量真值为 False 的 clause/循环整个消失，值退化成默认值）。
+ *   1. if、步进模式的 for、while 的 cond 折成的字面量真值为 False 的 clause/循环整个消失，
+ *      值退化成默认值（迭代模式的 for 没有 cond，不参与死循环消除）。
  *   2. if 的某个 clause 的 cond 折成的字面量真值为 True，
  *      则连同它自己在内后面的 clause/else 全部消失，只留这个 clause 的 body；
  *

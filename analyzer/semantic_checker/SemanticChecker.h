@@ -51,7 +51,7 @@ class SemanticChecker : public AstConstVisitor {
         if (a.size() != b.size()) error_internal("mismatched array sizes", pos);
     }
 
-    void check(const AstNode &node);
+    void visit(const AstNode &node);
 
 #define X(nt) void visit(const nt &node) override;
 #include "../../parser/ast_nodes/x_ast_nodes.inc"
@@ -74,8 +74,8 @@ class SemanticChecker : public AstConstVisitor {
     // 检查 func/class 的 doc 槽位：必须为空或者恰好是一个字符串字面量
     void check_doc(const AstNodePtr &doc) const;
 
-    // 检查一份 CallArgs：位置组（可 *expr 展开）+ 关键字组（可 **expr 展开），普通函数调用、
-    // import 调用形态、eval 共用
+    // 检查一份 CallArgs：位置组（可 *expr 展开）+ 关键字组（可 **expr 展开）
+    // 普通函数调用、import 调用形态、eval 共用
     void check_call_args(const CallArgs &args, Position pos);
 
   public:

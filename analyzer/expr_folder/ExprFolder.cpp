@@ -6,12 +6,12 @@
 
 void ExprFolder::visit_and_replace(AstNodePtr &node) {
     if (!node) return;
-    visit_any(*node);
+    visit(*node);
     // 折到不动为止
     while (AstNodePtr folded{StaticEvaler::fold(*node)}) node = std::move(folded);
 }
 
-void ExprFolder::visit_any(AstNode &node) { node.accept(*this); }
+void ExprFolder::visit(AstNode &node) { node.accept(*this); }
 
 void ExprFolder::fold_call_args(CallArgs &args) {
     for (auto &arg : args.positional_args_) visit_and_replace(arg);
@@ -57,6 +57,8 @@ void ExprFolder::visit(AstNodeTry &node) {
     visit_and_replace(node.try_expr_);
     for (auto &clause : node.except_clauses_) {
         for (auto &exc : clause.exceptions_) visit_and_replace(exc);
+        // target_ 可空；目标本身是左值、折不动，能折的是它内部（如 a[1 + 1] 的下标）
+        visit_and_replace(clause.target_);
         visit_and_replace(clause.body_);
     }
     visit_and_replace(node.finally_expr_);
@@ -176,6 +178,6 @@ void ExprFolder::visit(AstNodeImportKw &) {}
 
 void ExprFolder::visit(AstNodeImportCall &node) { fold_call_args(node.args_); }
 
-void ExprFolder::fold(AstNodeProgram &root) { ExprFolder{}.visit(root); }
+void ExprFolder::fold_program(AstNodeProgram &root) { ExprFolder{}.visit(root); }
 
-void ExprFolder::fold_expr(AstNodePtr &node) { ExprFolder{}.visit_and_replace(node); }
+void ExprFolder::fold_single_expr(AstNodePtr &node) { ExprFolder{}.visit_and_replace(node); }

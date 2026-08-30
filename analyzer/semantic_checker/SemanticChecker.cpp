@@ -21,7 +21,7 @@ void SemanticChecker::require_not_empty(const std::u32string &name, const Positi
     if (name.empty()) error_internal("unexpected empty name", pos);
 }
 
-void SemanticChecker::check(const AstNode &node) { node.accept(*this); }
+void SemanticChecker::visit(const AstNode &node) { node.accept(*this); }
 
 void SemanticChecker::visit(const AstNodeClass &node) {
     const Position pos{node.pos_};
@@ -96,7 +96,7 @@ void SemanticChecker::visit(const AstNodeForIter &node) {
     check_not_null(node.iterable_, pos);
     if (node.target_) check_lvalue(*node.target_);
     ctx_.loop_depth++;
-    require_not_null(node.body_, node.pos_), check(*node.body_);
+    require_not_null(node.body_, node.pos_), visit(*node.body_);
 }
 
 void SemanticChecker::visit(const AstNodeBreak &node) {
@@ -227,7 +227,7 @@ void SemanticChecker::visit(const AstNodeFunc &node) {
     ctx_.in_local_scope = true;
     ctx_.loop_depth = 0;
     ctx_.finally_loop_depth = -1;
-    check(*node.body_);
+    visit(*node.body_);
 }
 
 void SemanticChecker::visit(const AstNodeImportKw &node) {
@@ -469,23 +469,23 @@ void SemanticChecker::visit(const AstNodeGlobal &node) {
 
 void SemanticChecker::check_not_null(const AstNodePtr &node, const Position pos) {
     if (!node) error_internal("unexpected null node", pos);
-    check(*node);
+    visit(*node);
 }
 
 void SemanticChecker::check_not_null(const AstNodeProgramPtr &node, const Position pos) {
     if (!node) error_internal("unexpected null node", pos);
-    check(*node);
+    visit(*node);
 }
 
 void SemanticChecker::check_nullable(const AstNodePtr &node) {
-    if (node) check(*node);
+    if (node) visit(*node);
 }
 
 void SemanticChecker::check_lvalue(const AstNode &node) {
     // a  a[ind]  a.x
     if (dynamic_cast<const AstNodeIdentifier *>(&node) ||
         dynamic_cast<const AstNodeIndex *>(&node) || dynamic_cast<const AstNodeAttr *>(&node)) {
-        return check(node);
+        return visit(node);
     }
 
     // (a, b)  [a, b]
@@ -520,7 +520,7 @@ void SemanticChecker::check_lvalue_pure(const AstNode &node) {
     // a  a[ind]  a.x
     if (dynamic_cast<const AstNodeIdentifier *>(&node) ||
         dynamic_cast<const AstNodeIndex *>(&node) || dynamic_cast<const AstNodeAttr *>(&node)) {
-        return check(node);
+        return visit(node);
     }
 
     error("identifier, attribute access, or index expression expected before op=", node.pos_);
@@ -550,4 +550,4 @@ void SemanticChecker::check_call_args(const CallArgs &args, const Position pos) 
 SemanticChecker::SemanticChecker(const AstNode &root, std::string file_path)
     : root_{root}, file_path_{std::move(file_path)} {}
 
-void SemanticChecker::check() && { check(root_); }
+void SemanticChecker::check() && { visit(root_); }

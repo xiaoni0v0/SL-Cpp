@@ -22,7 +22,7 @@ inline nlohmann::json fold_json(const std::u32string &source) {
             std::to_string(program->exprs_.size())
         );
     }
-    ExprFolder::fold_expr(program->exprs_[0]);
+    ExprFolder::fold_single_expr(program->exprs_[0]);
     return nlohmann::json(program->exprs_[0]->to_json());
 }
 
@@ -31,7 +31,7 @@ inline nlohmann::json fold_json(const std::u32string &source) {
 // （比如 AstNodeProgram::prune_program 原地精简 exprs_）。
 inline nlohmann::json fold_program_json(const std::u32string &source) {
     AstNodeProgramPtr program{parse_as_file(source)};
-    ExprFolder::fold(*program);
+    ExprFolder::fold_program(*program);
     return nlohmann::json(program->to_json());
 }
 

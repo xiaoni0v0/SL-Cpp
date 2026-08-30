@@ -57,6 +57,13 @@
   类体里写一行 `SL_AST_NODE_ACCEPT` 宏，私有 `to_json_impl` 覆写），并把该头文件加进 `ast_nodes.h`；
   `to_json.cpp` 里实现 `to_json_impl`；`SemanticChecker.h`/`.cpp` 和 `ExprFolder.h`/`.cpp` 里各加
   对应的 `visit(...) override`（哪怕只是递归子节点、什么都不折）。
+- **给已有节点加一个新的子节点槽位（`AstNodePtr` 字段），编译器一个字都不会提醒**——这跟上面
+  "加新节点类型漏了 `visit` 会编译期报错"是两回事：X-macro 只保证每个**类型**都有 `visit`，管不到
+  某个 `visit` 里面漏读了哪个**字段**。加完新槽位必须手动过一遍三个消费方：`to_json.cpp` 的
+  `to_json_impl`、`SemanticChecker` 的 `visit`、`ExprFolder` 的 `visit`（外加对应的测试）。踩过：
+  `as` 那次给 `AstNodeForIter` 和 `AstNodeTry::AstNodeExceptAndExpr` 各加了个 `target_`，前者三处
+  都跟上了，后者在 `ExprFolder` 里漏了，于是 `except (E as a[1 + 1])` 的下标一直没被折叠，四套
+  测试全绿也照样没发现（测试同样漏写了这个槽位）。
 - **节点类型拆分原则**："语义形状不同就不该共用节点类型"——比如比较运算符独立于普通二元运算符
   （`AstNodeCompare`，链式短路语义不同）、`is` 又独立于比较（`AstNodeIs`，不可重载、不跟比较混链）、
   `for` 的步进/迭代两种模式是 `AstNodeForCond`/`AstNodeForIter` 两个节点。不用 `variant`/tag 字段在
