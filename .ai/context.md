@@ -306,6 +306,29 @@ loader 永远不解析点号，`a.b` 能不能访问纯靠 `a` 模块自己有�
 判 `import\n(...)` 为错误，被否决：拆成独立节点之后 `(` 不再是接在某个被调表达式后面的后缀，而是
 `import(...)` 整体的一部分）。
 
+### `global`/`import`（关键字形态）目标收紧：不再参与外层运算符链
+
+两者曾经都是"`parse_non_op` 只吃一个 token 就返回"——`global` 直接 `expect(IDENTIFIER)`，
+`import` 手写一个 dot-loop 吃 `a.b.c`。问题是返回的节点会照常交回外层 `parse_expr_pratt` 的
+中缀/后缀循环，跟标识符、字面量一视同仁地继续参与 `.`/`()`/`+`：`global x.y` 解析成
+`Attr(Global(x),"y")`，`import a.b(x)` 解析成 `Call(ImportKw([a,b]),[x])`。这**不是**特意设计的
+"一切皆表达式，别为它们特殊开洞"——`global` 的值恒为 `None`（3.4.4），`import` 的目标是模块对象、
+模块对象恒不可调用（3.4.5 易错提醒）——两种拼法**保证**跑不通，编译期就能确定，只是实现从没堵。
+
+**否决过的修法**：在 `check_terminator()` 那套机制上加一道"这个构造后面必须紧跟真正的终止符"的
+检查。否决理由：终止符的合法集合随嵌入语境变（顶层是换行/`;`，函数实参里是 `)`/`,`，元组里是
+`)`/`,`……），要把这些语境挨个枚举等于重新发明"什么token能合法跟在一个表达式后面"这件事，而这件事
+`parse_expr_pratt` 自己的循环终止条件已经在处理，没必要另开一套。
+
+**定稿**：目标改成整条 `parse_expr()`，吃完再校验形状——`global` 要求纯 `AstNodeIdentifier`；
+`import` 要求 `AstNodeIdentifier` 或一路 `AstNodeAttr` 到底的链，展开进 `segments_`（复用属性
+访问的 `.`/换行规则，不再手写一份"跟 x.y 保持一致"的复制品）。校验和析构都在 Parser 里做完，最终
+字段形状不变（`identifier_: u32string`、`segments_: vector<u32string>`），不留一个宽泛的
+`AstNodePtr` 给语义层。目标位置先用一次不消耗 token 的 `check(IDENTIFIER)` 探路，避免撞见
+`global class`/`import as` 这类关键字时一头扎进它们自己的产生式、报出不相关的错。
+
+判断标尺见 [parser-token-vs-expr-level.md](notes/parser-token-vs-expr-level.md) 新增的第三问。
+
 ### 真值统一到 `__bool__`
 
 原文只列了一张"哪些内置对象为假"的清单，读起来像是真值由解释器写死的。改成：任意对象 `x` 的真值

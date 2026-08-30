@@ -1,6 +1,8 @@
 // SL.md import 表达式——两种语法形态，各自一个节点类型：
-//   1. 关键字形态 import a / import a.b.c ...：各段都是标识符 token（不是表达式），解析成
-//      AstNodeImportKw；
+//   1. 关键字形态 import a / import a.b.c ...：目标整条按表达式解析，再要求形状是"标识符，
+//      或者一路都是标识符的属性访问链"，展开成分段名字，解析成 AstNodeImportKw；
+//      形状之外的东西（索引/调用/运算符……）一律拒绝——模块对象不可调用（SL.md 易错提醒），
+//      放行了也只是把编译期就能确定的错推迟到运行期；
 //   2. 调用形态 import(...)：实参解析规则跟普通函数调用完全一致（共用 finish_call_args），但没有
 //      被调对象槽位——import 是运算符本身，不是能按名字取到的函数对象，解析成 AstNodeImportCall。
 //      实参本身一概不校验、留给运行时。
@@ -51,10 +53,13 @@ TEST_SUITE("import 关键字形态") {
     }
 
     TEST_CASE("段名不能是关键字/保留字") {
-        CHECK_THROWS_AS(parse_as_file(U"import class"), SyntaxError);
         CHECK_THROWS_AS(parse_as_file(U"import os.class"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"import as"), SyntaxError);
         CHECK_THROWS_AS(parse_as_file(U"import import"), SyntaxError);
+    }
+
+    TEST_CASE("第一段撞见关键字时报的是'期待标识符'，不会一头扎进关键字自己的产生式报无关的错") {
+        check_parse_throws_with(U"import class", "expected an identifier after 'import'");
+        check_parse_throws_with(U"import as", "expected an identifier after 'import'");
     }
 
     TEST_CASE("点号后面必须还有一段") {
@@ -62,15 +67,9 @@ TEST_SUITE("import 关键字形态") {
         CHECK_THROWS_AS(parse_as_file(U"import a.b."), SyntaxError);
     }
 
-    TEST_CASE("'..' 是独立的 Range 运算符 token，不是两个 '.'：段名到此为止") {
-        CHECK(
-            parse_json(U"import a..b") == nlohmann::json{
-                                              {"type", "OpBinary"},
-                                              {"op", ".."},
-                                              {"left", import_kw(nlohmann::json::array({"a"}))},
-                                              {"right", ident("b")}
-                                          }
-        );
+    TEST_CASE("'..' 是独立的 Range 运算符 token，不是两个 '.'：不是合法的导入路径形状") {
+        // a..b 整条按表达式解析会先吃成 Range(a, b)，这不是"标识符/属性访问链"的形状，报错
+        check_parse_throws_with(U"import a..b", "import target must be a dotted identifier path");
     }
 
     TEST_CASE("缺少名字时报错") {
@@ -96,19 +95,13 @@ TEST_SUITE("import 关键字形态") {
         CHECK_THROWS_AS(parse_as_file(U"import a\n.b"), SyntaxError);
     }
 
-    TEST_CASE("import a 整体和其他基本表达式一样参与后缀运算符链（点号除外，被段名吃掉了）") {
-        CHECK(
-            parse_json(U"import a[0]") ==
-            nlohmann::json{
-                {"type", "Index"},
-                {"object", import_kw(nlohmann::json::array({"a"}))},
-                {"args", nlohmann::json::array({{{"type", "LiteralInt"}, {"raw", "0"}}})}
-            }
-        );
-        // 段名吃干净之后才轮到调用：import a.b(x) 是 (import a.b)(x)
-        const auto called = parse_json(U"import a.b(x)");
-        CHECK(called["type"] == "Call");
-        CHECK(called["object"] == import_kw(nlohmann::json::array({"a", "b"})));
+    TEST_CASE(
+        "目标不能是索引/调用/运算符表达式等——模块对象本身不可调用（SL.md 易错提醒），"
+        "这类接出来的东西必错，干脆在语法层直接拦"
+    ) {
+        check_parse_throws_with(U"import a[0]", "import target must be a dotted identifier path");
+        check_parse_throws_with(U"import a.b(x)", "import target must be a dotted identifier path");
+        check_parse_throws_with(U"import a + 1", "import target must be a dotted identifier path");
     }
 
     TEST_CASE("import 是表达式，可以出现在任何需要值的位置") {

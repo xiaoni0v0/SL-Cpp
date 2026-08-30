@@ -1058,15 +1058,23 @@ AstNodePtr Parser::parse_import() {
     }
 
     // 关键字形态 import a.b.c
-    // 点号在这里一路吃干净，换行规则跟属性访问 x.y 完全一致
-    std::vector segments{expect(TokenType::IDENTIFIER).lexeme}; // 消耗标识符
-    skip_paren_newline();
-    while (check(TokenType::SIGN_DOT)) {
-        expect(TokenType::SIGN_DOT); // 消耗 '.'
-        skip_newline();
-        segments.push_back(expect(TokenType::IDENTIFIER).lexeme); // 消耗标识符
-        skip_paren_newline();
+    if (!check(TokenType::IDENTIFIER)) error("expected an identifier after 'import'");
+    const Position target_pos{peek().row, peek().col};
+    const AstNodePtr target{parse_expr()};
+
+    std::vector<std::u32string> segments;
+    const AstNode *cur{target.get()};
+    while (const auto *attr = dynamic_cast<const AstNodeAttr *>(cur)) { // 不断往外掏 attr，展平
+        segments.push_back(attr->attr_);
+        cur = attr->object_.get();
     }
+
+    if (const auto *base{dynamic_cast<const AstNodeIdentifier *>(cur)})
+        segments.push_back(base->identifier_);
+    else
+        error("import target must be a dotted identifier path", target_pos);
+
+    std::ranges::reverse(segments);
 
     return std::make_unique<AstNodeImportKw>(start_pos, std::move(segments));
 }
@@ -1169,9 +1177,14 @@ AstNodePtr Parser::parse_global() {
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_GLOBAL); // 消耗 'global'
     skip_newline();
-    return std::make_unique<AstNodeGlobal>(
-        start_pos, expect(TokenType::IDENTIFIER).lexeme
-    ); // 消耗标识符
+
+    if (!check(TokenType::IDENTIFIER)) error("expected an identifier after 'global'");
+    const Position target_pos{peek().row, peek().col};
+    const AstNodePtr target{parse_expr()};
+
+    if (const auto *ident{dynamic_cast<const AstNodeIdentifier *>(target.get())})
+        return std::make_unique<AstNodeGlobal>(start_pos, ident->identifier_);
+    error("global target must be a single identifier", target_pos);
 }
 
 bool Parser::finish_comma_batch(const TokenType close, const std::function<void()> &parse_item) {
