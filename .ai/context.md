@@ -138,6 +138,19 @@ git log/commit message 的职责，不是这里的。代码怎么组织、有哪
 一个叫 `code` 的形参是运行期按 3.5 的通用调用规则判定的事（绑定失败 `DispatchError`），跟普通
 函数调用的参数个数/类型从不在语法/语义层校验是同一套道理，不给 `eval` 搞特殊待遇。
 
+**`positional_args_`/`keyword_args_`/`paren_pos_` 三个字段后来又被拆进 `CallArgs` 聚合体**：
+`AstNodeCall`/`AstNodeImportCall`/`AstNodeEval` 三份实参字段形状完全一样，`SemanticChecker`/
+`ExprFolder`/`to_json.cpp` 三处的处理逻辑也跟着重复了三遍。**否决过的修法**：给这三个节点类型加个
+公共基类——不成立，`AstVisitor`/`AstConstVisitor` 由 `x_ast_nodes.inc` 的 X-macro 生成，每个
+**具体**节点类型各自一份 `virtual void visit(nt&)`，`accept()` 转发的是 `*this` 的静态类型，加基类
+一个重载都省不掉，纯粹多绕一层。真正能砍的是数据形状，于是把三个字段拆成 `ast_node_misc.h` 里的
+`CallArgs`（`OneKwArg`/`OneCapture` 已经是"本身不是 AstNode、被多个节点类型共用的小聚合体"这个
+模式，`CallArgs` 只是照抄），三个节点各自一个 `args_: CallArgs` 成员；再在三处消费方各写一个吃
+`CallArgs` 的共享辅助（`SemanticChecker::check_call_args`、`ExprFolder::fold_call_args`、
+`to_json.cpp` 里的 `call_args_to_json`），三份重复的处理逻辑收成一份。`Parser::finish_call` 也
+拆成两层：`finish_call_args()` 只消耗 `(...)`、产出 `CallArgs`，不碰被调对象槽位，`import`/`eval`
+的调用形态直接调它，不再借道构造一个丢弃大半字段的 `AstNodeCall` 再拆解。
+
 ### `as`：`for` 迭代目标 + `except` 绑定目标，一个关键字两处用，但只有一种含义
 
 原本这两件事分别由 `in`（`for (lvalue in iterable)`）和隐式注入的 `__except__` 承担，两处都割裂：

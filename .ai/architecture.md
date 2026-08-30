@@ -63,8 +63,15 @@
   一个节点里区分两种语义——X-macro 分发本来就是一个类型一个重载，`variant` 会在下面再手写一层全项目
   独一份的二级分发。
 - **节点位置字段**：只有"产生式里夹着一个不属于任何子节点的裸 token"的节点类型才补一个 `Position` 字段
-  （比如 `AstNodeCall::paren_pos_`、`AstNodeAttr::dot_pos_`）——节点的结束位置几乎总能从最右子节点
-  递归推出，不需要现在就存;基类 `AstNode::pos_` 只存起始位置。
+  （比如 `AstNodeCall::args_.paren_pos_`、`AstNodeAttr::dot_pos_`）——节点的结束位置几乎总能从最右
+  子节点递归推出，不需要现在就存;基类 `AstNode::pos_` 只存起始位置。
+- **调用类节点共用 `CallArgs`**：`AstNodeCall`/`AstNodeImportCall`/`AstNodeEval` 的实参部分
+  （位置组/关键字组/`paren_pos_`）形状完全一致，拆成 `ast_node_misc.h` 里的 `CallArgs` 聚合体，三个
+  节点各自持有一份 `args_` 成员，不重复三份字段——`OneKwArg`/`OneCapture` 已经是这个模式。注意这
+  只是**数据形状**共用，不是给这三个节点类型加公共基类：`AstVisitor`/`AstConstVisitor` 由
+  `x_ast_nodes.inc` 生成，每个具体节点类型各自一个 `visit()` 重载，加基类砍不掉这层重复，真正能砍的
+  是 `SemanticChecker::check_call_args`/`ExprFolder::fold_call_args`/`to_json.cpp` 的
+  `call_args_to_json` 这几个吃 `CallArgs` 的共享辅助函数。
 - **`to_json()` 是 NVI 模式**：基类 `to_json(include_pos=false)` 非虚、转发给各节点私有的
   `to_json_impl(include_pos)`（纯虚，无默认值）——虚函数不能带默认参数（clang-tidy 会拦，且这条规则
   本身是对的：默认值在虚函数场景下按调用点静态类型决定，容易产生跟直觉不符的结果）。

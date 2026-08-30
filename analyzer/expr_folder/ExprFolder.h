@@ -17,6 +17,9 @@ class ExprFolder : public AstVisitor {
     // 双分派的后半程：转给节点的 accept，由它挑到下面对应的 visit
     void visit_any(AstNode &node);
 
+    // 折一份 CallArgs 里的每个实参：普通函数调用、import 调用形态、eval 共用
+    void fold_call_args(CallArgs &args);
+
 #define X(nt) void visit(nt &node) override;
 #include "../../parser/ast_nodes/x_ast_nodes.inc"
 

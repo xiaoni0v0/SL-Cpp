@@ -159,6 +159,8 @@ class Parser {
     [[nodiscard]] AstNodeFunc::AllParams finish_func_params();
     // 完成字典剩余部分。当前已被判为字典、第一项已解析为 first。不消耗括号、不动括号栈
     [[nodiscard]] AstNodePtr finish_dict(Position start_pos, AstNodePtr first);
+    // 完成实参表 (...)：位置组 + 关键字组 + '(' 位置。消耗括号、管理括号栈
+    [[nodiscard]] CallArgs finish_call_args();
     // 完成函数调用 f(...)。消耗括号、管理括号栈
     [[nodiscard]] std::unique_ptr<AstNodeCall> finish_call(AstNodePtr obj, Position start_pos);
     // 完成索引 x[...]。消耗括号、管理括号栈

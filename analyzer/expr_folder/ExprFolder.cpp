@@ -13,6 +13,11 @@ void ExprFolder::visit_and_replace(AstNodePtr &node) {
 
 void ExprFolder::visit_any(AstNode &node) { node.accept(*this); }
 
+void ExprFolder::fold_call_args(CallArgs &args) {
+    for (auto &arg : args.positional_args_) visit_and_replace(arg);
+    for (auto &kw : args.keyword_args_) visit_and_replace(kw.value_);
+}
+
 void ExprFolder::visit(AstNodeClass &node) {
     for (auto &deco : node.decorators_) visit_and_replace(deco);
     for (auto &base : node.bases_) visit_and_replace(base);
@@ -80,10 +85,7 @@ void ExprFolder::visit(AstNodeFunc &node) {
     visit(*node.body_);
 }
 
-void ExprFolder::visit(AstNodeEval &node) {
-    for (auto &arg : node.positional_args_) visit_and_replace(arg);
-    for (auto &kw : node.keyword_args_) visit_and_replace(kw.value_);
-}
+void ExprFolder::visit(AstNodeEval &node) { fold_call_args(node.args_); }
 
 void ExprFolder::visit(AstNodeLiteralNone &) {}
 
@@ -154,8 +156,7 @@ void ExprFolder::visit(AstNodeCompoundAssign &node) {
 
 void ExprFolder::visit(AstNodeCall &node) {
     visit_and_replace(node.object_);
-    for (auto &arg : node.positional_args_) visit_and_replace(arg);
-    for (auto &kw : node.keyword_args_) visit_and_replace(kw.value_);
+    fold_call_args(node.args_);
 }
 
 void ExprFolder::visit(AstNodeIndex &node) {
@@ -173,10 +174,7 @@ void ExprFolder::visit(AstNodeGlobal &) {}
 
 void ExprFolder::visit(AstNodeImportKw &) {}
 
-void ExprFolder::visit(AstNodeImportCall &node) {
-    for (auto &arg : node.positional_args_) visit_and_replace(arg);
-    for (auto &kw : node.keyword_args_) visit_and_replace(kw.value_);
-}
+void ExprFolder::visit(AstNodeImportCall &node) { fold_call_args(node.args_); }
 
 void ExprFolder::fold(AstNodeProgram &root) { ExprFolder{}.visit(root); }
 

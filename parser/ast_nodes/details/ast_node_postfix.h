@@ -14,16 +14,10 @@
 // f(arg1, arg2, kw=val, ...)
 struct AstNodeCall : AstNode {
     AstNodePtr object_;
-    std::vector<AstNodePtr> positional_args_; // 位置组：位置实参、*expr 展开，按书写顺序
-    std::vector<OneKwArg> keyword_args_;      // 关键字组：关键字实参、**expr 展开，按书写顺序
-    Position paren_pos_;                      // '(' 自己的位置
+    CallArgs args_;
 
-    explicit AstNodeCall(
-        const Position pos, AstNodePtr object, std::vector<AstNodePtr> positional_args,
-        std::vector<OneKwArg> keyword_args, const Position paren_pos
-    )
-        : AstNode{pos}, object_{std::move(object)}, positional_args_{std::move(positional_args)},
-          keyword_args_{std::move(keyword_args)}, paren_pos_{paren_pos} {}
+    explicit AstNodeCall(const Position pos, AstNodePtr object, CallArgs args)
+        : AstNode{pos}, object_{std::move(object)}, args_{std::move(args)} {}
 
     SL_AST_NODE_ACCEPT
 

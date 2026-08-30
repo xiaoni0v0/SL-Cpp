@@ -27,16 +27,10 @@ struct AstNodeImportKw : AstNode {
 
 // 调用形态的 import(name, lazy=..., force=...)
 struct AstNodeImportCall : AstNode {
-    std::vector<AstNodePtr> positional_args_; // 位置组：位置实参、*expr 展开，按书写顺序
-    std::vector<OneKwArg> keyword_args_;      // 关键字组：关键字实参、**expr 展开，按书写顺序
-    Position paren_pos_;                      // '(' 自己的位置
+    CallArgs args_;
 
-    explicit AstNodeImportCall(
-        const Position pos, std::vector<AstNodePtr> positional_args,
-        std::vector<OneKwArg> keyword_args, const Position paren_pos
-    )
-        : AstNode{pos}, positional_args_{std::move(positional_args)},
-          keyword_args_{std::move(keyword_args)}, paren_pos_{paren_pos} {}
+    explicit AstNodeImportCall(const Position pos, CallArgs args)
+        : AstNode{pos}, args_{std::move(args)} {}
 
     SL_AST_NODE_ACCEPT
 

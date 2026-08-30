@@ -110,7 +110,8 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
         keyword_args.push_back({OneKwArg::Kind::Keyword, U"", int_lit()});
         AstNodeProgramPtr program{wrap(
             std::make_unique<AstNodeImportCall>(
-                Position{0, 0}, std::vector<AstNodePtr>{}, std::move(keyword_args), Position{0, 0}
+                Position{0, 0},
+                CallArgs{std::vector<AstNodePtr>{}, std::move(keyword_args), Position{0, 0}}
             )
         )};
         check_throws_internal_error_with(*program, "unexpected empty name");
@@ -121,7 +122,8 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
         positional_args.push_back(nullptr);
         AstNodeProgramPtr program{wrap(
             std::make_unique<AstNodeImportCall>(
-                Position{0, 0}, std::move(positional_args), std::vector<OneKwArg>{}, Position{0, 0}
+                Position{0, 0},
+                CallArgs{std::move(positional_args), std::vector<OneKwArg>{}, Position{0, 0}}
             )
         )};
         check_throws_internal_error_with(*program, "unexpected null node");

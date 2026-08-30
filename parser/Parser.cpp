@@ -1047,15 +1047,8 @@ AstNodePtr Parser::parse_import() {
     skip_newline();
 
     // 调用形态 import(...)
-    if (check(TokenType::SIGN_LPAREN)) {
-        const std::unique_ptr call{finish_call(nullptr, start_pos)}; // 消耗 '(' ... ')'
-        return std::make_unique<AstNodeImportCall>(
-            start_pos,
-            std::move(call->positional_args_),
-            std::move(call->keyword_args_),
-            call->paren_pos_
-        );
-    }
+    if (check(TokenType::SIGN_LPAREN))
+        return std::make_unique<AstNodeImportCall>(start_pos, finish_call_args());
 
     // 关键字形态 import a.b.c
     if (!check(TokenType::IDENTIFIER)) error("expected an identifier after 'import'");
@@ -1084,13 +1077,7 @@ AstNodePtr Parser::parse_eval() {
     expect(TokenType::KW_EVAL); // 消耗 'eval'
     skip_newline();
 
-    const std::unique_ptr call{finish_call(nullptr, start_pos)}; // 消耗 '(' ... ')'
-    return std::make_unique<AstNodeEval>(
-        start_pos,
-        std::move(call->positional_args_),
-        std::move(call->keyword_args_),
-        call->paren_pos_
-    );
+    return std::make_unique<AstNodeEval>(start_pos, finish_call_args()); // 消耗 '(' ... ')'
 }
 
 AstNodePtr Parser::parse_paren_or_tuple() {
@@ -1339,7 +1326,7 @@ AstNodePtr Parser::finish_dict(const Position start_pos, AstNodePtr first) {
     return std::make_unique<AstNodeLiteralDict>(start_pos, std::move(items));
 }
 
-std::unique_ptr<AstNodeCall> Parser::finish_call(AstNodePtr obj, const Position start_pos) {
+CallArgs Parser::finish_call_args() {
     const Position paren_pos{peek().row, peek().col};
     expect_open(Bracket::Paren);
 
@@ -1378,9 +1365,11 @@ std::unique_ptr<AstNodeCall> Parser::finish_call(AstNodePtr obj, const Position 
     if (!check(TokenType::SIGN_RPAREN)) error("expected ')' to close function call");
     expect_close(Bracket::Paren);
 
-    return std::make_unique<AstNodeCall>(
-        start_pos, std::move(obj), std::move(positional_args), std::move(keyword_args), paren_pos
-    );
+    return CallArgs{std::move(positional_args), std::move(keyword_args), paren_pos};
+}
+
+std::unique_ptr<AstNodeCall> Parser::finish_call(AstNodePtr obj, const Position start_pos) {
+    return std::make_unique<AstNodeCall>(start_pos, std::move(obj), finish_call_args());
 }
 
 AstNodePtr Parser::finish_index(AstNodePtr obj, const Position start_pos) {

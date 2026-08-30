@@ -16,6 +16,19 @@ json kwargs_to_json(const std::vector<OneKwArg> &kwargs, const bool include_pos)
     return result;
 }
 
+// 普通函数调用、import 调用形态、eval 共用的那部分
+json call_args_to_json(const CallArgs &args, const bool include_pos) {
+    auto positional_args = json::array();
+    for (const auto &arg : args.positional_args_)
+        positional_args.push_back(arg->to_json(include_pos));
+    // 必须用 = 拷贝初始化，不能用 {}——见 .ai/notes/json-test-brace-init-trap.md
+    auto keyword_args = kwargs_to_json(args.keyword_args_, include_pos);
+
+    return json{
+        {"positional_args", std::move(positional_args)}, {"keyword_args", std::move(keyword_args)}
+    };
+}
+
 // 收集模式记号原样序列化成它在源码里的写法
 const char *collect_to_json(const CollectMark mark) {
     switch (mark.container_) {
@@ -289,22 +302,10 @@ json AstNodeDecorator::to_json_impl(const bool include_pos) const {
 }
 
 json AstNodeEval::to_json_impl(const bool include_pos) const {
-    auto positional_args = json::array();
-    for (const auto &arg : positional_args_) positional_args.push_back(arg->to_json(include_pos));
-    auto keyword_args = kwargs_to_json(keyword_args_, include_pos);
-
-    if (include_pos)
-        return json{
-            {"type", "Eval"},
-            {"pos", pos_to_json(pos_)},
-            {"positional_args", std::move(positional_args)},
-            {"keyword_args", std::move(keyword_args)}
-        };
-    return json{
-        {"type", "Eval"},
-        {"positional_args", std::move(positional_args)},
-        {"keyword_args", std::move(keyword_args)}
-    };
+    json result{{"type", "Eval"}};
+    if (include_pos) result["pos"] = pos_to_json(pos_);
+    result.update(call_args_to_json(args_, include_pos));
+    return result;
 }
 
 json AstNodeFunc::to_json_impl(const bool include_pos) const {
@@ -347,22 +348,10 @@ json AstNodeImportKw::to_json_impl(const bool include_pos) const {
 }
 
 json AstNodeImportCall::to_json_impl(const bool include_pos) const {
-    auto positional_args = json::array();
-    for (const auto &arg : positional_args_) positional_args.push_back(arg->to_json(include_pos));
-    auto keyword_args = kwargs_to_json(keyword_args_, include_pos);
-
-    if (include_pos)
-        return json{
-            {"type", "ImportCall"},
-            {"pos", pos_to_json(pos_)},
-            {"positional_args", std::move(positional_args)},
-            {"keyword_args", std::move(keyword_args)}
-        };
-    return json{
-        {"type", "ImportCall"},
-        {"positional_args", std::move(positional_args)},
-        {"keyword_args", std::move(keyword_args)}
-    };
+    json result{{"type", "ImportCall"}};
+    if (include_pos) result["pos"] = pos_to_json(pos_);
+    result.update(call_args_to_json(args_, include_pos));
+    return result;
 }
 
 json AstNodeLiteralNone::to_json_impl(const bool include_pos) const {
@@ -576,24 +565,11 @@ json AstNodeCompoundAssign::to_json_impl(const bool include_pos) const {
 }
 
 json AstNodeCall::to_json_impl(const bool include_pos) const {
-    auto positional_args = json::array();
-    for (const auto &arg : positional_args_) positional_args.push_back(arg->to_json(include_pos));
-    auto keyword_args = kwargs_to_json(keyword_args_, include_pos);
-
-    if (include_pos)
-        return json{
-            {"type", "Call"},
-            {"pos", pos_to_json(pos_)},
-            {"object", object_->to_json(include_pos)},
-            {"positional_args", std::move(positional_args)},
-            {"keyword_args", std::move(keyword_args)}
-        };
-    return json{
-        {"type", "Call"},
-        {"object", object_->to_json(include_pos)},
-        {"positional_args", std::move(positional_args)},
-        {"keyword_args", std::move(keyword_args)}
-    };
+    json result{{"type", "Call"}};
+    if (include_pos) result["pos"] = pos_to_json(pos_);
+    result["object"] = object_->to_json(include_pos);
+    result.update(call_args_to_json(args_, include_pos));
+    return result;
 }
 
 json AstNodeIndex::to_json_impl(const bool include_pos) const {
