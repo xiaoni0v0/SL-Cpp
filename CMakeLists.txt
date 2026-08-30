@@ -146,6 +146,7 @@ add_executable(SL main.cpp
         parser/ast_nodes/details/ast_node_class.h
         parser/ast_nodes/details/ast_node_control_flows.h
         parser/ast_nodes/details/ast_node_decorators.h
+        parser/ast_nodes/details/ast_node_eval.h
         parser/ast_nodes/details/ast_node_func.h
         parser/ast_nodes/details/ast_node_import.h
         parser/ast_nodes/details/ast_node_literals.cpp
@@ -298,6 +299,7 @@ add_executable(SL_Cpp_Parser_Tests
         parser/ast_nodes/details/ast_node_class.h
         parser/ast_nodes/details/ast_node_control_flows.h
         parser/ast_nodes/details/ast_node_decorators.h
+        parser/ast_nodes/details/ast_node_eval.h
         parser/ast_nodes/details/ast_node_func.h
         parser/ast_nodes/details/ast_node_import.h
         parser/ast_nodes/details/ast_node_literals.cpp
@@ -390,6 +392,7 @@ add_executable(SL_Cpp_Analyzer_Tests
         parser/ast_nodes/details/ast_node_class.h
         parser/ast_nodes/details/ast_node_control_flows.h
         parser/ast_nodes/details/ast_node_decorators.h
+        parser/ast_nodes/details/ast_node_eval.h
         parser/ast_nodes/details/ast_node_func.h
         parser/ast_nodes/details/ast_node_import.h
         parser/ast_nodes/details/ast_node_literals.cpp
