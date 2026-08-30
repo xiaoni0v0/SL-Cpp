@@ -336,7 +336,7 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
 
         // 全部交给 finish_call / finish_index 处理
         if (op == TokenType::SIGN_LPAREN) {
-            left = finish_call(std::move(left), start_pos);
+            left = std::make_unique<AstNodeCall>(start_pos, std::move(left), finish_call_args());
             continue;
         }
         if (op == TokenType::SIGN_LBRACKET) {
@@ -1366,10 +1366,6 @@ CallArgs Parser::finish_call_args() {
     expect_close(Bracket::Paren);
 
     return CallArgs{std::move(positional_args), std::move(keyword_args), paren_pos};
-}
-
-std::unique_ptr<AstNodeCall> Parser::finish_call(AstNodePtr obj, const Position start_pos) {
-    return std::make_unique<AstNodeCall>(start_pos, std::move(obj), finish_call_args());
 }
 
 AstNodePtr Parser::finish_index(AstNodePtr obj, const Position start_pos) {
