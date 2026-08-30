@@ -256,11 +256,23 @@ void SemanticChecker::visit(const AstNodeImportCall &node) {
 }
 
 void SemanticChecker::visit(const AstNodeEval &node) {
-    const ContextGuard guard{*this};
-    ctx_.can_star = false;
-    ctx_.can_double_star = false;
+    const Position pos{node.pos_};
 
-    check_not_null(node.code_, node.pos_);
+    const ContextGuard guard{*this};
+
+    // 位置组：位置传参、*expr
+    ctx_.can_star = true;
+    ctx_.can_double_star = false;
+    for (const auto &arg : node.positional_args_) check_not_null(arg, pos);
+
+    // 关键字组：关键字实参、**expr
+    for (const auto &kw : node.keyword_args_) {
+        if (kw.kind_ == OneKwArg::Kind::Keyword) require_not_empty(kw.keyword_, pos);
+
+        ctx_.can_star = false;
+        ctx_.can_double_star = kw.kind_ == OneKwArg::Kind::DoubleStar;
+        check_not_null(kw.value_, pos);
+    }
 }
 
 void SemanticChecker::visit(const AstNodeLiteralNone &) {}

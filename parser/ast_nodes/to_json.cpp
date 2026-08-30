@@ -289,11 +289,22 @@ json AstNodeDecorator::to_json_impl(const bool include_pos) const {
 }
 
 json AstNodeEval::to_json_impl(const bool include_pos) const {
+    auto positional_args = json::array();
+    for (const auto &arg : positional_args_) positional_args.push_back(arg->to_json(include_pos));
+    auto keyword_args = kwargs_to_json(keyword_args_, include_pos);
+
     if (include_pos)
         return json{
-            {"type", "Eval"}, {"pos", pos_to_json(pos_)}, {"code", code_->to_json(include_pos)}
+            {"type", "Eval"},
+            {"pos", pos_to_json(pos_)},
+            {"positional_args", std::move(positional_args)},
+            {"keyword_args", std::move(keyword_args)}
         };
-    return json{{"type", "Eval"}, {"code", code_->to_json(include_pos)}};
+    return json{
+        {"type", "Eval"},
+        {"positional_args", std::move(positional_args)},
+        {"keyword_args", std::move(keyword_args)}
+    };
 }
 
 json AstNodeFunc::to_json_impl(const bool include_pos) const {
@@ -338,7 +349,6 @@ json AstNodeImportKw::to_json_impl(const bool include_pos) const {
 json AstNodeImportCall::to_json_impl(const bool include_pos) const {
     auto positional_args = json::array();
     for (const auto &arg : positional_args_) positional_args.push_back(arg->to_json(include_pos));
-    // 必须用 = 拷贝初始化，不能用 {}——见 .ai/notes/json-test-brace-init-trap.md
     auto keyword_args = kwargs_to_json(keyword_args_, include_pos);
 
     if (include_pos)
@@ -568,7 +578,6 @@ json AstNodeCompoundAssign::to_json_impl(const bool include_pos) const {
 json AstNodeCall::to_json_impl(const bool include_pos) const {
     auto positional_args = json::array();
     for (const auto &arg : positional_args_) positional_args.push_back(arg->to_json(include_pos));
-    // 必须用 = 拷贝初始化，不能用 {}——见 .ai/notes/json-test-brace-init-trap.md
     auto keyword_args = kwargs_to_json(keyword_args_, include_pos);
 
     if (include_pos)

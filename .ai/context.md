@@ -129,6 +129,15 @@ git log/commit message 的职责，不是这里的。代码怎么组织、有哪
 **`eval_isolated` 保持普通内置函数**。它跟帧无关、吃一个真 `globals` 字典，行为就是普通函数。这个
 不对称是诚实的：`eval` 是穿着调用外衣的编译期构造，`eval_isolated` 是货真价实的函数。
 
+**实参形状后来又改过一次**：最初 `AstNodeEval` 只有单个 `code_: AstNodePtr` 字段，Parser 手写
+`expect_open(Paren) → parse_expr() → expect_close(Paren)`，`eval(code)` 是唯一写法。既然
+`eval` 是"关键字伪装的函数"，就要**尽可能像**一次真正的调用：改成 `positional_args_`/
+`keyword_args_`/`paren_pos_`（跟 `AstNodeCall`/`AstNodeImportCall` 同形状），Parser 里也直接
+复用 `finish_call(nullptr, start_pos)`。于是 `eval('x')`、`eval(code='x')`、
+`eval(**{'code':'x'})` 语法上都合法，`0` 个或 `2` 个位置实参也不再是 `SyntaxError`——恰好绑出
+一个叫 `code` 的形参是运行期按 3.5 的通用调用规则判定的事（绑定失败 `DispatchError`），跟普通
+函数调用的参数个数/类型从不在语法/语义层校验是同一套道理，不给 `eval` 搞特殊待遇。
+
 ### `as`：`for` 迭代目标 + `except` 绑定目标，一个关键字两处用，但只有一种含义
 
 原本这两件事分别由 `in`（`for (lvalue in iterable)`）和隐式注入的 `__except__` 承担，两处都割裂：

@@ -1082,15 +1082,15 @@ AstNodePtr Parser::parse_import() {
 AstNodePtr Parser::parse_eval() {
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_EVAL); // 消耗 'eval'
-
-    // 括号强制
     skip_newline();
-    expect_open(Bracket::Paren);
-    skip_paren_newline();
-    AstNodePtr code{parse_expr()};
-    expect_close(Bracket::Paren);
 
-    return std::make_unique<AstNodeEval>(start_pos, std::move(code));
+    const std::unique_ptr call{finish_call(nullptr, start_pos)}; // 消耗 '(' ... ')'
+    return std::make_unique<AstNodeEval>(
+        start_pos,
+        std::move(call->positional_args_),
+        std::move(call->keyword_args_),
+        call->paren_pos_
+    );
 }
 
 AstNodePtr Parser::parse_paren_or_tuple() {
