@@ -171,6 +171,11 @@ void SemanticChecker::visit(const AstNodeDecorator &node) {
     check_not_null(node.target_, pos);
 }
 
+void SemanticChecker::visit(const AstNodeEval &node) {
+    const ContextGuard guard{*this};
+    check_call_args(node.args_, node.pos_);
+}
+
 void SemanticChecker::visit(const AstNodeFunc &node) {
     const Position pos{node.pos_};
 
@@ -236,11 +241,6 @@ void SemanticChecker::visit(const AstNodeImportKw &node) {
 }
 
 void SemanticChecker::visit(const AstNodeImportCall &node) {
-    const ContextGuard guard{*this};
-    check_call_args(node.args_, node.pos_);
-}
-
-void SemanticChecker::visit(const AstNodeEval &node) {
     const ContextGuard guard{*this};
     check_call_args(node.args_, node.pos_);
 }

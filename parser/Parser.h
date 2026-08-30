@@ -49,7 +49,7 @@ class Parser {
 
     [[noreturn]] void
     error(const std::string &msg, std::optional<Position> pos = std::nullopt) const;
-    [[noreturn]] void error_internal(const std::string &msg, Position pos = {-1, -1}) const;
+    [[noreturn]] void error_internal(const std::string &msg, Position pos = {1, 1}) const;
 
     /**
      * 尽可能多地解析表达式，直到 EOF 或 '}'
@@ -105,11 +105,20 @@ class Parser {
     // 解析 for / while 紧跟在关键字之后的收集模式记号（可以没有）
     [[nodiscard]] CollectMark parse_collect_mark();
 
-    // 类
-    [[nodiscard]] AstNodePtr parse_class(
-        std::vector<AstNodePtr> decorators = {}, std::vector<Position> positions_decorator = {},
-        Position deco_pos = {}
-    );
+    // 分组 (expr) 或者元组 (expr1, expr2)
+    [[nodiscard]] AstNodePtr parse_paren_or_tuple();
+    // 列表 [expr1, expr2]
+    [[nodiscard]] AstNodePtr parse_list();
+    // 字典 {k1: v1, ...} 或复合表达式
+    [[nodiscard]] AstNodePtr parse_brace();
+
+    // del
+    [[nodiscard]] AstNodePtr parse_del();
+    // global
+    [[nodiscard]] AstNodePtr parse_global();
+    // import（关键字形态出 AstNodeImportKw，调用形态出 AstNodeImportCall）
+    [[nodiscard]] AstNodePtr parse_import();
+
     // if-elif-else
     [[nodiscard]] AstNodePtr parse_if();
     // for（步进模式出 AstNodeForCond，迭代模式出 AstNodeForIter）
@@ -122,27 +131,20 @@ class Parser {
     [[nodiscard]] AstNodePtr parse_try();
     // raise
     [[nodiscard]] AstNodePtr parse_raise();
-    // 装饰器表达式 / 函数 / 类
-    [[nodiscard]] AstNodePtr parse_decorator();
     // 函数
     [[nodiscard]] AstNodePtr parse_func(
         std::vector<AstNodePtr> decorators = {}, std::vector<Position> positions_decorator = {},
         Position deco_pos = {}
     );
-    // import（关键字形态出 AstNodeImportKw，调用形态出 AstNodeImportCall）
-    [[nodiscard]] AstNodePtr parse_import();
+    // 类
+    [[nodiscard]] AstNodePtr parse_class(
+        std::vector<AstNodePtr> decorators = {}, std::vector<Position> positions_decorator = {},
+        Position deco_pos = {}
+    );
+    // 装饰器表达式 / 函数 / 类
+    [[nodiscard]] AstNodePtr parse_decorator();
     // eval(code)
     [[nodiscard]] AstNodePtr parse_eval();
-    // 分组 (expr) 或者元组 (expr1, expr2)
-    [[nodiscard]] AstNodePtr parse_paren_or_tuple();
-    // 列表 [expr1, expr2]
-    [[nodiscard]] AstNodePtr parse_list();
-    // 字典 {k1: v1, ...} 或复合表达式
-    [[nodiscard]] AstNodePtr parse_brace();
-    // del
-    [[nodiscard]] AstNodePtr parse_del();
-    // global
-    [[nodiscard]] AstNodePtr parse_global();
 
     /**
      * 完成一堆逗号连成的一串的剩余部分，可能空。不消耗括号、不动括号栈。
