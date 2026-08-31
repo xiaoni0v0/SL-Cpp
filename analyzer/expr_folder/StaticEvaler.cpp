@@ -614,7 +614,9 @@ std::optional<bool> StaticEvaler::literal_equal(const AstNode &a, const AstNode 
         return true;
     }
 
-    // 其他不同类型的一定不等
+    // 走到这里说明两边类型不同、且没有哪一方认识对方。按 SL.md 3.8 的终局回退，`==` 此时取
+    // `a is b`——而不同类型的两个字面量不可能是同一个对象，所以恒为 False。这不是近似，是精确结果。
+    // 注意这条兜底只有 `==`/`!=` 有；序比较两侧都弃权是 TypeError，见 literal_compare 末尾
     return false;
 }
 
@@ -668,7 +670,9 @@ std::partial_ordering StaticEvaler::literal_compare(const AstNode &a, const AstN
         return lexicographic(la->items_, lb->items_);
     }
 
-    return std::partial_ordering::unordered; // None/dict/Ellipsis 均不支持大小比较
+    // 类型不同、或类型本身不支持序比较（None/Ellipsis 等）。序比较没有 `==`/`!=` 那条按身份
+    // 兜底的规则（SL.md 3.8），两侧都弃权就是运行期 TypeError——所以这里只能不折，交给运行期报
+    return std::partial_ordering::unordered;
 }
 
 AstNodePtr StaticEvaler::fold(AstNode &node) {
