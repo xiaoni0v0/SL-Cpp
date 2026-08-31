@@ -143,8 +143,8 @@ SL 中有以下**字面量**类型：
 - 回车符 '\r'
 
 符号之间若会产生歧义，则必须有空白、换行、括号等分隔符将其分隔，否则可省略。
-例如，`for $ (i in ls) { i ** 2 }` 可以写为 `for$(i in ls){i**2}`。但 `a! == b` 不可写为 `a!==b`。
-注意关键字（`in`、`and` 等）不是符号，两侧该有的空白不能省，否则会和相邻标识符粘成一个标识符。
+例如，`for $ (ls as i) { i ** 2 }` 可以写为 `for$(ls as i){i**2}`。但 `a! == b` 不可写为 `a!==b`。
+注意关键字（`as`、`and` 等）不是符号，两侧该有的空白不能省，否则会和相邻标识符粘成一个标识符。
 
 ### 2.2 表达式
 
@@ -186,19 +186,19 @@ f
 # 原因：第一行的二元运算符 `+` 只有一个左参数，不完整，合并下一条
 
 x.
-func()
-# 以上解析为 x.func();
+foo()
+# 以上解析为 x.foo();
 # 原因：第一行的二元运算符 `.` 只有一个左参数，不完整，合并下一条
 
 x
-.func()
-# 以上解析为两条表达式 `x;` 与 `.func();`，后者抛出 SyntaxError
+.foo()
+# 以上解析为两条表达式 `x;` 与 `.foo();`，后者抛出 SyntaxError
 # 不推荐这种链式调用写法。确需链式调用时，请在外侧加圆括号
 
 (x
-.func()
+.foo()
 )
-# 以上解析为 x.func();
+# 以上解析为 x.foo();
 # 原因：括号未闭合，表达式不完整，不断合并
 
 (
@@ -746,10 +746,10 @@ try expr1 ⟦except (Exception1, ... ⟦as lvalue⟧) expr2 ...⟧ ⟦finally ex
 例如：
 
 ```
-for $ (i in 0..4) i * i             # [0, 1, 4, 9]
-for $ * (i in [[1, 2], [3, 4]]) i   # [1, 2, 3, 4]
-for $$ (i in 0..3) (i, str(i))      # {0: '0', 1: '1', 2: '2'}
-for $$ ** (d in [{1: 2}, {3: 4}]) d # {1: 2, 3: 4}
+for $ (0..4 as i) i * i             # [0, 1, 4, 9]
+for $ * ([[1, 2], [3, 4]] as i) i   # [1, 2, 3, 4]
+for $$ (0..3 as i) (i, str(i))      # {0: '0', 1: '1', 2: '2'}
+for $$ ** ([{1: 2}, {3: 4}] as d) d # {1: 2, 3: 4}
 ```
 
 **注意**：不应在无限循环中使用收集模式，否则内存占用将持续增加。
@@ -1220,17 +1220,18 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 
 #### 3.9.2 迭代器协议
 
-迭代器协议规定对象如何参与 `for (i in obj)` 及 `*obj` 展开迭代。
+迭代器协议规定对象如何参与 `for (obj as i)` 及 `*obj` 展开迭代。
 
-`for ⟦collect⟧ (i in obj) expr` 大致等价于
+`for ⟦collect⟧ (obj ⟦as lvalue⟧) expr` 大致等价于
 
 ```
 {
     if (not isinstance(obj, protocols.Iterable)) raise TypeError("...")
     iterator = obj.__iter__()
     while ⟦collect⟧ (True) {
-        i = iterator.__next__()
-        if (i is StopIteration) break
+        item = iterator.__next__()
+        if (item is StopIteration) break
+        lvalue = item # 仅在写了 as 时才有这一步；不写 as 时取出的值直接丢弃
         expr
     }
 }

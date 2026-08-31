@@ -383,7 +383,11 @@ AstNodePtr StaticEvaler::fold_mul(const AstNodeOpBinary &node) {
 
     // 'a' * 3
     if (const auto *s{dynamic_cast<const AstNodeLiteralStr *>(&container_node)}) {
+        // 空串直接给结果
+        if (s->value_.empty()) return std::make_unique<AstNodeLiteralStr>(node.pos_, U"");
+
         if (mul_exceeds(s->value_.size(), n, nMaxStrLength)) return nullptr;
+
         std::u32string value;
         value.reserve(s->value_.size() * n);
         for (size_t i{0}; i < n; ++i) value += s->value_;

@@ -303,6 +303,20 @@ TEST_SUITE("StaticEvaler 容器运算——大小上限（kMaxStrLength=4096, kM
         CHECK(fold_json(U"'a' * 4097")["type"] == "OpBinary");
     }
 
+    // 空串重复走的是单独一条路：上限检查算的是 长度 * 次数，空串的长度是 0、乘出来恒为 0，永远
+    // 不超限，于是次数再大也拦不住，只能靠"空串重复还是空串"提前返回。
+    //
+    // 最后两条特意取 int64_t 上界：折叠器一旦丢掉那个提前返回，就会退化成按次数逐轮拼接，这两条
+    // 直接跑不完。也就是说这里的回归失败形态是**测试跑不动**而不是断言红——没有不靠计时就能断言
+    // "没有空转 n 轮"的写法，取一个大到跑不完的次数是最直白的钉法。
+    TEST_CASE("空串重复任意次都折成空串，且不受上限影响、不按次数空转") {
+        CHECK(fold_json(U"'' * 0") == str_lit(""));
+        CHECK(fold_json(U"'' * 1") == str_lit(""));
+        CHECK(fold_json(U"'' * 4097") == str_lit("")); // 超过 nMaxStrLength，非空串这里就不折了
+        CHECK(fold_json(U"'' * 9223372036854775807") == str_lit(""));
+        CHECK(fold_json(U"9223372036854775807 * ''") == str_lit("")); // 次数在左也一样
+    }
+
     // 注意：这里存中间结果必须用 `= fold_json(...)` 而不是 `{fold_json(...)}`——nlohmann::json
     // 有 initializer_list 构造函数，`auto j{已经是个 json 的值}` 这种写法会被当成"用这一个元素
     // 构造数组"，把本该是的 object 包成一个只有一个元素的 array（跟前面遇到过的

@@ -938,13 +938,13 @@ AstNodePtr Parser::parse_while() {
 AstNodePtr Parser::parse_return() {
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_RETURN); // 消耗 'return'
-    // 若紧跟终止符则为裸 return（值为 None）
-    // 语句终止符 NEWLINE, ';', EOF, '}' + 括号语境的闭合 / 分隔符 ')', ']', ','
+    // 若紧跟以下 token 则为裸 return（值为 None）
     const bool bare{
         check(TokenType::NEWLINE) || check(TokenType::SIGN_SEMICOLON) ||
         check(TokenType::END_OF_FILE) || check(TokenType::SIGN_RBRACE) ||
         check(TokenType::SIGN_RPAREN) || check(TokenType::SIGN_RBRACKET) ||
-        check(TokenType::SIGN_COMMA)
+        check(TokenType::SIGN_COMMA) || check(TokenType::KW_ELSE) || check(TokenType::KW_ELIF) ||
+        check(TokenType::KW_EXCEPT) || check(TokenType::KW_FINALLY)
     };
     return std::make_unique<AstNodeReturn>(start_pos, bare ? nullptr : parse_expr());
 }
