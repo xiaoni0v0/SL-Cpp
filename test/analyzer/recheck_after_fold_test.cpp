@@ -52,9 +52,9 @@ TEST_SUITE("折叠产物重新 check 也能过——负 int") {
     }
 
     TEST_CASE("折不动的也得能重新 check——科学计数法字面量原样留在树上") {
-        // StaticEvaler 目前读不了科学计数法（node_to_int64 走 from_chars，遇到 e 就停），
-        // 于是 `1e9 - 2e9` 整个不折。折没折不重要，重要的是重新 check 照样过
-        CHECK_NOTHROW(fold_and_recheck(U"1e9 - 2e9"));
+        // 科学计数法的 int 现在按值参与折叠（BigInt 自己展开指数），`1e9 - 2e9` 会折成
+        // -1000000000。折没折不重要，重要的是重新 check 照样过
+        CHECK(fold_and_recheck(U"1e9 - 2e9") == int_lit("-1000000000"));
         CHECK_NOTHROW(fold_and_recheck(U"-1e9"));
         CHECK_NOTHROW(fold_and_recheck(U"-1.5e-3"));
     }
@@ -62,10 +62,13 @@ TEST_SUITE("折叠产物重新 check 也能过——负 int") {
 
 TEST_SUITE("折叠产物重新 check 也能过——负 decimal") {
 
-    TEST_CASE("一元负号") {
-        CHECK(fold_and_recheck(U"-1.5") == decimal_lit("-1.5"));
-        CHECK(fold_and_recheck(U"-0.0") == decimal_lit("-0.0")); // 负零保留符号
-        CHECK(fold_and_recheck(U"-0.05") == decimal_lit("-0.05"));
+    // decimal 的一元负号现在不折了（结果为 decimal 的算术一律不折），所以这里钉的是
+    // "原样留着的 OpUnary 重新 check 照样过"，而不是折出来的字面量
+    TEST_CASE("一元负号作用在 decimal 上不折，但重新 check 照样过") {
+        CHECK_NOTHROW(fold_and_recheck(U"-1.5"));
+        CHECK_NOTHROW(fold_and_recheck(U"-0.0"));
+        CHECK_NOTHROW(fold_and_recheck(U"-0.05"));
+        CHECK(fold_and_recheck(U"-1.5")["type"] == "OpUnary");
     }
 }
 

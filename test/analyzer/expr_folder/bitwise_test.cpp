@@ -95,36 +95,47 @@ TEST_SUITE("StaticEvaler 位运算") {
     }
 }
 
-TEST_SUITE("StaticEvaler 位运算——int64_t 边界") {
+// 位运算改走 BigInt 之后同样没有 int64_t 溢出这回事了。这一组钉住新的边界：
+//   1. 大操作数、大结果都照折；
+//   2. `<<` 会让规模爆炸，受 nMaxIntDigits 约束；`>>`/`&`/`|`/`^` 只会变小或不变，不受约束；
+//   3. 移位量本身大到装不下 int64_t 时，`<<` 不折（必然超上限），`>>` 反而能直接给出答案。
+TEST_SUITE("StaticEvaler 位运算——任意精度与规模上限") {
 
-    TEST_CASE("<< 移位量恰好落在 [0, 62] 折，63 一律不折（哪怕 value 是 0）") {
-        CHECK(fold_json(U"1 << 62") == int_lit("4611686018427387904"));
+    TEST_CASE("以前卡在 int64_t 边界上不折的移位，现在都精确折出来") {
+        CHECK(fold_json(U"1 << 63") == int_lit("9223372036854775808"));
+        CHECK(fold_json(U"2 << 62") == int_lit("9223372036854775808"));
+        CHECK(fold_json(U"0 << 63") == int_lit("0"));
+    }
+
+    TEST_CASE("操作数超出 int64_t 范围的 & ^ | 照折，结果精确") {
+        CHECK(fold_json(U"99999999999999999999999999 & 1") == int_lit("1"));
         CHECK(
-            fold_json(U"1 << 63") ==
-            nlohmann::json{
-                {"type", "OpBinary"}, {"op", "<<"}, {"left", int_lit("1")}, {"right", int_lit("63")}
-            }
+            fold_json(U"99999999999999999999999999 | 0") == int_lit("99999999999999999999999999")
         );
-        // 0 << 63 数学上显然还是 0，但这里为了简单统一，shift 一超过 62 就不折，不单独优化这个特例
         CHECK(
-            fold_json(U"0 << 63") ==
-            nlohmann::json{
-                {"type", "OpBinary"}, {"op", "<<"}, {"left", int_lit("0")}, {"right", int_lit("63")}
-            }
+            fold_json(U"99999999999999999999999999 ^ 0") == int_lit("99999999999999999999999999")
         );
     }
 
-    TEST_CASE("<< 移位量合法但结果溢出 int64_t，不折") {
-        CHECK(
-            fold_json(U"2 << 62") ==
-            nlohmann::json{
-                {"type", "OpBinary"}, {"op", "<<"}, {"left", int_lit("2")}, {"right", int_lit("62")}
-            }
-        );
-        CHECK(fold_json(U"1 << 61") == int_lit("2305843009213693952"));
+    TEST_CASE("~ 对任意大的 int 都能折（~x == -x-1）") {
+        CHECK(fold_json(U"~99999999999999999999999999") == int_lit("-100000000000000000000000000"));
     }
 
-    TEST_CASE("<< 移位量本身超出 int64_t 范围，不折") {
+    // 左移 k 位约让十进制位数多 k*log10(2) 位。上限 4096 位对应约 13603 位移位量，
+    // 这里取两侧各一个：13000 稳稳在内，14000 稳稳在外
+    TEST_CASE("<< 结果位数受 nMaxIntDigits 约束，超了不折") {
+        CHECK(fold_json(U"1 << 13000")["type"] == "LiteralInt");
+        CHECK(
+            fold_json(U"1 << 14000") == nlohmann::json{
+                                            {"type", "OpBinary"},
+                                            {"op", "<<"},
+                                            {"left", int_lit("1")},
+                                            {"right", int_lit("14000")}
+                                        }
+        );
+    }
+
+    TEST_CASE("<< 移位量本身超出 int64_t 范围，不折（结果必然超上限）") {
         CHECK(
             fold_json(U"1 << 99999999999999999999999999") ==
             nlohmann::json{
@@ -136,15 +147,17 @@ TEST_SUITE("StaticEvaler 位运算——int64_t 边界") {
         );
     }
 
-    TEST_CASE("操作数本身超出 int64_t 范围的 & ^ |，不折（哪怕数学上算得出来）") {
+    // >> 只会让数变小，移位量再大也算得出来：非负数右移到底是 0，负数是 -1（算术右移补符号位）
+    TEST_CASE(">> 移位量大到装不下 int64_t 时直接给出结果，不需要真移") {
+        CHECK(fold_json(U"1 >> 99999999999999999999999999") == int_lit("0"));
+        CHECK(fold_json(U"-1 >> 99999999999999999999999999") == int_lit("-1"));
         CHECK(
-            fold_json(U"99999999999999999999999999 & 1") ==
-            nlohmann::json{
-                {"type", "OpBinary"},
-                {"op", "&"},
-                {"left", int_lit("99999999999999999999999999")},
-                {"right", int_lit("1")}
-            }
+            fold_json(U"99999999999999999999999999 >> 99999999999999999999999999") == int_lit("0")
         );
+    }
+
+    TEST_CASE(">> 大移位量但装得下时照常算") {
+        CHECK(fold_json(U"1 >> 1000") == int_lit("0"));
+        CHECK(fold_json(U"-1 >> 1000") == int_lit("-1"));
     }
 }

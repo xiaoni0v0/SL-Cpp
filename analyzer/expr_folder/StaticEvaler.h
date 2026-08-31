@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../../numeric/BigDec.h"
+#include "../../numeric/BigInt.h"
 #include "../../parser/ast_nodes/ast_nodes.h"
 
 #include <compare>
@@ -8,17 +10,20 @@
 
 /**
  * 编译期静态求值器
- * 不依赖高精度库
  * 折不动一律返回 nullptr，从不抛异常
+ *
+ * 只有当编译期算出的结果，在任何可能的运行期上下文下都与运行期结果逐位相同时，才折。
+ *
+ * 有两件互相独立的事会破坏这条判据：
+ * 1. 上下文依赖，比如 decimal。
+ * 2. 表示保真，比如用 int64_t 算 int 是保守但正确（溢出就放弃）；用 double 算 decimal 是错值。
  *
  * 折叠范围：
  *
  * 一元：
  *   int: + - ~
- *   bool: + -（没有 ~：位运算是 int 特有的，bool 改继承 numbers.Real 之后不再沾 int 的边，
- *     见 .ai/context.md "bool 不再继承 int" 一节）
- *   decimal/str/tuple/list: 无（decimal 的 +x/-x 同样要按运行时上下文舍入，不是恒等操作，
- *     不折的理由同下面二元的 decimal 算术）
+ *   bool: + -
+ *   decimal/str/tuple/list: 无
  *
  * 二元：
  *            int  bool  decimal  str  tuple  list
@@ -29,26 +34,26 @@
  *     tuple   F     F      F      F     C      F
  *      list   F     F      F      F     F      C
  *
- * A = { ** * // % + - < <= > >= != == << >> & ^ | }
- * B = { ** * // % + - < <= > >= != == }
- * C = { + < <= > >= != == }
- * D = { < <= > >= != == }
- * E = { * != == }
- * F = { != == }
- *
- * `in` 不在任何一组里：它是容器操作，答案取决于运行期的对象，编译期不折。
- *
- * 以上中：
- * - 纯数值运算（含位运算）一律用 int64_t 计算，任何一步超出 int64_t 范围都不折；
- * - str 的 + 拼接、* 重复，结果长度不超过 nMaxStrLength 时折叠；
- * - tuple/list 的 + 拼接，结果元素个数不超过 nMaxContainerItems 时折叠；
- * - tuple/list 的 * 重复恒不折。
+ * A = { ** * // % + - < <= > >= != == << >> & ^ | } // 算数、比较、位运算
+ * B = { ** * // % + - < <= > >= != == }             // 算数、比较
+ * C = { + < <= > >= != == }                         // 容器拼接、比较
+ * D = { < <= > >= != == }                           // 比较
+ * E = { * != == }                                   // 容器重复、相等
+ * F = { != == }                                     // 相等
  *
  * 除此之外，and/or/not 对于字面量均折叠。
  *
+ * 规模上限：
+ * - int 结果的十进制位数不超过 nMaxIntDigits。
+ *   只有会爆炸的 `*`/`**`/`<<` 需要事先估算，`+`/`-` 至多多一位、// % & | ^ >> 只会变小，都不用卡；
+ * - str 的 + 拼接、* 重复，结果长度不超过 nMaxStrLength 时折叠；
+ * - tuple/list 的 + 拼接，结果元素个数不超过 nMaxContainerItems 时折叠；
+ *
+ * 运行期必然报错的一律不折，把错误原样留给运行期。
+ *
  * 死分支消除：
  *   1. if、步进模式的 for、while 的 cond 折成的字面量真值为 False 的 clause/循环整个消失，
- *      值退化成默认值（迭代模式的 for 没有 cond，不参与死循环消除）。
+ *      值退化成默认值。
  *   2. if 的某个 clause 的 cond 折成的字面量真值为 True，
  *      则连同它自己在内后面的 clause/else 全部消失，只留这个 clause 的 body；
  *
@@ -106,8 +111,10 @@ class StaticEvaler {
 
     // —————————— 判断 ——————————
 
-    // 真值。调用方保证 is_literal_pure(literal)
-    [[nodiscard]] static bool truthy(const AstNode &literal);
+    // 真值。调用方保证 is_literal_pure(literal)。
+    // nullopt = "判不了"（字面量形状不合法、或 decimal 超出 BigDec 表示范围）。调用方必须把它
+    // 当"不折"处理，**绝不能默认成真或假**——这个返回值会决定死分支消除留下哪一支
+    [[nodiscard]] static std::optional<bool> truthy(const AstNode &literal);
 
     /**
      * node 是不是一个纯字面量：
@@ -117,7 +124,12 @@ class StaticEvaler {
      */
     [[nodiscard]] static bool is_literal_pure(const AstNode &node);
 
-    // —————————— 数值提升相关 ——————————
+    // —————————— 数值分类与取值 ——————————
+    //
+    // 三个谓词是分层的：is_int ⊂ is_int_family ⊂ is_numeric，各自对应上面表里的一档：
+    //   is_int        —— 严格 int，只有位运算该用它（bool 没有位运算方法）
+    //   is_int_family —— int 或 bool，四则运算/比较用它（bool 先折算成 int，SL.md 4.2.5）
+    //   is_numeric    —— 再加上 decimal，只有比较和真值该用它（decimal 算术一律不折）
 
     // 是不是 int。只有位运算该用它
     [[nodiscard]] static bool is_int(const AstNode &node);
@@ -125,10 +137,15 @@ class StaticEvaler {
     [[nodiscard]] static bool is_int_family(const AstNode &node);
     // 是不是 bool 或 int 或 decimal
     [[nodiscard]] static bool is_numeric(const AstNode &node);
-    // node -> int64_t。调用方保证 is_int_family(node)
-    [[nodiscard]] static std::optional<int64_t> node_to_int64(const AstNode &node);
-    // node -> double。调用方保证 is_numeric(node)
-    [[nodiscard]] static double node_to_double(const AstNode &node);
+
+    // node -> BigInt。调用方保证 is_int_family(node)；字面量形状不合法时返回 nullopt（不抛）
+    // bool 按 SL.md 4.2.5 折算成 1/0；int 的科学计数法写法（1e9）由 BigInt 自己按值展开
+    [[nodiscard]] static std::optional<BigInt> node_to_bigint(const AstNode &node);
+    // node -> BigDec。调用方保证 is_numeric(node)；不合法或非有限（inf/NaN）时返回 nullopt
+    // int/bool 精确提升成 decimal（SL.md 4.2.6：提升不舍入）
+    [[nodiscard]] static std::optional<BigDec> node_to_bigdec(const AstNode &node);
+    // BigInt -> int64_t，装不下返回 nullopt。移位量、指数这类"必须是小整数"的场合用
+    [[nodiscard]] static std::optional<int64_t> bigint_to_int64(const BigInt &value);
 
     // —————————— 折叠上限 ——————————
 
@@ -136,20 +153,17 @@ class StaticEvaler {
     static constexpr size_t nMaxContainerItems{256};
     // str：+ 拼接、* 重复，结果字符数上限
     static constexpr size_t nMaxStrLength{4096};
+    // int：折叠结果的十进制位数上限。只有 * ** << 需要事先估算并卡它，见类注释
+    static constexpr size_t nMaxIntDigits{4096};
 
     // —————————— 构造折叠结果 ——————————
 
     [[nodiscard]] static AstNodePtr make_bool(Position pos, bool value);
-    [[nodiscard]] static AstNodePtr make_int(Position pos, int64_t value);
-    [[nodiscard]] static AstNodePtr
-    make_decimal(Position pos, double value); // ±inf/NaN 返回 nullptr
+    [[nodiscard]] static AstNodePtr make_int(Position pos, const BigInt &value);
     // 字面量之间的值相等。调用方保证 is_literal_pure(a) 且 is_literal_pure(b)
-    [[nodiscard]] static bool literal_equal(const AstNode &a, const AstNode &b);
+    [[nodiscard]] static std::optional<bool> literal_equal(const AstNode &a, const AstNode &b);
     // 字面量之间的值比较。调用方保证 is_literal_pure(a) 且 is_literal_pure(b)
     [[nodiscard]] static std::partial_ordering literal_compare(const AstNode &a, const AstNode &b);
-    // int 字面量之间的值比较。调用方保证 a.raw_、b.raw_ 均非空
-    [[nodiscard]] static std::strong_ordering
-    literal_compare_int(const AstNodeLiteralInt &a, const AstNodeLiteralInt &b);
 
   public:
     StaticEvaler() = delete;

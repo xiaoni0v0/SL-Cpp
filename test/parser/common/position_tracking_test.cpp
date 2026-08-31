@@ -103,6 +103,14 @@ TEST_SUITE("位置追踪——运算符自己的位置") {
         CHECK(call->args_.pos_paren_.col == 7); // '('
     }
 
+    TEST_CASE("eval args_.pos_paren_ 是 '(' 自己的位置，pos_ 是 'eval' 的位置") {
+        const AstNodePtr node{parse_single(U"eval('x')")};
+        const auto *ev{dynamic_cast<AstNodeEval *>(node.get())};
+        REQUIRE(ev != nullptr);
+        CHECK(ev->pos_.col == 1);             // 'eval'
+        CHECK(ev->args_.pos_paren_.col == 5); // '('
+    }
+
     TEST_CASE("import 关键字形态 pos_ 是 'import' 的位置，不是第一段名字的位置") {
         const AstNodePtr node{parse_single(U"  import os.path")};
         const auto *kw{dynamic_cast<AstNodeImportKw *>(node.get())};

@@ -3,15 +3,10 @@
 #include "../../utils/string_utils.h"
 
 #include <algorithm>
-#include <array>
 #include <cassert>
 #include <charconv>
-#include <cmath>
-#include <cstdlib>
-#include <limits>
 #include <stdckdint.h>
 #include <string>
-#include <string_view>
 
 namespace {
 
@@ -27,108 +22,6 @@ bool mul_exceeds(const size_t a, const size_t b, const size_t cap) {
     size_t product;
     if (ckd_mul(&product, a, b)) return true;
     return product > cap;
-}
-
-// 以下几个 checked_*，溢出统一返回 nullopt
-
-// -a
-std::optional<int64_t> checked_neg(const int64_t a) {
-    int64_t result;
-    // 事实上，只有 a == INT64_MIN 时会溢出
-    if (ckd_sub(&result, int64_t{0}, a)) return std::nullopt;
-    return result;
-}
-
-// a + b
-std::optional<int64_t> checked_add(const int64_t a, const int64_t b) {
-    int64_t result;
-    if (ckd_add(&result, a, b)) return std::nullopt;
-    return result;
-}
-
-// a - b
-std::optional<int64_t> checked_sub(const int64_t a, const int64_t b) {
-    int64_t result;
-    if (ckd_sub(&result, a, b)) return std::nullopt;
-    return result;
-}
-
-// a * b
-std::optional<int64_t> checked_mul(const int64_t a, const int64_t b) {
-    int64_t result;
-    if (ckd_mul(&result, a, b)) return std::nullopt;
-    return result;
-}
-
-// a ** b，快速幂。调用方保证 exponent >= 0
-std::optional<int64_t> checked_pow(int64_t base, int64_t exponent) {
-    assert(exponent >= 0);
-
-    int64_t result{1};
-    while (exponent > 0) {
-        if (exponent % 2 != 0) {
-            const std::optional next{checked_mul(result, base)};
-            if (!next) return std::nullopt;
-            result = *next;
-        }
-        exponent /= 2;
-        if (exponent > 0) {
-            const std::optional next_base{checked_mul(base, base)};
-            if (!next_base) return std::nullopt;
-            base = *next_base;
-        }
-    }
-
-    return result;
-}
-
-// a << b
-std::optional<int64_t> checked_lshift(const int64_t a, const int64_t b) {
-    if (b < 0 || b >= 63) return std::nullopt;
-    return checked_mul(a, int64_t{1} << b); // a << b 等价于 a * 2^b
-}
-
-// a >> b
-std::optional<int64_t> checked_rshift(const int64_t a, const int64_t b) {
-    if (b < 0) return std::nullopt;
-    if (b >= 63) return a < 0 ? int64_t{-1} : int64_t{0};
-    return a >> b; // C++20 起对负数的右移是良定义的
-}
-
-// double -> string。调用方保证 value 有限
-std::string double_to_string(const double value) {
-    assert(std::isfinite(value));
-
-    constexpr size_t nBufSize{std::numeric_limits<double>::max_exponent10 + 32}; // 这个数肯定够的
-    std::array<char, nBufSize> buf{};
-    const auto [ptr, ec]{
-        std::to_chars(buf.data(), buf.data() + buf.size(), value, std::chars_format::fixed)
-    };
-    std::string s{buf.data(), ptr};
-    if (s.find('.') == std::string::npos) s += ".0"; // 没有小数点就添上
-    return s;
-}
-
-// string -> int64_t（可以带一个前导 '-'，但源码里的字面量本身不会）
-std::optional<int64_t> string_to_int64(const std::u32string &raw) {
-    const std::string text{u32_to_utf8(raw)};
-    int64_t value{0};
-    const char *begin{text.data()}, *end{begin + text.size()};
-    if (const auto [ptr, ec]{std::from_chars(begin, end, value)}; ec != std::errc{} || ptr != end)
-        return std::nullopt;
-    return value;
-}
-
-// bool 提升成 int。调用方保证 is_int_family(node)
-AstNodeLiteralInt promote_as_int(const AstNode &node) {
-    assert(
-        dynamic_cast<const AstNodeLiteralBool *>(&node) ||
-        dynamic_cast<const AstNodeLiteralInt *>(&node)
-    );
-
-    if (const auto *i{dynamic_cast<const AstNodeLiteralInt *>(&node)}) return *i;
-    const auto &b{dynamic_cast<const AstNodeLiteralBool &>(node)};
-    return AstNodeLiteralInt{node.pos_, b.value_ ? U"1" : U"0"};
 }
 
 } // namespace
@@ -188,8 +81,9 @@ AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
 
         bool result;
         if (node.ops_[i] == Eq || node.ops_[i] == Ne) {
-            const bool eq{literal_equal(a, b)};
-            result = node.ops_[i] == Eq ? eq : !eq;
+            const std::optional eq{literal_equal(a, b)};
+            if (!eq) break; // 值判不了，这一环之后的都停在这
+            result = node.ops_[i] == Eq ? *eq : !*eq;
         } else {
             const std::partial_ordering cmp{literal_compare(a, b)};
             // 类型不支持比较，没法折
@@ -240,13 +134,23 @@ AstNodePtr StaticEvaler::fold_compare(AstNodeCompare &node) {
 }
 
 AstNodePtr StaticEvaler::fold_if(AstNodeIf &node) {
+    // 判不了真值的 clause 跟"不是字面量"一样，到它为止停下——绝不能猜
+    const auto cond_is_false{[](const AstNodePtr &cond) {
+        if (!is_literal_pure(*cond)) return false;
+        const std::optional t{truthy(*cond)};
+        return t && !*t;
+    }};
+    const auto cond_is_true{[](const AstNodePtr &cond) {
+        if (!is_literal_pure(*cond)) return false;
+        const std::optional t{truthy(*cond)};
+        return t && *t;
+    }};
+
     size_t i{0}; // 索引 i 之前的所有 clauses 都是字面量且是 False
-    while (i < node.clauses_.size() && is_literal_pure(*node.clauses_[i].cond_) &&
-           !truthy(*node.clauses_[i].cond_))
-        ++i;
+    while (i < node.clauses_.size() && cond_is_false(node.clauses_[i].cond_)) ++i;
 
     // 确定为 False* 跟着个 True
-    if (i < node.clauses_.size() && is_literal_pure(*node.clauses_[i].cond_)) {
+    if (i < node.clauses_.size() && cond_is_true(node.clauses_[i].cond_)) {
         return std::move(node.clauses_[i].body_);
     }
 
@@ -267,8 +171,10 @@ AstNodePtr StaticEvaler::fold_if(AstNodeIf &node) {
 }
 
 AstNodePtr StaticEvaler::fold_for_cond(AstNodeForCond &node) {
-    // 空->True、无法判断、True
-    if (!node.cond_ || !is_literal_pure(*node.cond_) || truthy(*node.cond_)) return nullptr;
+    // 空->True、不是字面量、真值判不了、真值为 True，这四种都不折
+    if (!node.cond_ || !is_literal_pure(*node.cond_)) return nullptr;
+    const std::optional cond_truthy{truthy(*node.cond_)};
+    if (!cond_truthy || *cond_truthy) return nullptr;
 
     // $$ 一轮没跑的值是个空 dict，不折
     if (node.collect_.container_ == CollectMark::Container::Dict) return nullptr;
@@ -317,7 +223,9 @@ AstNodePtr StaticEvaler::fold_compound(AstNodeCompound &node) {
 AstNodePtr StaticEvaler::fold_not(const AstNodeOpUnary &node) {
     if (!is_literal_pure(*node.operand_)) return nullptr;
 
-    return make_bool(node.pos_, !truthy(*node.operand_));
+    const std::optional t{truthy(*node.operand_)};
+    if (!t) return nullptr;
+    return make_bool(node.pos_, !*t);
 }
 
 AstNodePtr StaticEvaler::fold_add(AstNodeOpBinary &node) {
@@ -374,17 +282,22 @@ AstNodePtr StaticEvaler::fold_mul(const AstNodeOpBinary &node) {
         return {r, l};
     }();
 
-    // 非负 int 才有定义；数量转 int64_t 都装不下的，同样交给运行时
-    const std::optional count{node_to_int64(count_node)};
-    if (!count || *count < 0) return nullptr;
-    const size_t n{static_cast<size_t>(*count)};
+    // 非负 int 才有定义
+    const std::optional count_value{node_to_bigint(count_node)};
+    if (!count_value || count_value->is_negative()) return nullptr;
 
     // 现在，挑出来数字 count_node，另一个 container_node 不知道是啥
 
     // 'a' * 3
     if (const auto *s{dynamic_cast<const AstNodeLiteralStr *>(&container_node)}) {
-        // 空串直接给结果
+        // 空串重复多少次都还是空串，直接给结果。这条必须走在下面的上限检查前面：空串的
+        // 0 * n 恒不超限，落进拼接循环就是白跑 n 次，而 n 能大到没边，等于编译期挂死
         if (s->value_.empty()) return std::make_unique<AstNodeLiteralStr>(node.pos_, U"");
+
+        // 次数大到装不下 int64_t 的，非空串必然超长度上限，直接不折
+        const std::optional count{bigint_to_int64(*count_value)};
+        if (!count) return nullptr;
+        const size_t n{static_cast<size_t>(*count)};
 
         if (mul_exceeds(s->value_.size(), n, nMaxStrLength)) return nullptr;
 
@@ -402,123 +315,59 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpUnary &node) {
     using enum AstNodeOpUnary::OpType;
     const AstNode &operand{*node.operand_};
 
-    if (!is_literal_pure(operand) || !is_numeric(operand)) return nullptr;
+    // decimal 的一元 +/- 也是算术运算，同样按运行期上下文舍入（prec 小的时候 -1.234 会变成 -1.2），
+    // 不是恒等操作，所以连同 decimal 的二元算术一起不折——这里只放 int/bool 过
+    if (!is_literal_pure(operand) || !is_int_family(operand)) return nullptr;
 
-    // int：转 int64_t 失败（超范围）或者取反溢出（-INT64_MIN）都不折
-    if (is_int_family(operand)) {
-        const std::optional v{node_to_int64(operand)};
-        if (!v) return nullptr;
-        if (node.op_ == Pos) return make_int(node.pos_, *v);
-        const std::optional negated{checked_neg(*v)};
-        if (!negated) return nullptr;
-        return make_int(node.pos_, *negated);
-    }
-    // decimal
-    const double v{node_to_double(operand)};
-    return make_decimal(node.pos_, node.op_ == Pos ? v : -v);
+    const std::optional v{node_to_bigint(operand)};
+    if (!v) return nullptr;
+    return make_int(node.pos_, node.op_ == Pos ? v->plus() : v->minus());
 }
 
 AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpBinary &node) {
     using enum AstNodeOpBinary::OpType;
     const AstNode &l{*node.left_}, &r{*node.right_};
-    if (!is_literal_pure(l) || !is_literal_pure(r) || !is_numeric(l) || !is_numeric(r))
-        return nullptr;
+    if (!is_literal_pure(l) || !is_literal_pure(r)) return nullptr;
 
-    const bool is_both_int{is_int_family(l) && is_int_family(r)};
+    // 任何一侧是 decimal（或 `/`，其结果恒为 decimal）都不折：结果按运行期上下文舍入，
+    // 编译期不知道那时的 prec/rounding。比较不走这里，它在 fold_compare 里，照折
+    if (!is_int_family(l) || !is_int_family(r) || node.op_ == Div) return nullptr;
 
-    // 工具函数：把两个操作数都解析成 int64_t，任意一个超范围就不折
-    const auto int_operands{[&]() -> std::optional<std::pair<int64_t, int64_t>> {
-        const std::optional lv{node_to_int64(l)};
-        const std::optional rv{node_to_int64(r)};
-        if (!lv || !rv) return std::nullopt;
-        return std::make_pair(*lv, *rv);
-    }};
+    const std::optional lv{node_to_bigint(l)}, rv{node_to_bigint(r)};
+    if (!lv || !rv) return nullptr;
+
+    const size_t ld{lv->num_decimal_digits()}, rd{rv->num_decimal_digits()};
 
     switch (node.op_) {
+    // +/- 至多让位数多一位，不用卡上限
     case Add:
-        if (is_both_int) {
-            const auto operands{int_operands()};
-            if (!operands) return nullptr;
-            const auto result{checked_add(operands->first, operands->second)};
-            if (!result) return nullptr;
-            return make_int(node.pos_, *result);
-        }
-        return make_decimal(node.pos_, node_to_double(l) + node_to_double(r));
-
+        return make_int(node.pos_, lv->add(*rv));
     case Sub:
-        if (is_both_int) {
-            const auto operands{int_operands()};
-            if (!operands) return nullptr;
-            const auto result{checked_sub(operands->first, operands->second)};
-            if (!result) return nullptr;
-            return make_int(node.pos_, *result);
-        }
-        return make_decimal(node.pos_, node_to_double(l) - node_to_double(r));
+        return make_int(node.pos_, lv->sub(*rv));
 
+    // 位数相加，会爆，事先卡
     case Mul:
-        if (is_both_int) {
-            const auto operands{int_operands()};
-            if (!operands) return nullptr;
-            const auto result{checked_mul(operands->first, operands->second)};
-            if (!result) return nullptr;
-            return make_int(node.pos_, *result);
-        }
-        return make_decimal(node.pos_, node_to_double(l) * node_to_double(r));
+        if (sum_exceeds(ld, rd, nMaxIntDigits)) return nullptr;
+        return make_int(node.pos_, lv->mul(*rv));
 
-    case Div: {
-        const double rv{node_to_double(r)};
-        if (rv == 0.0) return nullptr; // MathError，交给运行时
-        return make_decimal(node.pos_, node_to_double(l) / rv);
+    // 除零是 MathError（SL.md 3.4.2），原样留给运行期；商和余数都只会变小，不用卡上限
+    case DivFloor:
+        if (rv->is_zero()) return nullptr;
+        return make_int(node.pos_, lv->floor_div(*rv));
+    case Mod:
+        if (rv->is_zero()) return nullptr;
+        return make_int(node.pos_, lv->mod(*rv));
+
+    case Pow: {
+        // 指数为负时结果是 decimal（3 ** -1 == 0.333...），落进上面那条 decimal 禁令
+        if (rv->is_negative()) return nullptr;
+        // BigInt::pow 自己不设上限，指数大了会一路算到跑不完，必须事先估：
+        // 结果位数 ≈ 底数位数 × 指数，先要求指数本身是个小整数，再卡乘积
+        const std::optional exp{bigint_to_int64(*rv)};
+        if (!exp) return nullptr;
+        if (mul_exceeds(ld, static_cast<size_t>(*exp), nMaxIntDigits)) return nullptr;
+        return make_int(node.pos_, lv->pow(*rv));
     }
-
-    case DivFloor: {
-        if (is_both_int) {
-            const auto operands{int_operands()};
-            if (!operands) return nullptr;
-            const auto [lv, rv]{*operands};
-            if (rv == 0) return nullptr;
-            // INT64_MIN / -1 商本身就溢出（二补码下 -INT64_MIN 无法表示），不折
-            if (lv == std::numeric_limits<int64_t>::min() && rv == -1) return nullptr;
-            // C++ 内置 / 是向零截断，这里手动调整成向负无穷取整
-            int64_t q{lv / rv};
-            if (lv % rv != 0 && (lv % rv < 0) != (rv < 0)) --q;
-            return make_int(node.pos_, q);
-        }
-        const double rv{node_to_double(r)};
-        if (rv == 0.0) return nullptr;
-        return make_decimal(node.pos_, std::floor(node_to_double(l) / rv));
-    }
-
-    case Mod: {
-        if (is_both_int) {
-            const auto operands{int_operands()};
-            if (!operands) return nullptr;
-            const auto [lv, rv]{*operands};
-            if (rv == 0) return nullptr;
-            if (lv == std::numeric_limits<int64_t>::min() && rv == -1) return nullptr; // 同上
-            int64_t m{lv % rv};
-            if (m != 0 && (m < 0) != (rv < 0)) m += rv; // 向 rv 的符号方向调整
-            return make_int(node.pos_, m);
-        }
-        const double rv{node_to_double(r)};
-        if (rv == 0.0) return nullptr;
-        double m{std::fmod(node_to_double(l), rv)};
-        if (m != 0.0 && (m < 0.0) != (rv < 0.0)) m += rv; // 向 y 的符号方向调整
-        return make_decimal(node.pos_, m);
-    }
-
-    case Pow:
-        // 都是 int 且指数非负：结果仍是 int，要么折成 int，要么不折
-        if (is_both_int) {
-            const auto operands{int_operands()};
-            if (!operands) return nullptr; // 操作数超出 int64_t 范围，不折
-            if (operands->second >= 0) {
-                if (const auto result{checked_pow(operands->first, operands->second)})
-                    return make_int(node.pos_, *result);
-                return nullptr; // 结果溢出，同样不折
-            }
-        }
-        return make_decimal(node.pos_, std::pow(node_to_double(l), node_to_double(r)));
 
     default:
         return nullptr;
@@ -527,41 +376,53 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpBinary &node) {
 
 AstNodePtr StaticEvaler::fold_bitwise(const AstNodeOpUnary &node) {
     const AstNode &operand{*node.operand_};
-    // 位运算只对 int 有定义
+    // 位运算只对 int 有定义：bool 没有位运算方法（SL.md 4.2.5），~True 运行期是 TypeError，
+    // 所以这里用严格的 is_int 而不是 is_int_family
     if (!is_literal_pure(operand) || !is_int(operand)) return nullptr;
 
-    const std::optional v{node_to_int64(operand)};
+    const std::optional v{node_to_bigint(operand)};
     if (!v) return nullptr;
-    return make_int(node.pos_, ~*v); // 按位取反不会溢出，无需额外检查
+    return make_int(node.pos_, v->bit_not()); // ~x == -x-1，位数至多多一位，不用卡上限
 }
 
 AstNodePtr StaticEvaler::fold_bitwise(const AstNodeOpBinary &node) {
     using enum AstNodeOpBinary::OpType;
     const AstNode &l{*node.left_}, &r{*node.right_};
-    // 同上
+    // 同上，两侧都必须是严格的 int
     if (!is_literal_pure(l) || !is_literal_pure(r) || !is_int(l) || !is_int(r)) return nullptr;
 
-    const std::optional lv{node_to_int64(l)};
-    const std::optional rv{node_to_int64(r)};
+    const std::optional lv{node_to_bigint(l)}, rv{node_to_bigint(r)};
     if (!lv || !rv) return nullptr;
 
     switch (node.op_) {
+    // & | ^ 的结果不会比两个操作数里长的那个更长，不用卡上限
     case BitAnd:
-        return make_int(node.pos_, *lv & *rv); // & ^ | 两个定宽整数直接算，不会溢出
+        return make_int(node.pos_, lv->bit_and(*rv));
     case BitOr:
-        return make_int(node.pos_, *lv | *rv);
+        return make_int(node.pos_, lv->bit_or(*rv));
     case BitXor:
-        return make_int(node.pos_, *lv ^ *rv);
+        return make_int(node.pos_, lv->bit_xor(*rv));
+
     case LShift: {
-        const std::optional result{checked_lshift(*lv, *rv)};
-        if (!result) return nullptr;
-        return make_int(node.pos_, *result);
+        // 负移位量的语义还没拍板（见 .ai/context.md），不折，留给运行期
+        if (rv->is_negative()) return nullptr;
+        const std::optional k{bigint_to_int64(*rv)};
+        if (!k) return nullptr;
+        // 左移 k 位最多让十进制位数多 k * log10(2) 位，用 0.302 > log10(2) 取个上界
+        if (sum_exceeds(
+                lv->num_decimal_digits(), static_cast<size_t>(*k) * 302 / 1000 + 1, nMaxIntDigits
+            ))
+            return nullptr;
+        return make_int(node.pos_, lv->shift_left(*k));
     }
     case RShift: {
-        const std::optional result{checked_rshift(*lv, *rv)};
-        if (!result) return nullptr;
-        return make_int(node.pos_, *result);
+        if (rv->is_negative()) return nullptr; // 同上
+        // 移位量大到装不下 int64_t 时，结果必然是 0 或 -1（算术右移补符号位），直接给出来
+        const std::optional k{bigint_to_int64(*rv)};
+        if (!k) return make_int(node.pos_, BigInt{lv->is_negative() ? -1 : 0});
+        return make_int(node.pos_, lv->shift_right(*k)); // 只会变小，不用卡上限
     }
+
     default:
         return nullptr;
     }
@@ -571,22 +432,32 @@ AstNodePtr StaticEvaler::fold_and_or(AstNodeOpBinary &node) {
     using enum AstNodeOpBinary::OpType;
     if (!is_literal_pure(*node.left_)) return nullptr;
 
-    const bool left_truthy{truthy(*node.left_)};
-    const bool take_left{node.op_ == And ? !left_truthy : left_truthy};
+    const std::optional left_truthy{truthy(*node.left_)};
+    if (!left_truthy) return nullptr;
+    const bool take_left{node.op_ == And ? !*left_truthy : *left_truthy};
     return std::move(take_left ? node.left_ : node.right_);
 }
 
-bool StaticEvaler::truthy(const AstNode &literal) {
+std::optional<bool> StaticEvaler::truthy(const AstNode &literal) {
     assert(is_literal_pure(literal));
 
     if (dynamic_cast<const AstNodeLiteralNone *>(&literal)) return false;
     if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&literal)}) return b->value_;
-    if (const auto *i{dynamic_cast<const AstNodeLiteralInt *>(&literal)}) {
-        const std::optional v{node_to_int64(*i)};
-        return !v || *v != 0; // 太大了装不下则必然非零；或者能装下而且是非零
+
+    // int/decimal 都必须按**值**判零，不能看 raw_ 的字面长相：1e2 和 0e0 都是合法写法，前者非零、
+    // 后者是零，光比字符串一个都判不对。取不出值就返回 nullopt（"判不了"），绝不能默认成真——
+    // 这个函数的返回值会决定死分支消除留哪一支，猜错就是静默改掉程序语义
+    if (is_int_family(literal)) {
+        const std::optional v{node_to_bigint(literal)};
+        if (!v) return std::nullopt;
+        return !v->is_zero();
     }
-    if (const auto *f{dynamic_cast<const AstNodeLiteralDecimal *>(&literal)})
-        return node_to_double(*f) != 0.0;
+    if (is_numeric(literal)) { // 走到这里只剩 decimal
+        const std::optional v{node_to_bigdec(literal)};
+        if (!v) return std::nullopt;
+        return !v->is_zero(); // 负零与 0 数值相等，is_zero 已经覆盖
+    }
+
     if (const auto *s{dynamic_cast<const AstNodeLiteralStr *>(&literal)}) return !s->value_.empty();
     if (const auto *t{dynamic_cast<const AstNodeLiteralTuple *>(&literal)})
         return !t->items_.empty();
@@ -631,58 +502,73 @@ bool StaticEvaler::is_numeric(const AstNode &node) {
     return is_int_family(node) || dynamic_cast<const AstNodeLiteralDecimal *>(&node);
 }
 
-std::optional<int64_t> StaticEvaler::node_to_int64(const AstNode &node) {
+std::optional<BigInt> StaticEvaler::node_to_bigint(const AstNode &node) {
     assert(is_int_family(node));
 
-    // bool
+    // bool 按 SL.md 4.2.5 折算成 1/0，之后一律复用 int 的实现
     if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&node)})
-        return b->value_ ? int64_t{1} : int64_t{0};
+        return BigInt{b->value_ ? 1 : 0};
 
-    // int
+    // int。科学计数法写法（1e9）由 BigInt 自己按值展开，这里不碰 raw_ 的字符串形状
     const auto &i{dynamic_cast<const AstNodeLiteralInt &>(node)};
-    return string_to_int64(i.raw_);
+    try {
+        return BigInt::from_decimal_string(u32_to_utf8(i.raw_));
+    } catch (const std::invalid_argument &) {
+        return std::nullopt; // 形状本该由节点构造函数保证，这里兜底：折不动而不是抛出去
+    }
 }
 
-double StaticEvaler::node_to_double(const AstNode &node) {
+std::optional<BigDec> StaticEvaler::node_to_bigdec(const AstNode &node) {
     assert(is_numeric(node));
 
-    // bool
-    if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&node)})
-        return b->value_ ? 1.0 : 0.0;
+    // int/bool 精确提升成 decimal（SL.md 4.2.6：提升不舍入）
+    if (is_int_family(node)) {
+        const std::optional v{node_to_bigint(node)};
+        if (!v) return std::nullopt;
+        return BigDec::from_bigint(*v);
+    }
 
-    // int
-    if (const auto *i{dynamic_cast<const AstNodeLiteralInt *>(&node)})
-        return std::strtod(u32_to_utf8(i->raw_).c_str(), nullptr);
+    const auto &d{dynamic_cast<const AstNodeLiteralDecimal &>(node)};
+    std::optional value{BigDec::try_from_string(u32_to_utf8(d.raw_))};
+    // 超出 BigDec 表示范围的字面量（指数 lexer 不设上限）返回 nullopt；
+    // inf/NaN 这里也一并挡掉——它们参与序比较会触发信号，不该在编译期替运行期做决定
+    if (!value || !value->is_finite()) return std::nullopt;
+    return value;
+}
 
-    // decimal
-    const auto &f{dynamic_cast<const AstNodeLiteralDecimal &>(node)};
-    return std::strtod(u32_to_utf8(f.raw_).c_str(), nullptr);
+std::optional<int64_t> StaticEvaler::bigint_to_int64(const BigInt &value) {
+    // 位数先粗筛，够小了再按十进制串精确转
+    if (value.num_decimal_digits() > 18) return std::nullopt;
+    const std::string text{value.to_decimal_string()};
+    int64_t result{0};
+    const char *begin{text.data()}, *end{begin + text.size()};
+    if (const auto [ptr, ec]{std::from_chars(begin, end, result)}; ec != std::errc{} || ptr != end)
+        return std::nullopt;
+    return result;
 }
 
 AstNodePtr StaticEvaler::make_bool(const Position pos, const bool value) {
     return std::make_unique<AstNodeLiteralBool>(pos, value);
 }
 
-AstNodePtr StaticEvaler::make_int(const Position pos, const int64_t value) {
-    return std::make_unique<AstNodeLiteralInt>(pos, utf8_to_u32(std::to_string(value)));
+AstNodePtr StaticEvaler::make_int(const Position pos, const BigInt &value) {
+    return std::make_unique<AstNodeLiteralInt>(pos, utf8_to_u32(value.to_decimal_string()));
 }
 
-AstNodePtr StaticEvaler::make_decimal(const Position pos, const double value) {
-    if (!std::isfinite(value))
-        return nullptr; // ±inf/NaN 写不出合法的 decimal 字面量，交给运行时处理
-    return std::make_unique<AstNodeLiteralDecimal>(pos, utf8_to_u32(double_to_string(value)));
-}
-
-bool StaticEvaler::literal_equal(const AstNode &a, const AstNode &b) {
+std::optional<bool> StaticEvaler::literal_equal(const AstNode &a, const AstNode &b) {
     assert(is_literal_pure(a) && is_literal_pure(b));
 
-    // bool/int/decimal
+    // bool/int/decimal。两边都是 int 家族时用 BigInt 比（精确且便宜），只要有一侧是 decimal
+    // 就统一抬到 BigDec 比——int 提升成 decimal 是精确的，所以 1 == 1.0 这种跨类型比较也准
     if (is_numeric(a) && is_numeric(b)) {
         if (is_int_family(a) && is_int_family(b)) {
-            return literal_compare_int(promote_as_int(a), promote_as_int(b)) ==
-                   std::strong_ordering::equal;
+            const std::optional va{node_to_bigint(a)}, vb{node_to_bigint(b)};
+            if (!va || !vb) return std::nullopt;
+            return va->equals(*vb);
         }
-        return node_to_double(a) == node_to_double(b);
+        const std::optional va{node_to_bigdec(a)}, vb{node_to_bigdec(b)};
+        if (!va || !vb) return std::nullopt;
+        return *va == *vb;
     }
 
     // None
@@ -707,8 +593,11 @@ bool StaticEvaler::literal_equal(const AstNode &a, const AstNode &b) {
         *tb{dynamic_cast<const AstNodeLiteralTuple *>(&b)};
         ta && tb) {
         if (ta->items_.size() != tb->items_.size()) return false;
-        for (size_t i{0}; i < ta->items_.size(); ++i)
-            if (!literal_equal(*ta->items_[i], *tb->items_[i])) return false;
+        for (size_t i{0}; i < ta->items_.size(); ++i) {
+            const std::optional eq{literal_equal(*ta->items_[i], *tb->items_[i])};
+            if (!eq) return std::nullopt; // 有一个元素判不了，整体就判不了
+            if (!*eq) return false;
+        }
         return true;
     }
 
@@ -717,8 +606,11 @@ bool StaticEvaler::literal_equal(const AstNode &a, const AstNode &b) {
         *lb{dynamic_cast<const AstNodeLiteralList *>(&b)};
         la && lb) {
         if (la->items_.size() != lb->items_.size()) return false;
-        for (size_t i{0}; i < la->items_.size(); ++i)
-            if (!literal_equal(*la->items_[i], *lb->items_[i])) return false;
+        for (size_t i{0}; i < la->items_.size(); ++i) {
+            const std::optional eq{literal_equal(*la->items_[i], *lb->items_[i])};
+            if (!eq) return std::nullopt; // 同上
+            if (!*eq) return false;
+        }
         return true;
     }
 
@@ -729,14 +621,17 @@ bool StaticEvaler::literal_equal(const AstNode &a, const AstNode &b) {
 std::partial_ordering StaticEvaler::literal_compare(const AstNode &a, const AstNode &b) {
     assert(is_literal_pure(a) && is_literal_pure(b));
 
-    // bool/int/decimal
+    // bool/int/decimal，取值方式同 literal_equal。取不出值时返回 unordered，
+    // 跟"这两个类型本来就不支持比大小"归成同一个出口——调用方对两者的处理都是不折
     if (is_numeric(a) && is_numeric(b)) {
         if (is_int_family(a) && is_int_family(b)) {
-            return literal_compare_int(
-                promote_as_int(a), promote_as_int(b)
-            ); // 隐式转成 partial_ordering
+            const std::optional va{node_to_bigint(a)}, vb{node_to_bigint(b)};
+            if (!va || !vb) return std::partial_ordering::unordered;
+            return va->compare_ordering(*vb); // 隐式转成 partial_ordering
         }
-        return node_to_double(a) <=> node_to_double(b);
+        const std::optional va{node_to_bigdec(a)}, vb{node_to_bigdec(b)};
+        if (!va || !vb) return std::partial_ordering::unordered;
+        return *va <=> *vb;
     }
 
     // str
@@ -774,39 +669,6 @@ std::partial_ordering StaticEvaler::literal_compare(const AstNode &a, const AstN
     }
 
     return std::partial_ordering::unordered; // None/dict/Ellipsis 均不支持大小比较
-}
-
-std::strong_ordering
-StaticEvaler::literal_compare_int(const AstNodeLiteralInt &a, const AstNodeLiteralInt &b) {
-    assert(!a.raw_.empty() && !b.raw_.empty());
-
-    const bool a_neg{a.raw_[0] == U'-'}, b_neg{b.raw_[0] == U'-'};
-
-    // 先比符号
-    if (a_neg != b_neg) return a_neg ? std::strong_ordering::less : std::strong_ordering::greater;
-
-    // 工具函数：去掉符号和前导零
-    const auto magnitude{[](const std::u32string &raw) -> std::u32string_view {
-        size_t idx{raw[0] == U'-' || raw[0] == U'+' ? size_t{1} : size_t{0}};
-        while (idx + 1 < raw.size() && raw[idx] == U'0') ++idx;
-        return std::u32string_view{raw}.substr(idx);
-    }};
-
-    // 符号相同，去掉符号和前导零后比较：位数不等，位数多的更大；位数相等再按字典序
-    const std::u32string_view ma{magnitude(a.raw_)}, mb{magnitude(b.raw_)};
-
-    std::strong_ordering magnitude_cmp{std::strong_ordering::equal};
-    if (ma.size() != mb.size())
-        magnitude_cmp = ma.size() <=> mb.size();
-    else if (const int c{ma.compare(mb)}; c != 0)
-        magnitude_cmp = c <=> 0;
-
-    // 都非负：绝对值大小就是数值大小
-    if (!a_neg) return magnitude_cmp;
-    // 都是负：绝对值越大，数值越小，方向取反
-    if (magnitude_cmp == std::strong_ordering::less) return std::strong_ordering::greater;
-    if (magnitude_cmp == std::strong_ordering::greater) return std::strong_ordering::less;
-    return std::strong_ordering::equal;
 }
 
 AstNodePtr StaticEvaler::fold(AstNode &node) {

@@ -34,7 +34,7 @@
 | `lexer/` | `Lexer.{h,cpp}`：分词器。`token.h` 定义 `Token`；`x_token_type.h`/`x_keyword.h`/`x_reservedword.h` 是 X-macro 列表（见下）。 |
 | `parser/` | `Parser.{h,cpp}`：递归下降 + Pratt 解析器，产出 `parser/ast_nodes/` 里定义的 AST。 |
 | `parser/ast_nodes/` | AST 节点类型定义。`ast_nodes.h` 是汇总头（引入 `details/` 下所有节点头）；`x_ast_nodes.h` 是全部节点类型的 X-macro 列表；`to_json.cpp` 实现每个节点的 `to_json_impl`（调试/测试用，不是语言语义的一部分）；`ast_visitor.h` 定义 `AstVisitor`/`AstConstVisitor`（会改树的、只读的两套）和 `SL_AST_NODE_ACCEPT` 宏，要遍历 AST 的类继承它们，靠 `accept` + `visit` 两次虚调用完成双分派——漏实现某个节点类型是编译期错误，不是运行期 assert。 |
-| `parser/ast_nodes/details/` | 具体节点定义，按语法范畴分文件（`ast_node_class.h`、`ast_node_control_flows.h`、`ast_node_func.h`、`ast_node_import.h`、`ast_node_literals.h`、`ast_node_multi_exprs.h`（Program/Compound）、`ast_node_operators.h`、`ast_node_postfix.h`（call/index/attr）、`ast_node_var.h`（del/global/标识符）、`ast_node_decorators.h`、`ast_node_eval.h`）。`ast_node_misc.h` 放**不是** `AstNode`、但被多个节点类型共用的小聚合体（`OneCapture`、`OneKwArg`）。唯一的 `.cpp` 是 `ast_node_literals.cpp`：int/decimal 字面量的构造函数在这里校验 `raw_` 的形状（纯数字/前导零/科学计数法后缀/可选的前导负号），违反即 `InternalError`——常量折叠造出来的字面量节点不会再经过 `SemanticChecker`，只有构造函数拦得住。 |
+| `parser/ast_nodes/details/` | 具体节点定义，按语法范畴分文件（`ast_node_class.h`、`ast_node_control_flows.h`、`ast_node_func.h`、`ast_node_import.h`、`ast_node_literals.h`、`ast_node_multi_exprs.h`（Program/Compound）、`ast_node_operators.h`、`ast_node_postfix.h`（call/index/attr）、`ast_node_var.h`（del/global/标识符）、`ast_node_decorators.h`、`ast_node_eval.h`）。`ast_node_misc.h` 放**不是** `AstNode`、但被多个节点类型共用的小聚合体（`OneCapture`、`OneKwArg`、`CallArgs`）。唯一的 `.cpp` 是 `ast_node_literals.cpp`：int/decimal 字面量的构造函数在这里校验 `raw_` 的形状（纯数字/前导零/科学计数法后缀/可选的前导负号），违反即 `InternalError`——常量折叠造出来的字面量节点不会再经过 `SemanticChecker`，只有构造函数拦得住。 |
 | `analyzer/` | `Analyzer.{h,cpp}`：入口，依次跑 `SemanticChecker` 和 `ExprFolder`。 |
 | `analyzer/semantic_checker/` | `SemanticChecker.{h,cpp}`（`AstConstVisitor` 的实现）：语义检查（作用域规则、lvalue 合法性、`*`/`**` 位置合法性、func/class 约束、AST 结构防御性校验……），只读不改 AST，违规抛 `SyntaxError`（真实语义错误）或 `InternalError`（AST 结构本身违反 Parser 的保证，代表实现自己有 bug）。单个节点自己字段的合法性不归这里，归节点构造函数（见 `parser/ast_nodes/details/`）。 |
 | `analyzer/expr_folder/` | `ExprFolder.{h,cpp}`（`AstVisitor` 的实现）：遍历 + 原地替换 AST 的调度层，拥有 `AstNodePtr` 槽位的所有权。`StaticEvaler.{h,cpp}`：纯函数式的"给一个节点判断能不能折、折成什么"，不遍历树、不拥有节点。 |
@@ -82,6 +82,13 @@
   `x_ast_nodes.inc` 生成，每个具体节点类型各自一个 `visit()` 重载，加基类砍不掉这层重复，真正能砍的
   是 `SemanticChecker::check_call_args`/`ExprFolder::fold_call_args`/`to_json.cpp` 的
   `call_args_to_json` 这几个吃 `CallArgs` 的共享辅助函数。
+- **折叠器（`StaticEvaler`）的算术走 `numeric/` 的 `BigInt`/`BigDec`**，不是 `int64_t`/`double`：
+  折叠的判据是「编译期算出的结果，在任何运行期上下文下都与运行期逐位相同」，所以折叠器内部的算术
+  必须就是语言的算术。类注释里那张「哪些类型、哪些运算符折」的表是这一块的**规范**，改动前先读它。
+  两条最容易踩的：结果为 decimal 的运算一律不折（按运行期 `prec`/`rounding` 舍入，编译期不知道）；
+  判定函数（`truthy`/`literal_equal`）返回 `std::optional`，`nullopt` 是「判不了」，调用方必须当
+  「不折」处理——**不能给它一个默认值**，那会让死分支消除挑错分支。详见
+  .ai/context.md「`StaticEvaler` 改用 BigInt/BigDec」一节。
 - **`to_json()` 是 NVI 模式**：基类 `to_json(include_pos=false)` 非虚、转发给各节点私有的
   `to_json_impl(include_pos)`（纯虚，无默认值）——虚函数不能带默认参数（clang-tidy 会拦，且这条规则
   本身是对的：默认值在虚函数场景下按调用点静态类型决定，容易产生跟直觉不符的结果）。
@@ -96,8 +103,9 @@
   格式化等依赖运行时对象同一性/协议判等的场景故意不折，交给以后的执行器。
 - 两者的执行顺序固定是 **check 在前、fold 在后**——反过来会有死分支消除把"本该在受限语境里"的表达式
   搬到不受限语境、悄悄让非法写法变合法的风险（具体反例见 [context.md](context.md)）。
-- `StaticEvaler` 的折叠范围、编译期"折叠炸弹"防护（`int64_t` 溢出检测代替无限精度折叠、容器折叠结果
-  设大小上限）是刻意的工程约束，不是语言语义的一部分——新增折叠点时要留意这条边界。
+- `StaticEvaler` 的折叠范围、编译期"折叠炸弹"防护（int 结果位数、str 长度、容器元素数三道上限）
+  是刻意的工程约束，不是语言语义的一部分——新增折叠点时要留意这条边界。上限挡的是"算得完但没必要"
+  （`2 ** 大数`、`'' * 大数` 这类），不是"算不对"：算不对属于保真性问题，见上面折叠器那一条。
 
 ## 测试组织
 

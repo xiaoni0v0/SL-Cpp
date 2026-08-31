@@ -421,6 +421,8 @@ add_executable(SL_Cpp_Analyzer_Tests
         test/analyzer/expr_folder/arithmetic_test.cpp
         test/analyzer/expr_folder/bitwise_test.cpp
         test/analyzer/expr_folder/container_ops_test.cpp
+        test/analyzer/expr_folder/numeric_fidelity_test.cpp
+        test/analyzer/expr_folder/eval_for_del_is_test.cpp
         test/analyzer/expr_folder/compare_is_test.cpp
         test/analyzer/expr_folder/logical_test.cpp
         test/analyzer/expr_folder/dead_branch_test.cpp
