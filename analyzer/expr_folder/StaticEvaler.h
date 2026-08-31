@@ -112,8 +112,6 @@ class StaticEvaler {
     // —————————— 判断 ——————————
 
     // 真值。调用方保证 is_literal_pure(literal)。
-    // nullopt = "判不了"（字面量形状不合法、或 decimal 超出 BigDec 表示范围）。调用方必须把它
-    // 当"不折"处理，**绝不能默认成真或假**——这个返回值会决定死分支消除留下哪一支
     [[nodiscard]] static std::optional<bool> truthy(const AstNode &literal);
 
     /**
@@ -125,11 +123,6 @@ class StaticEvaler {
     [[nodiscard]] static bool is_literal_pure(const AstNode &node);
 
     // —————————— 数值分类与取值 ——————————
-    //
-    // 三个谓词是分层的：is_int ⊂ is_int_family ⊂ is_numeric，各自对应上面表里的一档：
-    //   is_int        —— 严格 int，只有位运算该用它（bool 没有位运算方法）
-    //   is_int_family —— int 或 bool，四则运算/比较用它（bool 先折算成 int，SL.md 4.2.5）
-    //   is_numeric    —— 再加上 decimal，只有比较和真值该用它（decimal 算术一律不折）
 
     // 是不是 int。只有位运算该用它
     [[nodiscard]] static bool is_int(const AstNode &node);
@@ -139,10 +132,9 @@ class StaticEvaler {
     [[nodiscard]] static bool is_numeric(const AstNode &node);
 
     // node -> BigInt。调用方保证 is_int_family(node)；字面量形状不合法时返回 nullopt（不抛）
-    // bool 按 SL.md 4.2.5 折算成 1/0；int 的科学计数法写法（1e9）由 BigInt 自己按值展开
     [[nodiscard]] static std::optional<BigInt> node_to_bigint(const AstNode &node);
     // node -> BigDec。调用方保证 is_numeric(node)；不合法或非有限（inf/NaN）时返回 nullopt
-    // int/bool 精确提升成 decimal（SL.md 4.2.6：提升不舍入）
+    // int/bool 精确提升成 decimal
     [[nodiscard]] static std::optional<BigDec> node_to_bigdec(const AstNode &node);
     // BigInt -> int64_t，装不下返回 nullopt。移位量、指数这类"必须是小整数"的场合用
     [[nodiscard]] static std::optional<int64_t> bigint_to_int64(const BigInt &value);

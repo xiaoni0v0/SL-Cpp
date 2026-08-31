@@ -30,13 +30,13 @@ AstNodePtr StaticEvaler::fold_unary(const AstNodeOpUnary &node) {
     using enum AstNodeOpUnary::OpType;
 
     switch (node.op_) {
-    case Not:
-        return fold_not(node);
     case Pos:
     case Neg:
         return fold_arithmetic(node);
     case BitInvert:
         return fold_bitwise(node);
+    case Not:
+        return fold_not(node);
     default:
         return nullptr;
     }
@@ -315,9 +315,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpUnary &node) {
     using enum AstNodeOpUnary::OpType;
     const AstNode &operand{*node.operand_};
 
-    // decimal 的一元 +/- 也是算术运算，同样按运行期上下文舍入（prec 小的时候 -1.234 会变成 -1.2），
-    // 不是恒等操作，所以连同 decimal 的二元算术一起不折——这里只放 int/bool 过
-    if (!is_literal_pure(operand) || !is_int_family(operand)) return nullptr;
+    if (!(is_literal_pure(operand) && is_int_family(operand))) return nullptr;
 
     const std::optional v{node_to_bigint(operand)};
     if (!v) return nullptr;
@@ -505,7 +503,7 @@ bool StaticEvaler::is_numeric(const AstNode &node) {
 std::optional<BigInt> StaticEvaler::node_to_bigint(const AstNode &node) {
     assert(is_int_family(node));
 
-    // bool 按 SL.md 4.2.5 折算成 1/0，之后一律复用 int 的实现
+    // bool 1/0，之后一律复用 int 的实现
     if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&node)})
         return BigInt{b->value_ ? 1 : 0};
 
