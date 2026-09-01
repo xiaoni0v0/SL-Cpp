@@ -179,6 +179,88 @@ TEST_SUITE("表达式分隔符——其他续行场景（try/except/finally 同 
     }
 }
 
+TEST_SUITE("表达式分隔符——嵌在别的表达式里的 if/try 同样跨行合并") {
+    // 这条规则是 if/try 产生式自身的行为：只要这个 if/try 缺 else/finally，就会向后看一行，
+    // 不管它这次是不是"待定表达式本身解析出来的顶层节点"——嵌在赋值右侧、算术表达式里、
+    // 复合表达式内部，规则一样生效，不因为嵌套就失效。
+
+    TEST_CASE("x = if (c) a\\nelse b：if 是赋值的右操作数，同样跨行合并") {
+        CHECK(
+            parse_program_json(U"x = if (c) a\nelse b") ==
+            nlohmann::json{
+                {"type", "Program"},
+                {"exprs",
+                 nlohmann::json::array(
+                     {{{"type", "Assign"},
+                       {"target", ident("x")},
+                       {"value",
+                        {{"type", "If"},
+                         {"clauses",
+                          nlohmann::json::array({{{"cond", ident("c")}, {"body", ident("a")}}})},
+                         {"else_expr", ident("b")}}}}}
+                 )}
+            }
+        );
+    }
+
+    TEST_CASE("1 + if (c) a\\nelse b：if 是算术运算的右操作数，同样跨行合并") {
+        CHECK(
+            parse_program_json(U"1 + if (c) a\nelse b") ==
+            nlohmann::json{
+                {"type", "Program"},
+                {"exprs",
+                 nlohmann::json::array(
+                     {{{"type", "OpBinary"},
+                       {"op", "+"},
+                       {"left", int_lit("1")},
+                       {"right",
+                        {{"type", "If"},
+                         {"clauses",
+                          nlohmann::json::array({{{"cond", ident("c")}, {"body", ident("a")}}})},
+                         {"else_expr", ident("b")}}}}}
+                 )}
+            }
+        );
+    }
+
+    TEST_CASE("{ x = if (c) a\\nelse b }：if 嵌在复合表达式内部，同样跨行合并") {
+        const AstNodeProgramPtr program{parse_as_file(U"{ x = if (c) a\nelse b }")};
+        REQUIRE(program->exprs_.size() == 1);
+        const auto *compound{dynamic_cast<AstNodeCompound *>(program->exprs_[0].get())};
+        REQUIRE(compound != nullptr);
+        REQUIRE(compound->exprs_.size() == 1);
+        const auto *assign{dynamic_cast<AstNodeAssign *>(compound->exprs_[0].get())};
+        REQUIRE(assign != nullptr);
+        const auto *if_node{dynamic_cast<AstNodeIf *>(assign->value_.get())};
+        REQUIRE(if_node != nullptr);
+        CHECK(if_node->else_expr_ != nullptr);
+    }
+
+    TEST_CASE("x = try a\\nexcept (E) b：try 是赋值的右操作数，同样跨行合并") {
+        CHECK(
+            parse_program_json(U"x = try a\nexcept (E) b") ==
+            nlohmann::json{
+                {"type", "Program"},
+                {"exprs",
+                 nlohmann::json::array(
+                     {{{"type", "Assign"},
+                       {"target", ident("x")},
+                       {"value",
+                        {{"type", "Try"},
+                         {"try_expr", ident("a")},
+                         {"except_clauses",
+                          nlohmann::json::array(
+                              {{{"exceptions", nlohmann::json::array({ident("E")})},
+                                {"target", nullptr},
+                                {"body", ident("b")}}}
+                          )},
+                         {"finally_expr", nullptr}}}}}
+                 )}
+            }
+        );
+    }
+}
+
 TEST_SUITE("表达式分隔符——分号/换行的基本切分") {
 
     TEST_CASE("分号分隔多条表达式") {

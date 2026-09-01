@@ -547,7 +547,11 @@ void SemanticChecker::check_call_args(const CallArgs &args, const Position pos) 
     }
 }
 
-SemanticChecker::SemanticChecker(const AstNode &root, std::string file_path)
-    : root_{root}, file_path_{std::move(file_path)} {}
+SemanticChecker::SemanticChecker(
+    const AstNode &root, std::string file_path, const bool in_local_scope
+)
+    : root_{root}, file_path_{std::move(file_path)} {
+    ctx_.in_local_scope = in_local_scope;
+}
 
 void SemanticChecker::check() && { visit(root_); }

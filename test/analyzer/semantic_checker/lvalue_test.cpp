@@ -18,6 +18,13 @@ TEST_SUITE("SemanticChecker 左值检查") {
         CHECK_NOTHROW(check_program(U"[*a, b] = x"));
     }
 
+    TEST_CASE("零个左值的解构（() = x / [] = x）语法上合法，跟 Python 一致") {
+        // 要求右边解构出恰好 0 个元素，是运行期的事（元素个数不匹配同一类错误），
+        // 不在这一层检查
+        CHECK_NOTHROW(check_program(U"() = x"));
+        CHECK_NOTHROW(check_program(U"[] = x"));
+    }
+
     TEST_CASE("解构里嵌套解构也合法") { CHECK_NOTHROW(check_program(U"(a, (b, c)) = x")); }
 
     TEST_CASE("字面量/调用等不是合法的赋值目标") {

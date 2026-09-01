@@ -81,10 +81,13 @@ class SemanticChecker : public AstConstVisitor {
   public:
     /**
      * 构造 SemanticChecker 对象
-     * @param root      要检查的根节点：整份 Program 或者单独一条表达式。
-     * @param file_path 文件路径，默认为 "<unknown>"
+     * @param root           要检查的根节点：整份 Program 或者单独一条表达式。
+     * @param file_path      文件路径，默认为 "<unknown>"
+     * @param in_local_scope 检查起点所在的帧是不是局部作用域，默认为 false（模块顶层）
      */
-    explicit SemanticChecker(const AstNode &root, std::string file_path = "<unknown>");
+    explicit SemanticChecker(
+        const AstNode &root, std::string file_path = "<unknown>", bool in_local_scope = false
+    );
 
     /**
      * 语法合法性检查

@@ -11,9 +11,11 @@ void Analyzer::analyze_program(AstNodeProgram &root, std::string file_path) {
     ExprFolder::fold_program(root);
 }
 
-void Analyzer::analyze_single_expr(AstNodePtr &expr, std::string file_path) {
+void Analyzer::analyze_single_expr(
+    AstNodePtr &expr, std::string file_path, const bool in_local_scope
+) {
     assert(expr); // 调用方保证非空
 
-    SemanticChecker{*expr, std::move(file_path)}.check();
+    SemanticChecker{*expr, std::move(file_path), in_local_scope}.check();
     ExprFolder::fold_single_expr(expr);
 }

@@ -159,6 +159,47 @@ git log/commit message 的职责，不是这里的。代码怎么组织、有哪
 一眼认出来，也跟基类 `AstNode::pos_` 同词根开头，扫一眼字段列表就知道哪些是辅助定位用的
 `Position`、哪些是正经数据。纯改名，不涉及语义。
 
+### `global` 作用在引用捕获上：挪到运行期，`NameError` 不是 `SyntaxError`
+
+3.10.2 原文写的是"`identifier` 不能是引用捕获，否则抛出 `SyntaxError`"，但 `SemanticChecker`
+一直没有实现这条静态检查（`func f[&x]() { global x }` 能通过语义检查）——这不是遗漏，是后来定了
+另一条：**`global` 是一次名字表操作，不是函数体级别的静态声明**，不该在编译期就把"这个名字是不是
+引用捕获"这件事拦下来。理由：`global`/`del`/`import`/`try` 在 SL 里本来就是"求值时才生效、不要求
+任何外层构造"的一类操作（跟 `eval(code)` 的"静态外层环境为空"模型是同一套哲学，见上面一节），把
+"是不是引用捕获"这个本可以静态推出来的性质硬套上编译期报错，反而破坏了这个一致性。
+
+**定稿**：这条检查挪到求值 `global identifier` 这一步（运行期），报的异常也从 `SyntaxError` 改成
+`NameError`——这是 3.11"`SyntaxError` 只在编译期抛"这条既有约定倒逼出来的结果，不只是换个名字。
+`global x` 执行后，`x` 这个名字在当前帧里从引用捕获切换成模块全局，彻底断开跟原引用的关联（不是
+"两者都生效"那种含糊状态）。机制上不需要新的运行期状态：VM 本来就要给每一帧维护引用捕获名集合
+（3.10.4 的读写删都要用），`global x` 执行时查一下这个集合即可。SL.md 3.10.2 已经按此改写。
+
+### `eval` 的局部/全局帧：`SemanticChecker`/`Analyzer::analyze_single_expr` 新增 `in_local_scope` 参数
+
+`eval(code)` 的静态外层环境为空这条模型（见上面一节）漏了一处：`global` 合不合法不只取决于
+"`code` 的 AST 里有没有包一层 `func`/`class`"，还取决于**调用帧本身**是不是局部作用域——
+`func f() { eval('global x') }` 里，`code` 应该在 `f` 的局部帧里求值，`global x` 该合法；但
+`analyze_single_expr`（`eval` 的编译入口）原来把 `ctx_.in_local_scope` 写死成 `false`，把这种
+合法用法也一并拦了（连带一条把这个错误行为钉成"正确期望"的测试）。
+
+**根因**：这条信息（调用帧是不是局部作用域）是纯运行期概念，`SemanticChecker`/`Analyzer` 在静态
+分析阶段没有任何办法从 `code` 的 AST 反推出来——只有实际执行 `eval` 那一刻的 VM 知道当前帧是什么。
+
+**定稿**：`SemanticChecker` 构造函数、`Analyzer::analyze_single_expr` 都新增一个
+`bool in_local_scope = false` 参数（默认值保持向后兼容，`check_program`/`analyze_program` 走的
+是整份 Program 入口，没有这个参数，恒为顶层语义）。`SemanticChecker` 构造时直接拿它初始化
+`ctx_.in_local_scope`，取代原来构造函数体里隐含的"恒为 false"。真正把正确的值传进来是未来
+codegen/VM 编译 `eval` 调用点时的责任——`eval` 是关键字不是一等值，编译一次 `eval(...)` 调用时，
+编译器天然知道这段代码此刻在哪一帧里，把这一帧是不是局部作用域这个已知信息传给
+`analyze_single_expr` 即可，不需要在 `code` 求值时反向推断。当前还没有 codegen/executor，这两个
+新参数暂时只有测试在用（`check_single_expr(source, /*in_local_scope=*/true)` 模拟从函数体内部
+调 `eval` 的场景）。
+
+**`return`/`break`/`continue` 不受这条影响**：它们判的是"AST 里有没有包一层 Program/循环"，
+是纯静态、跟调用帧局部/全局身份无关的性质——`eval` 出来的单表达式不管在哪一帧跑，都不会凭空多出
+一层 Program 或循环包装。`global` 是目前发现的唯一一个"合法性取决于调用帧、而不只取决于 `code`
+自己的 AST 形状"的构造。
+
 ### `==`/`!=` 的终局回退：解释器按身份兜底，序比较没有这条
 
 3.8 原来把回退链写成「两侧的 eq/cmp 都未命中就报错」，六个比较运算符一视同仁。按这个字面读，

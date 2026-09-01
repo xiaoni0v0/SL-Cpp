@@ -27,8 +27,11 @@ class Analyzer final {
     /**
      * 分析单独一条表达式
      * 折叠只折这条表达式本身，不涉及 Program 级别的剪枝。
-     * @param expr      表达式节点，原地修改（折叠可能整个换掉这个节点）。调用方保证非空
-     * @param file_path 文件路径，默认为 "<unknown>"
+     * @param expr           表达式节点，原地修改（折叠可能整个换掉这个节点）。调用方保证非空
+     * @param file_path      文件路径，默认为 "<unknown>"
+     * @param in_local_scope 这条表达式的调用帧是不是局部作用域，默认为 false。
      */
-    static void analyze_single_expr(AstNodePtr &expr, std::string file_path = "<unknown>");
+    static void analyze_single_expr(
+        AstNodePtr &expr, std::string file_path = "<unknown>", bool in_local_scope = false
+    );
 };

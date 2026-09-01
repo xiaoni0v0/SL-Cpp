@@ -207,6 +207,25 @@ TEST_SUITE("赋值与复合赋值") {
         );
     }
 
+    TEST_CASE("零个左值的解构：() = x / [] = x 语法上合法（跟 Python 一致，语义层不拦）") {
+        CHECK(
+            parse_json(U"() = x") ==
+            nlohmann::json{
+                {"type", "Assign"},
+                {"target", {{"type", "LiteralTuple"}, {"items", nlohmann::json::array()}}},
+                {"value", ident("x")}
+            }
+        );
+        CHECK(
+            parse_json(U"[] = x") ==
+            nlohmann::json{
+                {"type", "Assign"},
+                {"target", {{"type", "LiteralList"}, {"items", nlohmann::json::array()}}},
+                {"value", ident("x")}
+            }
+        );
+    }
+
     TEST_CASE("没有无括号元组：a, b = x 在逗号处缺分隔符") {
         CHECK_THROWS_AS(parse_as_file(U"a, b = x"), SyntaxError);
     }

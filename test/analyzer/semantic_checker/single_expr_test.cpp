@@ -57,9 +57,16 @@ TEST_SUITE("SemanticChecker 单表达式入口") {
         CHECK_NOTHROW(check_single_expr(U"try a except (E) b"));
     }
 
-    TEST_CASE("global 仍然要求身处局部作用域，单表达式入口不改变这条") {
+    TEST_CASE("global 是否合法取决于调用帧，不是单表达式入口本身说了算") {
+        // 默认 in_local_scope=false，模拟顶层/模块帧调用 eval：跟文件顶层 global 一样非法
         check_single_expr_throws_with(U"global x", "global outside function/class body");
+        // in_local_scope=true，模拟从函数/类体内部调用 eval（SL.md 3.4.10：eval 的 code
+        // 在调用帧求值，global 判的是那一帧，不是 code 的 AST 里有没有包一层 func/class）
+        CHECK_NOTHROW(check_single_expr(U"global x", true));
+        // code 里自己写的函数体建立了新的局部作用域，跟外层调用帧是不是局部作用域无关，
+        // 两种 in_local_scope 传参下都合法
         CHECK_NOTHROW(check_single_expr(U"func f() { global x }"));
+        CHECK_NOTHROW(check_single_expr(U"func f() { global x }", true));
     }
 
     TEST_CASE("走 Program 入口时，同样这些顶层写法照常合法（对照组）") {
