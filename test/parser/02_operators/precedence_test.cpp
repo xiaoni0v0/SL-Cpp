@@ -171,6 +171,24 @@ TEST_SUITE("优先级——四则/位运算/范围") {
         );
     }
 
+    TEST_CASE("切片就是索引参数里写 ..，没有 Python 那种 a[1:2] 记法") {
+        CHECK(
+            parse_json(U"a[1..2]") == nlohmann::json{
+                                          {"type", "Index"},
+                                          {"object", ident("a")},
+                                          {"args",
+                                           nlohmann::json::array(
+                                               {{{"type", "OpBinary"},
+                                                 {"op", ".."},
+                                                 {"left", int_lit("1")},
+                                                 {"right", int_lit("2")}}}
+                                           )}
+                                      }
+        );
+        // Python 式的 a[1:2] 在 SL 里没有对应语法，': 2' 直接在这个位置报语法错误
+        check_parse_throws_with(U"a[1:2]", "expected ']'");
+    }
+
     TEST_CASE("括号可以改变运算顺序：(1 + 2) * 3") {
         CHECK(
             parse_json(U"(1 + 2) * 3") == nlohmann::json{

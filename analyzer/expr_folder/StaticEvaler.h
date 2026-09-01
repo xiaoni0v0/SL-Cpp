@@ -89,7 +89,7 @@ class StaticEvaler final {
 
     // 一元 + -
     [[nodiscard]] static AstNodePtr fold_arithmetic(const AstNodeOpUnary &node);
-    // 二元 + - * / // % **
+    // 二元 + - * // % **
     [[nodiscard]] static AstNodePtr fold_arithmetic(const AstNodeOpBinary &node);
 
     // bool/int 的位运算

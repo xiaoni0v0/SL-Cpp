@@ -42,7 +42,7 @@ class Parser {
     const Token &expect_close(Bracket kind);
     // 无条件跳过 NEWLINE
     void skip_newline();
-    // 仅当最内层那对括号是 Bracket::Plain 时跳过 NEWLINE
+    // 仅当最内层那对括号是 Paren 或 Square 时跳过 NEWLINE（ForHeader/Brace 不跳）
     void skip_paren_newline();
     // 无条件跳过 NEWLINE 和 ';'
     void skip_terminator();
@@ -168,7 +168,7 @@ class Parser {
 
   public:
     /**
-     * 构造 Lexer 对象
+     * 构造 Parser 对象
      * @param tokens    由 Lexer 输出的 tokens
      * @param file_path 文件路径，默认为 "<unknown>"
      */

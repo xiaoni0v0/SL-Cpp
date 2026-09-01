@@ -197,26 +197,34 @@ def floor_divmod_one(x_s, y_s, prec, rounding, emax, emin, mod, traps_on=None):
             record(ctx, mod.InvalidOperation)
             return mod.Decimal("NaN")
 
-        # 必须比 prec 本身宽出一截，否则"超高精度"这个假设自己先垮了：prec 逼近/超过 HUGE_PREC
-        # 时，这个参考模型会在精度不够的地方自己触发 Inexact，把本该有解的组合错判成
-        # DivisionImpossible——踩过这个坑（prec 3000 时），BigDec 那边其实算对了
-        assert prec < HUGE_PREC, "floor_divmod_one 的参考精度必须比被测的 prec 更宽"
-        big = new_ctx(HUGE_PREC, rounding, 999999999, -999999999, mod)
-        qt, rt = big.divmod(x, y)  # 向零截断
-        if qt.is_nan():
-            # 超高精度下都装不下的商，目标精度当然更装不下
-            record(ctx, mod.DivisionImpossible)
-            return mod.Decimal("NaN")
-        if big.flags[mod.Inexact]:
-            exact[0] = False
-            return None
-        q, r = qt, rt
-        if not rt.is_zero() and rt.is_signed() != y.is_signed():
-            q = big.subtract(qt, mod.Decimal(1))
-            r = big.add(rt, y)
+        if y.is_infinite():
+            # 除数无穷：真商恰好是整数 0（不需要向负无穷再修正一格）；余数就是被除数本身。
+            # 必须跟 x.is_infinite() 一样提前特判、不能落进下面"截断再修正"的通用算法——
+            # 那套算法假设截断商之外还有个非零小数部分要向负无穷收，但除数无穷时截断商
+            # 本身就已经是精确的 0，没有"再收一格"的余地（0 × Infinity 才是没定义的）
+            q = mod.Decimal("-0") if sign else mod.Decimal("0")
+            r = x
+        else:
+            # 必须比 prec 本身宽出一截，否则"超高精度"这个假设自己先垮了：prec 逼近/超过
+            # HUGE_PREC 时，这个参考模型会在精度不够的地方自己触发 Inexact，把本该有解的
+            # 组合错判成 DivisionImpossible——踩过这个坑（prec 3000 时），BigDec 那边其实算对了
+            assert prec < HUGE_PREC, "floor_divmod_one 的参考精度必须比被测的 prec 更宽"
+            big = new_ctx(HUGE_PREC, rounding, 999999999, -999999999, mod)
+            qt, rt = big.divmod(x, y)  # 向零截断
+            if qt.is_nan():
+                # 超高精度下都装不下的商，目标精度当然更装不下
+                record(ctx, mod.DivisionImpossible)
+                return mod.Decimal("NaN")
             if big.flags[mod.Inexact]:
                 exact[0] = False
                 return None
+            q, r = qt, rt
+            if not rt.is_zero() and rt.is_signed() != y.is_signed():
+                q = big.subtract(qt, mod.Decimal(1))
+                r = big.add(rt, y)
+                if big.flags[mod.Inexact]:
+                    exact[0] = False
+                    return None
         if q.is_finite() and len(q.copy_abs().as_tuple().digits) > prec:
             record(ctx, mod.DivisionImpossible)
             return mod.Decimal("NaN")

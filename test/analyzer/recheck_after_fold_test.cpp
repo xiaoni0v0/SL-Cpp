@@ -7,9 +7,9 @@
 namespace {
 
 // 按 Analyzer 的顺序跑一遍（check -> fold），再把折完的树 check 一遍，返回折叠后的 JSON。
-// 折叠走 ExprFolder::fold_expr 而不是整份 Program 的入口，免得折成纯字面量之后被 prune 掉，
+// 折叠走 ExprFolder::fold_single_expr 而不是整份 Program 的入口，免得折成纯字面量之后被 prune 掉，
 // 那样重新 check 的就是一棵空树，测了等于没测。
-nlohmann::json fold_and_recheck(const std::u32string &source) {
+nlohmann::json fold_and_recheck(const std::u32string &source, const bool include_pos = false) {
     AstNodeProgramPtr program{parse_as_file(source)};
     SemanticChecker{*program, "<test>"}.check();
     if (program->exprs_.size() != 1) {
@@ -20,7 +20,7 @@ nlohmann::json fold_and_recheck(const std::u32string &source) {
     }
     ExprFolder::fold_single_expr(program->exprs_[0]);
     SemanticChecker{*program, "<test>"}.check(); // 折完了还得能过
-    return nlohmann::json(program->exprs_[0]->to_json());
+    return nlohmann::json(program->exprs_[0]->to_json(include_pos));
 }
 
 } // namespace
@@ -48,8 +48,9 @@ TEST_SUITE("折叠产物重新 check 也能过——负 int") {
         // 科学计数法的 int 按值参与折叠（折叠器内部把指数展开成普通数字串再走 int64_t 那条路），
         // `1e9 - 2e9` 会折成 -1000000000。折没折不重要，重要的是重新 check 照样过
         CHECK(fold_and_recheck(U"1e9 - 2e9") == int_lit("-1000000000"));
-        CHECK_NOTHROW(fold_and_recheck(U"-1e9"));
-        CHECK_NOTHROW(fold_and_recheck(U"-1.5e-3"));
+        CHECK(fold_and_recheck(U"-1e9") == int_lit("-1000000000"));
+        // decimal 一律不折，一元负号原样留着 OpUnary
+        CHECK(fold_and_recheck(U"-1.5e-3")["type"] == "OpUnary");
     }
 }
 
@@ -78,5 +79,29 @@ TEST_SUITE("折叠产物重新 check 也能过——嵌在别的结构里") {
         SemanticChecker{*program, "<test>"}.check();
         ExprFolder::fold_program(*program);
         CHECK_NOTHROW(SemanticChecker{*program, "<test>"}.check());
+    }
+}
+
+TEST_SUITE("折叠产物重新 check 也能过——链式比较部分折叠") {
+    // 部分折叠是折叠器里唯一一条"手动重建 ops_/operands_/positions_op_ 三个 vector"的路径，
+    // 一旦下标写错导致三者长度不匹配，SemanticChecker::visit(AstNodeCompare) 的
+    // require_same_size 会在重新 check 时抓到——这里既确认重新 check 能过，也确认剩下那个
+    // 运算符的位置没有被丢换成别的运算符的位置。
+
+    TEST_CASE("前两环确定为 True，剩下的链重新 check 也能过") {
+        CHECK_NOTHROW(fold_and_recheck(U"1 < 2 < x"));
+        CHECK_NOTHROW(fold_and_recheck(U"1 < 2 < 3 < x"));
+    }
+
+    TEST_CASE("部分折叠后 positions_op 是剩下那个运算符自己的位置，不是被丢掉的那个") {
+        // "1 < 2 < 3 < x" -> 1(1) (2)<(3) (4)2(5) (6)<(7) (8)3(9) (10)<(11) (12)x(13)
+        // 前两环 "1 < 2"、"2 < 3" 都确定为 True，剩下 "3 < x"，对应第三个 '<'（列 11）
+        // 必须用 = 拷贝初始化，不能用 {}——见 .ai/notes/json-test-brace-init-trap.md
+        const auto result = fold_and_recheck(U"1 < 2 < 3 < x", true);
+        CHECK(result["type"] == "Compare");
+        REQUIRE(result["positions_op"].size() == 1);
+        CHECK(result["positions_op"][0]["col"] == 11);
+        // 剩下的链自己的起始位置也该是 "3"（列 9），不是原链的起点 "1"
+        CHECK(result["pos"]["col"] == 9);
     }
 }

@@ -168,7 +168,7 @@ TEST_SUITE("import 调用形态") {
         check_parse_throws_with(U"import('math'", "expected ')' to close function call");
     }
 
-    TEST_CASE("实参表内部可以随意换行（括号内，paren_depth_ 正常生效）") {
+    TEST_CASE("实参表内部可以随意换行（括号内，brackets_ 栈顶是 Paren，换行当空白）") {
         CHECK(
             parse_json(U"import(\n  'os',\n  lazy=True,\n)")["positional_args"] ==
             nlohmann::json::array({str_literal("os")})

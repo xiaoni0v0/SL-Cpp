@@ -31,7 +31,7 @@ struct AstNodeDel : AstNode {
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
-// global identifier（语法本身就是标识符，不是表达式，解析时直接 expect(IDENTIFIER)）
+// global identifier
 struct AstNodeGlobal : AstNode {
     std::u32string identifier_;
 

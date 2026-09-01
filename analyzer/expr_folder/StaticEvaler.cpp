@@ -231,7 +231,7 @@ AstNodePtr StaticEvaler::fold_if(AstNodeIf &node) {
     // 第一个 clause 就没法判定
     if (i == 0) return nullptr;
 
-    // 确定为全是 True
+    // 确定为全是 False
     if (i == node.clauses_.size()) {
         if (node.else_expr_) return std::move(node.else_expr_);
         return std::make_unique<AstNodeLiteralNone>(node.pos_);
@@ -247,8 +247,8 @@ AstNodePtr StaticEvaler::fold_if(AstNodeIf &node) {
 AstNodePtr StaticEvaler::fold_for_cond(AstNodeForCond &node) {
     // 空->True、不是字面量、真值判不了、真值为 True，这四种都不折
     if (!node.cond_ || !is_literal_pure(*node.cond_)) return nullptr;
-    const std::optional cond_truthy{truthy(*node.cond_)};
-    if (!cond_truthy || *cond_truthy) return nullptr;
+    if (const std::optional cond_truthy{truthy(*node.cond_)}; !cond_truthy || *cond_truthy)
+        return nullptr;
 
     // $$ 一轮没跑的值是个空 dict，不折
     if (node.collect_.container_ == CollectMark::Container::Dict) return nullptr;

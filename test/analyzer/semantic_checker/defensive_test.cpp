@@ -153,12 +153,12 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
     }
 
     TEST_CASE("AstNodeFunc/AstNodeClass：decorators_ 和 positions_decorator_ 数量对不上") {
-        std::vector<AstNodePtr> decorators;
-        decorators.push_back(int_lit());
+        std::vector<AstNodePtr> func_decorators;
+        func_decorators.push_back(int_lit());
         AstNodeProgramPtr func_program{wrap(
             std::make_unique<AstNodeFunc>(
                 Position{0, 0},
-                std::move(decorators),
+                std::move(func_decorators),
                 std::vector<Position>{},
                 std::nullopt,
                 std::vector<OneCapture>{},
@@ -169,6 +169,53 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
             )
         )};
         check_throws_internal_error_with(*func_program, "mismatched array sizes");
+
+        std::vector<AstNodePtr> class_decorators;
+        class_decorators.push_back(int_lit());
+        AstNodeProgramPtr class_program{wrap(
+            std::make_unique<AstNodeClass>(
+                Position{0, 0},
+                std::move(class_decorators),
+                std::vector<Position>{},
+                std::nullopt,
+                std::vector<AstNodePtr>{},
+                std::vector<OneCapture>{},
+                nullptr,
+                std::make_unique<AstNodeProgram>(Position{0, 0}, std::vector<AstNodePtr>{})
+            )
+        )};
+        check_throws_internal_error_with(*class_program, "mismatched array sizes");
+    }
+
+    TEST_CASE("AstNodeFunc/AstNodeClass：body_ 为空指针") {
+        AstNodeProgramPtr func_program{wrap(
+            std::make_unique<AstNodeFunc>(
+                Position{0, 0},
+                std::vector<AstNodePtr>{},
+                std::vector<Position>{},
+                std::nullopt,
+                std::vector<OneCapture>{},
+                AstNodeFunc::AllParams{},
+                nullptr,
+                nullptr,
+                nullptr
+            )
+        )};
+        check_throws_internal_error_with(*func_program, "unexpected null node");
+
+        AstNodeProgramPtr class_program{wrap(
+            std::make_unique<AstNodeClass>(
+                Position{0, 0},
+                std::vector<AstNodePtr>{},
+                std::vector<Position>{},
+                std::nullopt,
+                std::vector<AstNodePtr>{},
+                std::vector<OneCapture>{},
+                nullptr,
+                nullptr
+            )
+        )};
+        check_throws_internal_error_with(*class_program, "unexpected null node");
     }
 
     TEST_CASE("AstNodeClass：captures_ 里某一项 identifier_ 是空字符串") {

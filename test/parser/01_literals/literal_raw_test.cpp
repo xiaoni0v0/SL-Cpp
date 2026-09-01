@@ -57,6 +57,10 @@ TEST_SUITE("字面量 raw_ 校验——正例走真实源码，Lexer 吐出来�
         CHECK_NOTHROW(parse_as_file(U"0e0"));
         CHECK_NOTHROW(parse_as_file(U"123e4"));
         CHECK_NOTHROW(parse_as_file(U"1e9999")); // 恰好是上限
+        // 光是"能解析"钉不住"折出来的节点类型对不对"——万一 lexer/parser 把它收成了
+        // LiteralDecimal，上面这些 CHECK_NOTHROW 全部照样绿
+        CHECK(parse_json(U"1e9") == int_lit("1e9"));
+        CHECK(parse_json(U"1e9")["type"] == "LiteralInt");
     }
 
     TEST_CASE("科学计数法：尾数带小数点，是 decimal，指数可正可负") {
@@ -67,6 +71,8 @@ TEST_SUITE("字面量 raw_ 校验——正例走真实源码，Lexer 吐出来�
         CHECK_NOTHROW(parse_as_file(U"0.05e3"));
         CHECK_NOTHROW(parse_as_file(U"1.0e-0"));
         CHECK_NOTHROW(parse_as_file(U"1.0e999999")); // decimal 侧不设指数上限
+        CHECK(parse_json(U"1.0e9")["type"] == "LiteralDecimal");
+        CHECK(parse_json(U"1.0e9")["raw"] == "1.0e9");
     }
 
     TEST_CASE("科学计数法出现在各种表达式位置上") {

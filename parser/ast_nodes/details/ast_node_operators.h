@@ -163,7 +163,8 @@ struct AstNodeAssign : AstNode {
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
-// target op= expr（op 为算术/位运算，由语义层校验）
+// target op= expr
+// （op 为算术/位运算，由 Parser::assign_compound_to_binary 的白名单保证，不是语义层校验的）
 struct AstNodeCompoundAssign : AstNode {
     AstNodePtr target_;
     AstNodeOpBinary::OpType op_;

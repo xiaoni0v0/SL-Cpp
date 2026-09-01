@@ -54,7 +54,7 @@ TEST_SUITE("Parser 的 SyntaxError 行为") {
     }
 
     TEST_CASE("遇到 EOF 时区分'括号未闭合'和'单纯缺表达式'两种措辞，不能笼统一句带过") {
-        // "(" -> 未闭合括号内缺表达式，paren_depth_ > 0，提示是括号没收尾
+        // "(" -> 未闭合括号内缺表达式，brackets_ 非空，提示是括号没收尾
         try {
             parse_as_file(U"(");
             FAIL("应当抛出异常");
@@ -63,9 +63,9 @@ TEST_SUITE("Parser 的 SyntaxError 行为") {
             CHECK(msg.find("unclosed bracket") != std::string::npos);
             CHECK(msg.find("1:2:") != std::string::npos); // EOF 紧跟在 '(' 之后
         }
-        // "1 +" -> 二元运算符消耗完还等着右操作数，paren_depth_ == 0，提示是缺了表达式本身
+        // "1 +" -> 二元运算符消耗完还等着右操作数，brackets_ 为空，提示是缺了表达式本身
         // （注：完全空的输入 "" 本身语法上合法——parse_exprs 的循环条件一见 EOF 就直接不进入循环体，
-        // 根本不会走到 parse_non_op，产出的是空的顶层表达式列表，不是错误）
+        // 根本不会走到 parse_non_op，产出的是空的顶层表达式列表，不是错误，断言见下面单独的用例）
         try {
             parse_as_file(U"1 +");
             FAIL("应当抛出异常");
@@ -75,6 +75,15 @@ TEST_SUITE("Parser 的 SyntaxError 行为") {
             CHECK(msg.find("unclosed bracket") == std::string::npos);
             CHECK(msg.find("1:4:") != std::string::npos); // EOF 紧跟在 "1 +" 之后
         }
+    }
+
+    TEST_CASE("空输入（或只有注释/空白）语法上合法，产出空 Program，不是错误") {
+        CHECK(
+            parse_program_json(U"") ==
+            nlohmann::json{{"type", "Program"}, {"exprs", nlohmann::json::array()}}
+        );
+        CHECK(parse_program_json(U"   \n\n  ") == parse_program_json(U""));
+        CHECK(parse_program_json(U"# 整段都是注释\n# 还是注释") == parse_program_json(U""));
     }
 
     TEST_CASE(

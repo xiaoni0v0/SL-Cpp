@@ -243,15 +243,16 @@ TEST_SUITE("BigDec——// 和 % 的向负无穷取整语义") {
         }
     }
 
-    TEST_CASE("除数是无穷：结果符合 floor 的定义，也保住了恒等式") {
+    TEST_CASE("除数是无穷：真商恰好是 0，不需要向负无穷再修正一格") {
         DecContext ctx{quiet_context()};
         CHECK(d("1").floor_div(d("Infinity"), ctx).to_string() == "0");
         CHECK(d("1").mod(d("Infinity"), ctx).to_string() == "1");
-        // 一正一负：真商是个无穷小的负数，向负无穷取整就是 -1，余数随之变成 -Infinity
-        CHECK(d("1").floor_div(d("-Infinity"), ctx).to_string() == "-1");
-        CHECK(d("1").mod(d("-Infinity"), ctx).to_string() == "-Infinity");
-        CHECK(d("-1").floor_div(d("Infinity"), ctx).to_string() == "-1");
-        CHECK(d("-1").mod(d("Infinity"), ctx).to_string() == "Infinity");
+        // 一正一负：真商是精确的 0（带符号的 -0），floor(-0) 仍是 -0，不会再减 1；
+        // 余数就是被除数本身，不会被"修正"成无穷
+        CHECK(d("1").floor_div(d("-Infinity"), ctx).to_string() == "-0");
+        CHECK(d("1").mod(d("-Infinity"), ctx).to_string() == "1");
+        CHECK(d("-1").floor_div(d("Infinity"), ctx).to_string() == "-0");
+        CHECK(d("-1").mod(d("Infinity"), ctx).to_string() == "-1");
         CHECK(d("0").floor_div(d("Infinity"), ctx).to_string() == "0");
         CHECK(d("0").mod(d("Infinity"), ctx).to_string() == "0");
     }

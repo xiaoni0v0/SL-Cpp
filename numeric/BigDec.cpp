@@ -859,6 +859,8 @@ BigDec BigDec::floor_div(const BigDec &rhs, DecContext &ctx) const {
         ctx.raise(DecCondition::DivisionByZero);
         return infinity(sign_ != rhs.sign_);
     }
+    // 除数无穷：真商恰好是 0
+    if (rhs.is_infinite()) return quotient_to_dec(BigInt(0), sign_ != rhs.sign_).fix(ctx);
     const std::optional<std::pair<BigInt, BigDec>> trunc{trunc_divmod(rhs, ctx.prec())};
     if (!trunc) return raise_invalid(ctx, DecCondition::DivisionImpossible);
     const std::optional<BigInt> quotient{
@@ -877,6 +879,8 @@ BigDec BigDec::mod(const BigDec &rhs, DecContext &ctx) const {
         return raise_invalid(
             ctx, is_zero() ? DecCondition::DivisionUndefined : DecCondition::InvalidOperation
         );
+    // 除数无穷：商恒为 0，余数就是被除数本身
+    if (rhs.is_infinite()) return fix(ctx);
     const std::optional<std::pair<BigInt, BigDec>> trunc{trunc_divmod(rhs, ctx.prec())};
     if (!trunc) return raise_invalid(ctx, DecCondition::DivisionImpossible);
     // 商本身用不上，但商算不出来的话 x % y == x - (x // y) * y 就不成立了，这里只取它的成败
@@ -905,6 +909,9 @@ std::pair<BigDec, BigDec> BigDec::divmod(const BigDec &rhs, DecContext &ctx) con
         ctx.raise(DecCondition::DivisionByZero);
         return {infinity(sign_ != rhs.sign_), raise_invalid(ctx)};
     }
+    // 除数无穷：商恒为 0，余数就是被除数本身，不需要向负无穷修正（同 floor_div/mod）
+    if (rhs.is_infinite())
+        return {quotient_to_dec(BigInt(0), sign_ != rhs.sign_).fix(ctx), fix(ctx)};
     const std::optional<std::pair<BigInt, BigDec>> trunc{trunc_divmod(rhs, ctx.prec())};
     const std::optional<BigInt> quotient{
         trunc ? floor_quotient(trunc->first, *this, rhs, trunc->second, ctx.prec()) : std::nullopt

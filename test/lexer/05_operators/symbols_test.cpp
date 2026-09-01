@@ -73,14 +73,16 @@ TEST_SUITE("符号：贪婪最长匹配（多字符优先于短的）") {
         CHECK(lex_dump(U"%=") == "SIGN_PERCENT_ASSIGN");
     }
 
-    TEST_CASE("& 系列：& / &=") {
+    TEST_CASE("& 系列：& / &=，没有 &&（SL 没有这个记号，两个 & 就是两个单字符）") {
         CHECK(lex_dump(U"&") == "SIGN_AMPERSAND");
         CHECK(lex_dump(U"&=") == "SIGN_AMPERSAND_ASSIGN");
+        CHECK(lex_dump(U"&&") == "SIGN_AMPERSAND SIGN_AMPERSAND");
     }
 
-    TEST_CASE("| 系列：| / |=") {
+    TEST_CASE("| 系列：| / |=，没有 ||（同上，两个 | 就是两个单字符）") {
         CHECK(lex_dump(U"|") == "SIGN_PIPE");
         CHECK(lex_dump(U"|=") == "SIGN_PIPE_ASSIGN");
+        CHECK(lex_dump(U"||") == "SIGN_PIPE SIGN_PIPE");
     }
 
     TEST_CASE("^ 系列：^ / ^=") {

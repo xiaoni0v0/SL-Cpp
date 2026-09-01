@@ -275,7 +275,7 @@ TEST_SUITE(
     }
 }
 
-TEST_SUITE("StaticEvaler 容器运算——大小上限（kMaxStrLength=4096, kMaxContainerItems=256）") {
+TEST_SUITE("StaticEvaler 容器运算——大小上限（nMaxStrLength=4096, nMaxContainerItems=256）") {
 
     TEST_CASE("str + 恰好等于上限折，超一个字符不折") {
         CHECK(

@@ -24,9 +24,20 @@ TEST_SUITE("SemanticChecker 作用域") {
     }
 
     TEST_CASE("func/class 体把 loop_depth 归零") {
-        CHECK_THROWS_AS(check_program(U"while (True) { func f() { break } }"), SyntaxError);
-        CHECK_THROWS_AS(check_program(U"while (True) { func f() { continue } }"), SyntaxError);
-        CHECK_THROWS_AS(check_program(U"while (True) { class C { break } }"), SyntaxError);
+        check_throws_with(U"while (True) { func f() { break } }", "break outside loop");
+        check_throws_with(U"while (True) { func f() { continue } }", "continue outside loop");
+        check_throws_with(U"while (True) { class C { break } }", "break outside loop");
+    }
+
+    TEST_CASE("break/continue 不能出现在循环头部的槽里，只能在循环体里") {
+        // cond/init/inc/iterable 各槽都在 loop_depth++ 之前检查，出现在这些槽里跟压根不在
+        // 循环里是一回事
+        check_throws_with(U"while (break) 1", "break outside loop");
+        check_throws_with(U"while (continue) 1", "continue outside loop");
+        check_throws_with(U"for (break; True; i += 1) 1", "break outside loop");
+        check_throws_with(U"for (i = 0; break; i += 1) 1", "break outside loop");
+        check_throws_with(U"for (i = 0; True; break) 1", "break outside loop");
+        check_throws_with(U"for (break as i) 1", "break outside loop");
     }
 
     TEST_CASE("return 在 Program 里都合法") {

@@ -125,6 +125,9 @@ TEST_SUITE("BigInt——构造与十进制字符串往返") {
         );
         // 前导零不计入位数：下面这个去掉前导零只有 1 位，照收
         CHECK(d("1e0000000000000000000009").to_decimal_string() == "1000000000");
+        // 尾数是零不该走"0 直接短路"那条捷径把残缺指数的错误吞掉——得先因指数残缺抛错
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("0e"), std::invalid_argument);
+        CHECK_THROWS_AS((void) BigInt::from_decimal_string("0e+"), std::invalid_argument);
     }
 
     TEST_CASE("超长十进制字符串往返（500 位、2000 位），顺带过一遍加减法不会破坏这么长的数") {

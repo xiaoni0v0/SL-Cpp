@@ -232,7 +232,7 @@ void SemanticChecker::visit(const AstNodeFunc &node) {
     ctx_.in_local_scope = true;
     ctx_.loop_depth = 0;
     ctx_.finally_loop_depth = -1;
-    visit(*node.body_);
+    check_not_null(node.body_, pos);
 }
 
 void SemanticChecker::visit(const AstNodeImportKw &node) {

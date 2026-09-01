@@ -19,10 +19,11 @@
 - [no-section-numbers.md](no-section-numbers.md) — 代码/测试/目录名里一律不许出现 SL.md 章节号，只能写文字描述
 - [parser-member-vs-lambda.md](parser-member-vs-lambda.md) — Parser.cpp 里辅助逻辑该当类成员还是局部 lambda 的判断标尺
 - [parser-prefer-expect.md](parser-prefer-expect.md) — 消耗类型确定的 token 一律用 expect(X)，不用裸 advance()
-- [parser-paren-depth-convention.md](parser-paren-depth-convention.md) — finish_* 系列函数管理 paren_depth_ 和括号收尾的统一约定
+- [parser-paren-depth-convention.md](parser-paren-depth-convention.md) — finish_* 系列函数管理括号栈 brackets_ 和括号收尾的统一约定
 - [parser-token-vs-expr-level.md](parser-token-vs-expr-level.md) — Parser 某个槽位该收紧到 token 级别还是走通用表达式再交给语义层判形状
 - [ast-node-passing-conventions.md](ast-node-passing-conventions.md) — AST 节点该传引用、非 const 引用还是智能指针引用，以及 const 在这里承载的信息
 - [json-test-brace-init-trap.md](json-test-brace-init-trap.md) — 写 parser 测试时 nlohmann::json 花括号初始化会被吃成数组的坑
+- [grok-dsh-cli-review.md](grok-dsh-cli-review.md) — 调用本机 grok/dsh 两个 CLI 做交叉代码审查时的只读参数，避免卡在权限提示上
 
 ## 记录新笔记的原则
 

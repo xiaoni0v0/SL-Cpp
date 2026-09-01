@@ -151,8 +151,9 @@ Python 内置的 int）产出，对应的 `02_bigdec/python_cross_test.cpp` /
 这些是在这个代码库里反复被验证过的取舍标准，加新功能/改现有代码时默认套用：
 
 - **非法状态在数据形状层面就不可表达，优于"用状态机扫描去挡"**。例：`AstNodeFunc` 的形参列表拆成
-  4 个字段对应形参列表的 4 段（`params_`/`var_args_name_`/`kw_only_params_`/`var_kwargs_name_`），
-  不是一个打了 tag 的扁平 vector 靠布尔标志区分区域；`AstNodeCall` 拆成 `positional_args_`/
+  `AllParams` 聚合体里对应形参列表 4 段的 4 个字段（`positional_`/`var_args_name_`/`kw_only_`/
+  `var_kwargs_name_`），不是一个打了 tag 的扁平 vector 靠布尔标志区分区域；`AstNodeCall`/
+  `AstNodeImportCall`/`AstNodeEval` 共用的 `CallArgs` 聚合体拆成 `positional_args_`/
   `keyword_args_` 两个字段各自保持书写顺序；`CollectMark`（`for`/`while` 的收集模式记号）拆成
   `Container` 枚举 + `expand_` 布尔两个正交字段，而不是四个字符串常量。这类打了 tag 的扁平结构是
   最容易漏边界情况的地方——状态机代码里"这个组合出现了但没被处理"的分支永远比看起来的多。
@@ -165,7 +166,7 @@ Python 内置的 int）产出，对应的 `02_bigdec/python_cross_test.cpp` /
   包一层——除非这个字段是全 AST 唯一需要这种表达力的地方，那种情况下 `variant` 才划算。
 - **各层入口的形态按"有没有可变状态"选，不要凭手感**：带跨节点遍历状态、必须保证"同一个对象只跑
   一次"的，做成**一次性对象 + 右值限定方法**，用 `&&` 让类型系统挡住第二次调用（`Parser` 的
-  `pos_`/`paren_depth_`、`SemanticChecker` 的 `ctx_`）；完全无状态、所需信息全在参数里的，做成
+  `pos_`/`brackets_`、`SemanticChecker` 的 `ctx_`）；完全无状态、所需信息全在参数里的，做成
   **静态函数**（`ExprFolder` 的所有 `visit` 本来就是静态的，`Analyzer` 只是把两步串起来）。
   别给无状态的东西套一个只存了个引用的构造函数——那是实例的外壳、静态的内里，同一个类里迟早出现
   一半入口是实例一半是静态的分裂。

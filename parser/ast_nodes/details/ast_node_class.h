@@ -16,7 +16,7 @@
 // ⟦@decorator ...⟧ class ⟦name⟧ ⟦(bases)⟧ ⟦[captures]⟧ ⟦doc⟧ { body }
 struct AstNodeClass : AstNode {
     std::vector<AstNodePtr> decorators_;        // 可空
-    std::vector<Position> positions_decorator_; // 每个装饰器自己的位置
+    std::vector<Position> positions_decorator_; // 每个装饰器自己的 '@' 位置
     std::optional<std::u32string> name_;        // nullopt 表示匿名类
     std::vector<AstNodePtr> bases_;             // 可空
     std::vector<OneCapture> captures_;          // 可空，语法/语义与 AstNodeFunc 的捕获列表完全一致

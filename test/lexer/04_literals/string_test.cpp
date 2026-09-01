@@ -49,10 +49,47 @@ TEST_SUITE("普通字符串") {
         }
     }
 
+    TEST_CASE("转义自己的闭合引号：双引号串里 \\\" 也认，不是只有单引号串里的 \\' 被测过") {
+        // 上面 11 种转义那组两个例子都是拿单引号串测的（'\''、'\"'），双引号串转义自己的
+        // 闭合引号从没单独测过——两种引号共用同一张转义表，这里补上双引号那一侧
+        CHECK(lex_dump(U"\"\\\"\"") == "LITERAL_STR(\")");
+        const auto tokens{lex(U"\"\\\"\"")};
+        REQUIRE(tokens.size() == 2);
+        CHECK(tokens[0].lexeme == U"\"");
+    }
+
     TEST_CASE("转义可与普通字符混用") {
         const auto tokens{lex(U"\"a\\tb\\nc\"")};
         REQUIRE(tokens.size() == 2);
         CHECK(tokens[0].lexeme == U"a\tb\nc");
+    }
+
+    TEST_CASE("\\0 只是单个 NUL 字符，不是 C 系的八进制转义前缀") {
+        // "\01" 应该是 NUL + 字符 '1'（两个码点），不是当成 \001 之类的八进制值去吃后续数字
+        const auto tokens{lex(U"\"\\01\"")};
+        REQUIRE(tokens.size() == 2);
+        REQUIRE(tokens[0].lexeme.size() == 2);
+        CHECK(tokens[0].lexeme[0] == U'\0');
+        CHECK(tokens[0].lexeme[1] == U'1');
+        // "\1" 没有这个转义，未知转义照样报错，不会被误当成八进制/十进制转义收掉
+        CHECK_THROWS_AS(lex(U"\"\\1\""), SyntaxError);
+    }
+
+    TEST_CASE("相邻字符串字面量不会自动拼接（SL 没有这条规则）") {
+        CHECK(lex_dump(U"\"a\" \"b\"") == "LITERAL_STR(a) LITERAL_STR(b)");
+        const auto tokens{lex(U"\"a\"\"b\"")};
+        REQUIRE(tokens.size() == 3);
+        CHECK(tokens[0].type == TokenType::LITERAL_STR);
+        CHECK(tokens[0].lexeme == U"a");
+        CHECK(tokens[1].type == TokenType::LITERAL_STR);
+        CHECK(tokens[1].lexeme == U"b");
+    }
+
+    TEST_CASE("保留字/关键字拼出的文本出现在字符串内容里，只是普通文本，不报保留字错误") {
+        CHECK(lex_dump(U"\"local assert yield\"") == "LITERAL_STR(local assert yield)");
+        const auto tokens{lex(U"\"local\"")};
+        REQUIRE(tokens.size() == 2);
+        CHECK(tokens[0].type == TokenType::LITERAL_STR);
     }
 
     TEST_CASE("未知转义报错，列指向反斜杠") {

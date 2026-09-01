@@ -334,7 +334,7 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         // lbp == -1 表示非中缀/后缀运算符；lbp < min_bp 表示绑定力不足，让上层处理
         if (lbp < min_bp) break;
 
-        // 全部交给 finish_call / finish_index 处理
+        // 全部交给 finish_call_args() / finish_index 处理
         if (op == TokenType::SIGN_LPAREN) {
             left = std::make_unique<AstNodeCall>(start_pos, std::move(left), finish_call_args());
             continue;
@@ -377,8 +377,8 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
             left = std::make_unique<AstNodeAttr>(
                 start_pos,
                 std::move(left),
-                expect(TokenType::IDENTIFIER).lexeme,
-                pos_op // 消耗标识符
+                expect(TokenType::IDENTIFIER).lexeme, // 消耗标识符
+                pos_op                                // '.' 自己的位置
             );
             continue;
         }

@@ -20,6 +20,10 @@ TEST_SUITE("ExprFolder eval") {
         const auto result = fold_json(U"eval(**{'code': 'a' + 'b'})");
         CHECK(result["keyword_args"][0]["keyword"] == nullptr);
         CHECK(result["keyword_args"][0]["value"]["type"] == "DoubleStar");
+        // 只查到 DoubleStar 这层不够——内层字典的 value（'a' + 'b'）真的被折了才算数
+        const auto &dict{result["keyword_args"][0]["value"]["operand"]};
+        CHECK(dict["type"] == "LiteralDict");
+        CHECK(dict["items"][0]["value"] == str_lit("ab"));
     }
 
     TEST_CASE("eval 节点本身不折，也不会当纯字面量丢掉") {

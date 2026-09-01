@@ -425,6 +425,7 @@ add_executable(SL_Cpp_Analyzer_Tests
         test/analyzer/semantic_checker/dict_call_test.cpp
         test/analyzer/semantic_checker/func_class_test.cpp
         test/analyzer/semantic_checker/import_test.cpp
+        test/analyzer/semantic_checker/eval_test.cpp
         test/analyzer/semantic_checker/single_expr_test.cpp
         test/analyzer/semantic_checker/defensive_test.cpp
 

@@ -118,6 +118,20 @@ TEST_SUITE("is 链") {
         );
     }
 
+    TEST_CASE("`not a is b` 是 not (a is b)：is（50）比 not（40）紧") {
+        CHECK(
+            parse_json(U"not a is b") ==
+            nlohmann::json{
+                {"type", "OpUnary"},
+                {"op", "not"},
+                {"operand",
+                 nlohmann::json{
+                     {"type", "Is"}, {"operands", nlohmann::json::array({ident("a"), ident("b")})}
+                 }}
+            }
+        );
+    }
+
     TEST_CASE("反过来：a is b < c 即 a is (b < c)（比较比 is 紧）") {
         CHECK(
             parse_json(U"a is b < c") ==

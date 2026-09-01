@@ -81,21 +81,22 @@ TEST_SUITE("跨分组组合——装饰器/类/函数/for/try/字典展开/is �
     }
 }
 
-TEST_SUITE("跨分组组合——{}/()/[] 混着嵌套时 paren_depth_ 的一致性") {
+TEST_SUITE("跨分组组合——{}/()/[] 混着嵌套时括号栈 brackets_ 的一致性") {
 
     TEST_CASE(
         "字典 value 换行不应合并这条规则，嵌套再深也不能失效（比 compound_dict_test.cpp 原始"
         "回归用例多包一层 list 和 call）"
     ) {
-        // f( [ { 'a' : 1 \n + 2 } ] )：dict 进入时把 paren_depth_ 清零，不管外层是 f( 还是 [
-        // 嵌了几层， 'a' 对应的 value 在换行处都应该老老实实结束，不能被外层的括号深度带偏而把 "+
-        // 2" 接续进来
+        // f( [ { 'a' : 1 \n + 2 } ] )：进入 {} 时 brackets_ 栈顶被压成 Brace，不管外层是
+        // f( 还是 [ 嵌了几层，只要栈顶是 Brace，skip_paren_newline 就不会跳过换行——
+        // 'a' 对应的 value 在换行处都应该老老实实结束，不能被外层的括号嵌套带偏而把 "+ 2"
+        // 接续进来
         CHECK_THROWS_AS(parse_as_file(U"f([{'a': 1\n+ 2}])"), SyntaxError);
     }
 
     TEST_CASE(
-        "字典结束后 paren_depth_ 正确恢复到外层，同一个调用里字典后面的实参依然支持跨行合并"
-        "（parse_brace 的 dict 分支必须在 finish_dict 返回之后才恢复 paren_depth_，不能提前）"
+        "字典结束后 brackets_ 栈顶正确恢复到外层，同一个调用里字典后面的实参依然支持跨行合并"
+        "（parse_brace 必须在 finish_dict 返回之后才 expect_close(Brace) 弹栈，不能提前）"
     ) {
         const std::u32string source{U"f({'a': 1}, x\n+ y)"};
         CHECK_NOTHROW(parse_as_file(source));
@@ -123,10 +124,11 @@ TEST_SUITE("跨分组组合——{}/()/[] 混着嵌套时 paren_depth_ 的一致
     }
 
     TEST_CASE(
-        "for 头部某一槽本身是字典字面量（内部会保存/清零/恢复 paren_depth_），"
-        "不影响 consume_sep 对槽间换行分隔符的判定"
+        "for 头部某一槽本身是字典字面量（内部会各自独立压栈/弹栈 Bracket::Brace），"
+        "不影响 parse_for 对槽间换行分隔符的判定"
     ) {
-        // init 槽里的字典会临时清零/恢复 paren_depth_，不应干扰槽间换行分隔。
+        // init 槽里的字典进入/退出时各自把 Brace 压栈/弹栈，brackets_ 栈底的 ForHeader
+        // 全程不受影响，不应干扰槽间换行分隔。
         const std::u32string source = U"for (state = {'count': 0}\n"
                                       U"     state.count < 10\n"
                                       U"     state.count += 1) body";

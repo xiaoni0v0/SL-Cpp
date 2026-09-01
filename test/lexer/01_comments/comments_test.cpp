@@ -35,7 +35,30 @@ TEST_SUITE("注释") {
         CHECK(lex_dump(U"/* a /* b */ c */") == "IDENTIFIER(c) SIGN_STAR SIGN_SLASH");
     }
 
-    TEST_CASE("未闭合块注释报错") { CHECK_THROWS_AS(lex(U"1 /* never closed"), SyntaxError); }
+    TEST_CASE("注释里出现保留字/关键字拼出的文本，只是普通文本") {
+        // 整行都是注释、这一行又是源码开头：行首换行被省略，不会多出一个 NEWLINE
+        CHECK(lex_dump(U"# local assert yield\n1") == "LITERAL_INT(1)");
+        CHECK(lex_dump(U"/* local assert */ 1") == "LITERAL_INT(1)");
+    }
+
+    TEST_CASE("空块注释 /**/ 是合法的空白") {
+        CHECK(lex_dump(U"1 /**/ 2") == "LITERAL_INT(1) LITERAL_INT(2)");
+    }
+
+    TEST_CASE("/*/ 不是自己闭合的块注释：内容是单个 '/'，仍未闭合") {
+        CHECK_THROWS_AS(lex(U"/*/"), SyntaxError);
+    }
+
+    TEST_CASE("未闭合块注释报错，消息和位置指向 /* 开头") {
+        try {
+            lex(U"1 /* never closed");
+            FAIL("应当抛出异常");
+        } catch (const SyntaxError &e) {
+            const std::string msg{e.what()};
+            CHECK(msg.find("unterminated") != std::string::npos);
+            CHECK(msg.find(":1:3:") != std::string::npos); // '/' 在第 3 列
+        }
+    }
 
     TEST_CASE("/ 后面不是 * 就是除号") {
         CHECK(lex_dump(U"1 / 2") == "LITERAL_INT(1) SIGN_SLASH LITERAL_INT(2)");
