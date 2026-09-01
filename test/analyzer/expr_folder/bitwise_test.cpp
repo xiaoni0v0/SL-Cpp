@@ -1,9 +1,4 @@
-// StaticEvaler/ExprFolder：位运算折叠（~ & ^ | << >>，只对 int 有意义，bool 也不行）。
-// dict 的 | 合并见 container_ops_test.cpp（跟 int 的 | 是同一个运算符，按左操作数类型分派）。
-//
-// int 运算一律用 int64_t 计算（不再用任意精度的 BigInt）。& ^ | 两个定宽整数直接算，恒不溢出；
-// >> 只会让值更收敛，任意非负的移位量都有确定结果（移位量很大时饱和到 0 或 -1），不设上限；
-// << 会让值变大，移位量必须落在 [0, 62]，还要另外检查结果没有溢出 int64_t。
+// 位运算只折真正的 int，bool 不折。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
@@ -16,7 +11,7 @@ TEST_SUITE("StaticEvaler 位运算") {
         CHECK(fold_json(U"6 | 3") == int_lit("7"));
     }
 
-    TEST_CASE("按无穷位补码语义（SL.md 原例，本项目 int 字面量目前只支持十进制，255 即 0xff）") {
+    TEST_CASE("按无穷位补码语义（255 即规范里的 0xff 例）") {
         CHECK(fold_json(U"-1 & 255") == int_lit("255"));
         CHECK(fold_json(U"~5") == int_lit("-6"));
     }
@@ -50,10 +45,7 @@ TEST_SUITE("StaticEvaler 位运算") {
         );
     }
 
-    // bool 不继承 int（见 SL.md 的 bool 内置类一节），位运算是 int 特有的方法，bool 没有；
-    // 这跟四则运算/比较
-    // 会把 bool 折算成 int 再算是两回事（见 arithmetic_test.cpp）。折叠器一律不折，留给运行时抛
-    // TypeError。
+    // 位运算是 int 特有的，bool 没有；不折，留给运行时报 TypeError。
     TEST_CASE("bool 不参与位运算，不折") {
         CHECK(
             fold_json(U"True & 1") ==

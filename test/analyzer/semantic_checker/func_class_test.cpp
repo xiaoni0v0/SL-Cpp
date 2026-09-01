@@ -1,4 +1,4 @@
-// SemanticChecker：func/class 的捕获/形参重名检查、形参顺序规则、doc 槽位校验。
+// 捕获/形参重名、默认值顺序、doc、装饰器子树。
 #include "test_utils.h"
 
 #include <doctest/doctest.h>
@@ -17,7 +17,7 @@ TEST_SUITE("SemanticChecker 捕获/形参重名") {
         check_throws_with(U"func f[x](x) {}", "duplicate name in capture/parameter list");
     }
 
-    TEST_CASE("class 捕获列表内部重名报错（此前遗漏：class 的 captures_ 完全没被检查过）") {
+    TEST_CASE("class 捕获列表内部重名报错") {
         check_throws_with(U"class C[x, x] {}", "duplicate name in capture list");
     }
 
@@ -30,8 +30,7 @@ TEST_SUITE("SemanticChecker 捕获/形参重名") {
 }
 
 TEST_SUITE("SemanticChecker 形参顺序") {
-    // "至多一个 *args""**kwargs 必须最后"现在是 Parser 阶段式解析直接保证的语法错误，
-    // 测试挪到了 test/parser/09_func/func_test.cpp，这里只测仍然是语义层职责的部分。
+    // 至多一个 *args、**kwargs 必须最后：Parser 已保证。这里只测语义层的默认值顺序。
 
     TEST_CASE("*args 之后的普通形参是仅关键字形参，有没有默认值、彼此顺序都不受限制") {
         CHECK_NOTHROW(check_program(U"func f(*x, y) {}"));
@@ -87,8 +86,6 @@ TEST_SUITE("SemanticChecker doc 槽位") {
     }
 }
 
-// 装饰器之前完全没有语义检查层面的正面用例覆盖，只有 defensive_test.cpp
-// 里针对畸形 AST（decorators_/positions_decorator_ 数量对不上）的防御性断言。
 TEST_SUITE("SemanticChecker 装饰器") {
 
     TEST_CASE("紧邻 func/class 的装饰器合法，含多个、含调用形式") {

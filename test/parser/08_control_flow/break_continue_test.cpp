@@ -1,6 +1,4 @@
-// SL.md break/continue 表达式：语法上就是裸关键字。
-// "只能在 for/while 的 expr 部分使用" 是语义层（loop_depth 上下文）的校验，不是 parser 的事，
-// 所以语法层面 break/continue 出现在任何位置都应该能正常解析出来。
+// break / continue。是否在循环里由语义层检查。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

@@ -1,14 +1,8 @@
-// SL.md return 表达式：return [expr]
+// return，expr 可省略。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
-
-namespace {
-nlohmann::json int_lit(const char *raw) {
-    return nlohmann::json::parse(R"({"type":"LiteralInt","raw":")" + std::string{raw} + R"("})");
-}
-} // namespace
 
 TEST_SUITE("return") {
 

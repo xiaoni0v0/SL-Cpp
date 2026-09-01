@@ -1,4 +1,4 @@
-// SL.md raise 表达式：raise expr（跟 return 不同，expr 不可省略）
+// raise expr，表达式不可省。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 

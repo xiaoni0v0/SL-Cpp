@@ -1,10 +1,4 @@
-// SemanticChecker：单表达式入口（eval(code)，见 SL.md 的 eval 内置函数一节）的静态外层环境为空。
-//
-// 这里没有任何"给 eval 特设"的规则：外层没有 Program，`return` 就找不到归属（它的作用对象是离它
-// 最近的 Program）；外层没有循环，`break`/`continue` 就无处可跳（它们只能用在 for/while 的 expr
-// 部分）。两者都是已有规则在空外层环境下的自然结果。
-// 反过来，code 自己写出来的函数体/类体/循环照常提供外层环境，里面的跳转合法——这组用例正是要把
-// "禁的是顶层、不是全部"这条边界钉住。
+// eval 入口的静态外层环境为空。
 #include "test_utils.h"
 
 #include <doctest/doctest.h>

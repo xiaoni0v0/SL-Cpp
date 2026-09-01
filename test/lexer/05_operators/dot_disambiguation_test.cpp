@@ -1,11 +1,9 @@
-// 点号消歧：`.` 在 SL 里身兼四职（小数点 / 属性运算符 / range 运算符 / Ellipsis），
-// 而且要求贪婪最长匹配（连续的点尽量多吃，但最多吃 3 个，因为 Ellipsis 是最长的点号 token）。
-// 这里把设计阶段过了一遍的六个极端例子原样转成测试，再加几个自己想到的边界情况。
+// 点号：小数点 / 属性 / range / Ellipsis。连续的点最多吃 3 个。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
 
-TEST_SUITE("点号消歧：设计阶段给出的六个例子") {
+TEST_SUITE("点号消歧——典型切分") {
 
     TEST_CASE("`1.f()` 表示调用 1 的 f 方法") {
         CHECK(
@@ -40,7 +38,7 @@ TEST_SUITE("点号消歧：设计阶段给出的六个例子") {
     }
 }
 
-TEST_SUITE("点号消歧：额外边界情况") {
+TEST_SUITE("点号消歧——数量与边界") {
 
     TEST_CASE("单个点：属性访问") {
         CHECK(lex_dump(U".") == "SIGN_DOT");

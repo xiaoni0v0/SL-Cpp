@@ -1,21 +1,8 @@
-// SL.md 表达式分隔符——照抄标准里的全部例子，逐条验证观察到的行为跟文档一致。
-// 注：标准描述的算法是“待定表达式，解析失败就合并下一条重试”；当前实现走的是完全不同的路子
-// （单趟递归下降/Pratt，在语法结构决定“看起来还没完”的地方主动 skip_newline），但对外可观察行为
-// 应该完全一致——这里测的就是这个“对外行为”，不关心内部怎么实现的。
+// 表达式分隔：软终止换行可续行，硬终止分号切断；if/try 跨行合并。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
-
-namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
-
-nlohmann::json int_lit(const char *raw) {
-    return nlohmann::json::parse(R"({"type":"LiteralInt","raw":")" + std::string{raw} + R"("})");
-}
-} // namespace
 
 TEST_SUITE("表达式分隔符——标准例子") {
 
@@ -52,8 +39,7 @@ TEST_SUITE("表达式分隔符——标准例子") {
     }
 
     TEST_CASE(
-        "x.\\nm()：'.' 只有左操作数，不完整，合并（SL.md 原例用的属性名是 func，"
-        "但 func 是关键字不能当属性名，这里换成 m）"
+        "x.\\nm()：'.' 只有左操作数，不完整，合并"
     ) {
         CHECK(
             parse_program_json(U"x.\nm()") ==

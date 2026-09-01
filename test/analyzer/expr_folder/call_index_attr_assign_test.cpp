@@ -1,15 +1,7 @@
-// ExprFolder：Call/Index/Attr/Assign/CompoundAssign 各子槽位的子表达式折叠。
-// 这几种节点自身都不参与整体折叠（不在 StaticEvaler::fold 的分发范围内——调用/索引/属性访问
-// 可能有副作用或依赖运行时状态，赋值本身就是副作用），但里面夹着的子表达式该折还是要递归折。
+// Call / Index / Attr / 赋值的子槽位折叠。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
-
-namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
-} // namespace
 
 TEST_SUITE("ExprFolder Call 子表达式折叠") {
 

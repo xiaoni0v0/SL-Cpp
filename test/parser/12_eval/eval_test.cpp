@@ -1,20 +1,10 @@
-// SL.md eval：eval 是关键字伪装的函数（同 C 的 sizeof），不是可传递的函数值，括号强制。
-// 之所以关键字化：eval 在调用帧里求值，做成一等值就没法静态判断"哪一帧会被现场插代码"。
-// 既然是"伪装成函数"，实参形状就要尽可能像真正的调用：直接复用 finish_call，
-// eval('x')、eval(code='x')、eval(**{'code':'x'}) 语法上都合法，恰好绑出一个叫 code 的形参
-// 是运行期的事（3.5/3.4.10），跟普通函数调用的参数个数/类型不在语法层校验是同一套道理。
+// eval 是关键字，括号强制；实参形状与普通调用相同。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
 
 namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
-nlohmann::json str_lit(const char *value) {
-    return nlohmann::json{{"type", "LiteralStr"}, {"value", value}};
-}
 nlohmann::json
 eval_node(const nlohmann::json &positional_args, const nlohmann::json &keyword_args) {
     return nlohmann::json{

@@ -1,15 +1,7 @@
-// StaticEvaler：if/elif/else、for/while 的死分支消除。
-// while 内部复用 AstNodeForCond（init_/inc_ 皆为 nullptr），见
-// test/parser/08_control_flow/while_test.cpp。
+// if/for/while 死分支、死循环消除。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
-
-namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
-} // namespace
 
 TEST_SUITE("StaticEvaler 死分支消除") {
 
@@ -53,7 +45,7 @@ TEST_SUITE("StaticEvaler 死分支消除") {
         );
     }
 
-    TEST_CASE("while(False) 一次都不会跑，值退化成 SL.md 的默认值：不收集是 0，收集是 []") {
+    TEST_CASE("while(False) 一次都不跑：不收集折成 0，收集折成 []") {
         const auto empty_list =
             nlohmann::json{{"type", "LiteralList"}, {"items", nlohmann::json::array()}};
 

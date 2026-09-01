@@ -1,4 +1,4 @@
-// SemanticChecker：字典字面量的 **/k:v 检查，调用参数里 can_star/can_double_star 上下文传递。
+// 字典 **/k:v，调用与索引里的 * / **。
 #include "test_utils.h"
 
 #include <doctest/doctest.h>
@@ -30,9 +30,7 @@ TEST_SUITE("SemanticChecker 调用参数") {
         CHECK_NOTHROW(check_program(U"f(1, *a, **b)"));
     }
 
-    // "位置组不能出现在关键字组之后"现在由 Parser
-    // 阶段式解析直接保证（是语法错误，不是语义层检查）， 测试见
-    // test/parser/02_operators/precedence_test.cpp。
+    // 位置组不能出现在关键字组之后：Parser 直接报语法错误，见 precedence_test.cpp。
 
     TEST_CASE("调用的 object_/各参数子表达式都会被递归检查") {
         check_throws_with(U"(break)()", "break outside loop");

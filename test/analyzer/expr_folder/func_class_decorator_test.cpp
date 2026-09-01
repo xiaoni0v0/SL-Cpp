@@ -1,17 +1,7 @@
-// ExprFolder：AstNodeFunc/AstNodeClass/AstNodeDecorator 各子槽位的子表达式折叠。
-// func/class 自身、decorator 自身都不参与整体折叠（不在 StaticEvaler::fold
-// 的分发范围内），这里只关心各个子槽位（形参默认值/类型注解、返回类型注解、捕获列表的
-// value_expr_、decorators_/bases_、装饰器自己的 decorator_/target_）会不会被递归折叠。
-// func/class 的 body_ 剪枝已经在 program_prune_test.cpp 覆盖，这里不重复。
+// func/class/装饰器各槽位折叠。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
-
-namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
-} // namespace
 
 TEST_SUITE("ExprFolder func 各槽位折叠") {
 

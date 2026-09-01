@@ -1,15 +1,10 @@
-// SL.md for/while 的收集模式记号：$ / $ * / $$ / $$ **。
-// 记号有两位，第一位定结果容器（$ 出 list、$$ 出 dict），第二位定每轮的值怎么进容器；
-// 两位必须配套（$ 配 *、$$ 配 **），其余组合是语法错。
+// 收集模式记号：`$` / `$ *` / `$$` / `$$ **`。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
 
 namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
 
 // for [mark] (xs as i) body 的期望形状，只有 collect 一项不同
 nlohmann::json for_iter(const char *mark) {

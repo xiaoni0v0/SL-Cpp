@@ -1,16 +1,8 @@
-// SL.md try 表达式：try expr1 [except (Exception1, ...) expr2 ...] [finally expr3]
-// "except 和 finally 不能同时省略" 是语义层校验（Parser.cpp 里也明确注释了这一点），
-// 语法层单纯 try expr（不写 except/finally）也能正常解析出来。
+// try / except / finally。except 和 finally 不能同时省略（语义层）。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
-
-namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
-} // namespace
 
 TEST_SUITE("try") {
 

@@ -1,21 +1,9 @@
-// StaticEvaler：复合表达式 { expr1; expr2; ... } 的折叠。值为最后一条表达式的值，
-// 空复合表达式为 None；{} 不引入作用域，所以子表达式之间可能靠副作用互相影响。
-//
-// 折叠规则（详见 StaticEvaler.h 类头注释）：
-//   1. 空复合表达式恒折成 None；
-//   2. 只有一条，直接展开成那一条本身，不管是不是字面量；
-//   3. 否则，除最后一条外，逐条丢掉纯字面量的子表达式（无副作用、值也用不上），非字面量的
-//      保留且相对顺序不变；最后一条永远保留（它决定整个表达式的值，不管是不是字面量）；
-//      丢到只剩最后一条就直接展开成那一条，丢完还剩不止一条就拼一个更短的复合表达式，
-//      一条都没丢成就不折。
+// 复合表达式剪枝。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
 
 namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
 
 nlohmann::json call0(const char *name) {
     return nlohmann::json{

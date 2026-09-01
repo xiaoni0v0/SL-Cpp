@@ -1,23 +1,11 @@
-﻿// SL.md for 表达式：
-//   步进模式 for [收集模式记号] (init cond inc) expr；迭代模式 for [收集模式记号] (lvalue :
-//   iterable) expr。 记号本身（$ / $ * / $$ / $$ **）单独在 collect_mark_test.cpp 里覆盖。
-// 这里重点覆盖：
-//   1. "裸单表达式当条件" for (cond) body 不是 SL.md 授权的语法，必须报错；
-//   2. 中间 cond 槽禁止裸的普通赋值 =（init/inc 不受限）；
-//   3. for () 彻底为空时的专门报错。
+// for：3 槽步进或 1 槽迭代；头部换行按软终止切槽。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
 
 namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
 
-nlohmann::json int_lit(const char *raw) {
-    return nlohmann::json::parse(R"({"type":"LiteralInt","raw":")" + std::string{raw} + R"("})");
-}
 nlohmann::json unary(const char *op, const nlohmann::json &operand) {
     return nlohmann::json{{"type", "OpUnary"}, {"op", op}, {"operand", operand}};
 }
@@ -286,9 +274,8 @@ TEST_SUITE("for——步进模式") {
 
 TEST_SUITE("for——步进模式头部的换行按软终止分隔") {
 
-    // SL.md 表达式分隔符一节的规则：换行处左侧若已能构成完整表达式就断开，否则并入下一行继续
-    // 解析。步进 for 的头部沿用同一套，不像别处的括号那样把换行当成空白——否则 `x = 1` 换行 `+1`
-    // 会被悄悄粘成 `x = 2`，跟同样这两行写在块里的结果正好相反。
+    // 步进 for 头部的换行按软终止切槽，不把括号内换行当空白。
+    // 否则 `x = 1` 换行 `+1` 会被粘成 `x = 2`，跟写在块里的结果相反。
 
     TEST_CASE("左侧已完整：在换行处断开，下一行归下一槽（下一行以中缀号开头也一样）") {
         CHECK(
@@ -398,7 +385,6 @@ TEST_SUITE("for——步进模式头部的换行按软终止分隔") {
     }
 
     TEST_CASE("换行切出第四槽：报错，不再把多出来的那行悄悄拌进上一槽") {
-        // 改动之前 `i += 1` 换行 `-1` 会被粘成 `i += (1 - 1)`，循环一步都不推进，还不报错
         CHECK_THROWS_AS(parse_as_file(U"for (i = 0\nc\ni += 1\n-1\n) body"), SyntaxError);
         CHECK_THROWS_AS(parse_as_file(U"for (a\nb\nc\nd) body"), SyntaxError);
         CHECK_THROWS_AS(parse_as_file(U"for (a;b;c;d) body"), SyntaxError);
@@ -454,7 +440,7 @@ TEST_SUITE("for——头部的槽数只能是 3 或 1") {
         CHECK_NOTHROW(parse_as_file(U"for (a + b) body"));
         CHECK_NOTHROW(parse_as_file(U"for (a and b) body"));
         CHECK_NOTHROW(parse_as_file(U"for (a .. b) body"));
-        // in 现在只是普通的成员测试运算符，出现在单槽里不再有任何特殊含义
+        // in 只是普通成员测试，单槽里没有特殊含义
         CHECK_NOTHROW(parse_as_file(U"for (a in b) body"));
     }
 
@@ -670,7 +656,7 @@ TEST_SUITE("for——cond 槽禁止裸的普通赋值（init/inc 不受限）") 
     }
 }
 
-TEST_SUITE("for——$ 与 for 之间不需要空白（SL.md）") {
+TEST_SUITE("for——$ 与 for 之间不需要空白") {
 
     TEST_CASE("步进模式 for$ 无空格") {
         CHECK(

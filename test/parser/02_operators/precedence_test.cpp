@@ -1,15 +1,8 @@
-﻿// SL.md 运算符——优先级表、结合性、后缀访问链（索引/调用/属性/?/!）。
-// 链式比较、is 链、赋值/复合赋值放在同目录的 compare_is_assign_test.cpp。
+// 运算符优先级、结合性、后缀访问链。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
-
-namespace {
-nlohmann::json int_lit(const char *raw) {
-    return nlohmann::json::parse(R"({"type":"LiteralInt","raw":")" + std::string{raw} + R"("})");
-}
-} // namespace
 
 TEST_SUITE("优先级——四则/位运算/范围") {
 
@@ -391,7 +384,7 @@ TEST_SUITE("索引/调用/属性访问链") {
         );
     }
 
-    TEST_CASE("*/** 展开的操作数按单目运算符一档（140）解析（SL.md 的结合力规则）") {
+    TEST_CASE("*/** 展开的操作数按单目一档解析") {
         // 属性访问（170）先结合进操作数：*a.b 即 *(a.b)
         CHECK(
             parse_json(U"[*a.b]")["items"][0] ==

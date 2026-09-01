@@ -1,17 +1,10 @@
-// SL.md 的运算符一节——`in`（成员测试，优先级 55）。
-// 它夹在比较组（60）和 `is`（50）之间，两边都不混链；自己也不像它们那样收成链节点，
-// 连写就是普通的左结合。
-// 它同时是迭代 for 的判别依据（`for (target in iterable)`），那部分在
-// 08_control_flow/for_test.cpp。
+// in：夹在比较和 is 之间的左结合二元运算，不收成链节点。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
 
 namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
 
 nlohmann::json in_op(const nlohmann::json &left, const nlohmann::json &right) {
     return nlohmann::json{{"type", "OpBinary"}, {"op", "in"}, {"left", left}, {"right", right}};
@@ -47,15 +40,14 @@ TEST_SUITE("in 运算符") {
 
     TEST_CASE("换行：in 之后可以（右操作数会跨行找），in 之前不行（左边已经完整）") {
         CHECK(parse_json(U"a in\nb") == in_op(ident("a"), ident("b")));
-        // 跟 SL.md 表达式分隔符一节的例子同理：第一行本身完整，就此断开，下一行以 in 开头起不了头
+        // 第一行已完整，断开；下一行以 in 开头起不了头
         CHECK_THROWS_AS(parse_as_file(U"a\nin b"), SyntaxError);
     }
 }
 
 TEST_SUITE("in 不主动支持链式，但连写也不报错") {
 
-    // 比较组和 is 各自会把连写收成一个链节点（`a < b <= c`、`a is b is c`），in 不参与这套：
-    // 它就是个普通的左结合二元运算符，连写就按左结合叠上去，语法层不拦
+    // 比较/is 会收成链节点，in 不参与：连写按左结合叠上去，语法层不拦。
     TEST_CASE("`a in b in c` 就是 `(a in b) in c`") {
         CHECK(parse_json(U"a in b in c") == in_op(in_op(ident("a"), ident("b")), ident("c")));
         CHECK(parse_json(U"a in b in c") == parse_json(U"(a in b) in c"));

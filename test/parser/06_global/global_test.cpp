@@ -1,6 +1,4 @@
-// SL.md global 表达式——语法：global identifier。
-// 目标整条按表达式解析（复用通用的 '.' 属性访问等规则），再要求恰好是一个标识符——
-// global 的值恒为 None，任何跟在目标后面的运算符都保证跑不通，干脆在语法层直接拦。
+// global identifier。目标必须恰好是一个标识符。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
@@ -21,7 +19,7 @@ TEST_SUITE("global") {
         CHECK_THROWS_AS(parse_as_file(U"global x y"), SyntaxError);
     }
 
-    TEST_CASE("目标不能是属性访问/索引/调用/运算符表达式等——这些接出来的值恒为 None，跑不通") {
+    TEST_CASE("目标不能是属性/索引/调用/运算符") {
         check_parse_throws_with(U"global x.y", "global target must be a single identifier");
         check_parse_throws_with(U"global x[0]", "global target must be a single identifier");
         check_parse_throws_with(U"global f()", "global target must be a single identifier");

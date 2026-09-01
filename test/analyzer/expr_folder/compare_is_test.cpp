@@ -1,5 +1,4 @@
-// StaticEvaler/ExprFolder：比较运算（含链式）。is 不参与折叠（对象同一性没法
-// 在编译期安全预判，见 StaticEvaler.h 类注释），dict 的一切运算同理不折。
+// 比较折叠；is 整体不折。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
@@ -136,12 +135,7 @@ TEST_SUITE("StaticEvaler 比较") {
     }
 }
 
-// SL.md 3.8 给 `==`/`!=` 定了一条**终局回退**：两侧的 eq/cmp 全部弃权之后，解释器按对象身份兜底
-// （`a == b` 取 `a is b`，`a != b` 取其否），而 `<`/`<=`/`>`/`>=` 没有这条兜底、直接抛 TypeError。
-//
-// 对折叠器来说，这条兜底让"两个不同类型的字面量"有了确定答案：不同类型不可能是同一个对象，
-// 所以 `==` 恒 False、`!=` 恒 True——是精确结果，不是保守近似。序比较则相反，跨类型一律不折，
-// 把 TypeError 原样留给运行期。这一对不对称是本组测试的主题。
+// == / != 两侧都弃权后按对象身份兜底；序比较没有这条，跨类型不折。
 TEST_SUITE("StaticEvaler 比较——跨类型的 ==/!= 兜底与序比较的不对称") {
 
     TEST_CASE("跨类型 == 折成 False、!= 折成 True（按身份兜底）") {
@@ -184,11 +178,7 @@ TEST_SUITE("StaticEvaler 比较——跨类型的 ==/!= 兜底与序比较的不
         CHECK(fold_json(U"... < ...")["type"] == "Compare");
     }
 
-    // 数值之间跨类型是**认识对方**的（SL.md 4.2.5 bool 折算成 int、4.2.6 数值相等的 int 与
-    // decimal 哈希相同），所以走按值比较而不是身份兜底——不能因为"类型不同"就一律判不等。
-    // bool/int 这一对认识对方且折叠器确实知道怎么比；decimal 这一侧虽然也"认识"，但折叠器
-    // 干脆不碰 decimal 的值（见 StaticEvaler.h 类注释），所以停在"不折"，不是算出 False
-    TEST_CASE("数值类型之间跨类型互相认识，不落到身份兜底：bool/int 按值折，decimal 干脆不折") {
+    TEST_CASE("bool/int 按值比；掺 decimal 不折") {
         CHECK(fold_json(U"True == 1") == bool_lit(true));
         CHECK(fold_json(U"False < 1.5")["type"] == "Compare"); // 认识但 decimal 不折，不是 False
         CHECK(fold_json(U"True == 1.0")["type"] == "Compare");
@@ -217,5 +207,16 @@ TEST_SUITE("StaticEvaler 比较——跨类型的 ==/!= 兜底与序比较的不
         CHECK(fold_json(U"1 == 1 == 'a'") == bool_lit(false)); // 后一环跨类型 → False → 整链 False
         CHECK(fold_json(U"3 < 2 < 'a'") == bool_lit(false));   // 第一环就假，短路，不看后面
         CHECK(fold_json(U"1 < 2 < 'a'")["type"] == "Compare"); // 第一环真、第二环不可比 → 部分折
+    }
+}
+
+TEST_SUITE("ExprFolder is") {
+
+    TEST_CASE("操作数会折，整体不折") {
+        const auto result = fold_json(U"(1 + 1) is (2 + 2)");
+        CHECK(result["type"] == "Is");
+        CHECK(result["operands"] == nlohmann::json::array({int_lit("2"), int_lit("4")}));
+        CHECK(fold_json(U"1 is 1")["type"] == "Is");
+        CHECK(fold_json(U"None is None")["type"] == "Is");
     }
 }

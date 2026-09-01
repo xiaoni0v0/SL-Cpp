@@ -1,4 +1,4 @@
-// StaticEvaler/ExprFolder：not/and/or（SL.md 的真值规则、逻辑运算符语义）。
+// not/and/or 与真值。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

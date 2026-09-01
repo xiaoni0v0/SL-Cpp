@@ -1,10 +1,5 @@
-// 字面量——科学计数法：`[eE][+-]?digits` 后缀，int 和 decimal 共用。
-//
-// 类型只看尾数带不带小数点：`1e9` 是 int，`1.0e9` 是 decimal；不看指数正负、更不看算出来的值
-// （`100e-1` 值恰好是整数 10，仍然不合法）。int 侧额外有两条限制：指数必须非负、且不超过 9999；
-// decimal 侧两条都不适用。
-//
-// 词法层只保留原文、不做数值展开（`1e9` 的 token 文本就是 "1e9"），数值转换归 numeric 那边。
+// 科学计数法：尾数无小数点则是 int（指数非负且 ≤ 9999），有小数点则是 decimal。
+// token 文本保持原文，不做数值展开。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
@@ -219,9 +214,8 @@ TEST_SUITE("科学计数法——畸形写法") {
         CHECK(has(lex_error(U"1e1e9"), "unexpected character 'e'"));
     }
 
-    TEST_CASE("e 被贪婪吃掉不会改变任何可接受的程序：数字后直接跟字母本来就非法") {
-        // `1else` 在加科学计数法之前就是错的，之后依然是错的，只是换了条错误信息；
-        // 要写「1 后面跟 else」必须有分隔，那时 e 根本轮不到数字侧看见
+    TEST_CASE("数字后直接跟字母本来就非法，e 被贪婪吃掉不改变合法程序") {
+        // 要写「1 后面跟 else」必须有分隔，那时 e 轮不到数字侧看见
         CHECK_THROWS_AS(lex(U"1else"), SyntaxError);
         CHECK(lex_dump(U"1 else") == "LITERAL_INT(1) KW_ELSE");
         CHECK(lex_dump(U"1\nelse") == "LITERAL_INT(1) NEWLINE KW_ELSE");

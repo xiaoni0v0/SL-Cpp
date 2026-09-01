@@ -1,23 +1,10 @@
-﻿// SL.md 函数表达式：
-// ⟦@decorator ...⟧ func ⟦identifier⟧ ⟦[ALL_CAPTURE]⟧ (ALL_PARAM) ⟦: type⟧ ⟦doc⟧ { expr1; ... }
-// 装饰器紧邻 func 的情况放在 11_decorator/decorator_test.cpp 测，这里只测 func 自身。
-// 形参在 json 里嵌套成一个 "params" 对象，依次由 4 段组成：positional（*args 之前）/ var_args /
-// kw_only（*args 之后）/ var_kwargs，见 SL.md 函数定义。无默认值形参必须排在有默认值形参前面
-// 语义层校验（见 test/analyzer/semantic_checker），这里只测语法形状本身，以及"至多一个
-// *args""**kwargs 必须 最后"这两条现在由 Parser 直接保证的规则。
+// func：形参四段、捕获、返回类型、doc。装饰器见 11_decorator。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
 
 namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
-
-nlohmann::json int_lit(const char *raw) {
-    return nlohmann::json::parse(R"({"type":"LiteralInt","raw":")" + std::string{raw} + R"("})");
-}
 
 nlohmann::json
 param(const char *id, const nlohmann::json &type_annotation, const nlohmann::json &default_value) {
@@ -276,8 +263,6 @@ TEST_SUITE("func——捕获列表") {
 TEST_SUITE("func——返回类型/文档字符串") {
 
     TEST_CASE("返回类型") {
-        // 注意：用 = 而不是 auto j{...}——花括号初始化一个已经构造好的 json 对象，
-        // 会被当成"用这一个元素构造数组"，而不是拷贝这个对象本身
         const auto j = parse_json(U"func f(): int {}");
         CHECK(j["return_type"] == ident("int"));
     }

@@ -1,13 +1,4 @@
-// StaticEvaler/ExprFolder：数值算术折叠（+ - * / // % **）。
-// 容器（str/tuple/list）的 +/*、dict 的 |、str 的 % 格式化见同目录 container_ops_test.cpp。
-//
-// int 运算一律用 int64_t 计算：溢出/装不下就不折，这是保守但正确，不追求任意精度。
-// 科学计数法写法（1e5）先在折叠器内部按值展开成普通数字串，再走同一条 int64_t 路径。
-//
-// 结果为 decimal 的运算一律**不折**：decimal 按运行期上下文（prec/rounding）舍入，编译期不知道
-// 那时的设置，折了就可能和实际执行不一致。这条覆盖 `/`（结果恒为 decimal）、任何一侧是 decimal
-// 的四则、`**` 指数为负、以及 decimal 的一元 +/-。见 StaticEvaler.h 类注释和
-// .ai/context.md "折叠器数值折叠" 一节。
+// int/bool 四则、幂、整除取模。decimal 和 `/` 不折。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
@@ -20,10 +11,7 @@ TEST_SUITE("StaticEvaler 数值算术") {
         CHECK(fold_json(U"2 * 3") == int_lit("6"));
     }
 
-    // bool 不继承 int（见 SL.md 的 bool 内置类一节），这里能提升是因为 bool 自己实现了
-    // numbers.Real 要求的四则
-    // 运算、大小比较，参与运算前把自己折算成 int。别把这条推广到 int 特有的运算：位运算、容器重复
-    // 次数都不接受 bool（见 bitwise_test.cpp、container_ops_test.cpp）。
+    // bool 不继承 int；四则/比较会把 bool 折成 int。位运算、容器重复次数不接受 bool。
     TEST_CASE("bool 参与数值运算按 int 提升，结果类型是 int 不是 bool") {
         CHECK(fold_json(U"True + 1") == int_lit("2"));
         CHECK(fold_json(U"True + True") == int_lit("2"));
@@ -31,7 +19,7 @@ TEST_SUITE("StaticEvaler 数值算术") {
         CHECK(fold_json(U"-True") == int_lit("-1"));
     }
 
-    // `/` 的结果恒为 decimal（SL.md 3.4.2），所以哪怕两边都是 int、哪怕除得尽，也一律不折
+    // `/` 的结果恒为 decimal，哪怕两边都是 int、哪怕除得尽，也一律不折
     TEST_CASE("/ 恒产出 decimal，因此恒不折（即使两边都是 int、即使除得尽）") {
         CHECK(
             fold_json(U"7 / 2") ==
@@ -47,7 +35,7 @@ TEST_SUITE("StaticEvaler 数值算术") {
         );
     }
 
-    TEST_CASE("// 和 % 都是 int 时恒产出 int，向负无穷取整（SL.md 原例）") {
+    TEST_CASE("// 和 % 都是 int 时恒产出 int，向负无穷取整") {
         CHECK(fold_json(U"-7 // 2") == int_lit("-4"));
         CHECK(fold_json(U"-7 % 2") == int_lit("1"));
         CHECK(fold_json(U"7 // -2") == int_lit("-4"));

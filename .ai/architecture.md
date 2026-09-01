@@ -112,9 +112,11 @@
 
 `test/` 下每个测试目标目录结构镜像对应源码目录（`test/lexer/`、`test/parser/`、
 `test/analyzer/{semantic_checker,expr_folder}/`、`test/numeric/`）。`test/parser/`、`test/lexer/`
-内部按主题分子目录，用两位数独立编号（`01_literals`、`08_control_flow`……），**不跟 SL.md 章节号
-绑定**，见 [notes/no-section-numbers.md](notes/no-section-numbers.md)。新增测试文件必须手动加进
-`CMakeLists.txt` 对应的 `add_executable(...)` 文件列表（不是 glob，漏加不报错、只是静默不参与编译）。
+内部按主题分子目录，用两位数独立编号（lexer `01_comments`…`07_errors`，parser `01_literals`…
+`13_cross`），**不跟 SL.md 章节号绑定**，见
+[notes/no-section-numbers.md](notes/no-section-numbers.md)。analyzer 按子系统分子目录，文件按被测
+规则命名，不再套一层编号。新增测试文件必须手动加进 `CMakeLists.txt` 对应的
+`add_executable(...)` 文件列表（不是 glob，漏加不报错、只是静默不参与编译）。
 
 `test/numeric/big_dec_cases.inc` 和 `big_int_cases.inc` 都是**生成产物**，分别由
 `gen_big_dec_cases.py`（期望值来自 CPython 自带的 decimal）和 `gen_big_int_cases.py`（期望值来自

@@ -1,7 +1,4 @@
-// SemanticChecker：import 表达式。
-// 关键字形态没有子表达式、也没有位置限制——名字对不对、模块找不找得到全是运行期的事
-// （ImportError）；调用形态的实参检查跟普通函数调用完全同一套规则（位置组允许 *、关键字组的
-// ** 项允许 **）。
+// import 两种形态的语义约束。
 #include "test_utils.h"
 
 #include <doctest/doctest.h>

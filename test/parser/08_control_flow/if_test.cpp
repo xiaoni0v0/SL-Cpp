@@ -1,19 +1,8 @@
-// SL.md if 表达式：if (cond1) expr1 [elif (cond2) expr2 ...] [else expr3]
-// 重点覆盖：cond 槽禁止裸的普通赋值 =（需要显式再套一层括号），但允许裸的复合赋值。
+// if / elif / else。cond 禁止裸 `=`，复合赋值可以。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
-
-namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
-
-nlohmann::json int_lit(const char *raw) {
-    return nlohmann::json::parse(R"({"type":"LiteralInt","raw":")" + std::string{raw} + R"("})");
-}
-} // namespace
 
 TEST_SUITE("if——基本形式") {
 
@@ -99,8 +88,7 @@ TEST_SUITE("if——基本形式") {
 
 TEST_SUITE("if——cond 槽禁止裸的普通赋值") {
 
-    TEST_CASE("裸 = 直接报错，提示改用双层括号，位置指向 '=' 自己（不是 'x' 或 '('）") {
-        // "if (x = 1) y" -> i(1)f(2) (3)((4)x(5) (6)=(7) (8)1(9))(10) (11)y(12)
+    TEST_CASE("裸 = 报错，提示加括号，位置指向 '='") {
         try {
             parse_as_file(U"if (x = 1) y");
             FAIL("应当抛出异常");

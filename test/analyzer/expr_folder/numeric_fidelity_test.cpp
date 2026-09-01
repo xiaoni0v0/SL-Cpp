@@ -1,19 +1,4 @@
-// StaticEvaler：数值折叠的**保真性**——折出来的值必须和运行期逐位一致。
-//
-// 这个文件专门钉住两类曾经真出过错的地方，它们的共同点是"折了，但折出来的是错值"，
-// 而不是"漏折"。漏折只是少优化一次，折错值是静默改变程序语义，危害完全不同一个量级。
-//
-// 一、int 的科学计数法写法（1e2、0e0）
-//     `raw_` 存的是源码原样，`1e2` 和 `100` 是同一个值的两种写法。凡是拿 `raw_` 当数字串
-//     直接比长度/字典序，或者"解析失败就当它很大"的地方，都会算错。曾经的实际后果：
-//     `0e0` 的真值被判成真，连带死分支消除留下了本该被消掉的那一支。
-//
-// 二、decimal 一律不折——算术、比较、真值，一概不折
-//     decimal 的值依赖运行期上下文（prec/rounding），编译期算出来的东西不保证跟运行期一致。
-//     早先版本让"比较不舍入，照折"，用 double 实现时确实出过错（1.0e-400 下溢成 0、
-//     9007199254740993 和 ...92.0 被 double 的 53 位尾数挤成同一个值）；现在的结论更简单：
-//     既然折叠器压根不打算引入高精度库去精确处理 decimal，就干脆一条规则到底，
-//     decimal 什么都不折，不再区分"这一种运算安全、那一种不安全"。
+// 科学计数法 int 按值折；decimal 一律不折；bool 折成 int。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
@@ -63,8 +48,6 @@ TEST_SUITE("StaticEvaler 保真性——int 的科学计数法写法") {
 
 TEST_SUITE("StaticEvaler 保真性——decimal 一律不折") {
 
-    // 折了就会得到 0.30000000000000004 这个 double 凑出来的错值；SL.md 4.2.6 说 decimal
-    // 底数是 10，`0.1 + 0.2 == 0.3` 为真，运行期算出来是精确的 0.3
     TEST_CASE("decimal 算术一律不折，避免造出运行期不会出现的值") {
         CHECK(fold_json(U"0.1 + 0.2")["type"] == "OpBinary");
         CHECK(fold_json(U"1.5 - 1.4")["type"] == "OpBinary");
@@ -115,7 +98,7 @@ TEST_SUITE("StaticEvaler 保真性——decimal 一律不折") {
     }
 }
 
-TEST_SUITE("StaticEvaler 保真性——bool 按 SL.md 4.2.5 折算成 int") {
+TEST_SUITE("StaticEvaler 保真性——bool 折算成 int") {
 
     // bool 不继承 int，但 numbers.Real 要求的四则运算和大小比较由 bool 自己实现：
     // 参与运算前按 1/0 折算成 int 再复用 int 的实现，结果类型是 int（不是 bool）

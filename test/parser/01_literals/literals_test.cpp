@@ -1,6 +1,4 @@
-// SL.md 字面量——parser 层面：token 如何变成对应的 AstNode
-// None/bool/_G/_L/int/decimal/str/... 已在 lexer 测试里覆盖过 token 化本身，这里只关心 Parser 是否
-// 把对应 token 原样正确地包进对应的 AstNode（字符串转义等已由 Lexer 处理完毕，不再重复测）。
+// 字面量 token 如何变成 AST 节点。转义已在词法测过。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
@@ -30,10 +28,7 @@ TEST_SUITE("基本字面量") {
         CHECK(parse_json(U"...") == nlohmann::json::parse(R"({"type":"LiteralEllipsis"})"));
     }
 
-    TEST_CASE("int：Parser 原样存字符串形式，不做数值转换") {
-        // 前导零本身是否合法在词法层面拦截、已在 lexer
-        // 测试里覆盖过（test/lexer/04_literals/int_test.cpp）， 这里只关心合法数字文本能不能被
-        // Parser 原样存进 raw_
+    TEST_CASE("int：Parser 原样存 raw_，不做数值转换") {
         CHECK(parse_json(U"123") == nlohmann::json::parse(R"({"type":"LiteralInt","raw":"123"})"));
         CHECK(parse_json(U"0") == nlohmann::json::parse(R"({"type":"LiteralInt","raw":"0"})"));
         CHECK(
@@ -129,9 +124,6 @@ TEST_SUITE("元组") {
     }
 
     TEST_CASE("多元素元组，尾逗号可选") {
-        // 注意：这里必须用 = 而不是 nlohmann::json expected{...}——花括号初始化遇到"唯一的初始化项
-        // 本身已经是个 json 对象"时，会被 nlohmann 的构造函数当成"用一个元素构造数组"，
-        // 而不是拷贝这个对象本身，得到的会是包了一层数组的错误结果
         const nlohmann::json expected = nlohmann::json::parse(
             R"({"type":"LiteralTuple","items":[
             {"type":"LiteralInt","raw":"1"},

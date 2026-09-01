@@ -1,11 +1,4 @@
-// 不变量：折叠产物必须还能过一遍 SemanticChecker。
-//
-// Analyzer 的顺序是先 check 后 fold，只 check 这一次；ExprFolder 之后造出来的节点没有任何人再看
-// 一眼。所以"折完的树重新 check 也能过"是这个模块的自洽性底线：check 描述的是"一棵合法 AST 长什么
-// 样"，不是"Parser 刚吐出来的树长什么样"。
-//
-// 最典型的例子是负数：源码里 `-1` 是一元负号加上 `1`（SL.md 说负数不是字面量，那是文法层面的话），
-// 折完之后变成一个 raw_ 为 "-1" 的 int 字面量节点——AST 层面它就是一个合法的字面量。
+// 先 check 再 fold 的产物必须还能再过一遍 SemanticChecker。
 #include "../../analyzer/semantic_checker/SemanticChecker.h"
 #include "test_utils.h"
 
@@ -62,8 +55,7 @@ TEST_SUITE("折叠产物重新 check 也能过——负 int") {
 
 TEST_SUITE("折叠产物重新 check 也能过——负 decimal") {
 
-    // decimal 的一元负号现在不折了（结果为 decimal 的算术一律不折），所以这里钉的是
-    // "原样留着的 OpUnary 重新 check 照样过"，而不是折出来的字面量
+    // decimal 算术一律不折，一元负号原样留着 OpUnary，重新 check 也要过。
     TEST_CASE("一元负号作用在 decimal 上不折，但重新 check 照样过") {
         CHECK_NOTHROW(fold_and_recheck(U"-1.5"));
         CHECK_NOTHROW(fold_and_recheck(U"-0.0"));

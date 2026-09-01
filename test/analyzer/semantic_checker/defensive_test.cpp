@@ -1,12 +1,4 @@
-// SemanticChecker：那些"只有 Parser 出 bug 才会触发"的**结构性**防御断言（空指针、数量对不上、
-// 标志位互相矛盾）。这类畸形的 AST 没法通过解析任何合法或不合法的源码构造出来（Parser 自己的
-// 语法/结构性保证决定了这几个字段永远满足对应的形状），只能像这里一样手工搭一棵树直接喂给
-// SemanticChecker，用来确认这些断言本身在真的遇到畸形输入时确实会正确报错，而不是静默放过或者
-// 直接崩溃。
-//
-// int/decimal 字面量 raw_ 的形状校验同样是防御性的，但它归节点自己的构造函数管、不归
-// SemanticChecker 管（常量折叠造出来的字面量节点不会再经过 SemanticChecker），测试在
-// test/parser/01_literals/literal_raw_test.cpp。
+// Parser 保证过的结构被破坏时抛 InternalError。
 #include "test_utils.h"
 
 #include <doctest/doctest.h>
@@ -74,7 +66,7 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
     TEST_CASE(
         "AstNodeLiteralDict：key 是 ** 展开，但 val 不是空指针（真正的 Parser "
         "永远不会产出这种组合，"
-        "见 test/parser/04_basic_exprs/compound_dict_test.cpp 里 {**d: v} 直接是 SyntaxError）"
+        "见 test/parser/04_compound_dict/compound_dict_test.cpp 里 {**d: v} 直接是 SyntaxError）"
     ) {
         std::vector<std::pair<AstNodePtr, AstNodePtr>> items;
         items.emplace_back(

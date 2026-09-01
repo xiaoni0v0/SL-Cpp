@@ -1,21 +1,8 @@
-﻿// SL.md 类表达式：⟦@decorator ...⟧ class ⟦name⟧ ⟦(bases)⟧ ⟦[captures]⟧ ⟦doc⟧ { body }
-// 装饰器紧邻 class 的情况放在 11_decorator/decorator_test.cpp 测。
-// 捕获列表语法/语义跟 func 的完全一致（见 SL.md 函数定义 / 类定义），细节各种组合已经在
-// 09_func/func_test.cpp 里测过一遍，这里只补类特有的：位置在基类之后、未闭合报错。
+// class：基类、捕获、doc。捕获语法与 func 相同。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
-
-namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
-
-nlohmann::json int_lit(const char *raw) {
-    return nlohmann::json::parse(R"({"type":"LiteralInt","raw":")" + std::string{raw} + R"("})");
-}
-} // namespace
 
 TEST_SUITE("class") {
 

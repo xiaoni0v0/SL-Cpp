@@ -1,21 +1,8 @@
-// 跨分组：把多种语法特征揉进同一份源码里解析，覆盖单个分组的测试文件覆盖不到的"交互"场景——
-// 装饰器/类/函数/控制流/字面量互相嵌套时会不会互相干扰，尤其是 {}/()/[] 三种括号混着嵌套时
-// paren_depth_、换行判定这些跨函数共享的状态会不会在深层嵌套下失效；以及报错发生在深层嵌套
-// 结构内部时，位置是否依然精确指向真正出问题的那个 token。
+// 多种语法嵌套在一起时括号栈、换行、报错位置仍正确。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
-
-namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
-
-nlohmann::json int_lit(const char *raw) {
-    return nlohmann::json::parse(R"({"type":"LiteralInt","raw":")" + std::string{raw} + R"("})");
-}
-} // namespace
 
 TEST_SUITE("跨分组组合——装饰器/类/函数/for/try/字典展开/is 揉在一起") {
 
@@ -139,9 +126,7 @@ TEST_SUITE("跨分组组合——{}/()/[] 混着嵌套时 paren_depth_ 的一致
         "for 头部某一槽本身是字典字面量（内部会保存/清零/恢复 paren_depth_），"
         "不影响 consume_sep 对槽间换行分隔符的判定"
     ) {
-        // init 槽是 "state = {'count': 0}"，槽内的字典字面量自己会把 paren_depth_ 清零再恢复成 for
-        // 头部的 1；consume_sep 全程只靠"上一个已消耗 token 和当前 token 是否同一行"来判断分隔，
-        // 不应该被这次嵌套的清零/恢复干扰
+        // init 槽里的字典会临时清零/恢复 paren_depth_，不应干扰槽间换行分隔。
         const std::u32string source = U"for (state = {'count': 0}\n"
                                       U"     state.count < 10\n"
                                       U"     state.count += 1) body";

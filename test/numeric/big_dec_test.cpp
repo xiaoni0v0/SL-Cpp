@@ -443,7 +443,7 @@ TEST_SUITE("BigDec——构造与字符串往返") {
 
 TEST_SUITE("BigDec——上下文与信号机制") {
 
-    TEST_CASE("默认上下文就是 SL.md 写的那套") {
+    TEST_CASE("默认上下文：prec 28、HalfEven、Emax/Emin ±999999") {
         const DecContext ctx;
         CHECK(ctx.prec() == 28);
         CHECK(ctx.rounding() == DecRounding::HalfEven);
@@ -809,10 +809,7 @@ TEST_SUITE("BigDec——// 和 % 的向负无穷取整语义") {
         CHECK(d("1").floor_div(d("-3"), ctx).to_string() == "-1");
     }
 
-    // 这条恒等式只在精确算术下必然成立，右边的乘法要按上下文舍入，跟 % 直接舍入出来的余数不保证
-    // 逐位相等（例：1 % 0.30000000000000000000000000009 在 prec 28 下就不相等，CPython 的
-    // Decimal 同样如此）——SL.md 的运算符语义一节只拿它定 % 的方向和符号，不承诺逐位相等。值池刻意
-    // 温和（系数位数不多，乘积不会顶到 prec），能过是这批具体输入凑巧没撞上双重舍入，不代表恒成立
+    // 精确算术下成立；有舍入时右边乘法再舍一次，不保证逐位相等。值池温和，乘积顶不到 prec。
     TEST_CASE("恒等式 x % y == x - (x // y) * y（温和值池下逐位成立，非普遍恒等式）") {
         DecContext ctx{quiet_context()};
         constexpr const char *const pool[]{

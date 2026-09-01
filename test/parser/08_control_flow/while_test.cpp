@@ -1,20 +1,8 @@
-// SL.md while 表达式：while [收集模式记号] (cond) expr。记号本身单独在 collect_mark_test.cpp 里覆盖
-// 内部复用 AstNodeForCond（init_/inc_ 皆为 nullptr），不单独建节点类型，但对外观察到的 JSON 形状
-// 就是按 ForCond 来的，这里直接按 ForCond 的字段断言。
+// while：内部是 init/inc 为空的步进 for。括号内换行是空白。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
-
-namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
-
-nlohmann::json int_lit(const char *raw) {
-    return nlohmann::json::parse(R"({"type":"LiteralInt","raw":")" + std::string{raw} + R"("})");
-}
-} // namespace
 
 TEST_SUITE("while") {
 
@@ -126,7 +114,7 @@ TEST_SUITE("while——cond 禁止裸的普通赋值") {
     }
 }
 
-TEST_SUITE("while——$ 与 while 之间不需要空白（SL.md）") {
+TEST_SUITE("while——$ 与 while 之间不需要空白") {
 
     TEST_CASE("基本 while$ 无空格") {
         CHECK(

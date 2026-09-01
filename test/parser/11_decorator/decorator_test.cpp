@@ -1,17 +1,8 @@
-// SL.md 装饰器表达式：
-//   紧邻 func/class 的 @decorator 属于函数/类表达式自己的语法，直接挂到 decorators_ 上；
-//   通用形式 @d1 @d2 ... expr ≡ d1(d2(...(expr)))，从最贴近 expr 的装饰器开始向外包裹，
-//   包成 AstNodeDecorator 链。
+// 紧邻 func/class 的 @ 挂到节点上；否则包成 Decorator 链。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
-
-namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
-} // namespace
 
 TEST_SUITE("装饰器——紧邻 func/class") {
 

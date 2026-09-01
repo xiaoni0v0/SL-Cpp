@@ -290,7 +290,7 @@ TEST_SUITE("BigInt——符号/奇偶/绝对值") {
         CHECK(d("-5").abs().abs() == d("5").abs());
     }
 
-    TEST_CASE("大路径下的正数：abs()/sign()/is_negative() 不受影响（之前只测过大路径负数）") {
+    TEST_CASE("大路径下的正数：abs()/sign()/is_negative()") {
         const BigInt positive_big{d("123456789012345678901234567890")};
         CHECK(positive_big.abs() == positive_big);
         CHECK(positive_big.sign() == 1);
@@ -322,8 +322,7 @@ TEST_SUITE("BigInt——to_double") {
     }
 
     TEST_CASE(
-        "跟 std::strtod 的正确舍入结果逐条对拍：覆盖位数超过 64 位、不可精确表示、需要真正"
-        "就近舍入的大数（早前逐 limb 累乘累加的实现在这类值上会错 1 ULP）"
+        "跟 std::strtod 对拍：覆盖超过 64 位、不可精确表示、需要就近舍入的大数"
     ) {
         const auto check_matches_strtod{[](const BigInt &x) {
             const std::string s{x.to_decimal_string()};
@@ -364,8 +363,7 @@ TEST_SUITE("BigInt——to_double") {
     }
 
     TEST_CASE(
-        "刻意构造舍入平局（数值恰好卡在两个相邻 double 正中间），验证就近取偶 + sticky "
-        "位打破平局都对——之前的用例都是碰巧踩中舍入，没有一条是故意踩中平局的"
+        "刻意构造舍入平局（数值恰好卡在两个相邻 double 正中间），验证就近取偶 + sticky 位"
     ) {
         // m 是 53 位整数（顶满一个 double 尾数），X = (2m+1) * 2^(k-1) 恰好是 m*2^k 和
         // (m+1)*2^k 正中间那个整数——m、m+1 这两个尾数在这个量级上正是相邻的两个可表示 double，
@@ -479,7 +477,7 @@ TEST_SUITE("BigInt——加减乘（含跨 limb 进位/借位）") {
 
 TEST_SUITE("BigInt——floor_div / mod：向负无穷取整，语义与 Python 一致") {
 
-    TEST_CASE("SL.md 原文举的例子：-7 // 2 == -4，-7 % 2 == 1") {
+    TEST_CASE("-7 // 2 == -4，-7 % 2 == 1") {
         CHECK(d("-7").floor_div(d("2")).to_decimal_string() == "-4");
         CHECK(d("-7").mod(d("2")).to_decimal_string() == "1");
     }
@@ -663,7 +661,7 @@ TEST_SUITE("BigInt——pow") {
         CHECK_THROWS_AS((void) d("2").pow(d("-1")), std::domain_error);
     }
 
-    TEST_CASE("指数本身是大路径值（走 is_odd()/floor_div 的大路径分支，之前这条路径零覆盖）") {
+    TEST_CASE("指数本身是大路径值（走 is_odd()/floor_div 的大路径分支）") {
         CHECK(d("1").pow(d("100000000000000000000")) == d("1")); // 1 的任何次幂恒为 1
         CHECK(d("0").pow(d("100000000000000000000")).is_zero());
         CHECK(d("-1").pow(d("100000000000000000000")) == d("1"));  // 个位是 0，偶数
@@ -677,7 +675,7 @@ TEST_SUITE("BigInt——pow") {
 
 TEST_SUITE("BigInt——位运算：按无穷位补码语义，与 Python 一致") {
 
-    TEST_CASE("SL.md 原文举的例子") {
+    TEST_CASE("~5 == -6；-1 & 255 == 255；-1 >> 100 == -1") {
         CHECK((~d("5")).to_decimal_string() == "-6");
         CHECK((d("-1") & d("255")).to_decimal_string() == "255"); // -1 的所有位都是 1
         CHECK((d("-1") >> 100).to_decimal_string() == "-1");      // 无论右移多少位，结果恒为 -1
@@ -816,7 +814,7 @@ TEST_SUITE("BigInt——移位：<< 恒等于乘 2^k，>> 恒等于向负无穷�
         CHECK((d("5") >> 0).to_decimal_string() == "5");
     }
 
-    TEST_CASE("负数右移恒为 -1（SL.md 原文例子）") {
+    TEST_CASE("负数右移恒为 -1") {
         CHECK((d("-1") >> 100).to_decimal_string() == "-1");
         CHECK((d("-1") >> 1).to_decimal_string() == "-1");
         CHECK((d("-1") >> 0).to_decimal_string() == "-1");
@@ -872,10 +870,7 @@ TEST_SUITE("BigInt——移位：<< 恒等于乘 2^k，>> 恒等于向负无穷�
     }
 }
 
-// 以下两个 TEST_SUITE 是针对 shrink() 那次 bug 的教训专门加的高强度测试：不再靠手挑几个具体案例，
-// 而是拿一批"边界值"两两、三三组合，批量验证数学上必然成立的恒等式。这类测试的好处是覆盖面是
-// 组合爆炸级的（几百上千种组合），且不需要我手算大数的期望值——期望值就是恒等式本身，只要 BigInt
-// 内部实现哪怕有一处不满足某条数学定律，几百种组合里大概率会踩中至少一种。
+// 边界值两两、三三组合，用恒等式本身当期望值。
 TEST_SUITE("BigInt——代数恒等式交叉验证（覆盖小路径/大路径边界、多 limb、正负号组合）") {
 
     TEST_CASE("加法：交换律、结合律、加法逆元、幺元") {
@@ -1068,11 +1063,7 @@ TEST_SUITE("BigInt——代数恒等式交叉验证（覆盖小路径/大路径�
     }
 }
 
-TEST_SUITE(
-    "BigInt——小路径/大路径规范化不变量：同一个值无论经过哪条运算路径算出来，都必须能用 == "
-    "判定相等（这正是 shrink() 那次 bug 的教训——bug 发作时数值本身没错，只是 is_small_ "
-    "标志跟别的同值对象不一致，导致 == 被误判为不等，只有专门针对这一点测才测得出来）"
-) {
+TEST_SUITE("BigInt——小路径/大路径规范化：同一值经不同运算路径算出来必须 ==") {
 
     TEST_CASE("恰好卡在 int64_t 边界上的一批值，分别通过好几条不同的运算路径算出来，两两都要相等") {
         for (const std::string &target : {
@@ -1152,7 +1143,7 @@ TEST_SUITE("BigInt——bit_length 与 to_double 的窄路径") {
         }
     }
 
-    TEST_CASE("num_decimal_digits：具体数值直接钉住（此前只在跟 bit_length 互证时被间接用到）") {
+    TEST_CASE("num_decimal_digits：具体数值直接钉住") {
         CHECK(d("0").num_decimal_digits() == 1); // 0 算 1 位
         CHECK(d("-0").num_decimal_digits() == 1);
         CHECK(d("7").num_decimal_digits() == 1);
@@ -1184,8 +1175,7 @@ TEST_SUITE("BigInt——bit_length 与 to_double 的窄路径") {
     }
 
     TEST_CASE("to_double 把整个值池灌给 strtod 对拍（含 [2^63, 2^64) 那段精确路径）") {
-        // 大路径但 64 位内装得下的那一支（2^63 <= |x| < 2^64）此前没被 to_double 的用例覆盖到，
-        // 而值池里本来就有 2^63、2^64-1 这些值——直接全灌进去，顺带把其余各档也一并对拍
+        // 含 [2^63, 2^64) 那段大路径但 64 位内装得下的精确路径
         for (const BigInt &x : interesting_values()) {
             const std::string s{x.to_decimal_string()};
             CAPTURE(s);

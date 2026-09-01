@@ -1,4 +1,4 @@
-// SL.md 运算符——符号本身的识别、贪婪最长匹配。点号单独放在 dot_disambiguation_test.cpp。
+// 符号识别与最长匹配。点号见 dot_disambiguation_test.cpp。
 #include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
@@ -113,13 +113,12 @@ TEST_SUITE("符号：贪婪最长匹配（多字符优先于短的）") {
         CHECK(lex_dump(U"!=") == "SIGN_NE");
     }
 
-    TEST_CASE("SL.md 举的反例：`a! == b` 不能写成 `a!==b`，两者词法结果不同") {
+    TEST_CASE("`a! == b` 与 `a!==b` 切分不同") {
         CHECK(lex_dump(U"a! == b") == "IDENTIFIER(a) SIGN_EXCLAIM SIGN_EQ IDENTIFIER(b)");
-        // 贪婪匹配下 !== 被切成 != 和 =，跟上面那句语义完全不同，这正是 spec 里特别提醒的坑
         CHECK(lex_dump(U"a!==b") == "IDENTIFIER(a) SIGN_NE SIGN_ASSIGN IDENTIFIER(b)");
     }
 
-    TEST_CASE("SL.md 举的正例：for $ (i : ls) { i ** 2 } 可以完全不加空白地压缩") {
+    TEST_CASE("符号与关键字之间不必有空白") {
         CHECK(lex_dump(U"for $ (ls as i) { i ** 2 }") == lex_dump(U"for$(ls as i){i**2}"));
     }
 }

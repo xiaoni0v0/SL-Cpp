@@ -263,7 +263,7 @@ add_executable(SL_Cpp_Lexer_Tests
         # 标识符
         test/lexer/03_identifiers/identifiers_test.cpp
         # 字面量
-        test/lexer/04_literals/none_bool_g_l_ellipsis_test.cpp
+        test/lexer/04_literals/none_bool_ellipsis_test.cpp
         test/lexer/04_literals/int_test.cpp
         test/lexer/04_literals/decimal_test.cpp
         test/lexer/04_literals/scientific_notation_test.cpp
@@ -272,11 +272,11 @@ add_executable(SL_Cpp_Lexer_Tests
         # 运算符与符号
         test/lexer/05_operators/symbols_test.cpp
         test/lexer/05_operators/dot_disambiguation_test.cpp
-        # 空白字符
+        # 空白
         test/lexer/06_whitespace/whitespace_test.cpp
-        # 跨分组：位置追踪、报错
-        test/lexer/common/position_tracking_test.cpp
-        test/lexer/common/error_handling_test.cpp
+        # 报错与位置
+        test/lexer/07_errors/error_handling_test.cpp
+        test/lexer/07_errors/position_tracking_test.cpp
 )
 sl_apply_test_target_options(SL_Cpp_Lexer_Tests)
 target_link_libraries(SL_Cpp_Lexer_Tests PRIVATE doctest::doctest)
@@ -322,24 +322,18 @@ add_executable(SL_Cpp_Parser_Tests
         test/parser/main_test.cpp
 
         # 测试代码
-        # 字面量
         test/parser/01_literals/literals_test.cpp
         test/parser/01_literals/literal_raw_test.cpp
-        # 运算符
         test/parser/02_operators/precedence_test.cpp
-        test/parser/02_operators/compare_is_assign_test.cpp
+        test/parser/02_operators/compare_is_test.cpp
         test/parser/02_operators/in_test.cpp
-        # 表达式分隔符
+        test/parser/02_operators/assign_test.cpp
+        test/parser/02_operators/unpack_test.cpp
         test/parser/03_separators/separator_test.cpp
-        # 基本表达式（{} 判别规则）
-        test/parser/04_basic_exprs/compound_dict_test.cpp
-        # del
+        test/parser/04_compound_dict/compound_dict_test.cpp
         test/parser/05_del/del_test.cpp
-        # global
         test/parser/06_global/global_test.cpp
-        # import
         test/parser/07_import/import_test.cpp
-        # 控制流
         test/parser/08_control_flow/if_test.cpp
         test/parser/08_control_flow/for_test.cpp
         test/parser/08_control_flow/while_test.cpp
@@ -348,19 +342,14 @@ add_executable(SL_Cpp_Parser_Tests
         test/parser/08_control_flow/return_test.cpp
         test/parser/08_control_flow/try_test.cpp
         test/parser/08_control_flow/raise_test.cpp
-        # 函数
         test/parser/09_func/func_test.cpp
-        # 类
         test/parser/10_class/class_test.cpp
-        # 装饰器
         test/parser/11_decorator/decorator_test.cpp
-        # eval
         test/parser/12_eval/eval_test.cpp
-        # 跨分组：位置追踪、报错
-        test/parser/common/position_tracking_test.cpp
-        test/parser/common/error_handling_test.cpp
-        test/parser/common/combination_test.cpp
-        test/parser/common/single_expr_entry_test.cpp
+        test/parser/13_cross/combination_test.cpp
+        test/parser/13_cross/error_handling_test.cpp
+        test/parser/13_cross/position_tracking_test.cpp
+        test/parser/13_cross/single_expr_entry_test.cpp
 )
 sl_apply_test_target_options(SL_Cpp_Parser_Tests)
 target_link_libraries(SL_Cpp_Parser_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
@@ -416,30 +405,34 @@ add_executable(SL_Cpp_Analyzer_Tests
         test/analyzer/main_test.cpp
         test/analyzer/recheck_after_fold_test.cpp
 
+        # 测试代码：semantic_checker
+        test/analyzer/semantic_checker/scope_test.cpp
+        test/analyzer/semantic_checker/lvalue_test.cpp
+        test/analyzer/semantic_checker/del_test.cpp
+        test/analyzer/semantic_checker/try_finally_test.cpp
+        test/analyzer/semantic_checker/dict_call_test.cpp
+        test/analyzer/semantic_checker/func_class_test.cpp
+        test/analyzer/semantic_checker/import_test.cpp
+        test/analyzer/semantic_checker/single_expr_test.cpp
+        test/analyzer/semantic_checker/defensive_test.cpp
+
         # 测试代码：expr_folder
         test/analyzer/expr_folder/arithmetic_test.cpp
         test/analyzer/expr_folder/bitwise_test.cpp
+        test/analyzer/expr_folder/logical_test.cpp
+        test/analyzer/expr_folder/compare_is_test.cpp
         test/analyzer/expr_folder/container_ops_test.cpp
         test/analyzer/expr_folder/numeric_fidelity_test.cpp
-        test/analyzer/expr_folder/eval_for_del_is_test.cpp
-        test/analyzer/expr_folder/compare_is_test.cpp
-        test/analyzer/expr_folder/logical_test.cpp
         test/analyzer/expr_folder/dead_branch_test.cpp
         test/analyzer/expr_folder/compound_test.cpp
         test/analyzer/expr_folder/program_prune_test.cpp
+        test/analyzer/expr_folder/call_index_attr_assign_test.cpp
         test/analyzer/expr_folder/try_raise_test.cpp
         test/analyzer/expr_folder/func_class_decorator_test.cpp
-        test/analyzer/expr_folder/call_index_attr_assign_test.cpp
         test/analyzer/expr_folder/import_test.cpp
-
-        # 测试代码：semantic_checker
-        test/analyzer/semantic_checker/scope_test.cpp
-        test/analyzer/semantic_checker/func_class_test.cpp
-        test/analyzer/semantic_checker/lvalue_test.cpp
-        test/analyzer/semantic_checker/dict_call_test.cpp
-        test/analyzer/semantic_checker/import_test.cpp
-        test/analyzer/semantic_checker/defensive_test.cpp
-        test/analyzer/semantic_checker/single_expr_test.cpp
+        test/analyzer/expr_folder/eval_test.cpp
+        test/analyzer/expr_folder/for_iter_test.cpp
+        test/analyzer/expr_folder/del_test.cpp
 )
 sl_apply_test_target_options(SL_Cpp_Analyzer_Tests)
 target_link_libraries(SL_Cpp_Analyzer_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)

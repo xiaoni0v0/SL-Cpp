@@ -1,23 +1,9 @@
-// StaticEvaler::prune_program：AstNodeProgram（模块顶层/函数体/类体）的剪枝规则。
-//
-// 关键点：Program 的值跟复合表达式不一样——不是"最后一条表达式的值"，而是完全由 return 决定：
-// 触发了 return 就是那个值，从头到尾没触发就恒为 None（SL.md）。所以纯字面量
-// （is_literal_pure）不管出现在 exprs_ 的哪个位置——包括最后一条——都能安全丢掉：它既不含
-// return，也没有副作用，留不留都不影响 Program 的值。`func f() { 1 }` 跟 `func f() {}`
-// 是同一个东西（调用都返回 None），这正是这条规则要处理的情况。
-//
-// 但节点本身的类型/身份不能变——ExprFolder::root_ 是按引用持有的 AstNodeProgram&，
-// AstNodeFunc::body_/AstNodeClass::body_ 也固定要求是 AstNodeProgramPtr，不是通用的
-// AstNodePtr，没法像复合表达式那样整个节点换成别的类型。所以这里只原地精简 exprs_，
-// 哪怕精简到空也不删除/替换这个节点。
+// Program 丢掉纯字面量，不保留最后一条。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
 
 namespace {
-nlohmann::json ident(const char *name) {
-    return nlohmann::json{{"type", "Identifier"}, {"identifier", name}};
-}
 
 nlohmann::json assign(const char *name, const nlohmann::json &value) {
     return nlohmann::json{{"type", "Assign"}, {"target", ident(name)}, {"value", value}};
@@ -84,7 +70,7 @@ TEST_SUITE("StaticEvaler AstNodeProgram 剪枝") {
         CHECK(body["exprs"] == nlohmann::json::array());
     }
 
-    TEST_CASE("func f() { 1 } 折完跟 func f() {} 长得一模一样（这次讨论的原始例子）") {
+    TEST_CASE("func f() { 1 } 折完跟 func f() {} 形状相同") {
         CHECK(fold_program_json(U"func f() { 1 }") == fold_program_json(U"func f() {}"));
     }
 

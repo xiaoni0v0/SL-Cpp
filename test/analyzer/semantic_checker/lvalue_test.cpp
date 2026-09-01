@@ -1,5 +1,4 @@
-// SemanticChecker：赋值/复合赋值目标的左值检查，含解构、以及左值根节点内部子表达式仍需完整
-// check()。
+// 赋值、for as、except as 的左值形状。
 #include "test_utils.h"
 
 #include <doctest/doctest.h>
@@ -32,7 +31,7 @@ TEST_SUITE("SemanticChecker 左值检查") {
         check_throws_with(U"[*a, *b] = x", "at most one starred lvalue allowed in destructuring");
     }
 
-    TEST_CASE("* 后面本身仍是一个左值，可以是嵌套的 tuple/list 解构（SL.md：解构“可嵌套”）") {
+    TEST_CASE("* 后面仍是左值，可以是嵌套的 tuple/list 解构") {
         CHECK_NOTHROW(check_program(U"(a, *(b, c)) = x"));
         CHECK_NOTHROW(check_program(U"(a, *[b, c]) = x"));
         // * 后面是纯左值（标识符/索引/属性）也都合法
@@ -59,15 +58,9 @@ TEST_SUITE("SemanticChecker 左值检查") {
         );
     }
 
-    TEST_CASE(
-        "左值根节点内部的子表达式仍然要完整 check()——之前 check_lvalue 对 Index/Attr 直接"
-        "返回、完全跳过了 object_/args_，导致里面的问题被忽略"
-    ) {
-        // a[break] = 1：break 在这里没有被任何循环包着，之前会被 check_lvalue
-        // 完全跳过检查，现在要报错
+    TEST_CASE("左值内部的子表达式仍要完整 check()") {
         check_throws_with(U"a[break] = 1", "break outside loop");
         check_throws_with(U"a[break] += 1", "break outside loop");
-        // 复合赋值同理，target_ 是 Attr 时 object_ 的子表达式也要被检查
         check_throws_with(U"(break).b = 1", "break outside loop");
     }
 

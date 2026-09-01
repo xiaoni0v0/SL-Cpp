@@ -1,13 +1,4 @@
-// AstNodeLiteralInt/AstNodeLiteralDecimal 构造时对 raw_ 的形状校验。
-//
-// raw_ 存的是词法层原样保留的源码文本（`1.50e-3` 就是这十个字符），构造函数复核它确实符合字面量
-// 文法——包括科学计数法后缀 `[eE][+-]?digits`：尾数不带小数点即为 int，指数必须非负且不超过 9999；
-// 尾数带小数点即为 decimal，指数可正可负、不设上限。另外允许一个前导负号：源码里的字面量不带符号
-// （`-1` 是一元负号加上 `1`），但常量折叠会把算出来的负数直接写进 raw_。
-//
-// 这些规则 Lexer 已经把过一道，违反它们只可能是 Lexer/Parser/ExprFolder 出了 bug，所以抛的是
-// InternalError 而不是 SyntaxError。校验放在构造函数里而不是 SemanticChecker 里，是因为常量折叠
-// 造出来的字面量节点根本不会再经过 SemanticChecker（Analyzer 只在折叠之前 check 一次）。
+// int/decimal 节点构造时校验 raw_ 形状。违反即 InternalError。
 #include "../../../builtins/exceptions/InternalError.h"
 #include "../test_utils.h"
 

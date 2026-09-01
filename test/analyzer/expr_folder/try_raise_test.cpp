@@ -1,11 +1,4 @@
-// ExprFolder：AstNodeTry/AstNodeRaise 各子槽位的子表达式折叠。
-// try/raise 本身永远不参与整体折叠（不在 StaticEvaler::fold 的分发范围内，运行期才能确定异常
-// 是否发生），这里只关心：try_expr_、except 的 exceptions_/target_/body_、finally_expr_、
-// raise 的 value_，这些子槽位各自的表达式该折还是照样会被递归折叠。
-//
-// target_ 是 `except (E as 目标)` 的绑定目标，跟 for 的 as 目标一样是左值：左值只可能是
-// 标识符/属性访问/索引/解构元组或列表，这几种都不在 StaticEvaler::fold 的分发范围内，所以目标
-// 本身永远折不动，能折的是它内部的子表达式（如 a[1 + 1] 的下标）。
+// try/raise 各槽位折叠，含 except as 目标。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

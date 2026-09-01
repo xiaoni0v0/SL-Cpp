@@ -1,6 +1,6 @@
 #pragma once
 
-// 测试专用工具：把 Lexer 的输出转成人类可读、方便在测试里当字符串字面量写的形式。
+// 把 Lexer 输出转成单行字符串，方便 CHECK(lex_dump(...) == "...")。
 
 #include "../../lexer/Lexer.h"
 #include "../../utils/string_utils.h"
@@ -9,12 +9,9 @@
 #include <string>
 #include <vector>
 
-// 直接跑词法分析，拿到原始 token 序列（含结尾 EOF）。
-// 用于需要检查 row/col、或者需要检查 EOF 本身的用例。
 inline std::vector<Token> lex(const std::u32string &source) { return Lexer{source}.tokenize(); }
 
-// 把一个 u32string 里的控制字符转成可见的转义序列，纯粹是为了让转储结果保持单行、方便阅读/比对，
-// 跟词法分析本身的转义处理（Lexer::read_string）无关，只是测试展示层面的东西。
+// 仅用于 dump 展示，跟词法层的字符串转义无关。
 inline std::string escape_for_dump(const std::u32string &s) {
     std::string out;
     for (const char32_t c : s) {
@@ -35,8 +32,7 @@ inline std::string escape_for_dump(const std::u32string &s) {
     return out;
 }
 
-// 词法分析 + 转储成一行字符串，格式：`TYPE1 TYPE2(内容) TYPE3 ...`，token 间用单个空格分隔。
-// 会跳过结尾的 END_OF_FILE。
+// 格式：`TYPE1 TYPE2(内容) ...`，跳过结尾 EOF。int/decimal/str/标识符带括号内容。
 inline std::string lex_dump(const std::u32string &source) {
     const auto tokens{lex(source)};
     std::ostringstream oss;
