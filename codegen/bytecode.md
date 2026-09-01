@@ -147,15 +147,20 @@
 
 ### 属性与索引
 
-| 指令             | 前                  | 后    | 行为                                                                     |
-|------------------|---------------------|-------|--------------------------------------------------------------------------|
-| `LOAD_ATTR n`    | `… obj`             | `… v` | `obj` → 属性值                                                           |
-| `STORE_ATTR n`   | `… obj val`         | `…`   | `obj val` → 弹两项，写属性                                               |
-| `DELETE_ATTR n`  | `… obj`             | `…`   | `obj` → 弹掉，删属性                                                     |
-| `LOAD_INDEX n`   | `… obj a₁ … aₙ`     | `… v` | `obj a1 … an` → 结果，走 `__op_get_index__`                              |
-| `STORE_INDEX n`  | `… obj a₁ … aₙ val` | `…`   | `obj a1 … an val` → 弹光，走 `__op_set_index__`                          |
-| `LOAD_INDEX_EX`  | `… obj args`        | `… v` | `obj args` → 结果。`args` 是下标已打包好的 list，索引里出现 `*` 展开时用 |
-| `STORE_INDEX_EX` | `… obj args val`    | `…`   | `obj args val` → 弹光                                                    |
+| 指令             | 前                  | 后    | 行为                                            |
+|------------------|---------------------|-------|-------------------------------------------------|
+| `LOAD_ATTR n`    | `… obj`             | `… v` | `obj` → 属性值                                  |
+| `STORE_ATTR n`   | `… obj val`         | `…`   | `obj val` → 弹两项，写属性                      |
+| `DELETE_ATTR n`  | `… obj`             | `…`   | `obj` → 弹掉，删属性                            |
+| `LOAD_INDEX n`   | `… obj a₁ … aₙ`     | `… v` | `obj a1 … an` → 结果，走 `__op_get_index__`     |
+| `STORE_INDEX n`  | `… obj a₁ … aₙ val` | `…`   | `obj a1 … an val` → 弹光，走 `__op_set_index__` |
+| `LOAD_INDEX_EX`  | `… obj args`        | `… v` | `obj args` → 结果。`args` 是下标已打包好的 list |
+| `STORE_INDEX_EX` | `… obj args val`    | `…`   | `obj args val` → 弹光                           |
+
+`*expr` 合法出现在索引里（`x[*a, b]`），跟函数调用一样：只要索引参数里有一个 `*` 展开，参数个数就不是
+编译期常数，必须先在栈上拼出 `args` 这个 list 再交给 `_EX` 版本；没有展开的普通索引走上面固定参数个数
+的 `LOAD_INDEX`/`STORE_INDEX`。索引没有 `**` 展开（`SL.md` 只允许 `**` 出现在字典字面量和函数调用）， 所以
+`_EX` 版本不需要 `kwargs`，跟 `CALL_EX` 不对称是故意的。
 
 ### 运算符
 
@@ -164,35 +169,43 @@
 | `UNARY_OP op`  | `… x`   | `… v` | `x` → 结果。`op` 选 `+` `-` `~` `not` `?` `!`                                                                                                 |
 | `BINARY_OP op` | `… x y` | `… v` | `x y` → 结果。`op` 选全部二元运算符，含六个比较、`in`、`is`、`..`。正向/反向方法、`__op_cmp__` 回退、`==`/`!=` 的身份兜底全在这条指令的实现里 |
 
-`and`/`or` 不是 `BINARY_OP`，走短路跳转。链式比较、`is` 链也不是独立指令，靠 `COPY`/`INSERT`/
-`BINARY_OP`/`POP_JUMP_IF_FALSE` 展开，见下面 codegen 模式。
+`not`、`is`（含 `is` 链）、六个比较（含链式比较）本身仍然各自是一次 `UNARY_OP`/`BINARY_OP`——"链"
+不是新语义，只是同一个二元运算符被连续应用多次。真正不落在这两条指令上的只有 `and`/`or`：它们不产出
+"某个运算符的结果"，而是"保留左值还是求右值"的控制流分支，走 `JUMP_IF_FALSE` 短路跳转，见下面 codegen
+模式；链式比较/`is` 链要的只是"把同一个操作数喂给两次 `BINARY_OP`"，靠 `COPY`/`INSERT` 拼接，同样见 下面
+codegen 模式。
 
 ### 容器
 
-| 指令                                           | 前                                       | 后                | 行为                                                                                                                                      |
-|------------------------------------------------|------------------------------------------|-------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
-| `MAKE_TUPLE n` / `MAKE_LIST n` / `MAKE_DICT n` | `… v₁ … vₙ`（dict 是 `… k₁ v₁ … kₙ vₙ`） | `… c`             | 弹 `n` 项（dict 弹 `2n` 项、键值交替）建容器。无展开项时用这组                                                                            |
-| `LIST_APPEND`                                  | `… lst x`                                | `… lst`           | 弹栈顶，追加到下面的 list                                                                                                                 |
-| `LIST_EXTEND`                                  | `… lst x`                                | `… lst`           | 弹栈顶（要求可迭代，否则 `TypeError`），元素依次追加到下面的 list                                                                         |
-| `DICT_PUT`                                     | `… d k v`                                | `… d`             | 弹 `k v` 两项写入下面的 dict                                                                                                              |
-| `DICT_MERGE`                                   | `… d x`                                  | `… d`             | 弹栈顶（要求满足映射协议，否则 `TypeError`），各项并入下面的 dict                                                                         |
-| `LIST_TO_TUPLE`                                | `… lst`                                  | `… tup`           | 把栈顶的 list 换成 tuple                                                                                                                  |
-| `UNPACK n`                                     | `… x`                                    | `… vₙ … v₁`       | 弹栈顶（要求可迭代），**逆序**压入各元素使第一个元素在栈顶；个数不是 `n` 则 `ValueError`                                                  |
-| `UNPACK_EX a`                                  | `… x`                                    | `… vₖ … *lv … v₁` | 带 `*lv` 的解构：`a` 低 8 位是星号前的项数、高 8 位是星号后的项数（高位靠 `EXTENDED_ARG` 给出）。星号项绑一个 list；元素不够 `ValueError` |
+| 指令                                           | 前                                       | 后                | 行为                                                                                     |
+|------------------------------------------------|------------------------------------------|-------------------|------------------------------------------------------------------------------------------|
+| `MAKE_TUPLE n` / `MAKE_LIST n` / `MAKE_DICT n` | `… v₁ … vₙ`（dict 是 `… k₁ v₁ … kₙ vₙ`） | `… c`             | 弹 `n` 项（dict 弹 `2n` 项、键值交替）建容器。无展开项时用这组                           |
+| `LIST_APPEND`                                  | `… lst x`                                | `… lst`           | 弹栈顶，追加到下面的 list                                                                |
+| `LIST_EXTEND`                                  | `… lst x`                                | `… lst`           | 弹栈顶（要求可迭代，否则 `TypeError`），元素依次追加到下面的 list                        |
+| `DICT_PUT`                                     | `… d k v`                                | `… d`             | 弹 `k v` 两项写入下面的 dict                                                             |
+| `DICT_MERGE`                                   | `… d x`                                  | `… d`             | 弹栈顶（要求满足映射协议，否则 `TypeError`），各项并入下面的 dict                        |
+| `LIST_TO_TUPLE`                                | `… lst`                                  | `… tup`           | 把栈顶的 list 换成 tuple                                                                 |
+| `UNPACK n`                                     | `… x`                                    | `… vₙ … v₁`       | 弹栈顶（要求可迭代），**逆序**压入各元素使第一个元素在栈顶；个数不是 `n` 则 `ValueError` |
+| `UNPACK_EX a`                                  | `… x`                                    | `… vₖ … *lv … v₁` | 带 `*lv` 的解构，见下                                                                    |
 
 带 `*`/`**` 展开的元组/列表/字典字面量走 `MAKE_LIST 0` / `MAKE_DICT 0` 加逐项
 append/extend/put/merge，元组最后补 `LIST_TO_TUPLE`；收集模式的 `for` 复用同一组指令。
 
+**`UNPACK_EX a` 的参数编码**：`a` 是一次 `EXTENDED_ARG` 累积出的 16 位值， **高 8 位**是星号后的项数、
+**低 8 位**是星号前的项数——跟本指令自己那一字节参数的位置对应：`EXTENDED_ARG (星号后项数)` 在前，
+`UNPACK_EX (星号前项数)` 在后，累积规则见前面「指令编码」一节，两半正好各占一字节。例如
+`(a, b, *rest, c) = e`（星号前 2 项、星号后 1 项）编译成 `EXTENDED_ARG 1` `UNPACK_EX 2`，累积值
+`a = (1 << 8) | 2`。这个编码天然只支持每侧至多 255 项——照抄 Python `UNPACK_EX` 的现成方案，接受这个
+上限：单条解构写一百多个显式名字本来就不是正常代码。
+
 ### 跳转
 
-| 指令                     | 前     | 后                          | 行为                                                                |
-|--------------------------|--------|-----------------------------|---------------------------------------------------------------------|
-| `JUMP t`                 | `…`    | `…`                         | 无条件跳                                                            |
-| `POP_JUMP_IF_FALSE t`    | `… x`  | `…`                         | 弹栈顶，真值为假则跳。真值即 `__bool__`，返回非 bool 是 `TypeError` |
-| `JUMP_IF_TRUE_OR_POP t`  | `… x`  | `… x`（真，跳）或 `…`（假） | 真值为真：**保留**栈顶并跳；否则弹掉继续。`or` 用                   |
-| `JUMP_IF_FALSE_OR_POP t` | `… x`  | `… x`（假，跳）或 `…`（真） | 真值为假：保留栈顶并跳；否则弹掉继续。`and` 用                      |
-| `LOAD_ITER`              | `… x`  | `… it`                      | 栈顶换成它的迭代器，不满足可迭代协议则 `TypeError`                  |
-| `FOR_ITER t`             | `… it` | `… it v` 或 `…`（耗尽，跳） | 取到下一个元素就压栈；耗尽则弹掉迭代器并跳 `t`                      |
+| 指令              | 前     | 后                          | 行为                                                                |
+|-------------------|--------|-----------------------------|---------------------------------------------------------------------|
+| `JUMP t`          | `…`    | `…`                         | 无条件跳                                                            |
+| `JUMP_IF_FALSE t` | `… x`  | `…`                         | 弹栈顶，真值为假则跳。真值即 `__bool__`，返回非 bool 是 `TypeError` |
+| `LOAD_ITER`       | `… x`  | `… it`                      | 栈顶换成它的迭代器，不满足可迭代协议则 `TypeError`                  |
+| `FOR_ITER t`      | `… it` | `… it v` 或 `…`（耗尽，跳） | 取到下一个元素就压栈；耗尽则弹掉迭代器并跳 `t`                      |
 
 ### 异常与 finally
 
@@ -232,18 +245,27 @@ append/extend/put/merge，元组最后补 `LIST_TO_TUPLE`；收集模式的 `for
 
 ## 关键构造的 codegen 模式
 
+**`and`/`or`**：只用一个消费型的 `JUMP_IF_FALSE`（不需要额外的 `JUMP_IF_TRUE`）。先复制一份操作数
+去测试，测试用的那份被 `JUMP_IF_FALSE` 吃掉，原件留在栈上；短路时原件就是结果，不短路时先弹掉原件
+再求右操作数。`or` 只是把"假才跳"倒过来，用一条无条件 `JUMP` 换向即可，不需要"真才跳"的指令：
+
+```
+a and b : <a> COPY 1 JUMP_IF_FALSE end POP_TOP <b> end:
+a or b  : <a> COPY 1 JUMP_IF_FALSE rhs JUMP end   rhs: POP_TOP <b>   end:
+```
+
 **链式比较 `a < b < c < d`**（`is` 链同理，`op` 换成 `is`）。中间段把右操作数复制一份垫到左操作数下面
-再比较，用 `POP_JUMP_IF_FALSE` 判断是否短路； **所有中间段的失败分支都跳向同一个 `fail`**——不管哪一段
+再比较，用 `JUMP_IF_FALSE` 判断是否短路； **所有中间段的失败分支都跳向同一个 `fail`**——不管哪一段
 先假，清理动作都是同一句"交换、弹掉左操作数，留下比较结果"：
 
 ```
 <a> <b>
 COPY 1 INSERT 3 BINARY_OP Lt   ; 栈: b t   (t = a < b)
-COPY 1 POP_JUMP_IF_FALSE fail
+COPY 1 JUMP_IF_FALSE fail
 POP_TOP                         ; 真：留 b，继续
 <c>
 COPY 1 INSERT 3 BINARY_OP Lt   ; 栈: c t   (t = b < c)
-COPY 1 POP_JUMP_IF_FALSE fail
+COPY 1 JUMP_IF_FALSE fail
 POP_TOP                         ; 真：留 c，继续
 <d> BINARY_OP Lt                ; 末段：t = c < d，不用再留操作数
 JUMP end
@@ -291,7 +313,7 @@ $$ **     : DICT_MERGE
 
 ```
 SETUP_EXCEPT h    <expr1>   POP_BLOCK   JUMP after
-h:  COPY 1 <E1> CHECK_EXC_MATCH POP_JUMP_IF_FALSE next1
+h:  COPY 1 <E1> CHECK_EXC_MATCH JUMP_IF_FALSE next1
     (有 as 就把栈顶异常对象赋给 lvalue，否则 POP_TOP) <expr2> JUMP after
 next1: …          RERAISE
 after:
