@@ -6,13 +6,15 @@
 
 TEST_SUITE("StaticEvaler 比较") {
 
-    TEST_CASE("数字之间的大小/相等比较，跨 bool/int/decimal 提升") {
+    TEST_CASE("数字之间的大小/相等比较，跨 bool/int 提升") {
         CHECK(fold_json(U"1 < 2") == bool_lit(true));
         CHECK(fold_json(U"2 <= 2") == bool_lit(true));
-        CHECK(fold_json(U"1 == 1.0") == bool_lit(true));
         CHECK(fold_json(U"True == 1") == bool_lit(true));
         CHECK(fold_json(U"1 != 2") == bool_lit(true));
     }
+
+    // decimal 一概不折（哪怕是跨类型比较），见 numeric_fidelity_test.cpp
+    TEST_CASE("掺了 decimal 的比较不折") { CHECK(fold_json(U"1 == 1.0")["type"] == "Compare"); }
 
     TEST_CASE("字符串按字典序比较") {
         CHECK(fold_json(U"'a' < 'b'") == bool_lit(true));
@@ -183,21 +185,22 @@ TEST_SUITE("StaticEvaler 比较——跨类型的 ==/!= 兜底与序比较的不
     }
 
     // 数值之间跨类型是**认识对方**的（SL.md 4.2.5 bool 折算成 int、4.2.6 数值相等的 int 与
-    // decimal 哈希相同），所以走按值比较而不是身份兜底——不能因为"类型不同"就一律判不等
-    TEST_CASE("数值类型之间跨类型互相认识，按值比较，不落到身份兜底") {
-        CHECK(fold_json(U"1 == 1.0") == bool_lit(true));
+    // decimal 哈希相同），所以走按值比较而不是身份兜底——不能因为"类型不同"就一律判不等。
+    // bool/int 这一对认识对方且折叠器确实知道怎么比；decimal 这一侧虽然也"认识"，但折叠器
+    // 干脆不碰 decimal 的值（见 StaticEvaler.h 类注释），所以停在"不折"，不是算出 False
+    TEST_CASE("数值类型之间跨类型互相认识，不落到身份兜底：bool/int 按值折，decimal 干脆不折") {
         CHECK(fold_json(U"True == 1") == bool_lit(true));
-        CHECK(fold_json(U"True == 1.0") == bool_lit(true));
-        CHECK(fold_json(U"1 < 1.5") == bool_lit(true)); // 序比较也认识
-        CHECK(fold_json(U"False < 1.5") == bool_lit(true));
+        CHECK(fold_json(U"False < 1.5")["type"] == "Compare"); // 认识但 decimal 不折，不是 False
+        CHECK(fold_json(U"True == 1.0")["type"] == "Compare");
+        CHECK(fold_json(U"1 < 1.5")["type"] == "Compare");
     }
 
     // 容器的元素级比较要递归套用同一套规则，兜底也要递归生效
     TEST_CASE("嵌套容器：元素级比较递归套用同一套规则") {
         CHECK(fold_json(U"((),) == ([],)") == bool_lit(false)); // 元素跨类型 → 元素不等
         CHECK(fold_json(U"(1,) == ('a',)") == bool_lit(false));
-        CHECK(fold_json(U"[1] == [1.0]") == bool_lit(true)); // 元素是数值，按值相等
-        CHECK(fold_json(U"(True,) == (1,)") == bool_lit(true));
+        CHECK(fold_json(U"[1] == [1.0]")["type"] == "Compare"); // 元素含 decimal，判不了，整体不折
+        CHECK(fold_json(U"(True,) == (1,)") == bool_lit(true)); // 元素是 bool/int，按值相等
     }
 
     TEST_CASE("嵌套容器的序比较：某个元素不可比 → 整体不可比 → 不折") {

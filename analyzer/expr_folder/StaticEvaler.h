@@ -1,7 +1,5 @@
 #pragma once
 
-#include "../../numeric/BigDec.h"
-#include "../../numeric/BigInt.h"
 #include "../../parser/ast_nodes/ast_nodes.h"
 
 #include <compare>
@@ -14,10 +12,6 @@
  *
  * 只有当编译期算出的结果，在任何可能的运行期上下文下都与运行期结果逐位相同时，才折。
  *
- * 有两件互相独立的事会破坏这条判据：
- * 1. 上下文依赖，比如 decimal。
- * 2. 表示保真，比如用 int64_t 算 int 是保守但正确（溢出就放弃）；用 double 算 decimal 是错值。
- *
  * 折叠范围：
  *
  * 一元：
@@ -27,31 +21,30 @@
  *
  * 二元：
  *            int  bool  decimal  str  tuple  list
- *       int   A     B      D      E     F      F
- *      bool   B     B      D      F     F      F
- *   decimal   D     D      D      F     F      F
+ *       int   A     B      G      E     F      F
+ *      bool   B     B      G      F     F      F
+ *   decimal   G     G      G      F     F      F
  *       str   E     F      F      C     F      F
  *     tuple   F     F      F      F     C      F
  *      list   F     F      F      F     F      C
  *
- * A = { ** * // % + - < <= > >= != == << >> & ^ | } // 算数、比较、位运算
- * B = { ** * // % + - < <= > >= != == }             // 算数、比较
- * C = { + < <= > >= != == }                         // 容器拼接、比较
- * D = { < <= > >= != == }                           // 比较
- * E = { * != == }                                   // 容器重复、相等
- * F = { != == }                                     // 相等
+ * A = { ** * // % + - == != < <= > >= << >> & ^ | } // 算数、比较、位运算
+ * B = { ** * // % + - == != < <= > >= }             // 算数、比较
+ * C = { + == != < <= > >= }                         // 容器拼接、比较
+ * E = { * == != }                                   // 容器重复、相等
+ * F = { == != }                                     // 相等
+ * G = { }                                           // 都不折
  *
  * 除此之外，and/or/not 对于字面量均折叠。
  *
  * 规模上限：
- * - int 结果的十进制位数不超过 nMaxIntDigits。
- *   只有会爆炸的 `*`/`**`/`<<` 需要事先估算，`+`/`-` 至多多一位、// % & | ^ >> 只会变小，都不用卡；
+ * - int 如果能用 int64_t 装下则折，科学计数法写法如果够小则字面展开；
  * - str 的 + 拼接、* 重复，结果长度不超过 nMaxStrLength 时折叠；
  * - tuple/list 的 + 拼接，结果元素个数不超过 nMaxContainerItems 时折叠；
  *
  * 运行期必然报错的一律不折，把错误原样留给运行期。
  *
- * 死分支消除：
+ * 死代码消除：
  *   1. if、步进模式的 for、while 的 cond 折成的字面量真值为 False 的 clause/循环整个消失，
  *      值退化成默认值。
  *   2. if 的某个 clause 的 cond 折成的字面量真值为 True，
@@ -131,13 +124,10 @@ class StaticEvaler {
     // 是不是 bool 或 int 或 decimal
     [[nodiscard]] static bool is_numeric(const AstNode &node);
 
-    // node -> BigInt。调用方保证 is_int_family(node)；字面量形状不合法时返回 nullopt（不抛）
-    [[nodiscard]] static std::optional<BigInt> node_to_bigint(const AstNode &node);
-    // node -> BigDec。调用方保证 is_numeric(node)；不合法或非有限（inf/NaN）时返回 nullopt
-    // int/bool 精确提升成 decimal
-    [[nodiscard]] static std::optional<BigDec> node_to_bigdec(const AstNode &node);
-    // BigInt -> int64_t，装不下返回 nullopt。移位量、指数这类"必须是小整数"的场合用
-    [[nodiscard]] static std::optional<int64_t> bigint_to_int64(const BigInt &value);
+    // node -> int64_t。调用方保证 is_int_family(node)。
+    // 科学计数法写法（1e5）在这里按值展开成普通数字串再解析；
+    // 装不下 int64_t（含指数超过 nMaxIntScientificExponent）时一律返回 nullopt
+    [[nodiscard]] static std::optional<int64_t> node_to_int64(const AstNode &node);
 
     // —————————— 折叠上限 ——————————
 
@@ -145,13 +135,13 @@ class StaticEvaler {
     static constexpr size_t nMaxContainerItems{256};
     // str：+ 拼接、* 重复，结果字符数上限
     static constexpr size_t nMaxStrLength{4096};
-    // int：折叠结果的十进制位数上限。只有 * ** << 需要事先估算并卡它，见类注释
-    static constexpr size_t nMaxIntDigits{4096};
+    // int 科学计数法展开的指数上限
+    static constexpr size_t nMaxIntScientificExponent{19};
 
     // —————————— 构造折叠结果 ——————————
 
     [[nodiscard]] static AstNodePtr make_bool(Position pos, bool value);
-    [[nodiscard]] static AstNodePtr make_int(Position pos, const BigInt &value);
+    [[nodiscard]] static AstNodePtr make_int(Position pos, int64_t value);
     // 字面量之间的值相等。调用方保证 is_literal_pure(a) 且 is_literal_pure(b)
     [[nodiscard]] static std::optional<bool> literal_equal(const AstNode &a, const AstNode &b);
     // 字面量之间的值比较。调用方保证 is_literal_pure(a) 且 is_literal_pure(b)

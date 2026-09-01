@@ -12,13 +12,15 @@ TEST_SUITE("StaticEvaler 逻辑运算") {
         CHECK(fold_json(U"not [1]") == bool_lit(false));
     }
 
-    TEST_CASE("真值规则：None/False/0/0.0/''/()/[]/dict() 为假，其余为真") {
+    TEST_CASE("真值规则：None/False/0/''/()/[]/dict() 为假，其余为真") {
         CHECK(fold_json(U"not None") == bool_lit(true));
-        CHECK(fold_json(U"not 0.0") == bool_lit(true));
         CHECK(fold_json(U"not ()") == bool_lit(true));
         CHECK(fold_json(U"not (1,)") == bool_lit(false));
         CHECK(fold_json(U"not ...") == bool_lit(false)); // Ellipsis 不在假值列表里
     }
+
+    // decimal 的真值也不折（哪怕字面看着明显是 0），见 numeric_fidelity_test.cpp
+    TEST_CASE("decimal 的真值不折") { CHECK(fold_json(U"not 0.0")["type"] == "OpUnary"); }
 
     TEST_CASE("and：左真则取右（原样返回，不一定是 bool），左假则取左") {
         CHECK(fold_json(U"True and 5") == int_lit("5"));

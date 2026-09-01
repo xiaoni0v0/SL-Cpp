@@ -374,14 +374,6 @@ add_executable(SL_Cpp_Analyzer_Tests
         lexer/x_token_type.inc
         utils/string_utils.cpp
         utils/string_utils.h
-        numeric/BigDec.cpp
-        numeric/BigDec.h
-        numeric/BigInt.cpp
-        numeric/BigInt.h
-        numeric/dec_math.cpp
-        numeric/dec_math.h
-        numeric/DecContext.cpp
-        numeric/DecContext.h
         parser/Parser.cpp
         parser/Parser.h
         parser/ast_nodes/ast_nodes.h

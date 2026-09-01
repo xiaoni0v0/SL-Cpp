@@ -8,11 +8,12 @@
 //     直接比长度/字典序，或者"解析失败就当它很大"的地方，都会算错。曾经的实际后果：
 //     `0e0` 的真值被判成真，连带死分支消除留下了本该被消掉的那一支。
 //
-// 二、decimal 一律不参与算术折叠，但比较照折
-//     decimal 的算术按运行期上下文（prec/rounding）舍入，编译期不知道那时的设置，
-//     所以结果为 decimal 的运算一概不折；比较不舍入，是上下文无关的，所以照折——但必须用
-//     BigDec 精确比，不能退化成二进制 double（double 会让 1.0e-400 下溢成 0、
-//     让 9007199254740993 和 ...92.0 挤进同一个值）。
+// 二、decimal 一律不折——算术、比较、真值，一概不折
+//     decimal 的值依赖运行期上下文（prec/rounding），编译期算出来的东西不保证跟运行期一致。
+//     早先版本让"比较不舍入，照折"，用 double 实现时确实出过错（1.0e-400 下溢成 0、
+//     9007199254740993 和 ...92.0 被 double 的 53 位尾数挤成同一个值）；现在的结论更简单：
+//     既然折叠器压根不打算引入高精度库去精确处理 decimal，就干脆一条规则到底，
+//     decimal 什么都不折，不再区分"这一种运算安全、那一种不安全"。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
@@ -60,7 +61,7 @@ TEST_SUITE("StaticEvaler 保真性——int 的科学计数法写法") {
     }
 }
 
-TEST_SUITE("StaticEvaler 保真性——decimal 算术不折、比较照折") {
+TEST_SUITE("StaticEvaler 保真性——decimal 一律不折") {
 
     // 折了就会得到 0.30000000000000004 这个 double 凑出来的错值；SL.md 4.2.6 说 decimal
     // 底数是 10，`0.1 + 0.2 == 0.3` 为真，运行期算出来是精确的 0.3
@@ -81,43 +82,36 @@ TEST_SUITE("StaticEvaler 保真性——decimal 算术不折、比较照折") {
         CHECK(fold_json(U"0 ** 0") == int_lit("1")); // 对照：两边都是 int 时是 1，照折
     }
 
-    TEST_CASE("decimal 比较照折，且必须精确——double 在这几个上都会给出相反的答案") {
-        // double 只有 53 位尾数，这两个数会挤进同一个 double
-        CHECK(fold_json(U"9007199254740993 == 9007199254740992.0") == bool_lit(false));
-        // 1.0e-400 在 double 下会下溢成 0
-        CHECK(fold_json(U"1.0e-400 != 0.0") == bool_lit(true));
-        CHECK(fold_json(U"1.0e-400 == 0.0") == bool_lit(false));
-        // 1.0000000000000000000000000001 在 double 下会舍成 1.0
-        CHECK(fold_json(U"1.0000000000000000000000000001 == 1.0") == bool_lit(false));
+    TEST_CASE("decimal 之间的比较一律不折，不管值多普通") {
+        CHECK(fold_json(U"9007199254740993 == 9007199254740992.0")["type"] == "Compare");
+        CHECK(fold_json(U"1.0e-400 != 0.0")["type"] == "Compare");
+        CHECK(fold_json(U"1.0000000000000000000000000001 == 1.0")["type"] == "Compare");
+        CHECK(fold_json(U"1.5 < 2.5")["type"] == "Compare");
+        CHECK(fold_json(U"1.5 == 1.50")["type"] == "Compare"); // 标度不同但值相等，folder 也不管
+        CHECK(fold_json(U"0.0 == 0.00")["type"] == "Compare");
     }
 
-    TEST_CASE("普通的 decimal 比较照常折") {
-        CHECK(fold_json(U"1.5 < 2.5") == bool_lit(true));
-        CHECK(fold_json(U"1.5 == 1.50") == bool_lit(true)); // 标度不同但值相等（SL.md 4.2.6）
-        CHECK(fold_json(U"0.0 == 0.00") == bool_lit(true));
-    }
-
-    // 连带后果：decimal 的一元 +/- 不折之后，**负的 decimal 整体就不再是纯字面量**了
-    // （`-0.0` 是 OpUnary 套一个字面量），于是任何带负 decimal 的比较/真值判断也一并不折。
-    // 这是能力上的损失，不是错误——少折一些永远是安全的那一侧
-    TEST_CASE("负的 decimal 不是纯字面量，牵连到的比较/真值也一并不折") {
+    // 连带后果：decimal 的一元 +/- 本身也不折（同样是"值依赖运行期上下文"），
+    // 所以负的 decimal（`-0.0`）在 AST 里是 OpUnary 套一个字面量，不是纯字面量本身；
+    // 不过这跟"decimal 一律不折"是同一个结论的两个体现，不影响下面的比较照样不折
+    TEST_CASE("负的 decimal 也不是纯字面量，比较/真值同样不折") {
         // 比较运算建的是 AstNodeCompare（链式比较自成一类），不是 AstNodeOpBinary
         CHECK(fold_json(U"0.0 == -0.0")["type"] == "Compare");
         CHECK(fold_json(U"-1.5 < 0.0")["type"] == "Compare");
         CHECK(fold_json(U"not -0.0")["type"] == "OpUnary");
     }
 
-    TEST_CASE("int 与 decimal 跨类型比较：int 精确提升成 decimal，不经过 double") {
-        CHECK(fold_json(U"1 == 1.0") == bool_lit(true));
-        CHECK(fold_json(U"1 < 1.5") == bool_lit(true));
-        CHECK(fold_json(U"True == 1.0") == bool_lit(true)); // bool 也照样提升
+    TEST_CASE("int 与 decimal 跨类型比较也不折：认识对方，但折叠器不碰 decimal 的值") {
+        CHECK(fold_json(U"1 == 1.0")["type"] == "Compare");
+        CHECK(fold_json(U"1 < 1.5")["type"] == "Compare");
+        CHECK(fold_json(U"True == 1.0")["type"] == "Compare"); // bool 一样不折
     }
 
-    TEST_CASE("decimal 的真值按值判零，不经过 double") {
-        CHECK(fold_json(U"not 0.0") == bool_lit(true));
-        CHECK(fold_json(U"not 0.00") == bool_lit(true));      // 标度不同一样是零
-        CHECK(fold_json(U"not 1.0e-400") == bool_lit(false)); // 非零，double 下会误判成零
-        CHECK(fold_json(U"if (1.0e-400) 111 else 222") == int_lit("111"));
+    TEST_CASE("decimal 的真值一律不折，哪怕字面看着明显是 0") {
+        CHECK(fold_json(U"not 0.0")["type"] == "OpUnary");
+        CHECK(fold_json(U"not 0.00")["type"] == "OpUnary");
+        CHECK(fold_json(U"not 1.0e-400")["type"] == "OpUnary");
+        CHECK(fold_json(U"if (1.0e-400) 111 else 222")["type"] == "If");
     }
 }
 

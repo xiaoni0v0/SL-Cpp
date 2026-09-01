@@ -129,3 +129,21 @@ struct AstNodeLiteralEllipsis : AstNode {
   private:
     [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
+
+// 剥掉开头可能有的负号
+[[nodiscard]] std::u32string_view strip_literal_sign(std::u32string_view raw);
+
+// 数字字面量科学计数法后缀 `[eE][+-]?digits` 的拆分结果
+struct LiteralExponentSplit {
+    std::u32string_view mantissa; // e/E 前面的部分；没有该后缀时就是整个输入
+    std::u32string_view exponent; // 指数的数字部分（不含符号）；没有该后缀时为空
+};
+
+/**
+ * 校验并拆出末尾的科学计数法后缀
+ * @param allow_negative_exponent 指数能不能带负号（int 不行，decimal 行）
+ * @param max_exponent_digits     指数位数上限，0 表示不限
+ */
+[[nodiscard]] LiteralExponentSplit strip_literal_exponent(
+    std::u32string_view raw, bool allow_negative_exponent, size_t max_exponent_digits, Position pos
+);

@@ -82,13 +82,14 @@
   `x_ast_nodes.inc` 生成，每个具体节点类型各自一个 `visit()` 重载，加基类砍不掉这层重复，真正能砍的
   是 `SemanticChecker::check_call_args`/`ExprFolder::fold_call_args`/`to_json.cpp` 的
   `call_args_to_json` 这几个吃 `CallArgs` 的共享辅助函数。
-- **折叠器（`StaticEvaler`）的算术走 `numeric/` 的 `BigInt`/`BigDec`**，不是 `int64_t`/`double`：
-  折叠的判据是「编译期算出的结果，在任何运行期上下文下都与运行期逐位相同」，所以折叠器内部的算术
-  必须就是语言的算术。类注释里那张「哪些类型、哪些运算符折」的表是这一块的**规范**，改动前先读它。
-  两条最容易踩的：结果为 decimal 的运算一律不折（按运行期 `prec`/`rounding` 舍入，编译期不知道）；
-  判定函数（`truthy`/`literal_equal`）返回 `std::optional`，`nullopt` 是「判不了」，调用方必须当
-  「不折」处理——**不能给它一个默认值**，那会让死分支消除挑错分支。详见
-  .ai/context.md「`StaticEvaler` 改用 BigInt/BigDec」一节。
+- **折叠器（`StaticEvaler`）不依赖 `numeric/` 的高精度库**，int 折叠走 `int64_t`：溢出/装不下就
+  不折，这是保守但正确，不追求任意精度。decimal 一律不折——算术、比较、真值都不折，因为它的值依赖
+  运行期可变的 `prec`/`rounding`，编译期算出来的东西不保证跟运行期一致。类注释里那张「哪些类型、
+  哪些运算符折」的表是这一块的**规范**，改动前先读它。int 的科学计数法写法（`1e5`）先在折叠器内部
+  按值展开成普通数字串（指数超过一个较小的内部上限就跳过展开直接不折，纯粹是提前退出的效率阈值，
+  不是正确性边界），再走同一条 `int64_t` 路径。判定函数（`truthy`/`literal_equal`）返回
+  `std::optional`，`nullopt` 是「判不了」，调用方必须当「不折」处理——**不能给它一个默认值**，
+  那会让死分支消除挑错分支。详见 .ai/context.md「折叠器数值折叠」一节。
 - **`to_json()` 是 NVI 模式**：基类 `to_json(include_pos=false)` 非虚、转发给各节点私有的
   `to_json_impl(include_pos)`（纯虚，无默认值）——虚函数不能带默认参数（clang-tidy 会拦，且这条规则
   本身是对的：默认值在虚函数场景下按调用点静态类型决定，容易产生跟直觉不符的结果）。

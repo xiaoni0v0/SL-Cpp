@@ -13,10 +13,12 @@
 #include <string>
 
 namespace {
+
 std::string path_abspath(const std::string &path) {
     std::error_code ec;
     return std::filesystem::absolute(path, ec).string();
 }
+
 } // namespace
 
 Executor::Executor(const std::string &s) : file_path{path_abspath(s)} {}

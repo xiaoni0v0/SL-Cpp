@@ -52,8 +52,8 @@ TEST_SUITE("折叠产物重新 check 也能过——负 int") {
     }
 
     TEST_CASE("折不动的也得能重新 check——科学计数法字面量原样留在树上") {
-        // 科学计数法的 int 现在按值参与折叠（BigInt 自己展开指数），`1e9 - 2e9` 会折成
-        // -1000000000。折没折不重要，重要的是重新 check 照样过
+        // 科学计数法的 int 按值参与折叠（折叠器内部把指数展开成普通数字串再走 int64_t 那条路），
+        // `1e9 - 2e9` 会折成 -1000000000。折没折不重要，重要的是重新 check 照样过
         CHECK(fold_and_recheck(U"1e9 - 2e9") == int_lit("-1000000000"));
         CHECK_NOTHROW(fold_and_recheck(U"-1e9"));
         CHECK_NOTHROW(fold_and_recheck(U"-1.5e-3"));
