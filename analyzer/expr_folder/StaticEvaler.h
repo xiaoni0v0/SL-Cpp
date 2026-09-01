@@ -60,7 +60,7 @@
  *
  * AstNodeProgram 原地精简 exprs_，丢掉全部纯字面量子表达式
  */
-class StaticEvaler {
+class StaticEvaler final {
     // —————————— 一级入口 ——————————
 
     // 一元
