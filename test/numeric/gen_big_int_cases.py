@@ -10,7 +10,7 @@
 import random
 import sys
 
-# 跟 big_int_test.cpp 里 interesting_values() 手写的边界值对齐，量级覆盖 32/64 位 limb 边界
+# 跟 01_bigint/test_utils.h 里 interesting_values() 手写的边界值对齐，量级覆盖 32/64 位 limb 边界
 BOUNDARY_POOL = [
     0,
     1,
@@ -82,7 +82,7 @@ def main():
     out = [
         "// 本文件由 test/numeric/gen_big_int_cases.py 生成，不要手改。",
         "// 期望值来自 Python 内置的 int，跟 BigInt 是各自独立的代码。",
-        "// 每张表的行格式见 big_int_test.cpp 里跑这张表的那段。",
+        "// 每张表的行格式见 01_bigint/python_cross_test.cpp 里跑这张表的那段。",
         "",
         "#pragma once",
         "",
@@ -136,7 +136,7 @@ def main():
 
     # ---- 科学计数法解析：字面量|展开后的十进制串 ----------------------------
     # 尾数和指数都取一批边界值组合，期望值直接由 Python 的 int(mantissa) * 10**exp 给出。
-    # 指数恒非负（BigInt 不收负指数，那类归 big_int_test.cpp 里的手写用例管）
+    # 指数恒非负（BigInt 不收负指数，那类归 01_bigint 里的手写用例管）
     sci_lines = []
     sci_mantissas = [
         0,

@@ -228,12 +228,24 @@ add_executable(SL_Cpp_Numeric_Tests
 
         # 测试工具
         test/numeric/main_test.cpp
+        test/numeric/01_bigint/test_utils.h
+        test/numeric/02_bigdec/test_utils.h
 
-        # 测试代码
-        test/numeric/big_dec_cases.inc
-        test/numeric/big_dec_test.cpp
+        # 测试代码：BigInt
+        test/numeric/01_bigint/construct_convert_test.cpp
+        test/numeric/01_bigint/arithmetic_test.cpp
+        test/numeric/01_bigint/bitwise_shift_test.cpp
+        test/numeric/01_bigint/identities_test.cpp
+        test/numeric/01_bigint/python_cross_test.cpp
+        # 测试代码：BigDec
+        test/numeric/02_bigdec/construct_context_test.cpp
+        test/numeric/02_bigdec/arithmetic_test.cpp
+        test/numeric/02_bigdec/identities_pow_test.cpp
+        test/numeric/02_bigdec/narrow_path_test.cpp
+        test/numeric/02_bigdec/python_cross_test.cpp
+        # 生成的交叉验证表（不要手改）
         test/numeric/big_int_cases.inc
-        test/numeric/big_int_test.cpp
+        test/numeric/big_dec_cases.inc
 )
 sl_apply_test_target_options(SL_Cpp_Numeric_Tests)
 target_link_libraries(SL_Cpp_Numeric_Tests PRIVATE doctest::doctest)

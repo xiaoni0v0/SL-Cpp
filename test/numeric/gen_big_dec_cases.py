@@ -20,7 +20,7 @@
 #     Rounded、_pydecimal 先抛 Inexact）——陷阱表只要求两套实现"抛出的条件名"一致，抛出时的
 #     flags 以 _pydecimal 为准（BigDec 是照它移植的）。
 #
-# BigDec 两处都站 _pydecimal 一边，行为由 big_dec_test.cpp 里的手写用例钉住。之所以做成"全表统一
+# BigDec 两处都站 _pydecimal 一边，行为由 02_bigdec 里的手写用例钉住。之所以做成"全表统一
 # 过滤"而不是只挡这两处：分歧点是随参数（尤其是 Emin、舍入方式）漂移的，哪天有人往池子里加一档
 # 参数，不该因此得到一张 BigDec 永远过不了的表。
 #
@@ -341,7 +341,7 @@ def main():
     out = [
         "// 本文件由 test/numeric/gen_big_dec_cases.py 生成，不要手改。",
         "// 期望值来自 CPython 自带的两套 decimal 实现，跟 BigDec 是各自独立的代码。",
-        "// 每张表的行格式见 big_dec_test.cpp 里跑这张表的那段。",
+        "// 每张表的行格式见 02_bigdec/python_cross_test.cpp 里跑这张表的那段。",
         "",
         "#pragma once",
         "",

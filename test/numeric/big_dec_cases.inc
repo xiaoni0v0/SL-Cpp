@@ -1,6 +1,6 @@
 // 本文件由 test/numeric/gen_big_dec_cases.py 生成，不要手改。
 // 期望值来自 CPython 自带的两套 decimal 实现，跟 BigDec 是各自独立的代码。
-// 每张表的行格式见 big_dec_test.cpp 里跑这张表的那段。
+// 每张表的行格式见 02_bigdec/python_cross_test.cpp 里跑这张表的那段。
 
 #pragma once
 

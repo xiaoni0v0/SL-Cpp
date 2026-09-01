@@ -1,6 +1,6 @@
 // 本文件由 test/numeric/gen_big_int_cases.py 生成，不要手改。
 // 期望值来自 Python 内置的 int，跟 BigInt 是各自独立的代码。
-// 每张表的行格式见 big_int_test.cpp 里跑这张表的那段。
+// 每张表的行格式见 01_bigint/python_cross_test.cpp 里跑这张表的那段。
 
 #pragma once
 

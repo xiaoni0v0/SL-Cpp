@@ -49,7 +49,8 @@
 [no-section-numbers.md](no-section-numbers.md)），每个目录一个或几个 `*_test.cpp`，用 doctest 的
 `TEST_SUITE`/`TEST_CASE`。
 新增测试文件要记得同步加进 `CMakeLists.txt` 里对应的 `add_executable(SL_Cpp_Parser_Tests ...)` /
-`SL_Cpp_Lexer_Tests` 列表（这两个列表是手写的文件清单，不是 glob，漏加不会报错、只会静默不编译）。
+`SL_Cpp_Lexer_Tests` / `SL_Cpp_Analyzer_Tests` / `SL_Cpp_Numeric_Tests` 列表（这些列表是手写的
+文件清单，不是 glob，漏加不会报错、只会静默不编译）。
 
 正例用 `parse_json(...)`/`parse_program_json(...)` 转成 json 结构比对；反例（语法错误）用
 `CHECK_THROWS_AS(..., SyntaxError)`，如果要断言具体是哪句报错、报错位置对不对，直接 `try { ... }

@@ -111,21 +111,23 @@
 ## 测试组织
 
 `test/` 下每个测试目标目录结构镜像对应源码目录（`test/lexer/`、`test/parser/`、
-`test/analyzer/{semantic_checker,expr_folder}/`、`test/numeric/`）。`test/parser/`、`test/lexer/`
-内部按主题分子目录，用两位数独立编号（lexer `01_comments`…`07_errors`，parser `01_literals`…
-`13_cross`），**不跟 SL.md 章节号绑定**，见
+`test/analyzer/{semantic_checker,expr_folder}/`、`test/numeric/`）。`test/parser/`、`test/lexer/`、
+`test/numeric/` 内部按主题分子目录，用两位数独立编号（lexer `01_comments`…`07_errors`，parser
+`01_literals`…`13_cross`，numeric `01_bigint` / `02_bigdec`），**不跟 SL.md 章节号绑定**，见
 [notes/no-section-numbers.md](notes/no-section-numbers.md)。analyzer 按子系统分子目录，文件按被测
-规则命名，不再套一层编号。新增测试文件必须手动加进 `CMakeLists.txt` 对应的
-`add_executable(...)` 文件列表（不是 glob，漏加不报错、只是静默不参与编译）。
+规则命名，不再套一层编号——源码本身已经按子系统拆开，测试跟着走比再编一套号更不容易找错地方。
+新增测试文件必须手动加进 `CMakeLists.txt` 对应的 `add_executable(...)` 文件列表（不是 glob，漏加
+不报错、只是静默不参与编译）。
 
 `test/numeric/big_dec_cases.inc` 和 `big_int_cases.inc` 都是**生成产物**，分别由
 `gen_big_dec_cases.py`（期望值来自 CPython 自带的 decimal）和 `gen_big_int_cases.py`（期望值来自
-Python 内置的 int）产出，`big_dec_test.cpp`/`big_int_test.cpp` 逐条比对结果和触发的信号。改
-`BigDec`/`BigInt` 的语义时要连带重新生成（脚本开头写了用法），别手改那两个 `.inc`；生成器的种子
-是固定的，同一个 CPython 版本下重新生成应当跟仓库里的逐字节一致，这一点可以当回归检查用。两个
-脚本都带一个倍数参数，临时跑几十倍规模的差分测试很方便，提交进仓库的那份用默认倍数。BigDec 那张
-表里除了陷阱全关的路径，还有 `kTrapped*` 四张陷阱开启的表（抛不抛、抛哪个条件、抛出时 flags 到
-哪一步），值池刻意塞了带非零指数的零；这些表的合并规则见脚本头注释。
+Python 内置的 int）产出，对应的 `02_bigdec/python_cross_test.cpp` /
+`01_bigint/python_cross_test.cpp` 逐条比对结果和触发的信号。改 `BigDec`/`BigInt` 的语义时要连带
+重新生成（脚本开头写了用法），别手改那两个 `.inc`；生成器的种子是固定的，同一个 CPython 版本下
+重新生成应当跟仓库里的逐字节一致，这一点可以当回归检查用。两个脚本都带一个倍数参数，临时跑几十
+倍规模的差分测试很方便，提交进仓库的那份用默认倍数。BigDec 那张表里除了陷阱全关的路径，还有
+`kTrapped*` 四张陷阱开启的表（抛不抛、抛哪个条件、抛出时 flags 到哪一步），值池刻意塞了带非零
+指数的零；这些表的合并规则见脚本头注释。
 
 **每组用例都拿 CPython 的两套实现（libmpdec 和 `_pydecimal`）各算一遍，不一致就整组跳过**——它们
 自己在 `**` 和 `exp` 上就有已知分歧（见 [context.md](context.md)）。这条规则是防呆用的：分歧点随
