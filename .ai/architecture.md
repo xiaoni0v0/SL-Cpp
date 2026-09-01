@@ -11,16 +11,17 @@
   → Lexer      (lexer/)              词法分析，产出 Token 序列
   → Parser     (parser/)             语法分析，产出 AST
   → Analyzer   (analyzer/)           语义检查 + 编译期常量折叠，原地改 AST
-  → Executor   (executor/)           空壳，还没写
+  → CodeGen    (codegen/)            AST → Code（字节码），空壳，还没写
+  → Executor   (executor/)           跑字节码的虚拟机，空壳，还没写
 ```
 
 `main.cpp` 目前只是个手工调用这条流水线、把每一步中间结果打印出来的调试入口，不是真正的解释器入口。
 
 **当前完成度**：Lexer/Parser 已实现且有完整测试；Analyzer 的两个子系统（语义检查、常量折叠）已实现
 且有完整测试；`numeric/` 的 `BigInt`（`int` 的底层）和 `BigDec`+`DecContext`（`decimal` 的底层）已实现
-且有完整测试；`executor/Executor.{h,cpp}` 只是个占位空壳，虚拟机/求值器还没有任何代码。**在
-`executor/` 落地之前，SL.md 里"运行时"相关的条文（对象模型、GC、异常传播的具体机制等）都还没有对应
-实现可以参照，只能靠 SL.md 文本本身。**
+且有完整测试；`codegen/`、`executor/` 都只是占位空壳，还没有任何代码（设计已定稿，见
+[`codegen/bytecode.md`](../codegen/bytecode.md)）。**在 `executor/` 落地之前，SL.md 里"运行时"相关的
+条文（对象模型、GC、异常传播的具体机制等）都还没有对应实现可以参照，只能靠 SL.md 文本本身。**
 
 **`BigDec` 的完成度**：SL.md 里 decimal 参与的**运算符全都实现了**——四则、`//`/`%`、比较、`**`，
 外加 `sqrt`/`exp`/`ln`/`log10`（`**` 的一般情形要靠它们）。还没做的是 `hash`（要跟数值相等的 `int`
@@ -33,7 +34,7 @@
 |---|---|
 | `lexer/` | `Lexer.{h,cpp}`：分词器。`token.h` 定义 `Token`；`x_token_type.inc`/`x_keyword.inc`/`x_reservedword.inc` 是 X-macro 列表（见下）。 |
 | `parser/` | `Parser.{h,cpp}`：递归下降 + Pratt 解析器，产出 `parser/ast_nodes/` 里定义的 AST。 |
-| `parser/ast_nodes/` | AST 节点类型定义。`ast_nodes.h` 是汇总头（引入 `details/` 下所有节点头）；`x_ast_nodes.h` 是全部节点类型的 X-macro 列表；`to_json.cpp` 实现每个节点的 `to_json_impl`（调试/测试用，不是语言语义的一部分）；`ast_visitor.h` 定义 `AstVisitor`/`AstConstVisitor`（会改树的、只读的两套）和 `SL_AST_NODE_ACCEPT` 宏，要遍历 AST 的类继承它们，靠 `accept` + `visit` 两次虚调用完成双分派——漏实现某个节点类型是编译期错误，不是运行期 assert。 |
+| `parser/ast_nodes/` | AST 节点类型定义。`ast_nodes.h` 是汇总头（引入 `details/` 下所有节点头）；`x_ast_nodes.inc` 是全部节点类型的 X-macro 列表；`to_json.cpp` 实现每个节点的 `to_json_impl`（调试/测试用，不是语言语义的一部分）；`ast_visitor.h` 定义 `AstVisitor`/`AstConstVisitor`（会改树的、只读的两套）和 `SL_AST_NODE_ACCEPT` 宏，要遍历 AST 的类继承它们，靠 `accept` + `visit` 两次虚调用完成双分派——漏实现某个节点类型是编译期错误，不是运行期 assert。 |
 | `parser/ast_nodes/details/` | 具体节点定义，按语法范畴分文件（`ast_node_class.h`、`ast_node_control_flows.h`、`ast_node_func.h`、`ast_node_import.h`、`ast_node_literals.h`、`ast_node_multi_exprs.h`（Program/Compound）、`ast_node_operators.h`、`ast_node_postfix.h`（call/index/attr）、`ast_node_var.h`（del/global/标识符）、`ast_node_decorators.h`、`ast_node_eval.h`）。`ast_node_misc.h` 放**不是** `AstNode`、但被多个节点类型共用的小聚合体（`OneCapture`、`OneKwArg`、`CallArgs`）。唯一的 `.cpp` 是 `ast_node_literals.cpp`：int/decimal 字面量的构造函数在这里校验 `raw_` 的形状（纯数字/前导零/科学计数法后缀/可选的前导负号），违反即 `InternalError`——常量折叠造出来的字面量节点不会再经过 `SemanticChecker`，只有构造函数拦得住。 |
 | `analyzer/` | `Analyzer.{h,cpp}`：入口，依次跑 `SemanticChecker` 和 `ExprFolder`。 |
 | `analyzer/semantic_checker/` | `SemanticChecker.{h,cpp}`（`AstConstVisitor` 的实现）：语义检查（作用域规则、lvalue 合法性、`*`/`**` 位置合法性、func/class 约束、AST 结构防御性校验……），只读不改 AST，违规抛 `SyntaxError`（真实语义错误）或 `InternalError`（AST 结构本身违反 Parser 的保证，代表实现自己有 bug）。单个节点自己字段的合法性不归这里，归节点构造函数（见 `parser/ast_nodes/details/`）。 |
@@ -41,7 +42,8 @@
 | `numeric/` | `BigInt.{h,cpp}`：手写高精度整数，`int` 的底层实现（`小路径 int64_t` / `大路径 limbs` 双表示）。`BigDec.{h,cpp}`：十进制浮点数，`decimal` 的底层实现（`BigInt 系数 + int64_t 指数 + 独立符号位 + 特殊值 tag`）。`DecContext.{h,cpp}`：`decimal.Context` 的底层实现——舍入方式、精度、指数范围、信号的陷阱/标志位，以及陷阱触发时抛的 `DecTrapped`。`dec_math.{h,cpp}`：`ln`/`log10`/`exp`/`**` 用的整数层定点算法（`ilog`/`iexp`/`dlog`/`dexp`/`dpower` 等），只跟 BigInt 打交道，不认识上下文和信号。 |
 | `builtins/exceptions/` | 前端自己用的 C++ 异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`）——跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。 |
 | `utils/` | 自由函数工具：`string_utils`（UTF-8/UTF-32 互转等）、`file_utils`（读文件）。 |
-| `executor/` | 空壳，还没写。 |
+| `codegen/` | `Code.{h,cpp}`/`CodeGen.{h,cpp}`：空壳，还没写。[`bytecode.md`](../codegen/bytecode.md) 是指令集/帧/`Code` 的完整设计，动这两个目录之前先读它。 |
+| `executor/` | 空壳，还没写。字节码虚拟机，设计见 [`codegen/bytecode.md`](../codegen/bytecode.md)。 |
 | `test/` | 目录结构镜像 `lexer/`/`parser/`/`analyzer/`/`numeric/`，见下。 |
 
 ## AST 节点：X-macro 分发 + 双路径职责
