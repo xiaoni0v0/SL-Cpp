@@ -1,9 +1,9 @@
 // 构造、十进制往返、符号/绝对值、to_double、比较。
 #include "test_utils.h"
 
-#include <doctest/doctest.h>
 #include <cmath>
 #include <cstdlib>
+#include <doctest/doctest.h>
 #include <limits>
 #include <stdexcept>
 
@@ -252,9 +252,7 @@ TEST_SUITE("BigInt——to_double") {
         CHECK((-huge).to_double() < 0);
     }
 
-    TEST_CASE(
-        "跟 std::strtod 对拍：覆盖超过 64 位、不可精确表示、需要就近舍入的大数"
-    ) {
+    TEST_CASE("跟 std::strtod 对拍：覆盖超过 64 位、不可精确表示、需要就近舍入的大数") {
         const auto check_matches_strtod{[](const BigInt &x) {
             const std::string s{x.to_decimal_string()};
             CAPTURE(s);
@@ -293,9 +291,7 @@ TEST_SUITE("BigInt——to_double") {
         }
     }
 
-    TEST_CASE(
-        "刻意构造舍入平局（数值恰好卡在两个相邻 double 正中间），验证就近取偶 + sticky 位"
-    ) {
+    TEST_CASE("刻意构造舍入平局（数值恰好卡在两个相邻 double 正中间），验证就近取偶 + sticky 位") {
         // m 是 53 位整数（顶满一个 double 尾数），X = (2m+1) * 2^(k-1) 恰好是 m*2^k 和
         // (m+1)*2^k 正中间那个整数——m、m+1 这两个尾数在这个量级上正是相邻的两个可表示 double，
         // 所以 X 是一个精确的、数学意义上的舍入平局，不依赖对 to_double 内部实现的任何假设

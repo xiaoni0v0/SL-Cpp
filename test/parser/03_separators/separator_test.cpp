@@ -38,9 +38,7 @@ TEST_SUITE("表达式分隔符——标准例子") {
         );
     }
 
-    TEST_CASE(
-        "x.\\nm()：'.' 只有左操作数，不完整，合并"
-    ) {
+    TEST_CASE("x.\\nm()：'.' 只有左操作数，不完整，合并") {
         CHECK(
             parse_program_json(U"x.\nm()") ==
             nlohmann::json{

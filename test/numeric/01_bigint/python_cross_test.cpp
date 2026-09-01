@@ -1,13 +1,12 @@
 // 跟 Python int 的交叉验证。表由 gen_big_int_cases.py 生成，不要手改 .inc。
 #include "test_utils.h"
 
-#include <doctest/doctest.h>
 #include <cstdlib>
+#include <doctest/doctest.h>
 
 namespace {
 #include "../big_int_cases.inc"
 } // namespace
-
 
 TEST_SUITE("BigInt——跟 Python int 的交叉验证") {
 

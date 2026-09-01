@@ -34,9 +34,7 @@ TEST_SUITE("标识符") {
     TEST_CASE("非 ASCII 字母不是标识符字符") {
         const std::u32string e_acute{static_cast<char32_t>(0x00E9)};
         CHECK_THROWS_AS(lex(e_acute), SyntaxError);
-        const std::u32string chinese{
-            static_cast<char32_t>(0x53D8), static_cast<char32_t>(0x91CF)
-        };
+        const std::u32string chinese{static_cast<char32_t>(0x53D8), static_cast<char32_t>(0x91CF)};
         CHECK_THROWS_AS(lex(chinese), SyntaxError);
         const std::u32string foo_acute{U'f', U'o', U'o', static_cast<char32_t>(0x00E9)};
         CHECK_THROWS_AS(lex(foo_acute), SyntaxError);

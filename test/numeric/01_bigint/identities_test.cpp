@@ -1,8 +1,8 @@
 // 代数恒等式、路径规范化、bit_length、operator 与具名方法。
 #include "test_utils.h"
 
-#include <doctest/doctest.h>
 #include <cstdlib>
+#include <doctest/doctest.h>
 
 // 边界值两两、三三组合，用恒等式本身当期望值。
 TEST_SUITE("BigInt——代数恒等式交叉验证（覆盖小路径/大路径边界、多 limb、正负号组合）") {
