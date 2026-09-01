@@ -133,3 +133,17 @@ TEST_SUITE("StaticEvaler 死分支消除") {
         );
     }
 }
+
+TEST_SUITE("ExprFolder break / continue / global") {
+
+    TEST_CASE("节点本身不折") {
+        CHECK(fold_json(U"break") == nlohmann::json{{"type", "Break"}});
+        CHECK(fold_json(U"continue") == nlohmann::json{{"type", "Continue"}});
+        CHECK(fold_json(U"global x") == nlohmann::json{{"type", "Global"}, {"identifier", "x"}});
+    }
+
+    TEST_CASE("循环体里的 break/continue 也不被消掉") {
+        CHECK(fold_json(U"while (x) break")["body"]["type"] == "Break");
+        CHECK(fold_json(U"while (x) continue")["body"]["type"] == "Continue");
+    }
+}

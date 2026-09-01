@@ -103,4 +103,20 @@ TEST_SUITE("装饰器——通用形式") {
     }
 
     TEST_CASE("装饰器后面缺表达式报错") { CHECK_THROWS_AS(parse_as_file(U"@dec"), SyntaxError); }
+
+    TEST_CASE("@ 之后 Pratt 把中缀吃进装饰器：@d + x 的装饰器是 d+x，后面没有目标") {
+        CHECK_THROWS_AS(parse_as_file(U"@d + x"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"@d * x"), SyntaxError);
+    }
+
+    TEST_CASE("@d.attr x：'.' 是后缀，装饰器停在 d.attr，x 是目标") {
+        CHECK(
+            parse_json(U"@d.attr x") ==
+            nlohmann::json{
+                {"type", "Decorator"},
+                {"decorator", {{"type", "Attr"}, {"object", ident("d")}, {"attr", "attr"}}},
+                {"target", ident("x")}
+            }
+        );
+    }
 }

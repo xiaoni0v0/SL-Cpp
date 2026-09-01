@@ -41,6 +41,7 @@ TEST_SUITE("词法 SyntaxError") {
 
     TEST_CASE("各类触发条件互不干扰") {
         CHECK_THROWS_AS(lex(U"1abc"), SyntaxError);
+        CHECK_THROWS_AS(lex(U"0x10"), SyntaxError);
         CHECK_THROWS_AS(lex(U"\"unterminated"), SyntaxError);
         CHECK_THROWS_AS(lex(U"`unterminated"), SyntaxError);
         CHECK_THROWS_AS(lex(U"/* unterminated"), SyntaxError);

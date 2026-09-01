@@ -84,6 +84,25 @@ TEST_SUITE("if——基本形式") {
     }
 
     TEST_CASE("缺少 body 报错") { CHECK_THROWS_AS(parse_as_file(U"if (a)"), SyntaxError); }
+
+    TEST_CASE("嵌套 if 的 else 绑到内层：if (a) if (b) 1 else 2") {
+        CHECK(
+            parse_json(U"if (a) if (b) 1 else 2") ==
+            nlohmann::json{
+                {"type", "If"},
+                {"clauses",
+                 nlohmann::json::array(
+                     {{{"cond", ident("a")},
+                       {"body",
+                        {{"type", "If"},
+                         {"clauses",
+                          nlohmann::json::array({{{"cond", ident("b")}, {"body", int_lit("1")}}})},
+                         {"else_expr", int_lit("2")}}}}}
+                 )},
+                {"else_expr", nullptr}
+            }
+        );
+    }
 }
 
 TEST_SUITE("if——cond 槽禁止裸的普通赋值") {

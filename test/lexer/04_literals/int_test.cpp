@@ -28,6 +28,11 @@ TEST_SUITE("int") {
         CHECK_THROWS_AS(lex(U"1x"), SyntaxError);
         CHECK_THROWS_AS(lex(U"123_"), SyntaxError);
         CHECK_THROWS_AS(lex(U"1_000_000"), SyntaxError);
+        // 尚未支持的进制前缀，同样走「数字后跟字母」
+        CHECK_THROWS_AS(lex(U"0x10"), SyntaxError);
+        CHECK_THROWS_AS(lex(U"0Xff"), SyntaxError);
+        CHECK_THROWS_AS(lex(U"0b1010"), SyntaxError);
+        CHECK_THROWS_AS(lex(U"0o7"), SyntaxError);
     }
 
     TEST_CASE("负号是独立 token，不是字面量的一部分") {

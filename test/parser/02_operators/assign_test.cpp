@@ -1,4 +1,5 @@
 // 赋值 / 复合赋值。左值合法性由语义层检查。
+#include "../../../builtins/exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
@@ -204,5 +205,9 @@ TEST_SUITE("赋值与复合赋值") {
                   {"items", nlohmann::json::array({int_lit("1"), int_lit("2"), int_lit("3")})}}}
             }
         );
+    }
+
+    TEST_CASE("没有无括号元组：a, b = x 在逗号处缺分隔符") {
+        CHECK_THROWS_AS(parse_as_file(U"a, b = x"), SyntaxError);
     }
 }

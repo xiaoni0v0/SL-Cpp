@@ -105,6 +105,19 @@ TEST_SUITE("is 链") {
         );
     }
 
+    TEST_CASE("`a is not b` 没有 is-not 运算符，是 a is (not b)") {
+        CHECK(
+            parse_json(U"a is not b") ==
+            nlohmann::json{
+                {"type", "Is"},
+                {"operands",
+                 nlohmann::json::array(
+                     {ident("a"), {{"type", "OpUnary"}, {"op", "not"}, {"operand", ident("b")}}}
+                 )}
+            }
+        );
+    }
+
     TEST_CASE("反过来：a is b < c 即 a is (b < c)（比较比 is 紧）") {
         CHECK(
             parse_json(U"a is b < c") ==

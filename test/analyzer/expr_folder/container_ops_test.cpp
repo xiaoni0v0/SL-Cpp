@@ -29,6 +29,11 @@ TEST_SUITE("StaticEvaler 容器运算——基本拼接/重复") {
         CHECK(fold_json(U"'x' * 0") == str_lit(""));
     }
 
+    TEST_CASE("str % 格式化不折") {
+        CHECK(fold_json(U"'%s' % 'a'")["type"] == "OpBinary");
+        CHECK(fold_json(U"'%s' % 'a'")["op"] == "%");
+    }
+
     TEST_CASE("tuple 拼接（+）能折；* 重复恒不折，见下面单独的 TEST_SUITE") {
         CHECK(
             fold_json(U"(1,) + (2, 3)") ==

@@ -136,6 +136,24 @@ TEST_SUITE("StaticEvaler 数值算术") {
         );
     }
 
+    TEST_CASE("范围运算不折") {
+        CHECK(fold_json(U"1 .. 3")["type"] == "OpBinary");
+        CHECK(fold_json(U"1 .. 3")["op"] == "..");
+        CHECK(fold_json(U"1 .. 10 .. 2")["type"] == "OpBinary");
+        CHECK(fold_json(U"(1 + 1) .. 3")["left"] == int_lit("2"));
+    }
+
+    TEST_CASE("后缀 ? / ! 不折") {
+        CHECK(
+            fold_json(U"1?") ==
+            nlohmann::json{{"type", "OpUnary"}, {"op", "?"}, {"operand", int_lit("1")}}
+        );
+        CHECK(
+            fold_json(U"1!") ==
+            nlohmann::json{{"type", "OpUnary"}, {"op", "!"}, {"operand", int_lit("1")}}
+        );
+    }
+
     TEST_CASE("~ 对 decimal 不折，交给运行时报错") {
         CHECK(
             fold_json(U"~1.5") ==

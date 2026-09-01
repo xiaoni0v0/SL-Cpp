@@ -72,6 +72,22 @@ TEST_SUITE("try") {
         );
     }
 
+    TEST_CASE("嵌套 try 的 finally 绑到内层：try try a finally b finally c") {
+        CHECK(
+            parse_json(U"try try a finally b finally c") ==
+            nlohmann::json{
+                {"type", "Try"},
+                {"try_expr",
+                 {{"type", "Try"},
+                  {"try_expr", ident("a")},
+                  {"except_clauses", nlohmann::json::array()},
+                  {"finally_expr", ident("b")}}},
+                {"except_clauses", nlohmann::json::array()},
+                {"finally_expr", ident("c")}
+            }
+        );
+    }
+
     TEST_CASE("语法层允许 except 和 finally 都不写（该约束交语义层校验）") {
         CHECK(
             parse_json(U"try a") == nlohmann::json{

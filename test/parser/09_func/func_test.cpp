@@ -206,6 +206,10 @@ TEST_SUITE("func——捕获列表") {
         );
     }
 
+    TEST_CASE("引用捕获不能带 =") {
+        CHECK_THROWS_AS(parse_as_file(U"func f[&x = 1]() {}"), SyntaxError);
+    }
+
     TEST_CASE("引用捕获") {
         CHECK(
             parse_json(U"func f[&y]() {}")["captures"] ==

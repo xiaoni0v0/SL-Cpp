@@ -89,6 +89,12 @@ TEST_SUITE("基本字面量") {
         CHECK(lit->value_ == U"a\nb");
     }
 
+    TEST_CASE("相邻字符串不会自动拼接，同一行两个字面量缺分隔符") {
+        CHECK_THROWS_AS(parse_as_file(U"\"a\" \"b\""), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"'a' 'b'"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"`a` `b`"), SyntaxError);
+    }
+
     TEST_CASE("str：原始字符串（反引号）不处理转义，天然支持多行原样带入") {
         const AstNodePtr node{parse_single(U"`line1\nline2`")};
         const auto *lit{dynamic_cast<AstNodeLiteralStr *>(node.get())};

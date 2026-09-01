@@ -65,3 +65,34 @@ TEST_SUITE("SemanticChecker 调用参数") {
         );
     }
 }
+
+TEST_SUITE("SemanticChecker * / ** 出现位置") {
+
+    TEST_CASE("顶层、算术、复合表达式里的 * 非法") {
+        check_throws_with(
+            U"*a", "* can only appear in tuple, list, index, or function call arguments"
+        );
+        check_throws_with(
+            U"*a + 1", "* can only appear in tuple, list, index, or function call arguments"
+        );
+        check_throws_with(
+            U"{*a}", "* can only appear in tuple, list, index, or function call arguments"
+        );
+        check_throws_with(
+            U"{1; *a}", "* can only appear in tuple, list, index, or function call arguments"
+        );
+    }
+
+    TEST_CASE("元组/列表里的 **、字典值侧的 * 非法") {
+        check_throws_with(
+            U"(**a,)", "** can only appear in dict literal or function call arguments"
+        );
+        check_throws_with(
+            U"[**a]", "** can only appear in dict literal or function call arguments"
+        );
+        check_throws_with(
+            U"{k: *v}", "* can only appear in tuple, list, index, or function call arguments"
+        );
+        check_throws_with(U"**a", "** can only appear in dict literal or function call arguments");
+    }
+}

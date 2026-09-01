@@ -29,6 +29,10 @@ TEST_SUITE("in 运算符") {
         CHECK(parse_json(U"x in items") == in_op(ident("x"), ident("items")));
     }
 
+    TEST_CASE("`x not in y` 不是一个运算符：not 不是中缀，缺分隔符") {
+        CHECK_THROWS_AS(parse_as_file(U"x not in y"), SyntaxError);
+    }
+
     TEST_CASE("`in` 是关键字不是符号，两侧的空白省不掉") {
         // 省掉就跟相邻标识符粘成一个标识符，不再是三个 token
         CHECK(parse_json(U"ain") == ident("ain"));

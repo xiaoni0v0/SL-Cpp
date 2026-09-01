@@ -519,5 +519,8 @@ TEST_SUITE("索引/调用/属性访问链") {
     TEST_CASE("属性访问后面必须是标识符") {
         CHECK_THROWS_AS(parse_as_file(U"a.1"), SyntaxError);
         CHECK_THROWS_AS(parse_as_file(U"a."), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"obj.for"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"obj.class"), SyntaxError);
+        CHECK_THROWS_AS(parse_as_file(U"obj.if"), SyntaxError);
     }
 }

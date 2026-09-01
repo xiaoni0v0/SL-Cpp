@@ -210,6 +210,16 @@ TEST_SUITE("StaticEvaler 比较——跨类型的 ==/!= 兜底与序比较的不
     }
 }
 
+TEST_SUITE("StaticEvaler in") {
+
+    TEST_CASE("in 整体不折") {
+        CHECK(fold_json(U"1 in (1,)")["type"] == "OpBinary");
+        CHECK(fold_json(U"1 in (1,)")["op"] == "in");
+        CHECK(fold_json(U"'a' in 'ab'")["type"] == "OpBinary");
+        CHECK(fold_json(U"(1 + 1) in xs")["left"] == int_lit("2"));
+    }
+}
+
 TEST_SUITE("ExprFolder is") {
 
     TEST_CASE("操作数会折，整体不折") {

@@ -175,6 +175,10 @@ TEST_SUITE("class——捕获列表") {
         CHECK(parse_json(U"class C[] {}")["captures"] == nlohmann::json::array());
     }
 
+    TEST_CASE("引用捕获不能带 =") {
+        CHECK_THROWS_AS(parse_as_file(U"class C[&x = 1] {}"), SyntaxError);
+    }
+
     TEST_CASE("捕获列表位于基类列表之后，两者可以同时出现、互不影响") {
         const auto j = parse_json(U"class C(Base)[x] {}");
         CHECK(j["bases"] == nlohmann::json::array({ident("Base")}));

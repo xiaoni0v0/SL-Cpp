@@ -16,6 +16,10 @@ TEST_SUITE("return") {
         );
     }
 
+    TEST_CASE("return a, b 不是返回元组，逗号处缺分隔符") {
+        CHECK_THROWS_AS(parse_as_file(U"return a, b"), SyntaxError);
+    }
+
     TEST_CASE("带值是复杂表达式") {
         CHECK(
             parse_json(U"return 1 + 2") == nlohmann::json{
