@@ -116,6 +116,13 @@ add_executable(SL main.cpp
         numeric/DecContext.cpp
         numeric/DecContext.h
 
+        # builtins
+        builtins/exceptions/EncodingError.h
+        builtins/exceptions/FileNotFoundError.h
+        builtins/exceptions/InternalError.h
+        builtins/exceptions/SLException.h
+        builtins/exceptions/SyntaxError.h
+
         # Executor
         executor/Executor.cpp
         executor/Executor.h
@@ -127,13 +134,6 @@ add_executable(SL main.cpp
         lexer/x_keyword.inc
         lexer/x_reservedword.inc
         lexer/x_token_type.inc
-
-        # builtins
-        builtins/exceptions/EncodingError.h
-        builtins/exceptions/FileNotFoundError.h
-        builtins/exceptions/InternalError.h
-        builtins/exceptions/SLException.h
-        builtins/exceptions/SyntaxError.h
 
         # Parser
         parser/Parser.cpp
@@ -166,6 +166,12 @@ add_executable(SL main.cpp
         analyzer/expr_folder/StaticEvaler.h
         analyzer/semantic_checker/SemanticChecker.cpp
         analyzer/semantic_checker/SemanticChecker.h
+
+        # CodeGen
+        codegen/Code.cpp
+        codegen/Code.h
+        codegen/CodeGen.cpp
+        codegen/CodeGen.h
 )
 
 # 编译选项
