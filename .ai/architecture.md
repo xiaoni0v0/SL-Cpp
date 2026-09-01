@@ -31,7 +31,7 @@
 
 | 目录 | 内容 |
 |---|---|
-| `lexer/` | `Lexer.{h,cpp}`：分词器。`token.h` 定义 `Token`；`x_token_type.h`/`x_keyword.h`/`x_reservedword.h` 是 X-macro 列表（见下）。 |
+| `lexer/` | `Lexer.{h,cpp}`：分词器。`token.h` 定义 `Token`；`x_token_type.inc`/`x_keyword.inc`/`x_reservedword.inc` 是 X-macro 列表（见下）。 |
 | `parser/` | `Parser.{h,cpp}`：递归下降 + Pratt 解析器，产出 `parser/ast_nodes/` 里定义的 AST。 |
 | `parser/ast_nodes/` | AST 节点类型定义。`ast_nodes.h` 是汇总头（引入 `details/` 下所有节点头）；`x_ast_nodes.h` 是全部节点类型的 X-macro 列表；`to_json.cpp` 实现每个节点的 `to_json_impl`（调试/测试用，不是语言语义的一部分）；`ast_visitor.h` 定义 `AstVisitor`/`AstConstVisitor`（会改树的、只读的两套）和 `SL_AST_NODE_ACCEPT` 宏，要遍历 AST 的类继承它们，靠 `accept` + `visit` 两次虚调用完成双分派——漏实现某个节点类型是编译期错误，不是运行期 assert。 |
 | `parser/ast_nodes/details/` | 具体节点定义，按语法范畴分文件（`ast_node_class.h`、`ast_node_control_flows.h`、`ast_node_func.h`、`ast_node_import.h`、`ast_node_literals.h`、`ast_node_multi_exprs.h`（Program/Compound）、`ast_node_operators.h`、`ast_node_postfix.h`（call/index/attr）、`ast_node_var.h`（del/global/标识符）、`ast_node_decorators.h`、`ast_node_eval.h`）。`ast_node_misc.h` 放**不是** `AstNode`、但被多个节点类型共用的小聚合体（`OneCapture`、`OneKwArg`、`CallArgs`）。唯一的 `.cpp` 是 `ast_node_literals.cpp`：int/decimal 字面量的构造函数在这里校验 `raw_` 的形状（纯数字/前导零/科学计数法后缀/可选的前导负号），违反即 `InternalError`——常量折叠造出来的字面量节点不会再经过 `SemanticChecker`，只有构造函数拦得住。 |
@@ -221,6 +221,6 @@ Python 内置的 int）产出，对应的 `02_bigdec/python_cross_test.cpp` /
 
 ## X-macro 清单文件
 
-除了 `x_ast_nodes.h`，还有 `../lexer/x_token_type.inc`（全部 `TokenType` 枚举值）、`../lexer/x_keyword.inc`
+除了 `x_ast_nodes.inc`，还有 `../lexer/x_token_type.inc`（全部 `TokenType` 枚举值）、`../lexer/x_keyword.inc`
 （关键字文本 → `TokenType` 映射）、`../lexer/x_reservedword.inc`（保留字但非关键字，如 `_G`/`_L`）。加新
 关键字/token 类型时这几个文件要一起改，具体加在哪由这个 token 的性质决定（是不是关键字、是不是保留字）。

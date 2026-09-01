@@ -129,76 +129,38 @@ git log/commit message 的职责，不是这里的。代码怎么组织、有哪
 **`eval_isolated` 保持普通内置函数**。它跟帧无关、吃一个真 `globals` 字典，行为就是普通函数。这个
 不对称是诚实的：`eval` 是穿着调用外衣的编译期构造，`eval_isolated` 是货真价实的函数。
 
-**实参形状后来又改过一次**：最初 `AstNodeEval` 只有单个 `code_: AstNodePtr` 字段，Parser 手写
-`expect_open(Paren) → parse_expr() → expect_close(Paren)`，`eval(code)` 是唯一写法。既然
-`eval` 是"关键字伪装的函数"，就要**尽可能像**一次真正的调用：改成 `positional_args_`/
-`keyword_args_`/`paren_pos_`（跟 `AstNodeCall`/`AstNodeImportCall` 同形状），Parser 里也直接
-复用 `finish_call(nullptr, start_pos)`。于是 `eval('x')`、`eval(code='x')`、
-`eval(**{'code':'x'})` 语法上都合法，`0` 个或 `2` 个位置实参也不再是 `SyntaxError`——恰好绑出
-一个叫 `code` 的形参是运行期按 3.5 的通用调用规则判定的事（绑定失败 `DispatchError`），跟普通
-函数调用的参数个数/类型从不在语法/语义层校验是同一套道理，不给 `eval` 搞特殊待遇。
+**实参形状尽可能像一次真正的调用**：`eval(code)`、`eval(code='x')`、`eval(**{'code':'x'}) `
+语法上都合法，`0`/`2` 个位置实参也不是 `SyntaxError`——恰好绑出一个叫 `code` 的形参是运行期按 3.5
+的通用调用规则判定的事（绑定失败 `DispatchError`），跟普通函数调用的参数个数/类型从不在语法/语义层
+校验是同一套道理，不给 `eval` 搞特殊待遇。`AstNodeEval` 因此和 `AstNodeCall`/`AstNodeImportCall`
+共用 `CallArgs` 聚合体（不是公共基类——理由见 [architecture.md](architecture.md) 的"调用类节点共用
+`CallArgs`"一条），`Parser::finish_call_args()` 三处调用方共用一份实参解析。
 
-**`positional_args_`/`keyword_args_`/`paren_pos_` 三个字段后来又被拆进 `CallArgs` 聚合体**：
-`AstNodeCall`/`AstNodeImportCall`/`AstNodeEval` 三份实参字段形状完全一样，`SemanticChecker`/
-`ExprFolder`/`to_json.cpp` 三处的处理逻辑也跟着重复了三遍。**否决过的修法**：给这三个节点类型加个
-公共基类——不成立，`AstVisitor`/`AstConstVisitor` 由 `x_ast_nodes.inc` 的 X-macro 生成，每个
-**具体**节点类型各自一份 `virtual void visit(nt&)`，`accept()` 转发的是 `*this` 的静态类型，加基类
-一个重载都省不掉，纯粹多绕一层。真正能砍的是数据形状，于是把三个字段拆成 `ast_node_misc.h` 里的
-`CallArgs`（`OneKwArg`/`OneCapture` 已经是"本身不是 AstNode、被多个节点类型共用的小聚合体"这个
-模式，`CallArgs` 只是照抄），三个节点各自一个 `args_: CallArgs` 成员；再在三处消费方各写一个吃
-`CallArgs` 的共享辅助（`SemanticChecker::check_call_args`、`ExprFolder::fold_call_args`、
-`to_json.cpp` 里的 `call_args_to_json`），三份重复的处理逻辑收成一份。`Parser::finish_call` 也
-拆成两层：`finish_call_args()` 只消耗 `(...)`、产出 `CallArgs`，不碰被调对象槽位，`import`/`eval`
-的调用形态直接调它，不再借道构造一个丢弃大半字段的 `AstNodeCall` 再拆解。
+### `global` 作用在引用捕获上：运行期检查，`NameError` 不是 `SyntaxError`
 
-**位置字段后来统一改成 `pos_` 前缀**：`paren_pos_`/`dot_pos_`/`bracket_pos_`/`op_pos_`/
-`op_positions_`/`decorator_positions_` 这批字段（分散在 `CallArgs`、`AstNodeAttr`、`AstNodeIndex`、
-`AstNodeOpUnary`/`AstNodeOpBinary`/`AstNodeCompoundAssign`、`AstNodeCompare`/`AstNodeIs`、
-`AstNodeFunc`/`AstNodeClass`）原来是 `xxx_pos_` 后缀，改成 `pos_xxx_` 前缀（复数形态相应改成
-`positions_xxx_`，如 `positions_op_`、`positions_decorator_`），理由是让"这是个位置字段"从前缀就能
-一眼认出来，也跟基类 `AstNode::pos_` 同词根开头，扫一眼字段列表就知道哪些是辅助定位用的
-`Position`、哪些是正经数据。纯改名，不涉及语义。
+**`global` 是一次名字表操作，不是函数体级别的静态声明**——跟 `del`/`import`/`try` 同一类"求值时
+才生效、不要求任何外层构造"的操作（同 `eval(code)` 的"静态外层环境为空"模型，见上面一节）。因此
+"`identifier` 是不是引用捕获"这条检查放在求值 `global identifier` 这一步（运行期），不是编译期；
+报的异常是 `NameError`，不是 `SyntaxError`（3.11 规定 `SyntaxError` 只在编译期抛，这是既有约定
+倒逼出的结果）。`global x` 执行后，该名字在当前帧里从引用捕获切换成模块全局，彻底断开跟原引用的
+关联。机制上不需要新的运行期状态：VM 本来就要给每一帧维护引用捕获名集合（3.10.4 的读写删都要用），
+执行时查一下这个集合即可。
 
-### `global` 作用在引用捕获上：挪到运行期，`NameError` 不是 `SyntaxError`
+### `eval` 的局部/全局帧：`in_local_scope` 从调用点传入，不是写死的
 
-3.10.2 原文写的是"`identifier` 不能是引用捕获，否则抛出 `SyntaxError`"，但 `SemanticChecker`
-一直没有实现这条静态检查（`func f[&x]() { global x }` 能通过语义检查）——这不是遗漏，是后来定了
-另一条：**`global` 是一次名字表操作，不是函数体级别的静态声明**，不该在编译期就把"这个名字是不是
-引用捕获"这件事拦下来。理由：`global`/`del`/`import`/`try` 在 SL 里本来就是"求值时才生效、不要求
-任何外层构造"的一类操作（跟 `eval(code)` 的"静态外层环境为空"模型是同一套哲学，见上面一节），把
-"是不是引用捕获"这个本可以静态推出来的性质硬套上编译期报错，反而破坏了这个一致性。
+`eval(code)` 的静态外层环境为空这条模型漏了一处：`global` 合不合法不只取决于`code` 的 AST 形状，
+还取决于**调用帧本身**是不是局部作用域（`func f() { eval('global x') }` 里 `code` 该在 `f` 的
+局部帧求值，`global x` 该合法）。这条信息是纯运行期概念，`SemanticChecker`/`Analyzer` 静态分析阶段
+无法从 `code` 的 AST 反推——只有执行 `eval` 那一刻的 VM 知道当前帧是什么。
 
-**定稿**：这条检查挪到求值 `global identifier` 这一步（运行期），报的异常也从 `SyntaxError` 改成
-`NameError`——这是 3.11"`SyntaxError` 只在编译期抛"这条既有约定倒逼出来的结果，不只是换个名字。
-`global x` 执行后，`x` 这个名字在当前帧里从引用捕获切换成模块全局，彻底断开跟原引用的关联（不是
-"两者都生效"那种含糊状态）。机制上不需要新的运行期状态：VM 本来就要给每一帧维护引用捕获名集合
-（3.10.4 的读写删都要用），`global x` 执行时查一下这个集合即可。SL.md 3.10.2 已经按此改写。
+**定稿**：`SemanticChecker` 构造函数、`Analyzer::analyze_single_expr` 都加一个
+`bool in_local_scope = false` 参数（默认值保证 `check_program`/`analyze_program` 的整份 Program
+入口不受影响，恒为顶层语义）。真正传入正确的值是未来 codegen/VM 编译 `eval` 调用点时的责任——
+编译器天然知道这段代码此刻在哪一帧，把这个已知信息转发给 `analyze_single_expr` 即可，不需要反向
+推断。当前没有 codegen/executor，这两个参数暂时只有测试在用。
 
-### `eval` 的局部/全局帧：`SemanticChecker`/`Analyzer::analyze_single_expr` 新增 `in_local_scope` 参数
-
-`eval(code)` 的静态外层环境为空这条模型（见上面一节）漏了一处：`global` 合不合法不只取决于
-"`code` 的 AST 里有没有包一层 `func`/`class`"，还取决于**调用帧本身**是不是局部作用域——
-`func f() { eval('global x') }` 里，`code` 应该在 `f` 的局部帧里求值，`global x` 该合法；但
-`analyze_single_expr`（`eval` 的编译入口）原来把 `ctx_.in_local_scope` 写死成 `false`，把这种
-合法用法也一并拦了（连带一条把这个错误行为钉成"正确期望"的测试）。
-
-**根因**：这条信息（调用帧是不是局部作用域）是纯运行期概念，`SemanticChecker`/`Analyzer` 在静态
-分析阶段没有任何办法从 `code` 的 AST 反推出来——只有实际执行 `eval` 那一刻的 VM 知道当前帧是什么。
-
-**定稿**：`SemanticChecker` 构造函数、`Analyzer::analyze_single_expr` 都新增一个
-`bool in_local_scope = false` 参数（默认值保持向后兼容，`check_program`/`analyze_program` 走的
-是整份 Program 入口，没有这个参数，恒为顶层语义）。`SemanticChecker` 构造时直接拿它初始化
-`ctx_.in_local_scope`，取代原来构造函数体里隐含的"恒为 false"。真正把正确的值传进来是未来
-codegen/VM 编译 `eval` 调用点时的责任——`eval` 是关键字不是一等值，编译一次 `eval(...)` 调用时，
-编译器天然知道这段代码此刻在哪一帧里，把这一帧是不是局部作用域这个已知信息传给
-`analyze_single_expr` 即可，不需要在 `code` 求值时反向推断。当前还没有 codegen/executor，这两个
-新参数暂时只有测试在用（`check_single_expr(source, /*in_local_scope=*/true)` 模拟从函数体内部
-调 `eval` 的场景）。
-
-**`return`/`break`/`continue` 不受这条影响**：它们判的是"AST 里有没有包一层 Program/循环"，
-是纯静态、跟调用帧局部/全局身份无关的性质——`eval` 出来的单表达式不管在哪一帧跑，都不会凭空多出
-一层 Program 或循环包装。`global` 是目前发现的唯一一个"合法性取决于调用帧、而不只取决于 `code`
-自己的 AST 形状"的构造。
+`return`/`break`/`continue` 不受这条影响：判的是"AST 里有没有包一层 Program/循环"，是跟调用帧
+局部/全局身份无关的静态性质。`global` 是目前唯一一个"合法性取决于调用帧"的构造。
 
 ### `==`/`!=` 的终局回退：解释器按身份兜底，序比较没有这条
 
@@ -268,28 +230,17 @@ None/Ellipsis、嵌套容器递归、链式比较短路与部分折叠），没�
 `strip_exponent` 这两个解析辅助函数收成一份两边共享的代码，而不是改数据形状——问题的根子是
 "消费方各自现场解析、逻辑不共享"，不是"存成一条字符串"。
 
-**顺带改掉一个接口缺陷（跟下面高精度库那段折腾无关，这条留下来了）**：`truthy`/`literal_equal`
-原来返回 `bool`，没有第三态、表达不了「判不了」，只能默认成真——这正是下面「起点」那组 bug 里
-`0e0` 真值判断错误的直接成因。现在两者都返回 `std::optional<bool>`，调用方（`fold_if`/
-`fold_for_cond`/`fold_not`/`fold_and_or`/`fold_compare`）一律把 `nullopt` 当「不折」处理。
-**判定函数缺第三态，在折叠器里就等于埋了一个错误的默认值。**
+**`truthy`/`literal_equal` 返回 `std::optional<bool>`，不是 `bool`**：需要表达"判不了"这个第三态，
+不能默认成真——`nullopt` 缺失时默认成真曾经让 `0e0` 的真值判断出错、被死分支消除留下了错误分支。
+调用方（`fold_if`/`fold_for_cond`/`fold_not`/`fold_and_or`/`fold_compare`）一律把 `nullopt` 当
+「不折」处理。**判定函数缺第三态，在折叠器里就等于埋了一个错误的默认值。**
 
 decimal 的一元 `+`/`-` 不折，所以负的 decimal 整体不是纯字面量（`-1.5` 是 `OpUnary` 套一个字面
 量），牵连到的比较、真值判断也一并不折——这不是漏洞，少折永远是安全的那一侧。
 
-**这项工作的起点：两组曾经真出过错的 bug**（折了，但折出来是错值，比"漏折"危害大一个量级）：
-
-- `double` 那组：`StaticEvaler` 早先用 `double` 算 decimal，`0.1 + 0.2` 折成
-  `0.30000000000000004`；`1.0e-400` 下溢成 0，`if (1.0e-400)` 挑错分支；
-  `9007199254740993 == 9007199254740992.0` 折成 `True`；掺 decimal 的 `0.0 ** 0` 折成 `1.0`，
-  把运行期必然抛的 `decimal.InvalidOperation` 吞了。这组 bug 现在的解法是"decimal 彻底不折"，
-  连比较也不例外，从根上不让这类错值有机会产生。
-- **拿 `raw_` 当数字串比**那组：int 的科学计数法写法 `1e2`/`0e0` 是合法字面量，但当时的
-  `node_to_int64` 用 `from_chars` 遇 `e` 就失败，`truthy` 把「解析失败」当成「数太大所以非零」，
-  比较则干脆按字符串比位数和字典序。于是 `1e2 == 100` 是 `False`、`0e0 == 0` 是 `False`、`0e0`
-  的真值是真——**最后一条让死分支消除留下了本该被消掉的那一支**，是唯一会静默改变程序语义的 bug。
-  现在的解法是折叠器内部按值展开科学计数法（见上面「int 的科学计数法写法」），配合
-  `std::optional<bool>` 那条接口修复。
+**为什么 decimal 折叠禁得这么死（连比较都不例外）**：用二进制浮点近似算 decimal 会产生错值，不是
+漏折——`0.1 + 0.2` 折成 `0.30000000000000004`、跨量级比较得出错误结果、`0.0 ** 0` 把运行期该抛的
+`InvalidOperation` 吞掉，这类错误比"该折的没折"严重一个量级，所以"decimal 一律不折"没有例外。
 
 **中途走过一段弯路：改成 `BigInt`/`BigDec`，后来否决**。当时的想法：既然 `numeric/` 已经链进 `SL`
 主目标，折叠器直接复用它，「编译期算的」和「运行期算的」就变成「本来就是同一份实现」，不再是「但愿
@@ -717,6 +668,11 @@ SL 的异常类型体系"，9999 同理。其三，规则内容本身就是"手�
 这类输出粘贴回源码当字面量会被读成 int，不是 decimal，往返静默换类型。见 SL.md 4.2.6 `str` 那条
 的说明；真要保住 decimal 类型，要么手动补一位小数（`1.0E+30`），要么走 `decimal(...)` 构造。
 
+**decimal 字面量的指数 lexer 不设上限，是故意的**——上下文的 Emin/Emax 运行时可变，而构造不舍入，
+词法期无从卡起。`1.0e2000000000` 这种超出 `BigDec::kMaxExponent` 的写法能过词法，到
+`try_from_string` 才返回 `nullopt`，由转换那一层报 `SyntaxError`。不下沉到 lexer：`kMaxExponent`
+是 numeric 的表示上限、不是源码形态的政策，抄一份到 lexer 会静默失配。
+
 ### decimal 的精度模型：抄 Python，每个运算都按上下文舍入
 
 一度设计成"精确优先"（`+ - * // %` 恒精确，只有除不尽的 `/` 和无理运算才舍入），**否决了**：
@@ -1035,16 +991,12 @@ BigDec、上下文和信号，好单独推敲。**里面那些常数（尤其是
 论证撑着的，动一个就会把上层那个循环的前提拆掉**，别随手调。`log10_digits` 带一份越算越长的静态
 缓存，因此不是线程安全的。
 
-**试过把 `big_dec_test.cpp` 里最耗时的两个 `TEST_CASE`（`**`、超越函数，合计占 numeric
-测试总耗时的大头）用 `std::thread` 铺开跑、`log10_digits` 那份缓存另加锁保护，指望榨干本机
-24 核——实测是反效果，而且不是"没提速"那种程度：2 线程就比单线程慢了 2.5 倍，24 线程慢了
-8 倍多（5.9s → 49.8s）。根因大概率是 `run_test.bat` 固定用的 `/MDd` Debug CRT 堆：调试堆的
-每次分配都要过一把全局临界区、外加链表式泄漏追踪的簿记开销，BigInt/BigDec
-这种"每步运算都建一堆临时大数"的负载一并发就是灾难，线程越多锁竞争越狠。要验证这套账真能提速
-得换 Release 构建，但那超出了"只改测试代码"的范围（`run_test.bat` 的构建类型是硬编码的），
-所以这条路线整个撤回了，两个 `TEST_CASE` 照旧串行。以后如果构建方式变了（比如真的有了 Release
-测试目标）想再捡起来，`log10_digits`/`dexp`/`dlog`/`dlog10`/`dpower` 这条链子仍然是唯一需要
-额外加锁的地方——`sqrt` 和 `power_exact` 精确路径不碰它，天然线程安全。
+**别用 `std::thread` 并行跑 `big_dec_test.cpp` 里 `**`/超越函数这两个最耗时的 `TEST_CASE`**：
+验证过是反效果——`run_test.bat` 固定用 `/MDd` Debug CRT 堆，每次分配都要过全局临界区，
+BigInt/BigDec 这种"每步运算都建一堆临时大数"的负载一并发就是锁竞争灾难（2 线程比单线程慢 2.5 倍，
+24 线程慢 8 倍多）。换 Release 构建可能是另一回事，但 `run_test.bat` 的构建类型是硬编码的
+Debug，验证不了。真要重拾这条路，`log10_digits`/`dexp`/`dlog`/`dlog10`/`dpower` 这条链子是唯一
+需要加锁的地方——`sqrt`/`power_exact` 精确路径不碰它，天然线程安全。
 
 **`**` 分三条路**：先用 `log10_exp_bound() + adjusted(y)` 粗筛掉必然溢出/下溢的（这一步同时替
 `power_exact` 挡住了 `10^ye`、`xc^m` 之类会炸开的输入，别把它挪走）；再试 `power_exact`——把 y 写成
@@ -1091,16 +1043,14 @@ CPython 自带的两套 decimal 实现（C 的 libmpdec、纯 Python 的 `_pydec
   `bits == 0`、`from_twos_complement` 收不到空 limbs、大路径的 `minus()` 收不到空 limbs——都是
   调用方的不变量保证的。
 
-**真的补进去的**（都在 `big_dec_test.cpp` 的"生成的用例表铺不到的窄路径"套件里）：`**` 那圈"不够
-定夺就多算三位"的重试循环（此前一次都没跑过，而 `exp`/`ln` 的同款循环是走到的）；`power_exact`
-负指数分支的三道上限（2 的幂 / 5 的幂各自的 `e > emax`、以及结果系数位数超过 `p`）；理想指数补零被
-`p - 位数` 夹住那一档；`log10_digits` 缓存扩容时的"再多算三位"和"剥掉尾零连同紧挨着的那一位"。
+生成的用例表撞不到、需要手写窄路径覆盖的：`**` 的"不够定夺就多算三位"重试循环；`power_exact` 负
+指数分支的三道上限；理想指数补零被 `p - 位数` 夹住那一档；`log10_digits` 缓存扩容的"再多算三位"和
+"剥尾零"两条路径。
 
-后面这条最贵（约 1.6 秒）也最讲究：触发它的 `p` 是拿 log(10) 的真实数字扫出来的——2500 以内只有
-`p = 409` 需要重试，`p = 176` 走剥尾零。**必须挑远高于其余用例摸得到的量级的 `p`**（其余最多到
-125 左右），因为那份缓存是进程级静态的、只增不减，`p` 选小了就会变成"看 doctest 先跑哪个用例"的
-薛定谔覆盖。这也是全项目唯一一处测试直接调 `dec_math`：从 BigDec 那层没法定向命中某个 `p`，而绕
-`log10()` 走还要多花一秒。
+**`log10_digits` 的缓存是进程级静态、只增不减的**：新增测试要定向命中它的某条扩容路径时，选的 `p`
+必须远高于其他用例已经摸到的量级（当前其他用例最高到 125 左右），否则命不命中取决于 doctest 跑
+用例的顺序，覆盖会随机漂移。这是全项目唯一一处测试直接调 `dec_math`（不经 `BigDec::log10()`）——
+从 `BigDec` 层没法定向命中某个具体的 `p`。
 
 另外，**`**` 的"精确结果 + 非整数指数"补报信号那段跟陷阱的交互，只能靠手写用例**：24 组里有 9 组
 libmpdec 跟 `_pydecimal` 不一致（前者把 `fix` 期间的 flags 全带上，后者只带补报到抛出点为止的），
@@ -1253,18 +1203,6 @@ Code），但"建立"这个操作每次执行都必须构造全新的 Function �
 - 内置类的构造/转换行为整片没定（`int(x)`、`str(x)`、`list(x)`、`tuple(x)` 等，只有
   `set`/`frozenset`/`frozendict`/`range` 写了）。其中 `int(decimal)` 的取整方向是真空白：截断还是
   向下取整？SL 的 `//` 已经定死"永远向负无穷"，`int()` 若选截断，语言里就有两种取整方向了。
-- 科学计数法字面量：lexer（`Lexer::read_number`，含 int 指数上限 9999）、`numeric/` 两个类
-  （`BigDec::try_from_string` 本来就按 IBM 语法收指数，`BigInt::from_decimal_string` 也补上了）
-  都做完了。parser/analyzer 那边跟进了两件：`AstNodeLiteral{Int,Decimal}` 的 `raw_` 形状校验
-  （见上面"字面量 `raw_` 的形状校验归节点构造函数"一节），以及 `float`/`Float` 这套旧名字全面改成
-  `decimal`/`Decimal`（`AstNodeLiteralDecimal`、`TokenType::LITERAL_DECIMAL`、JSON 里的
-  `"LiteralDecimal"`、`StaticEvaler::make_decimal`）。剩 `StaticEvaler` 的**逻辑**没跟进
-  （`is_numeric`/`node_to_double` 等还是拿 `double` 算，是老的二进制浮点语义，只是名字换了）。
-  接线时有一条义务别漏：decimal 字面量的指数 lexer 不设上限（**故意的**——上下文的 Emin/Emax
-  运行时可变，而构造不舍入，词法期无从卡起），于是 `1.0e2000000000` 这种超出 `BigDec::kMaxExponent`
-  的写法能过词法、到 `try_from_string` 才返回 `nullopt`，**由转换那一层报 SyntaxError**。这条不下沉
-  到 lexer：`kMaxExponent` 是 numeric 的表示上限、不是源码形态的政策，抄一份到 lexer 会静默失配
-  （跟 int 那条 9999 性质不同，那条挡的是写法上的不对称，手写等长字面量照样放行）。
 - 移位量为负时怎么办待拍板（`int` 和 raw 两边一起定）：建议抛 `ValueError`，不要"反向移位"，
   理由见上面 `raw_int`/`raw_float` 一节。
 - `BigDec` 还缺 `hash`（要跟数值相等的 `int` 一致，得先归一标度）和 `int(decimal)`（取整方向 SL.md
