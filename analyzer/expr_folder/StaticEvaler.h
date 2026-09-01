@@ -125,8 +125,8 @@ class StaticEvaler final {
     [[nodiscard]] static bool is_numeric(const AstNode &node);
 
     // node -> int64_t。调用方保证 is_int_family(node)。
-    // 科学计数法写法（1e5）在这里按值展开成普通数字串再解析；
-    // 装不下 int64_t（含指数超过 nMaxIntScientificExponent）时一律返回 nullopt
+    // 科学计数法写法在这里按值展开成普通数字串再解析；
+    // int64_t 装不下（含指数超过 nMaxIntScientificExponent）时一律返回 nullopt
     [[nodiscard]] static std::optional<int64_t> node_to_int64(const AstNode &node);
 
     // —————————— 折叠上限 ——————————

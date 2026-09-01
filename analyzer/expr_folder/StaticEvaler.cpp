@@ -11,8 +11,7 @@
 
 namespace {
 
-// 是不是一个写着负号的 int 字面量。只看 raw_ 开头有没有 '-'，不需要真的转成 int64_t 就能判——
-// 用于"数值可能装不下 int64_t，但只需要知道符号"的场合（重复次数、移位量的符号检查）
+// 是不是一个写着负号的 int 字面量
 bool is_negative_int_literal(const AstNode &node) {
     const auto *i{dynamic_cast<const AstNodeLiteralInt *>(&node)};
     return i && !i->raw_.empty() && i->raw_.front() == U'-';
@@ -61,24 +60,29 @@ std::optional<int64_t> checked_neg(const int64_t a) {
 
 // 向负无穷取整的整除。调用方保证 b != 0；唯一会溢出的情形是 INT64_MIN / -1
 std::optional<int64_t> checked_floor_div(const int64_t a, const int64_t b) {
+    assert(b != 0);
+
     if (a == INT64_MIN && b == -1) return std::nullopt;
     int64_t q{a / b}, r{a % b};
-    if (r != 0 && ((r < 0) != (b < 0))) --q; // C++ 的 / 向零截断，这里补一格调成向负无穷
+    if (r != 0 && (r < 0) != (b < 0)) --q; // C++ 的 / 向零截断，这里补一格调成向负无穷
     return q;
 }
 
-// 与 checked_floor_div 取整方向一致的取模。调用方保证 b != 0；
-// b == -1 时特判直接给 0，避免走到 a == INT64_MIN 时 % 本身的 UB（-1 整除一切，恒无余数）
+// 与 checked_floor_div 取整方向一致的取模。调用方保证 b != 0；b == -1 时特判直接给 0
 int64_t floor_mod(const int64_t a, const int64_t b) {
+    assert(b != 0);
+
     if (b == -1) return 0;
     int64_t r{a % b};
-    if (r != 0 && ((r < 0) != (b < 0))) r += b;
+    if (r != 0 && (r < 0) != (b < 0)) r += b;
     return r;
 }
 
-// base 的 exponent 次幂（int64_t）。调用方保证 exponent >= 0；溢出返回 nullopt
+// base ** exponent（int64_t）。调用方保证 exponent >= 0；溢出返回 nullopt
 std::optional<int64_t> checked_pow(const int64_t base, const int64_t exponent) {
-    // 0 ** 0 == 1（SL.md 3.4.2），且 base 为 0/1/-1 时指数可以大到不适合真的循环，须特判
+    assert(exponent >= 0);
+
+    // 0 ** 0 == 1，且 base 为 0/1/-1 时指数可以大到不适合真的循环，须特判
     if (exponent == 0) return 1;
     if (base == 0) return 0;
     if (base == 1) return 1;
@@ -383,7 +387,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpUnary &node) {
     using enum AstNodeOpUnary::OpType;
     const AstNode &operand{*node.operand_};
 
-    if (!(is_literal_pure(operand) && is_int_family(operand))) return nullptr;
+    if (!is_literal_pure(operand) || !is_int_family(operand)) return nullptr;
 
     const std::optional v{node_to_int64(operand)};
     if (!v) return nullptr;
@@ -630,8 +634,7 @@ AstNodePtr StaticEvaler::make_int(const Position pos, const int64_t value) {
 std::optional<bool> StaticEvaler::literal_equal(const AstNode &a, const AstNode &b) {
     assert(is_literal_pure(a) && is_literal_pure(b));
 
-    // bool/int/decimal。只要有一侧是 decimal 就不折——decimal 的值依赖运行期上下文，
-    // 折出来的结果不保证跟运行期一致。两边都是 int 家族才真的取值比较
+    // bool/int/decimal。只要有一侧是 decimal 就不折
     if (is_numeric(a) && is_numeric(b)) {
         if (!is_int_family(a) || !is_int_family(b)) return std::nullopt;
         const std::optional va{node_to_int64(a)}, vb{node_to_int64(b)};

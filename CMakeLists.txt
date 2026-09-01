@@ -189,6 +189,7 @@ target_link_libraries(SL PRIVATE nlohmann_json::nlohmann_json cxxopts::cxxopts)
 # 预编译头
 target_precompile_headers(SL PRIVATE
         <algorithm>
+        <charconv>
         <filesystem>
         <format>
         <iostream>
