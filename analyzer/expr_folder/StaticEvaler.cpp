@@ -387,6 +387,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpUnary &node) {
     using enum AstNodeOpUnary::OpType;
     const AstNode &operand{*node.operand_};
 
+    // 只接 int/bool
     if (!is_literal_pure(operand) || !is_int_family(operand)) return nullptr;
 
     const std::optional v{node_to_int64(operand)};
@@ -453,8 +454,8 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpBinary &node) {
 
 AstNodePtr StaticEvaler::fold_bitwise(const AstNodeOpUnary &node) {
     const AstNode &operand{*node.operand_};
-    // 位运算只对 int 有定义：bool 没有位运算方法（SL.md 4.2.5），~True 运行期是 TypeError，
-    // 所以这里用严格的 is_int 而不是 is_int_family
+
+    // 只接 int
     if (!is_literal_pure(operand) || !is_int(operand)) return nullptr;
 
     const std::optional v{node_to_int64(operand)};
