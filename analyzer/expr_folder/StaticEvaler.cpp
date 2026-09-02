@@ -486,9 +486,9 @@ AstNodePtr StaticEvaler::fold_bitwise(const AstNodeOpBinary &node) {
         return make_int(node.pos_, *lv ^ *rv);
 
     case LShift: {
-        // 负移位量的语义还没拍板（见 .ai/context.md），不折，留给运行期
+        // 负移位量是 ValueError，原样留给运行期
         if (!rv || *rv < 0) return nullptr;
-        if (*lv == 0) return make_int(node.pos_, 0); // 0 左移多少位都是 0，避免下面循环跑到天荒地老
+        if (*lv == 0) return make_int(node.pos_, 0); // 0 左移多少位都是 0，避免下面循环一直跑
         // a << k == 反复乘 2，一旦溢出立刻退出——不管 k 有多大，非零值最多翻 63 次倍就必然溢出
         int64_t result{*lv};
         for (int64_t i{0}; i < *rv; ++i) {
@@ -499,10 +499,9 @@ AstNodePtr StaticEvaler::fold_bitwise(const AstNodeOpBinary &node) {
         return make_int(node.pos_, result);
     }
     case RShift:
-        // 负移位量语义未定（同上），不折——这一步只需要知道符号，不需要移位量真的能塞进 int64_t
+        // 负移位量同上不折——这一步只需要知道符号，不需要移位量真的能塞进 int64_t
         if (is_negative_int_literal(r)) return nullptr;
         // 移位量装不下 int64_t（且已确认非负）时，结果只会是 0 或 -1（算术右移补符号位），
-        // 不需要真的知道移位量具体多大就能给出来
         if (!rv) return make_int(node.pos_, *lv < 0 ? -1 : 0);
         // 移位量达到/超过 int64_t 位宽时同理，直接给出来，避免对 >> 传入一个 C++ 认定为 UB 的位移量
         if (*rv >= 63) return make_int(node.pos_, *lv < 0 ? -1 : 0);

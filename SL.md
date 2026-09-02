@@ -622,7 +622,7 @@ try expr1 ⟦except (Exception1, ... ⟦as lvalue⟧) expr2 ...⟧ ⟦finally ex
       表示同 Python 里的 `range(start, stop, step)`；
   - 对于 `x` 是 int、decimal、None 且 `y` 是二元 range 对象，直接抛出 `TypeError`；
 - `x << y`, `x >> y`
-  对于 int，分别返回按位左移、按位右移；
+  对于 int，分别返回按位左移、按位右移；`y` 为负抛出 `ValueError`；
 - `x ^ y`
   - 对于 int，返回按位异或；
   - 对于 set，返回集合的异或；
