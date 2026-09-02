@@ -4,6 +4,7 @@
 #include "../builtins/exceptions/SLException.h"
 #include "../lexer/Lexer.h"
 #include "../parser/Parser.h"
+#include "../parser/ast_nodes/ast_json_dumper.h"
 #include "../parser/ast_nodes/details/ast_node_multi_exprs.h"
 #include "../utils/file_utils.h"
 #include "../utils/string_utils.h"
@@ -59,7 +60,7 @@ int Executor::run() const {
     AstNodeProgramPtr ast;
     try {
         ast = Parser{std::move(tokens), file_path}.parse_as_file();
-        std::cout << ast->to_json().dump(2) << std::endl << std::endl;
+        std::cout << AstJsonDumper::dump(*ast).dump(2) << std::endl << std::endl;
     } catch (SLException &e) {
         std::cerr << e.what() << std::endl;
         return 1;
@@ -74,7 +75,7 @@ int Executor::run() const {
     // 3. 分析器（检查 AST）
     try {
         Analyzer::analyze_program(*ast, file_path);
-        std::cout << ast->to_json().dump(2) << std::endl << std::endl;
+        std::cout << AstJsonDumper::dump(*ast).dump(2) << std::endl << std::endl;
     } catch (SLException &e) {
         std::cerr << e.what() << std::endl;
         return 1;

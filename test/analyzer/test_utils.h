@@ -20,13 +20,13 @@ inline nlohmann::json fold_json(const std::u32string &source) {
         );
     }
     ExprFolder::fold_single_expr(program->exprs_[0]);
-    return nlohmann::json(program->exprs_[0]->to_json());
+    return nlohmann::json(AstJsonDumper::dump(*program->exprs_[0]));
 }
 
 inline nlohmann::json fold_program_json(const std::u32string &source) {
     AstNodeProgramPtr program{parse_as_file(source)};
     ExprFolder::fold_program(*program);
-    return nlohmann::json(program->to_json());
+    return nlohmann::json(AstJsonDumper::dump(*program));
 }
 
 inline nlohmann::json int_lit(const std::string &raw) {

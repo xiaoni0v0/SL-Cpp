@@ -4,9 +4,6 @@
 
 #include <compare>
 #include <memory>
-#include <nlohmann/json.hpp>
-
-using json = nlohmann::ordered_json;
 
 // 源码里的一个位置（行、列）
 struct Position {
@@ -24,20 +21,9 @@ struct AstNode {
 
     virtual ~AstNode() = default;
 
-    /**
-     * 序列化为 JSON。字段顺序跟节点结构体成员声明顺序一致。
-     * @param include_pos 是否把位置信息也 dump 进去（基类 pos_，以及各节点的 pos_xxx_）
-     */
-    [[nodiscard]] json to_json(const bool include_pos = false) const {
-        return to_json_impl(include_pos);
-    }
-
     // 双分派的前半程
     virtual void accept(AstVisitor &visitor) = 0;
     virtual void accept(AstConstVisitor &visitor) const = 0;
-
-  private:
-    [[nodiscard]] virtual json to_json_impl(bool include_pos) const = 0;
 };
 
 using AstNodePtr = std::unique_ptr<AstNode>;

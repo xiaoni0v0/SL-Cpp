@@ -56,7 +56,4 @@ struct AstNodeFunc : AstNode {
           return_type_{std::move(return_type)}, doc_{std::move(doc)}, body_{std::move(body)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };

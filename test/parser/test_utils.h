@@ -8,6 +8,7 @@
 #include "../../builtins/exceptions/SyntaxError.h"
 #include "../../lexer/Lexer.h"
 #include "../../parser/Parser.h"
+#include "../../parser/ast_nodes/ast_json_dumper.h"
 
 #include <doctest/doctest.h>
 #include <nlohmann/json.hpp>
@@ -39,11 +40,11 @@ inline AstNodePtr parse_single(const std::u32string &source) {
 }
 
 inline nlohmann::json parse_json(const std::u32string &source) {
-    return nlohmann::json(parse_single(source)->to_json());
+    return nlohmann::json(AstJsonDumper::dump(*parse_single(source)));
 }
 
 inline nlohmann::json parse_program_json(const std::u32string &source) {
-    return nlohmann::json(parse_as_file(source)->to_json());
+    return nlohmann::json(AstJsonDumper::dump(*parse_as_file(source)));
 }
 
 inline void check_parse_as_single_expr_throws_with(

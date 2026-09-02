@@ -14,9 +14,6 @@ struct AstNodeProgram : AstNode {
         : AstNode{pos}, exprs_{std::move(exprs)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 using AstNodeProgramPtr = std::unique_ptr<AstNodeProgram>;
@@ -29,7 +26,4 @@ struct AstNodeCompound : AstNode {
         : AstNode{pos}, exprs_{std::move(exprs)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };

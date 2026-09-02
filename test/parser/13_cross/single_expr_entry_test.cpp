@@ -6,7 +6,7 @@
 TEST_SUITE("Parser 单表达式入口") {
 
     TEST_CASE("恰好一条：正常返回这条表达式自己的节点，外面没有 Program 那一层") {
-        const auto node = nlohmann::json(parse_as_single_expr(U"x = 0")->to_json());
+        const auto node = nlohmann::json(AstJsonDumper::dump(*parse_as_single_expr(U"x = 0")));
         CHECK(
             node == nlohmann::json{
                         {"type", "Assign"},
@@ -51,7 +51,7 @@ TEST_SUITE("Parser 单表达式入口") {
     }
 
     TEST_CASE("要放多条得自己写成复合表达式——那是一条表达式，能过") {
-        const auto node = nlohmann::json(parse_as_single_expr(U"{ a; b }")->to_json());
+        const auto node = nlohmann::json(AstJsonDumper::dump(*parse_as_single_expr(U"{ a; b }")));
         CHECK(node["type"] == "Compound");
         CHECK(node["exprs"].size() == 2);
     }

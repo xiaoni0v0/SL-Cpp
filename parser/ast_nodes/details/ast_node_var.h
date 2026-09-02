@@ -13,9 +13,6 @@ struct AstNodeIdentifier : AstNode {
         : AstNode{pos}, identifier_{std::move(identifier)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // del target（target 语法上是表达式，限定只能是标识符或属性访问，由语义层校验具体形状）
@@ -26,9 +23,6 @@ struct AstNodeDel : AstNode {
         : AstNode{pos}, target_{std::move(target)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // global identifier
@@ -39,7 +33,4 @@ struct AstNodeGlobal : AstNode {
         : AstNode{pos}, identifier_{std::move(identifier)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };

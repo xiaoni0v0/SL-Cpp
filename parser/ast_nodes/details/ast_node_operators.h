@@ -18,9 +18,6 @@ struct AstNodeStar : AstNode {
         : AstNode{pos}, operand_{std::move(operand)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // **expr（字典展开，不包括可变长关键字形参）
@@ -31,9 +28,6 @@ struct AstNodeDoubleStar : AstNode {
         : AstNode{pos}, operand_{std::move(operand)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // 一元运算符：+x  -x  ~x  not x  x?  x!
@@ -60,9 +54,6 @@ struct AstNodeOpUnary : AstNode {
         : AstNode{pos}, op_{op}, operand_{std::move(operand)}, pos_op_{pos_op} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // 二元运算符：+  -  *  /  //  %  **  &  |  ^  <<  >>  and  or  ..  in
@@ -103,9 +94,6 @@ struct AstNodeOpBinary : AstNode {
     }
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // 比较运算：a OP1 b ⟦OP2 c ...⟧（== != < <= > >= 一组）
@@ -126,9 +114,6 @@ struct AstNodeCompare : AstNode {
           positions_op_{std::move(positions_op)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // a is b ⟦is c ...⟧（is）
@@ -144,9 +129,6 @@ struct AstNodeIs : AstNode {
         : AstNode{pos}, operands_{std::move(operands)}, positions_op_{std::move(positions_op)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // target = expr
@@ -158,9 +140,6 @@ struct AstNodeAssign : AstNode {
         : AstNode{pos}, target_{std::move(target)}, value_{std::move(value)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // target op= expr
@@ -181,7 +160,4 @@ struct AstNodeCompoundAssign : AstNode {
           pos_op_{pos_op} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };

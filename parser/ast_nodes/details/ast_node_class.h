@@ -35,7 +35,4 @@ struct AstNodeClass : AstNode {
           body_{std::move(body)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };

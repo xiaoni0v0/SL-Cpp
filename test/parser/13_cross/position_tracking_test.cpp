@@ -1,4 +1,4 @@
-// AST 位置字段。to_json 不含位置，这里直接读节点。
+// AST 位置字段。默认的 JSON dump 不含位置，这里直接读节点。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

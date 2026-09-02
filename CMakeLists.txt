@@ -138,9 +138,10 @@ add_executable(SL main.cpp
         # Parser
         parser/Parser.cpp
         parser/Parser.h
+        parser/ast_nodes/ast_json_dumper.cpp
+        parser/ast_nodes/ast_json_dumper.h
         parser/ast_nodes/ast_nodes.h
         parser/ast_nodes/ast_visitor.h
-        parser/ast_nodes/to_json.cpp
         parser/ast_nodes/x_ast_nodes.inc
         parser/ast_nodes/details/ast_node.h
         parser/ast_nodes/details/ast_node_class.h
@@ -206,7 +207,6 @@ target_precompile_headers(SL PRIVATE
         <string>
         <utility>
         <vector>
-        <nlohmann/json.hpp>
 )
 
 # ============================================================
@@ -326,9 +326,10 @@ add_executable(SL_Cpp_Parser_Tests
         utils/string_utils.h
         parser/Parser.cpp
         parser/Parser.h
+        parser/ast_nodes/ast_json_dumper.cpp
+        parser/ast_nodes/ast_json_dumper.h
         parser/ast_nodes/ast_nodes.h
         parser/ast_nodes/ast_visitor.h
-        parser/ast_nodes/to_json.cpp
         parser/ast_nodes/x_ast_nodes.inc
         parser/ast_nodes/details/ast_node.h
         parser/ast_nodes/details/ast_node_class.h
@@ -400,9 +401,10 @@ add_executable(SL_Cpp_Analyzer_Tests
         utils/string_utils.h
         parser/Parser.cpp
         parser/Parser.h
+        parser/ast_nodes/ast_json_dumper.cpp
+        parser/ast_nodes/ast_json_dumper.h
         parser/ast_nodes/ast_nodes.h
         parser/ast_nodes/ast_visitor.h
-        parser/ast_nodes/to_json.cpp
         parser/ast_nodes/x_ast_nodes.inc
         parser/ast_nodes/details/ast_node.h
         parser/ast_nodes/details/ast_node_class.h

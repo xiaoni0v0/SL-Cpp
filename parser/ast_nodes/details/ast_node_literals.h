@@ -11,9 +11,6 @@ struct AstNodeLiteralNone : AstNode {
     explicit AstNodeLiteralNone(const Position pos) : AstNode{pos} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // bool
@@ -24,9 +21,6 @@ struct AstNodeLiteralBool : AstNode {
         : AstNode{pos}, value_{value} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 struct AstNodeLiteralGL : AstNode {
@@ -36,9 +30,6 @@ struct AstNodeLiteralGL : AstNode {
         : AstNode{pos}, value_{value} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // int。raw_ 的形状在构造时校验，不合法即 InternalError
@@ -48,9 +39,6 @@ struct AstNodeLiteralInt : AstNode {
     explicit AstNodeLiteralInt(Position pos, std::u32string raw);
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // decimal。raw_ 的形状在构造时校验，不合法即 InternalError
@@ -60,9 +48,6 @@ struct AstNodeLiteralDecimal : AstNode {
     explicit AstNodeLiteralDecimal(Position pos, std::u32string raw);
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // str
@@ -74,9 +59,6 @@ struct AstNodeLiteralStr : AstNode {
         : AstNode{pos}, value_{std::move(value)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // (1, 2, 3)，单元素元组须有尾逗号
@@ -87,9 +69,6 @@ struct AstNodeLiteralTuple : AstNode {
         : AstNode{pos}, items_{std::move(items)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // [1, 2, 3]
@@ -100,9 +79,6 @@ struct AstNodeLiteralList : AstNode {
         : AstNode{pos}, items_{std::move(items)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // {'k1': 'v1', 'k2': 'v2'}
@@ -115,9 +91,6 @@ struct AstNodeLiteralDict : AstNode {
         : AstNode{pos}, items_{std::move(items)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // ...
@@ -125,9 +98,6 @@ struct AstNodeLiteralEllipsis : AstNode {
     explicit AstNodeLiteralEllipsis(const Position pos) : AstNode{pos} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // 剥掉开头可能有的负号

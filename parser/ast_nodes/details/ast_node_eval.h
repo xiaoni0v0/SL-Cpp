@@ -16,7 +16,4 @@ struct AstNodeEval : AstNode {
         : AstNode{pos}, args_{std::move(args)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };

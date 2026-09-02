@@ -20,7 +20,7 @@ nlohmann::json fold_and_recheck(const std::u32string &source, const bool include
     }
     ExprFolder::fold_single_expr(program->exprs_[0]);
     SemanticChecker{*program, "<test>"}.check(); // 折完了还得能过
-    return nlohmann::json(program->exprs_[0]->to_json(include_pos));
+    return nlohmann::json(AstJsonDumper::dump(*program->exprs_[0], include_pos));
 }
 
 } // namespace

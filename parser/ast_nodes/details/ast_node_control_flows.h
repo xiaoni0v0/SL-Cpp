@@ -30,9 +30,6 @@ struct AstNodeIf : AstNode {
         : AstNode{pos}, clauses_{std::move(clauses)}, else_expr_{std::move(else_expr)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // 收集模式记号 $ / $ * / $$ / $$ **，两个 for 节点共用
@@ -57,9 +54,6 @@ struct AstNodeForCond : AstNode {
           inc_{std::move(inc)}, body_{std::move(body)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // for [collect] (iterable [as target]) body
@@ -77,27 +71,18 @@ struct AstNodeForIter : AstNode {
           target_{std::move(target)}, body_{std::move(body)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 struct AstNodeBreak : AstNode {
     explicit AstNodeBreak(const Position pos) : AstNode{pos} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 struct AstNodeContinue : AstNode {
     explicit AstNodeContinue(const Position pos) : AstNode{pos} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // return [expr]
@@ -108,9 +93,6 @@ struct AstNodeReturn : AstNode {
         : AstNode{pos}, value_{std::move(value)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // try expr [except (Exception, ... [as target]) expr]* [finally expr]
@@ -139,9 +121,6 @@ struct AstNodeTry : AstNode {
           finally_expr_{std::move(finally_expr)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 struct AstNodeRaise : AstNode {
@@ -151,7 +130,4 @@ struct AstNodeRaise : AstNode {
         : AstNode{pos}, value_{std::move(value)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };

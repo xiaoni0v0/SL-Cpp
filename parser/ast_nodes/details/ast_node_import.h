@@ -20,9 +20,6 @@ struct AstNodeImportKw : AstNode {
         : AstNode{pos}, segments_{std::move(segments)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // 调用形态的 import(name, lazy=..., force=...)
@@ -33,7 +30,4 @@ struct AstNodeImportCall : AstNode {
         : AstNode{pos}, args_{std::move(args)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };

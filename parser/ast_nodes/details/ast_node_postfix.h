@@ -20,9 +20,6 @@ struct AstNodeCall : AstNode {
         : AstNode{pos}, object_{std::move(object)}, args_{std::move(args)} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // x[i]  x[i, j, ...]
@@ -39,9 +36,6 @@ struct AstNodeIndex : AstNode {
           pos_bracket_{pos_bracket} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
 
 // x.attr
@@ -56,7 +50,4 @@ struct AstNodeAttr : AstNode {
         : AstNode{pos}, object_{std::move(object)}, attr_{std::move(attr)}, pos_dot_{pos_dot} {}
 
     SL_AST_NODE_ACCEPT
-
-  private:
-    [[nodiscard]] json to_json_impl(bool include_pos) const override;
 };
