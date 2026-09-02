@@ -77,7 +77,7 @@ C++ 状态机。
 | 字段           | 内容                                                                                                   |
 |----------------|--------------------------------------------------------------------------------------------------------|
 | 字节码         | 见上                                                                                                   |
-| 常量表         | 常量（见下）、名字元组（`CALL_KW` 用）、**嵌套 `Code`**（函数体/类体）                                 |
+| 常量表         | 不可变字面量值（见下）、**嵌套 `Code`**（函数体/类体）                                                 |
 | 名字表         | 标识符、属性名、`import` 的点分名字                                                                    |
 | 栈深上限       | 编译期算出，一次性分配操作数栈                                                                         |
 | 引用捕获名集合 | 函数体/类体才有，必须持久保留——运行期每次按标识符读写都要查                                            |
@@ -94,20 +94,31 @@ C++ 状态机。
 
 ### 常量表存什么形态
 
-**存"编译期常量描述"，不存 SL 对象**：一个小 variant —— `int`（`BigInt`）、`decimal`（`BigDec`， 系数+指数，
-`1.50`/`1.5` 可区分）、`str`、 **常量元组**（元素是子描述）、名字元组、嵌套 `Code`。
-`numeric/` 的两个值类跟对象系统无关，可以直接装。
+**判据是不可变，不是折叠器的 `StaticEvaler::is_literal_pure`**——后者含 `list`，而 `list` 可变，进了
+常量表就是每次求值拿到同一个对象：`a = f(); b = f(); a.append(3)` 会改到 `b`，`a is b` 还为真。 **减掉
+`list` 剩下的全部可进**：`None`/`bool`/`int`/`decimal`/`str`/`Ellipsis`/ **全常量元组**
+（`dict` 本来就不在 `is_literal_pure` 里）。
 
-物化成 SL 对象由 VM 在 **加载 `Code` 时一次性完成**并缓存在 `Code` 上，`LOAD_CONST` 只是取现成的。
-不能每次现造：同一常量项每次压的必须是同一个对象。相等常量项要不要去重共享是实现自由。
+`tuple` 不可变（`SL.md` 4.2.9：不可变指引用关系不可变），所以 `(1, (2, 'a'))` 是一条 `LOAD_CONST`
+而非 `MAKE_TUPLE`；只要有一个元素不是常量（`(x, 1)`、`([1],)`）整个就不是常量，走 `MAKE_TUPLE`。
+`CALL_KW` 的名字元组不单独算一类，就是个常量元组。`decimal` 能进是因为构造不舍入、精确保留全部位数 （
+`SL.md` 4.2.6），不受运行期上下文影响。
+
+**存的是编译期常量描述，不是 SL 对象**：一个小 variant——`BigInt` / `BigDec` / `str` / 单例 （`None`/
+`bool`/`Ellipsis`）/ 子描述列表（元组）/ 嵌套 `Code`。`numeric/` 的两个值类跟对象系统无关， 可以直接装。物化成
+SL 对象由 VM 在 **加载 `Code` 时一次性完成**并缓存在 `Code` 上，`LOAD_CONST` 只取
+现成的——不能每次现造，否则同一常量项每次压的不是同一个对象。相等常量项要不要去重共享是实现自由。
+**物化不允许失败**：可能构造不出来的字面量（如指数越界的 decimal）必须由前端挡下。
 
 这样 codegen 不依赖对象模型与 GC——常量对象归不归 GC 管、引用计数初值是多少，由 GC 设计定，不该被
 codegen 提前钉死；`Code` 也因此是纯编译产物，可序列化。代价只是物化时一个 switch。
 
-**可进常量表的判据是不可变，不是"是不是容器"**：`tuple` 不可变（`SL.md` 4.2.9：不可变指引用关系不可变），
-所以 **全常量元组直接进常量表**——`(1, (2, 'a'))` 是一条 `LOAD_CONST`，不是 `MAKE_TUPLE`。只要有一个元素
-不是常量（`(x, 1)`、`([1],)`）就整个不是常量，走 `MAKE_TUPLE`。int/str/decimal 字面量本来就共享同一个
-常量对象，元组没有理由例外。
+**`Code` 在常量表里，但不走 `LOAD_CONST`**：它不是 SL 对象，不该出现在操作数栈上。`MAKE_FUNC c` /
+`MAKE_CLASS c` 用参数字节直接给常量表下标（超 255 靠 `EXTENDED_ARG`）。于是 `LOAD_CONST` 压的恒为 SL
+对象。
+
+顶层的 `None`/`True`/`False`/`Ellipsis` 走 `LOAD_COMMON`，不占各自 `Code` 的常量表；只有嵌在常量元组
+里时才作为描述的一个 case 出现。
 
 ## 栈约定
 
@@ -142,7 +153,8 @@ codegen 必须按实际传下去的 `want_value` 静态跟踪栈深（算栈深�
 | `LOAD_CONST n`   | `…`            | `… c`          | 压常量表第 `n` 项                                |
 | `LOAD_COMMON n`  | `…`            | `… v`          | 压全局共享表第 `n` 项，见下                      |
 
-`LOAD_COMMON` 取的是一张 **全局共享、不属于任何单个 `Code`** 的小表：`None`/`True`/`False`、`import`
+`LOAD_COMMON` 取的是一张 **全局共享、不属于任何单个 `Code`** 的小表：`None`/`True`/`False`/`Ellipsis`、
+`import`
 调用形态背后的函数对象（见「调用与建立」）——极多份 `Code` 反复用到，没必要各自常量表都存一份。命名上 特意不叫
 `LOAD_COMMON_CONST`，跟 `LOAD_CONST` 是两张互不相干的表，`n` 不能混用。
 
@@ -211,8 +223,10 @@ codegen 模式）；链式比较/`is` 链靠 `COPY`/`INSERT` 把操作数喂给�
 带 `*`/`**` 展开的容器字面量走 `MAKE_LIST 0`/`MAKE_DICT 0` 加逐项 append/extend/put/merge，元组最后补
 `LIST_TO_TUPLE`；收集模式的 `for` 复用同一组指令。
 
-**全常量元组不用 `MAKE_TUPLE`**，直接 `LOAD_CONST`（见「常量表存什么形态」）。`list`/`dict` 无论元素是否
-全常量都必须每次现建。
+**全常量元组不用 `MAKE_TUPLE`**，直接 `LOAD_CONST`（见「常量表存什么形态」）。`list`/`dict` 不管元素是不是
+全常量都必须每次现建；元素全为常量且个数 ≥3 时可选的更短形态是 `MAKE_LIST 0` +
+`LOAD_CONST <常量元组>` +
+`LIST_EXTEND`（`n+1` 条压到 3 条），列表本身仍是新对象。
 
 **`UNPACK_EX a` 编码**：`a` 是一次 `EXTENDED_ARG` 累积出的 16 位值，高 8 位（`EXTENDED_ARG` 自己那字节）
 是星号后项数，低 8 位（`UNPACK_EX` 自己那字节）是星号前项数。例：`(a, b, *rest, c) = e` 编译成
@@ -271,16 +285,16 @@ CPython 对 star-unpacking 的处理一致，是真实语言限制不是内部�
 
 ### 调用与建立
 
-| 指令           | 前                                         | 后         | 行为                                                                                                                      |
-|----------------|--------------------------------------------|------------|---------------------------------------------------------------------------------------------------------------------------|
-| `CALL n`       | `… f a₁ … aₙ`                              | `… v`      | 压被调对象的帧（SL 函数 → `ByteCodeFrame`，内置 → `NativeFrame`）。只有位置实参                                           |
-| `CALL_KW n`    | `… f a₁ … aₙ names`                        | `… v`      | 同上，`names` 是常量表里的名字元组，末尾 `len(names)` 个实参按名字传                                                      |
-| `CALL_EX`      | `… f args kwargs`                          | `… v`      | 同上，`*`/`**` 展开时用                                                                                                   |
-| `MAKE_FUNC`    | `… captures params ret_type doc code name` | `… f`      | 弹 6 项建函数对象，见下                                                                                                   |
-| `MAKE_CLASS`   | `… captures bases doc code name`           | `… c`      | 弹 5 项，新建局部帧执行类体，见下                                                                                         |
-| `RETURN_VALUE` | `… v`                                      | ——（弹帧） | 弹栈顶为值，弹帧，按 `owner_` 种类收尾                                                                                    |
-| `IMPORT n`     | `…`                                        | `… m`      | 关键字形态 `import a.b.c`：名字表第 `n` 项是完整点分名，压 `NativeFrame` 跑加载算法，压入**第一段**模块对象               |
-| `EVAL`         | `… args kwargs`                            | `… v`      | 绑出 `code`（失败 `DispatchError`，非 str `TypeError`），解析成恰好一条表达式（否则 `SyntaxError`），编译，压 `EvalFrame` |
+| 指令           | 前                                    | 后         | 行为                                                                                                                      |
+|----------------|---------------------------------------|------------|---------------------------------------------------------------------------------------------------------------------------|
+| `CALL n`       | `… f a₁ … aₙ`                         | `… v`      | 压被调对象的帧（SL 函数 → `ByteCodeFrame`，内置 → `NativeFrame`）。只有位置实参                                           |
+| `CALL_KW n`    | `… f a₁ … aₙ names`                   | `… v`      | 同上，`names` 是常量表里的名字元组，末尾 `len(names)` 个实参按名字传                                                      |
+| `CALL_EX`      | `… f args kwargs`                     | `… v`      | 同上，`*`/`**` 展开时用                                                                                                   |
+| `MAKE_FUNC c`  | `… captures params ret_type doc name` | `… f`      | 弹 5 项 + 常量表第 `c` 项的 `Code`，建函数对象，见下                                                                      |
+| `MAKE_CLASS c` | `… captures bases doc name`           | `… cls`    | 弹 4 项 + 常量表第 `c` 项的 `Code`，新建局部帧执行类体，见下                                                              |
+| `RETURN_VALUE` | `… v`                                 | ——（弹帧） | 弹栈顶为值，弹帧，按 `owner_` 种类收尾                                                                                    |
+| `IMPORT n`     | `…`                                   | `… m`      | 关键字形态 `import a.b.c`：名字表第 `n` 项是完整点分名，压 `NativeFrame` 跑加载算法，压入**第一段**模块对象               |
+| `EVAL`         | `… args kwargs`                       | `… v`      | 绑出 `code`（失败 `DispatchError`，非 str `TypeError`），解析成恰好一条表达式（否则 `SyntaxError`），编译，压 `EvalFrame` |
 
 实参绑定算法（槽位填充、`*args`/`**kwargs` 收集、类型检查、函数族逐个试）不摊成字节码，在 `CALL` 系列
 指令实现里。`EVAL` 编译 `code` 时交给语义检查的 `in_local_scope` 取
@@ -438,23 +452,23 @@ after:
 直接跳进同一段 `finally` 体，末尾统一 `END_FINALLY` 分派—— **只编译一份**，`finally` 体不可能跳出这段
 范围（编译期已查），不用处理跳转穿过它。
 
-**建立函数**：装饰器最先求值，先压装饰器；`Code`/名字是常量放最后压：
+**建立函数**：装饰器最先求值，先压装饰器；名字是常量放最后压：
 
 ```
 <deco1> … <decoN>
 <各值捕获> MAKE_TUPLE k
 <各形参注解/默认值> MAKE_TUPLE m
-<返回类型> <doc> LOAD_CONST <Code> LOAD_CONST <名字>
-MAKE_FUNC
+<返回类型> <doc> LOAD_CONST <名字>
+MAKE_FUNC <Code 在常量表里的下标>
 CALL 1  (由近到远，一个装饰器一条)
 COPY 1 STORE_NAME f   (命名函数才有，绑定只发生一次)
 ```
 
-`MAKE_FUNC` 固定弹 6 项，缺的注解/默认值/名字/`doc` 用 `LOAD_COMMON` 压一个纯内部哨兵值（不能用
+`MAKE_FUNC` 固定弹 5 项，缺的注解/默认值/名字/`doc` 用 `LOAD_COMMON` 压一个纯内部哨兵值（不能用
 `None`，它是合法默认值）。引用捕获不产生任何指令：`MAKE_FUNC` 在当前帧执行，直接抓一份当前帧的引用
 挂到新对象上。
 
-**建立类**：形状同上，基类元组代替形参段，弹 5 项。`MAKE_CLASS` 不直接产出类对象——新建局部帧、写入
+**建立类**：形状同上，基类元组代替形参段，弹 4 项。`MAKE_CLASS` 不直接产出类对象——新建局部帧、写入
 值捕获、压栈执行类体；类体 `RETURN_VALUE` 收尾时才由 `owner_`（类构建器）完成属性收集、MRO、
 `__abstractmethods__`，把类对象压回。装饰器调用在这之后。
 
