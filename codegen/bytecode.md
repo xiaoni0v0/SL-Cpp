@@ -154,19 +154,19 @@
 
 ### 属性与索引
 
-| 指令             | 前                  | 后    | 行为                                            |
-|------------------|---------------------|-------|-------------------------------------------------|
-| `LOAD_ATTR n`    | `… obj`             | `… v` | `obj` → 属性值                                  |
-| `STORE_ATTR n`   | `… obj val`         | `…`   | `obj val` → 弹两项，写属性                      |
-| `DELETE_ATTR n`  | `… obj`             | `…`   | `obj` → 弹掉，删属性                            |
-| `LOAD_INDEX n`   | `… obj a₁ … aₙ`     | `… v` | `obj a1 … an` → 结果，走 `__op_get_index__`     |
-| `STORE_INDEX n`  | `… obj a₁ … aₙ val` | `…`   | `obj a1 … an val` → 弹光，走 `__op_set_index__` |
-| `LOAD_INDEX_EX`  | `… obj args`        | `… v` | `obj args` → 结果。`args` 是下标已打包好的 list |
-| `STORE_INDEX_EX` | `… obj args val`    | `…`   | `obj args val` → 弹光                           |
+| 指令            | 前                  | 后    | 行为                                            |
+|-----------------|---------------------|-------|-------------------------------------------------|
+| `GET_ATTR n`    | `… obj`             | `… v` | `obj` → 属性值                                  |
+| `SET_ATTR n`    | `… obj val`         | `…`   | `obj val` → 弹两项，写属性                      |
+| `DELETE_ATTR n` | `… obj`             | `…`   | `obj` → 弹掉，删属性                            |
+| `GET_INDEX n`   | `… obj a₁ … aₙ`     | `… v` | `obj a1 … an` → 结果，走 `__op_get_index__`     |
+| `SET_INDEX n`   | `… obj a₁ … aₙ val` | `…`   | `obj a1 … an val` → 弹光，走 `__op_set_index__` |
+| `GET_INDEX_EX`  | `… obj args`        | `… v` | `obj args` → 结果。`args` 是下标已打包好的 list |
+| `SET_INDEX_EX`  | `… obj args val`    | `…`   | `obj args val` → 弹光                           |
 
 `*expr` 合法出现在索引里（`x[*a, b]`），跟函数调用一样：只要索引参数里有一个 `*` 展开，参数个数就不是
 编译期常数，必须先在栈上拼出 `args` 这个 list 再交给 `_EX` 版本；没有展开的普通索引走上面固定参数个数
-的 `LOAD_INDEX`/`STORE_INDEX`。索引没有 `**` 展开（`SL.md` 只允许 `**` 出现在字典字面量和函数调用）， 所以
+的 `GET_INDEX`/`SET_INDEX`。索引没有 `**` 展开（`SL.md` 只允许 `**` 出现在字典字面量和函数调用）， 所以
 `_EX` 版本不需要 `kwargs`，跟 `CALL_EX` 不对称是故意的。
 
 ### 运算符
@@ -218,7 +218,7 @@ AST 已经保证在限内，`UNPACK_EX` 自己不用再防这一步。
 | `JUMP t`          | `…`    | `…`                         | 无条件跳                                                     |
 | `TO_BOOL`         | `… x`  | `… b`                       | `x` → `type(x).__bool__(x)` 的结果；不是 bool 则 `TypeError` |
 | `JUMP_IF_FALSE t` | `… b`  | `…`                         | 弹栈顶，`b` 假则跳                                           |
-| `LOAD_ITER`       | `… x`  | `… it`                      | 栈顶换成它的迭代器，不满足可迭代协议则 `TypeError`           |
+| `GET_ITER`        | `… x`  | `… it`                      | 栈顶换成它的迭代器，不满足可迭代协议则 `TypeError`           |
 | `FOR_ITER t`      | `… it` | `… it v` 或 `…`（耗尽，跳） | 取到下一个元素就压栈；耗尽则弹掉迭代器并跳 `t`               |
 
 **`JUMP_IF_FALSE` 只认 bool，自己不做真值转换**：真值转换单独拆成 `TO_BOOL`，调用方（codegen）保证 每次
@@ -319,8 +319,8 @@ end:
 
 ```
 x = e         : <e> COPY 1 STORE_NAME x
-x.a = e       : <x> <e> COPY 1 INSERT 3 STORE_ATTR a
-x[i] = e      : <x> <i> <e> COPY 1 INSERT 4 STORE_INDEX 1
+x.a = e       : <x> <e> COPY 1 INSERT 3 SET_ATTR a
+x[i] = e      : <x> <i> <e> COPY 1 INSERT 4 SET_INDEX 1
 (a, b) = e    : <e> COPY 1 UNPACK 2 STORE_NAME a STORE_NAME b
 ```
 
@@ -329,8 +329,8 @@ x[i] = e      : <x> <i> <e> COPY 1 INSERT 4 STORE_INDEX 1
 
 ```
 x op= e       : LOAD_NAME_STRICT x <e> BINARY_OP op COPY 1 STORE_NAME x
-x.a op= e     : <x> COPY 1 LOAD_ATTR a <e> BINARY_OP op COPY 1 INSERT 3 STORE_ATTR a
-x[i] op= e    : <x> <i> COPY 2 COPY 2 LOAD_INDEX 1 <e> BINARY_OP op COPY 1 INSERT 4 STORE_INDEX 1
+x.a op= e     : <x> COPY 1 GET_ATTR a <e> BINARY_OP op COPY 1 INSERT 3 SET_ATTR a
+x[i] op= e    : <x> <i> COPY 2 COPY 2 GET_INDEX 1 <e> BINARY_OP op COPY 1 INSERT 4 SET_INDEX 1
 ```
 
 **循环**：进循环前先压 **结果槽**（计数模式压 `0`，`$` 压空 list，`$$` 压空 dict），它整个循环期间待在
