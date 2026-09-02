@@ -106,11 +106,24 @@
 
 ## 栈约定
 
-- **每条表达式求值完，在操作数栈上恰好留一个值**。值恒为 `None` 的纯副作用构造（`del`/`global`/
-  `break`/`continue` 等）由 codegen 在指令后补一条 `LOAD_COMMON`（取 `None`，不是 `LOAD_CONST`——
-  `None` 走全局共享表，理由见「栈与常量」）。
-- 赋值类指令一律 **弹光**自己的操作数、不留值；需要赋值表达式的值时由 codegen 垫一份（见下面的模式）。
-- codegen 必须静态跟踪每个点的栈深：算栈深上限要用，`break`/`continue` 的裁栈也要用。
+**每个"编译一个表达式节点"的 codegen 函数都带一个 `want_value: bool` 参数，不变量是：编译完这个节点，
+操作数栈相对编译前恰好增加 `want_value ? 1 : 0`。** 不是无脑地"先都留一个值、外层不要再 `POP_TOP`"：
+`want_value=false` 时，节点自己判断能不能干脆不产出（赋值、`and`/`or`、`if` 缺分支要补的 `None`……
+这些"产出"本来就是 codegen 自己加的，不加就是了，省掉 `COPY`/`LOAD_COMMON` 这类垫值指令）；不能不产出 的（
+`CALL`、`BINARY_OP`、`LOAD_NAME` 这类——产出是指令本身固有的行为，没有"别产出"这个开关），编译完 照常补一条
+`POP_TOP`。判断"能不能不产出"的标准跟折叠器"被丢弃的部分本来就不会被求值就能丢"是同一条： 省掉的只能是
+codegen 自己额外加的垫值步骤，不能省掉任何有副作用/可能抛异常的求值本身。
+
+`want_value` 怎么往子节点传不是无脑原样转发，每种节点按自己的语义定：`Compound`/`Program` 的非末尾
+语句恒为 `false`，末尾语句/整体值继承外层给这个节点的 `want_value`；`for`/`while` 的 `init`/`inc`
+恒为 `false`（"对其求值实为跳过"）；`and`/`or` 左操作数要不要垫一份留到短路分支，取决于 **整个
+`and`/`or` 节点自己收到的** `want_value`，不是简单地也传 `true` 给左操作数（具体见下面 codegen 模式）。
+
+`del`/`global`/`break`/`continue` 这类值恒为 `None` 的纯副作用构造，`want_value=true` 时才补
+`LOAD_COMMON`（取 `None`，不是 `LOAD_CONST`——`None` 走全局共享表，理由见「栈与常量」），`false` 时 什么也不用补。
+
+codegen 必须按实际传下去的 `want_value` 静态跟踪每个点的栈深：算栈深上限要用，`break`/`continue`
+的裁栈也要用——两条路径（想要值/不想要值）算出来的深度不一样，不能只按其中一条算。
 
 ## 指令表
 
@@ -133,10 +146,19 @@
 常量表都存一份——叫 `LOAD_COMMON` 不叫 `LOAD_COMMON_CONST`，就是要跟 `LOAD_CONST` 的"这个常量属于 这份
 `Code`"区分开：两个指令的 `n` 是两张完全不同的表，不能混用下标。
 
-**`COPY` 和 `INSERT` 缺一不可**：`COPY` 只能在栈顶新增副本，不能把已经在栈上的项挪到更深的位置。
-赋值表达式的值、复合赋值、链式比较都需要把"后求值的操作数"的一份拷贝埋到"先求值的操作数"下面（求值
-顺序定死了谁先压栈，但消费指令要求的操作数顺序跟它不一致），这种下沉只能靠 `INSERT`（等价于旋转，
-`n=2` 时就是交换）完成，`COPY` 替代不了。
+**`COPY` 和 `INSERT` 缺一不可，`INSERT` 去不掉**：`COPY` 只能在栈顶新增副本，不能把已经在栈上的项
+挪到更深的位置；这种下沉只能靠 `INSERT`（等价于旋转，`n=2` 时就是交换）完成。三处真用到、且互相换不掉：
+
+1. 赋值表达式的值、复合赋值——`want_value=true` 时才用得上（见「栈约定」），`false` 时这两处直接不 需要
+   `INSERT`，这是 `want_value` 带来的实打实的省法，但省不掉 `INSERT` 这条指令本身，只是省掉它
+   在这两处的出现次数；
+2. 链式比较——不管整条链的值要不要，`b`（前一段的右操作数）都必须留到下一段当左操作数用，`want_value`
+   在这里帮不上忙；
+3. `for` 的 `$$` 收集模式——`UNPACK 2` 按"第一个元素在栈顶"的规则把 `(k, v)` 拆开，跟 `DICT_PUT` 要的
+   `d k v` 顺序正好差一次交换，得靠 `INSERT 2` 补上（见下面 codegen 模式）。
+
+第 2、3 条不是"赋值要留值"这种能靠 `want_value` 绕开的场景，是纯粹的操作数重排，`COPY` 替代不了，
+`INSERT` 留在指令集里是必要的。
 
 ### 名字
 
@@ -283,14 +305,25 @@ codegen 模式产出的字节码里，`import` 仍是关键字，SL 层没有任
 
 ## 关键构造的 codegen 模式
 
-**`and`/`or`**：只用一个消费型的 `JUMP_IF_FALSE`（不需要额外的 `JUMP_IF_TRUE`）。先复制一份操作数，
-拿这份副本走 `TO_BOOL` 再测试，原件全程留在栈上不受影响；短路时原件就是结果，不短路时先弹掉原件再求
-右操作数。`or` 只是把"假才跳"倒过来，用一条无条件 `JUMP` 换向即可，不需要"真才跳"的指令：
+**`and`/`or`**：只用一个消费型的 `JUMP_IF_FALSE`（不需要额外的 `JUMP_IF_TRUE`）。`want_value=true`
+时，先复制一份操作数，拿这份副本走 `TO_BOOL` 再测试，原件全程留在栈上不受影响；短路时原件就是结果，
+不短路时先弹掉原件再求右操作数（右操作数照样 `want_value=true`）：
 
 ```
-a and b : <a> COPY 1 TO_BOOL JUMP_IF_FALSE end POP_TOP <b> end:
-a or b  : <a> COPY 1 TO_BOOL JUMP_IF_FALSE rhs JUMP end   rhs: POP_TOP <b>   end:
+a and b (want=true) : <a> COPY 1 TO_BOOL JUMP_IF_FALSE end POP_TOP <b(want=true)> end:
+a or b  (want=true) : <a> COPY 1 TO_BOOL JUMP_IF_FALSE rhs JUMP end   rhs: POP_TOP <b(want=true)>   end:
 ```
+
+`want_value=false` 时不需要保留 `a` 本身——只要它的真值，不需要 `COPY`，`TO_BOOL` 直接吃掉 `a`；
+短路那条路径上什么也不用留（`a` 已经被 `TO_BOOL` 转换消耗掉，`JUMP_IF_FALSE` 又把转换结果弹了），右
+操作数继承外层的 `want_value=false`：
+
+```
+a and b (want=false) : <a> TO_BOOL JUMP_IF_FALSE end <b(want=false)> end:
+a or b  (want=false) : <a> TO_BOOL JUMP_IF_FALSE rhs JUMP end   rhs: <b(want=false)>   end:
+```
+
+`or` 只是把"假才跳"倒过来，用一条无条件 `JUMP` 换向即可，不需要"真才跳"的指令。
 
 **链式比较 `a < b < c < d`**（`is` 链同理，`op` 换成 `is`）。中间段把右操作数复制一份垫到左操作数下面
 再比较，`t`（比较结果）不保证已经是 bool（用户重载的比较方法可以返回别的类型），所以测试前先垫一条
@@ -315,34 +348,89 @@ end:
 末段（最后一个操作符）不需要保留操作数，直接 `BINARY_OP`。两个操作符（`a<b<c`）时只有一段中间段，
 三个以上重复中间那段即可。
 
-**赋值表达式的值**：先垫一份再让指令弹光。
+**赋值表达式的值**：`want_value=true` 才需要先垫一份再让指令弹光；`want_value=false`（赋值当一条
+独立语句用，最常见的情形）直接省掉 `COPY`/`INSERT`，`SET_ATTR`/`SET_INDEX` 本来就弹光不留值，正好 匹配：
 
 ```
-x = e         : <e> COPY 1 STORE_NAME x
-x.a = e       : <x> <e> COPY 1 INSERT 3 SET_ATTR a
-x[i] = e      : <x> <i> <e> COPY 1 INSERT 4 SET_INDEX 1
-(a, b) = e    : <e> COPY 1 UNPACK 2 STORE_NAME a STORE_NAME b
+x = e         (want=true)  : <e> COPY 1 STORE_NAME x
+x = e         (want=false) : <e> STORE_NAME x
+x.a = e       (want=true)  : <x> <e> COPY 1 INSERT 3 SET_ATTR a
+x.a = e       (want=false) : <x> <e> SET_ATTR a
+x[i] = e      (want=true)  : <x> <i> <e> COPY 1 INSERT 4 SET_INDEX 1
+x[i] = e      (want=false) : <x> <i> <e> SET_INDEX 1
+(a, b) = e    (want=true)  : <e> COPY 1 UNPACK 2 STORE_NAME a STORE_NAME b
+(a, b) = e    (want=false) : <e> UNPACK 2 STORE_NAME a STORE_NAME b
 ```
 
 **复合赋值**：目标只求值一次，靠 `COPY` 复制已在栈上的那份；多下标的用 `n+1` 条 `COPY n+1` 把 `obj`
-和各下标整体复制一遍。
+和各下标整体复制一遍。跟简单赋值一样，`want_value=false` 时省掉留值用的 `COPY`/`INSERT`：
 
 ```
-x op= e       : LOAD_NAME_STRICT x <e> BINARY_OP op COPY 1 STORE_NAME x
-x.a op= e     : <x> COPY 1 GET_ATTR a <e> BINARY_OP op COPY 1 INSERT 3 SET_ATTR a
-x[i] op= e    : <x> <i> COPY 2 COPY 2 GET_INDEX 1 <e> BINARY_OP op COPY 1 INSERT 4 SET_INDEX 1
+x op= e       (want=true)  : LOAD_NAME_STRICT x <e> BINARY_OP op COPY 1 STORE_NAME x
+x op= e       (want=false) : LOAD_NAME_STRICT x <e> BINARY_OP op STORE_NAME x
+x.a op= e     (want=true)  : <x> COPY 1 GET_ATTR a <e> BINARY_OP op COPY 1 INSERT 3 SET_ATTR a
+x.a op= e     (want=false) : <x> COPY 1 GET_ATTR a <e> BINARY_OP op SET_ATTR a
+x[i] op= e    (want=true)  : <x> <i> COPY 2 COPY 2 GET_INDEX 1 <e> BINARY_OP op COPY 1 INSERT 4 SET_INDEX 1
+x[i] op= e    (want=false) : <x> <i> COPY 2 COPY 2 GET_INDEX 1 <e> BINARY_OP op SET_INDEX 1
 ```
 
-**循环**：进循环前先压 **结果槽**（计数模式压 `0`，`$` 压空 list，`$$` 压空 dict），它整个循环期间待在
-栈上，循环结束时就是整条表达式的值。循环体求值后栈上多一个值，每轮收尾把它并进结果槽：
+**循环**：`for`/`while` 两种子模式（步进/迭代）各自的骨架，外加收集模式共用的收尾逻辑。
+
+进循环前先压 **结果槽**（计数模式压 `0`，`$` 压空 list，`$$` 压空 dict），它整个循环期间待在栈上，
+循环结束时就是整条表达式的值。循环体 `expr` 恒以 `want_value=true` 编译——不管外层要不要这个 `for`
+表达式整体的值，循环体每一轮的值都要被下面的收尾逻辑读一次（判真值/取出来 append/解构）。收尾完把
+这一轮的值从栈上换成对结果槽的更新：
 
 ```
 计数模式   : POP_TOP LOAD_CONST 1 BINARY_OP Add
 $         : LIST_APPEND
 $ *       : LIST_EXTEND
-$$        : UNPACK 2 INSERT 2 DICT_PUT
+$$        : UNPACK 2 INSERT 2 DICT_PUT   ; UNPACK 2 按"第一个元素在栈顶"给出 v k，跟 DICT_PUT 要的
+                                          ; d k v 差一次交换，INSERT 2 补上（这是 INSERT 去不掉的
+                                          ; 第三处，见「栈与常量」）
 $$ **     : DICT_MERGE
 ```
+
+**步进模式** `for ⟦collect⟧ (init; cond; inc) expr`：`init`/`inc` 恒 `want_value=false`（"对其求值
+实为跳过"，本来就不产出东西，不用刻意置 `false` 省什么）；`cond` 为空按 `SL.md` 视为 `True`，直接
+`JUMP loop` 不用测；`continue` 的目标是 `inc:`，不是 `loop:`——`SL.md` 明确"仍然会对 `inc` 求值进而 对
+`cond` 求值"：
+
+```
+<init>
+loop:
+  <cond> TO_BOOL JUMP_IF_FALSE end   ; cond 为空则省掉这行，直接落到 <expr>
+  <expr>                             ; want_value=true，留一个值
+  <收尾>                             ; 见上，并入结果槽
+inc:
+  <inc>
+  JUMP loop
+end:
+```
+
+**迭代模式** `for ⟦collect⟧ (iterable ⟦as lvalue⟧) expr`：`continue` 的目标直接是 `loop:`，没有
+`inc` 这一步。`FOR_ITER` 耗尽时自己弹掉迭代器，但 `break` 提前退出时迭代器还留在栈上——它是循环体
+在栈上多压出来的一层，`break` 裁栈时要算上它（codegen 本来就在静态跟踪栈深，这层不会漏，跟结果槽是
+同一件事的两个例子）：
+
+```
+<iterable> GET_ITER
+loop:
+  FOR_ITER end                  ; 取到元素压栈；耗尽则弹掉迭代器、跳 end
+  <写入 lvalue，弹光；没有 as 就 POP_TOP 丢弃>
+  <expr>                        ; want_value=true
+  <收尾>
+  JUMP loop
+end:
+```
+
+**`want_value=false` 时能不能连结果槽一起省掉**：计数模式能——它只是个纯计数，没有 `want_value` 时 连
+`LOAD_CONST 0`/每轮的 `POP_TOP LOAD_CONST 1 BINARY_OP Add` 都不用发，退化成一个不产值的裸循环。
+`$`/`$ *`/`$$`/`$$ **` 不能——`UNPACK`/`DICT_PUT`/`LIST_EXTEND`/`DICT_MERGE` 这些收尾指令本身可能抛
+`TypeError`/`ValueError`（个数不对、不可迭代、不满足映射协议……），跳过它们就是悄悄吞掉这些异常，
+不满足"只能省掉 codegen 自己加的垫值步骤，不能省掉有副作用/可能抛异常的求值"这条判断标准（「栈约定」
+一节）。收集模式的每一轮折叠必须照常做，只是最后要不要把整个结果槽的值留给外层，才由 `want_value`
+决定。
 
 **`break`/`continue` 不用运行期的块栈**：跳到哪、裁掉几层操作数栈，codegen 静态就知道，编译成"若干
 `POP_TOP` + `JUMP`"；中间隔着 `finally` 时在跳之前由内到外补 `CALL_FINALLY`。`return` 同理，只是不用
