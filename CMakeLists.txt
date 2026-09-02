@@ -215,12 +215,35 @@ target_precompile_headers(SL PRIVATE
 
 enable_testing()
 
-add_executable(SL_Cpp_Numeric_Tests
+add_executable(SL_Cpp_Numeric_BigInt_Tests
         # 被测代码
-        numeric/BigDec.cpp
-        numeric/BigDec.h
         numeric/BigInt.cpp
         numeric/BigInt.h
+
+        # 测试工具
+        test/numeric/main_test.cpp
+        test/numeric/01_bigint/test_utils.h
+
+        # 测试代码
+        test/numeric/01_bigint/construct_convert_test.cpp
+        test/numeric/01_bigint/arithmetic_test.cpp
+        test/numeric/01_bigint/bitwise_shift_test.cpp
+        test/numeric/01_bigint/identities_test.cpp
+        test/numeric/01_bigint/python_cross_test.cpp
+
+        # 生成的交叉验证表（不要手改）
+        test/numeric/big_int_cases.inc
+)
+sl_apply_test_target_options(SL_Cpp_Numeric_BigInt_Tests)
+target_link_libraries(SL_Cpp_Numeric_BigInt_Tests PRIVATE doctest::doctest)
+add_test(NAME SL_Cpp_Numeric_BigInt_Tests COMMAND SL_Cpp_Numeric_BigInt_Tests)
+
+add_executable(SL_Cpp_Numeric_BigDec_Tests
+        # 被测代码
+        numeric/BigInt.cpp
+        numeric/BigInt.h
+        numeric/BigDec.cpp
+        numeric/BigDec.h
         numeric/dec_math.cpp
         numeric/dec_math.h
         numeric/DecContext.cpp
@@ -228,28 +251,21 @@ add_executable(SL_Cpp_Numeric_Tests
 
         # 测试工具
         test/numeric/main_test.cpp
-        test/numeric/01_bigint/test_utils.h
         test/numeric/02_bigdec/test_utils.h
 
-        # 测试代码：BigInt
-        test/numeric/01_bigint/construct_convert_test.cpp
-        test/numeric/01_bigint/arithmetic_test.cpp
-        test/numeric/01_bigint/bitwise_shift_test.cpp
-        test/numeric/01_bigint/identities_test.cpp
-        test/numeric/01_bigint/python_cross_test.cpp
-        # 测试代码：BigDec
+        # 测试代码
         test/numeric/02_bigdec/construct_context_test.cpp
         test/numeric/02_bigdec/arithmetic_test.cpp
         test/numeric/02_bigdec/identities_pow_test.cpp
         test/numeric/02_bigdec/narrow_path_test.cpp
         test/numeric/02_bigdec/python_cross_test.cpp
+
         # 生成的交叉验证表（不要手改）
-        test/numeric/big_int_cases.inc
         test/numeric/big_dec_cases.inc
 )
-sl_apply_test_target_options(SL_Cpp_Numeric_Tests)
-target_link_libraries(SL_Cpp_Numeric_Tests PRIVATE doctest::doctest)
-add_test(NAME SL_Cpp_Numeric_Tests COMMAND SL_Cpp_Numeric_Tests)
+sl_apply_test_target_options(SL_Cpp_Numeric_BigDec_Tests)
+target_link_libraries(SL_Cpp_Numeric_BigDec_Tests PRIVATE doctest::doctest)
+add_test(NAME SL_Cpp_Numeric_BigDec_Tests COMMAND SL_Cpp_Numeric_BigDec_Tests)
 
 add_executable(SL_Cpp_Lexer_Tests
         # 被测代码
