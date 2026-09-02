@@ -180,6 +180,51 @@ std::optional<AstNodeOpBinary::OpType> assign_compound_to_binary(const TokenType
     }
 }
 
+// type 能不能作为一个表达式的开头，跟 Parser::parse_non_op() 那个 switch 里能处理的 case 一致
+bool can_start_expr(const TokenType type) {
+    using enum TokenType;
+
+    switch (type) {
+    case IDENTIFIER:
+    case LITERAL_NONE:
+    case LITERAL_TRUE:
+    case LITERAL_FALSE:
+    case LITERAL_G:
+    case LITERAL_L:
+    case LITERAL_ELLIPSIS:
+    case LITERAL_INT:
+    case LITERAL_DECIMAL:
+    case LITERAL_STR:
+    case SIGN_STAR:
+    case SIGN_DOUBLESTAR:
+    case SIGN_PLUS:
+    case SIGN_MINUS:
+    case SIGN_TILDE:
+    case KW_NOT:
+    case SIGN_LPAREN:
+    case SIGN_LBRACKET:
+    case SIGN_LBRACE:
+    case KW_DEL:
+    case KW_GLOBAL:
+    case KW_IMPORT:
+    case KW_EVAL:
+    case KW_IF:
+    case KW_FOR:
+    case KW_WHILE:
+    case KW_BREAK:
+    case KW_CONTINUE:
+    case KW_RETURN:
+    case KW_TRY:
+    case KW_RAISE:
+    case KW_FUNC:
+    case KW_CLASS:
+    case SIGN_AT:
+        return true;
+    default:
+        return false;
+    }
+}
+
 } // namespace
 
 const Token &Parser::peek() const {
@@ -938,14 +983,8 @@ AstNodePtr Parser::parse_while() {
 AstNodePtr Parser::parse_return() {
     const Position start_pos{peek().row, peek().col};
     expect(TokenType::KW_RETURN); // 消耗 'return'
-    // 若紧跟以下 token 则为裸 return（值为 None）
-    const bool bare{
-        check(TokenType::NEWLINE) || check(TokenType::SIGN_SEMICOLON) ||
-        check(TokenType::END_OF_FILE) || check(TokenType::SIGN_RBRACE) ||
-        check(TokenType::SIGN_RPAREN) || check(TokenType::SIGN_RBRACKET) ||
-        check(TokenType::SIGN_COMMA) || check(TokenType::KW_ELSE) || check(TokenType::KW_ELIF) ||
-        check(TokenType::KW_EXCEPT) || check(TokenType::KW_FINALLY)
-    };
+    // 裸 return（值为 None）
+    const bool bare{!can_start_expr(peek().type)};
     return std::make_unique<AstNodeReturn>(start_pos, bare ? nullptr : parse_expr());
 }
 

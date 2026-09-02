@@ -34,7 +34,7 @@
 |---|---|
 | `lexer/` | `Lexer.{h,cpp}`：分词器。`token.h` 定义 `Token`；`x_token_type.inc`/`x_keyword.inc`/`x_reservedword.inc` 是 X-macro 列表（见下）。 |
 | `parser/` | `Parser.{h,cpp}`：递归下降 + Pratt 解析器，产出 `parser/ast_nodes/` 里定义的 AST。 |
-| `parser/ast_nodes/` | AST 节点类型定义。`ast_nodes.h` 是汇总头（引入 `details/` 下所有节点头）；`x_ast_nodes.inc` 是全部节点类型的 X-macro 列表；`to_json.cpp` 实现每个节点的 `to_json_impl`（调试/测试用，不是语言语义的一部分）；`ast_visitor.h` 定义 `AstVisitor`/`AstConstVisitor`（会改树的、只读的两套）和 `SL_AST_NODE_ACCEPT` 宏，要遍历 AST 的类继承它们，靠 `accept` + `visit` 两次虚调用完成双分派——漏实现某个节点类型是编译期错误，不是运行期 assert。 |
+| `parser/ast_nodes/` | AST 节点类型定义。`ast_nodes.h` 是汇总头（引入 `details/` 下所有节点头）；`x_ast_nodes.inc` 是全部节点类型的 X-macro 列表；`ast_json_dumper.h`/`.cpp` 定义 `AstJsonDumper : public AstConstVisitor`，把 AST 序列化成 JSON（调试/测试用，不是语言语义的一部分），入口是静态方法 `AstJsonDumper::dump(node, include_pos)`，内部靠每个节点一个 `visit()` + `result_` 成员当通道完成（`.ai/notes/visitor-result-passing.md` 那个模式）；`ast_visitor.h` 定义 `AstVisitor`/`AstConstVisitor`（会改树的、只读的两套）和 `SL_AST_NODE_ACCEPT` 宏，要遍历 AST 的类继承它们，靠 `accept` + `visit` 两次虚调用完成双分派——漏实现某个节点类型是编译期错误，不是运行期 assert。 |
 | `parser/ast_nodes/details/` | 具体节点定义，按语法范畴分文件（`ast_node_class.h`、`ast_node_control_flows.h`、`ast_node_func.h`、`ast_node_import.h`、`ast_node_literals.h`、`ast_node_multi_exprs.h`（Program/Compound）、`ast_node_operators.h`、`ast_node_postfix.h`（call/index/attr）、`ast_node_var.h`（del/global/标识符）、`ast_node_decorators.h`、`ast_node_eval.h`）。`ast_node_misc.h` 放**不是** `AstNode`、但被多个节点类型共用的小聚合体（`OneCapture`、`OneKwArg`、`CallArgs`）。唯一的 `.cpp` 是 `ast_node_literals.cpp`：int/decimal 字面量的构造函数在这里校验 `raw_` 的形状（纯数字/前导零/科学计数法后缀/可选的前导负号），违反即 `InternalError`——常量折叠造出来的字面量节点不会再经过 `SemanticChecker`，只有构造函数拦得住。 |
 | `analyzer/` | `Analyzer.{h,cpp}`：入口，依次跑 `SemanticChecker` 和 `ExprFolder`。 |
 | `analyzer/semantic_checker/` | `SemanticChecker.{h,cpp}`（`AstConstVisitor` 的实现）：语义检查（作用域规则、lvalue 合法性、`*`/`**` 位置合法性、func/class 约束、AST 结构防御性校验……），只读不改 AST，违规抛 `SyntaxError`（真实语义错误）或 `InternalError`（AST 结构本身违反 Parser 的保证，代表实现自己有 bug）。单个节点自己字段的合法性不归这里，归节点构造函数（见 `parser/ast_nodes/details/`）。 |
@@ -56,13 +56,13 @@
   节点自己的 `accept` 挑中对应的 `visit`），不是 `dynamic_cast` 瀑布。**加一个新节点类型，必须在
   这里加一行**——加完之后漏实现哪个 `visit` 是**编译期**报错（纯虚函数没覆写），不会拖到运行期。
 - 新节点类型还需要：在 `parser/ast_nodes/details/` 某个合适的文件里定义结构体（继承 `AstNode`，
-  类体里写一行 `SL_AST_NODE_ACCEPT` 宏，私有 `to_json_impl` 覆写），并把该头文件加进 `ast_nodes.h`；
-  `to_json.cpp` 里实现 `to_json_impl`；`SemanticChecker.h`/`.cpp` 和 `ExprFolder.h`/`.cpp` 里各加
+  类体里写一行 `SL_AST_NODE_ACCEPT` 宏），并把该头文件加进 `ast_nodes.h`；`ast_json_dumper.cpp` 里加
+  对应的 `visit(...) override`；`SemanticChecker.h`/`.cpp` 和 `ExprFolder.h`/`.cpp` 里也各加
   对应的 `visit(...) override`（哪怕只是递归子节点、什么都不折）。
 - **给已有节点加一个新的子节点槽位（`AstNodePtr` 字段），编译器一个字都不会提醒**——这跟上面
   "加新节点类型漏了 `visit` 会编译期报错"是两回事：X-macro 只保证每个**类型**都有 `visit`，管不到
-  某个 `visit` 里面漏读了哪个**字段**。加完新槽位必须手动过一遍三个消费方：`to_json.cpp` 的
-  `to_json_impl`、`SemanticChecker` 的 `visit`、`ExprFolder` 的 `visit`（外加对应的测试）。踩过：
+  某个 `visit` 里面漏读了哪个**字段**。加完新槽位必须手动过一遍三个消费方：`ast_json_dumper.cpp` 的
+  `visit`、`SemanticChecker` 的 `visit`、`ExprFolder` 的 `visit`（外加对应的测试）。踩过：
   `as` 那次给 `AstNodeForIter` 和 `AstNodeTry::AstNodeExceptAndExpr` 各加了个 `target_`，前者三处
   都跟上了，后者在 `ExprFolder` 里漏了，于是 `except (E as a[1 + 1])` 的下标一直没被折叠，四套
   测试全绿也照样没发现（测试同样漏写了这个槽位）。
@@ -82,8 +82,8 @@
   节点各自持有一份 `args_` 成员，不重复三份字段——`OneKwArg`/`OneCapture` 已经是这个模式。注意这
   只是**数据形状**共用，不是给这三个节点类型加公共基类：`AstVisitor`/`AstConstVisitor` 由
   `x_ast_nodes.inc` 生成，每个具体节点类型各自一个 `visit()` 重载，加基类砍不掉这层重复，真正能砍的
-  是 `SemanticChecker::check_call_args`/`ExprFolder::fold_call_args`/`to_json.cpp` 的
-  `call_args_to_json` 这几个吃 `CallArgs` 的共享辅助函数。
+  是 `SemanticChecker::check_call_args`/`ExprFolder::fold_call_args`/`AstJsonDumper::dump_call_args`
+  这几个吃 `CallArgs` 的共享辅助函数。
 - **折叠器（`StaticEvaler`）不依赖 `numeric/` 的高精度库**，int 折叠走 `int64_t`：溢出/装不下就
   不折，这是保守但正确，不追求任意精度。decimal 一律不折——算术、比较、真值都不折，因为它的值依赖
   运行期可变的 `prec`/`rounding`，编译期算出来的东西不保证跟运行期一致。类注释里那张「哪些类型、
@@ -92,9 +92,11 @@
   不是正确性边界），再走同一条 `int64_t` 路径。判定函数（`truthy`/`literal_equal`）返回
   `std::optional`，`nullopt` 是「判不了」，调用方必须当「不折」处理——**不能给它一个默认值**，
   那会让死分支消除挑错分支。详见 .ai/context.md「折叠器数值折叠」一节。
-- **`to_json()` 是 NVI 模式**：基类 `to_json(include_pos=false)` 非虚、转发给各节点私有的
-  `to_json_impl(include_pos)`（纯虚，无默认值）——虚函数不能带默认参数（clang-tidy 会拦，且这条规则
-  本身是对的：默认值在虚函数场景下按调用点静态类型决定，容易产生跟直觉不符的结果）。
+- **AST 转 JSON 走独立的 visitor `AstJsonDumper`，不是节点自带的 `to_json()`**：`AstNode` 基类没有
+  序列化相关的成员，`AstJsonDumper : public AstConstVisitor`（`ast_json_dumper.h`/`.cpp`）像
+  `SemanticChecker`/`ExprFolder` 一样按 X-macro 展开一个节点一个 `visit() override`，用私有成员
+  `result_` 当产出通道（`.ai/notes/visitor-result-passing.md` 的模式），入口是静态方法
+  `AstJsonDumper::dump(node, include_pos)`。
 
 ## SemanticChecker 与 ExprFolder 的职责边界
 
@@ -135,15 +137,16 @@ Python 内置的 int）产出，对应的 `02_bigdec/python_cross_test.cpp` /
 自己在 `**` 和 `exp` 上就有已知分歧（见 [context.md](context.md)）。这条规则是防呆用的：分歧点随
 参数漂移，往池子里加一档 `Emin`/舍入方式就可能生成出一张永远过不了的表。
 
-提交进仓库的这份表是**按跑得动来配的**：`SL_Cpp_Numeric_Tests` 里超越函数和 `**` 那两个用例合起来
-就占了十几秒（BigDec 底下的 BigInt 是朴素算法，一次 `exp`/`ln` 要做几十次大数乘除），整个 ctest
-现在约 28 秒。要更大覆盖别往表里堆，用倍数参数临时生成一份跑完再换回来——40 倍规模
+提交进仓库的这份表是**按跑得动来配的**：`SL_Cpp_Numeric_BigDec_Tests` 里超越函数和 `**` 那两个用例
+合起来就占了十几秒（BigDec 底下的 BigInt 是朴素算法，一次 `exp`/`ln` 要做几十次大数乘除），整个
+ctest 现在约 28 秒。要更大覆盖别往表里堆，用倍数参数临时生成一份跑完再换回来——40 倍规模
 （约 83 万个断言）跑过，全过。单条最贵的手写用例是 `log10_digits` 那个（约 1.6 秒，见
 [context.md](context.md) 里"覆盖率驱动补的窄路径"一节），嫌慢时它是第一个可以砍的。
 
-四个测试可执行目标：`SL_Cpp_Numeric_Tests`、`SL_Cpp_Lexer_Tests`、`SL_Cpp_Parser_Tests`、
-`SL_Cpp_Analyzer_Tests`（后者同时覆盖 `semantic_checker/` 和 `expr_folder/` 两个子系统）。怎么构建/
-跑测试见 [notes/build-and-test.md](notes/build-and-test.md)。
+五个测试可执行目标：`SL_Cpp_Numeric_BigInt_Tests`、`SL_Cpp_Numeric_BigDec_Tests`、
+`SL_Cpp_Lexer_Tests`、`SL_Cpp_Parser_Tests`、`SL_Cpp_Analyzer_Tests`（最后这个同时覆盖
+`semantic_checker/` 和 `expr_folder/` 两个子系统）。怎么构建/跑测试见
+[notes/build-and-test.md](notes/build-and-test.md)。
 
 `test/doc/` 是 `build_doc.py` 从 `SL.md` 生成的带锚点版本（`SL_linked.md`/`.html`），生成产物，
 不是手写测试，且经常滞后于 `SL.md` 本身（除非用户明确要求，不需要主动重新生成）。

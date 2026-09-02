@@ -73,6 +73,29 @@ TEST_SUITE("return") {
         );
     }
 
+    TEST_CASE("裸 return 出现在字典键 / 形参默认值语境时也能正确识别为裸 return") {
+        // return 作为字典键，紧跟的 ':' 不是表达式的合法开头
+        CHECK(
+            parse_json(U"{return: 1}") ==
+            nlohmann::json{
+                {"type", "LiteralDict"},
+                {"items",
+                 nlohmann::json::array(
+                     {{{"key", {{"type", "Return"}, {"value", nullptr}}}, {"value", int_lit("1")}}}
+                 )}
+            }
+        );
+        // return 作为形参类型注解，紧跟的 '=' 不是表达式的合法开头
+        CHECK(
+            parse_json(U"func f(x: return = 1) {}")["params"]["positional"] ==
+            nlohmann::json::array(
+                {{{"identifier", "x"},
+                  {"type_annotation", {{"type", "Return"}, {"value", nullptr}}},
+                  {"default_value", int_lit("1")}}}
+            )
+        );
+    }
+
     // 裸 return 可以直接当 if/try 某个分支的 body，此时后续子句的引导关键字就是它的右边界。
     // 这几个关键字不在终止符集合里的话，return 会拿它们去 parse_expr()，报出跟真实错因无关的
     // "unexpected token 'else'" 之类；换行写法因为撞上 NEWLINE 会碰巧躲过去，一行内写则必炸。

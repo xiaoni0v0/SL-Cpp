@@ -99,7 +99,7 @@ class StaticEvaler final {
     // 二元 & ^ | << >>
     [[nodiscard]] static AstNodePtr fold_bitwise(const AstNodeOpBinary &node);
 
-    // and or。折叠的时候不短路
+    // and/or。按短路语义只看左操作数
     [[nodiscard]] static AstNodePtr fold_and_or(AstNodeOpBinary &node);
 
     // —————————— 判断 ——————————
