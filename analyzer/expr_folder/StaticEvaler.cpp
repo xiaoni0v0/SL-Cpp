@@ -250,16 +250,21 @@ AstNodePtr StaticEvaler::fold_for_cond(AstNodeForCond &node) {
     if (const std::optional cond_truthy{truthy(*node.cond_)}; !cond_truthy || *cond_truthy)
         return nullptr;
 
-    // $$ 一轮没跑的值是个空 dict，不折
-    if (node.collect_.container_ == CollectMark::Container::Dict) return nullptr;
-
-    AstNodePtr result{
-        node.collect_.container_ == CollectMark::Container::List
-            ? static_cast<AstNodePtr>(
-                  std::make_unique<AstNodeLiteralList>(node.pos_, std::vector<AstNodePtr>{})
-              )
-            : static_cast<AstNodePtr>(std::make_unique<AstNodeLiteralInt>(node.pos_, U"0"))
-    };
+    // 一轮都没跑时各收集模式的退化值
+    AstNodePtr result;
+    switch (node.collect_.container_) {
+    case CollectMark::Container::None:
+        result = std::make_unique<AstNodeLiteralInt>(node.pos_, U"0");
+        break;
+    case CollectMark::Container::List:
+        result = std::make_unique<AstNodeLiteralList>(node.pos_, std::vector<AstNodePtr>{});
+        break;
+    case CollectMark::Container::Dict:
+        result = std::make_unique<AstNodeLiteralDict>(
+            node.pos_, std::vector<std::pair<AstNodePtr, AstNodePtr>>{}
+        );
+        break;
+    }
     if (!node.init_) return result;
 
     std::vector<AstNodePtr> exprs;
@@ -466,24 +471,22 @@ AstNodePtr StaticEvaler::fold_bitwise(const AstNodeOpBinary &node) {
     // 只接 int
     if (!is_literal_pure(l) || !is_literal_pure(r) || !is_int(l) || !is_int(r)) return nullptr;
 
-    const std::optional lv{node_to_int64(l)};
+    // 右操作数装不下 int64_t 时各运算符的处置并不一致，所以这里只取值不退出
+    const std::optional lv{node_to_int64(l)}, rv{node_to_int64(r)};
     if (!lv) return nullptr; // 左操作数装不下 int64_t，一律不折
 
     switch (node.op_) {
     // & | ^ 两侧都已经是 int64_t，结果不可能超出 int64_t，不会溢出
     case BitAnd:
     case BitOr:
-    case BitXor: {
-        const std::optional rv{node_to_int64(r)};
+    case BitXor:
         if (!rv) return nullptr;
         if (node.op_ == BitAnd) return make_int(node.pos_, *lv & *rv);
         if (node.op_ == BitOr) return make_int(node.pos_, *lv | *rv);
         return make_int(node.pos_, *lv ^ *rv);
-    }
 
     case LShift: {
         // 负移位量的语义还没拍板（见 .ai/context.md），不折，留给运行期
-        const std::optional rv{node_to_int64(r)};
         if (!rv || *rv < 0) return nullptr;
         if (*lv == 0) return make_int(node.pos_, 0); // 0 左移多少位都是 0，避免下面循环跑到天荒地老
         // a << k == 反复乘 2，一旦溢出立刻退出——不管 k 有多大，非零值最多翻 63 次倍就必然溢出
@@ -495,17 +498,15 @@ AstNodePtr StaticEvaler::fold_bitwise(const AstNodeOpBinary &node) {
         }
         return make_int(node.pos_, result);
     }
-    case RShift: {
+    case RShift:
         // 负移位量语义未定（同上），不折——这一步只需要知道符号，不需要移位量真的能塞进 int64_t
         if (is_negative_int_literal(r)) return nullptr;
-        const std::optional rv{node_to_int64(r)};
         // 移位量装不下 int64_t（且已确认非负）时，结果只会是 0 或 -1（算术右移补符号位），
         // 不需要真的知道移位量具体多大就能给出来
         if (!rv) return make_int(node.pos_, *lv < 0 ? -1 : 0);
         // 移位量达到/超过 int64_t 位宽时同理，直接给出来，避免对 >> 传入一个 C++ 认定为 UB 的位移量
         if (*rv >= 63) return make_int(node.pos_, *lv < 0 ? -1 : 0);
         return make_int(node.pos_, *lv >> *rv); // 有符号右移是算术移位，等价于 floor(x / 2^k)
-    }
 
     default:
         return nullptr;

@@ -207,10 +207,11 @@ Python 内置的 int）产出，对应的 `02_bigdec/python_cross_test.cpp` /
   的值由 `return`（或 `None`）决定，跟"最后一条表达式的值"无关（这点跟 `AstNodeCompound` 不同，
   `Compound` 的值确实是最后一条，`fold_compound` 保留最后一条是对的、两者不能类比）。
 - **`for`/`while` 死分支消除**：`init_` 不管 `cond` 折出来是什么都会先无条件求值一次，折叠时不能
-  丢掉这个副作用——`init_` 非空时结果包成 `Compound{init_, 退化值}`（不带 `$` 退化成 `0`，`$` 退化
-  成 `[]`，`$$`/`$$ **` 退化成空 dict、没有对应字面量写不出来，所以这两种收集模式的 `for`/`while`
-  死循环消除干脆不折）。`cond` 折成确定 `True` 时刻意不折——只能确定"不会提前退出"，不像 `if` 折
-  `True` 那样能确定具体是哪个分支、有"换成什么"的答案。
+  丢掉这个副作用——`init_` 非空时结果包成 `Compound{init_, 退化值}`（不带 `$` 退化成 `0`，`$`/`$ *`
+  退化成 `[]`，`$$`/`$$ **` 退化成空 dict）。空 dict 在**源码**里写不出来（`{}` 归复合表达式），但
+  折叠器产出的是 AST 节点而不是源码，`AstNodeLiteralDict` 的 `items_` 本来就可空——"折叠结果必须是
+  parser 也能产出的形状"不是本项目的约束，别把它当理由。`cond` 折成确定 `True` 时刻意不折——只能
+  确定"不会提前退出"，不像 `if` 折 `True` 那样能确定具体是哪个分支、有"换成什么"的答案。
 - **`check`（`SemanticChecker`）必须在 `fold`（`ExprFolder`）之前跑，不能反过来**：反例
   `f(True and *args)`，check 先跑时 `*args` 作为 `and` 的右操作数永远在 `can_star=false` 语境下
   被检查、正确报错；但如果 fold 先跑，死分支消除会把 `*args` 从 `and` 表达式里挪出来直接顶到调用

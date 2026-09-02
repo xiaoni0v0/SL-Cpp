@@ -55,29 +55,27 @@ TEST_SUITE("StaticEvaler 死分支消除") {
         CHECK(fold_json(U"while $ * (False) 1") == empty_list);
     }
 
-    TEST_CASE("$$ 一次都不会跑也不折——空 dict 写不出字面量，折不出等价的节点") {
+    TEST_CASE("$$ 一次都不会跑：折成空 dict——源码写不出空字典字面量，但折叠器造得出这个节点") {
+        const auto empty_dict =
+            nlohmann::json{{"type", "LiteralDict"}, {"items", nlohmann::json::array()}};
+
+        CHECK(fold_json(U"while $$ (False) 1") == empty_dict);
+        // 展开与否不影响结果容器，$$ ** 一样折成空字典
+        CHECK(fold_json(U"while $$ ** (False) 1") == empty_dict);
+        // init 的副作用照样保留
         CHECK(
-            fold_json(U"while $$ (False) 1") == nlohmann::json{
-                                                    {"type", "ForCond"},
-                                                    {"collect", "$$"},
-                                                    {"init", nullptr},
-                                                    {"cond", bool_lit(false)},
-                                                    {"inc", nullptr},
-                                                    {"body", int_lit("1")}
-                                                }
+            fold_json(U"for $$ (x = 1 + 1; False;) 1") ==
+            nlohmann::json{
+                {"type", "Compound"},
+                {"exprs",
+                 nlohmann::json::array(
+                     {nlohmann::json{
+                          {"type", "Assign"}, {"target", ident("x")}, {"value", int_lit("2")}
+                      },
+                      empty_dict}
+                 )}
+            }
         );
-        CHECK(
-            fold_json(U"while $$ ** (False) 1") == nlohmann::json{
-                                                       {"type", "ForCond"},
-                                                       {"collect", "$$ **"},
-                                                       {"init", nullptr},
-                                                       {"cond", bool_lit(false)},
-                                                       {"inc", nullptr},
-                                                       {"body", int_lit("1")}
-                                                   }
-        );
-        // 不折整个节点，但 init 这种子表达式该折还是照折
-        CHECK(fold_json(U"for $$ (x = 1 + 1; False;) 1")["init"]["value"] == int_lit("2"));
     }
 
     TEST_CASE("for 的 cond 是 False：init 无论如何都会先无条件求值一次，副作用必须保留") {
