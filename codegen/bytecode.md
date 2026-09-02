@@ -107,7 +107,8 @@
 ## 栈约定
 
 - **每条表达式求值完，在操作数栈上恰好留一个值**。值恒为 `None` 的纯副作用构造（`del`/`global`/
-  `break`/`continue` 等）由 codegen 在指令后补一条 `LOAD_CONST None`。
+  `break`/`continue` 等）由 codegen 在指令后补一条 `LOAD_COMMON`（取 `None`，不是 `LOAD_CONST`——
+  `None` 走全局共享表，理由见「栈与常量」）。
 - 赋值类指令一律 **弹光**自己的操作数、不留值；需要赋值表达式的值时由 codegen 垫一份（见下面的模式）。
 - codegen 必须静态跟踪每个点的栈深：算栈深上限要用，`break`/`continue` 的裁栈也要用。
 
@@ -125,6 +126,12 @@
 | `COPY i`         | `… xᵢ … x₁`    | `… xᵢ … x₁ xᵢ` | 把从栈顶数第 `i` 项（`i=1` 即栈顶）复制一份压栈         |
 | `INSERT n`       | `… xₙ … x₂ x₁` | `… x₁ xₙ … x₂` | 弹出栈顶，插回到深度 `n` 的位置（`n=2` 即交换栈顶两项） |
 | `LOAD_CONST n`   | `…`            | `… c`          | 压常量表第 `n` 项                                       |
+| `LOAD_COMMON n`  | `…`            | `… v`          | 压全局共享表第 `n` 项，见下                             |
+
+`LOAD_COMMON` 取的是一张 **全局共享、不属于任何单个 `Code`** 的小表：`None`/`True`/`False`、`import`
+调用形态背后的函数对象（见「调用与建立」）……这些值被极多份 `Code` 反复用到，没必要每份 `Code` 自己的
+常量表都存一份——叫 `LOAD_COMMON` 不叫 `LOAD_COMMON_CONST`，就是要跟 `LOAD_CONST` 的"这个常量属于 这份
+`Code`"区分开：两个指令的 `n` 是两张完全不同的表，不能混用下标。
 
 **`COPY` 和 `INSERT` 缺一不可**：`COPY` 只能在栈顶新增副本，不能把已经在栈上的项挪到更深的位置。
 赋值表达式的值、复合赋值、链式比较都需要把"后求值的操作数"的一份拷贝埋到"先求值的操作数"下面（求值
@@ -170,10 +177,12 @@
 | `BINARY_OP op` | `… x y` | `… v` | `x y` → 结果。`op` 选全部二元运算符，含六个比较、`in`、`is`、`..`。正向/反向方法、`__op_cmp__` 回退、`==`/`!=` 的身份兜底全在这条指令的实现里 |
 
 `not`、`is`（含 `is` 链）、六个比较（含链式比较）本身仍然各自是一次 `UNARY_OP`/`BINARY_OP`——"链"
-不是新语义，只是同一个二元运算符被连续应用多次。真正不落在这两条指令上的只有 `and`/`or`：它们不产出
-"某个运算符的结果"，而是"保留左值还是求右值"的控制流分支，走 `JUMP_IF_FALSE` 短路跳转，见下面 codegen
-模式；链式比较/`is` 链要的只是"把同一个操作数喂给两次 `BINARY_OP`"，靠 `COPY`/`INSERT` 拼接，同样见 下面
-codegen 模式。
+不是新语义，只是同一个二元运算符被连续应用多次。`not` 是 `UNARY_OP` 里唯一 **不经过 MRO 分派**的 选择项：
+`SL.md` 明确 `not` 不可重载，它的行为固定是"对操作数取真值（这一步可能因为 `__bool__` 被 重载而回调 SL
+代码）然后取反"，不需要像 `+x`/`-x`/`~x`/`x?`/`x!` 那样先查 `__op_*__`。真正不落在
+`UNARY_OP`/`BINARY_OP` 这两条指令上的只有 `and`/`or`：它们不产出"某个运算符的结果"，而是"保留左值
+还是求右值"的控制流分支，走 `JUMP_IF_FALSE` 短路跳转，见下面 codegen 模式；链式比较/`is` 链要的只是
+"把同一个操作数喂给两次 `BINARY_OP`"，靠 `COPY`/`INSERT` 拼接，同样见下面 codegen 模式。
 
 ### 容器
 
@@ -195,17 +204,33 @@ append/extend/put/merge，元组最后补 `LIST_TO_TUPLE`；收集模式的 `for
 **低 8 位**是星号前的项数——跟本指令自己那一字节参数的位置对应：`EXTENDED_ARG (星号后项数)` 在前，
 `UNPACK_EX (星号前项数)` 在后，累积规则见前面「指令编码」一节，两半正好各占一字节。例如
 `(a, b, *rest, c) = e`（星号前 2 项、星号后 1 项）编译成 `EXTENDED_ARG 1` `UNPACK_EX 2`，累积值
-`a = (1 << 8) | 2`。这个编码天然只支持每侧至多 255 项——照抄 Python `UNPACK_EX` 的现成方案，接受这个
-上限：单条解构写一百多个显式名字本来就不是正常代码。
+`a = (1 << 8) | 2`。这个编码天然只支持每侧至多 255 项。 **这条上限必须在语义检查阶段就拦下来，不能留到
+codegen 发现 参数打包不进两个字节才出错**：`SemanticChecker` 要给带 `*lv` 的解构加一条检查，星号前、星号后的项数
+任一超过 255 就当场 `SyntaxError`，`SL.md` 的解构/lvalue 一节要补一句。这不是内部实现细节，是会拒绝
+用户代码的真实语言限制——CPython 对 star-unpacking 就是这么处理的（超限直接 `SyntaxError:
+too many expressions in star-unpacking assignment`），不是运行时才发现装不下的静默 bug。 codegen 到手的
+AST 已经保证在限内，`UNPACK_EX` 自己不用再防这一步。
 
 ### 跳转
 
-| 指令              | 前     | 后                          | 行为                                                                |
-|-------------------|--------|-----------------------------|---------------------------------------------------------------------|
-| `JUMP t`          | `…`    | `…`                         | 无条件跳                                                            |
-| `JUMP_IF_FALSE t` | `… x`  | `…`                         | 弹栈顶，真值为假则跳。真值即 `__bool__`，返回非 bool 是 `TypeError` |
-| `LOAD_ITER`       | `… x`  | `… it`                      | 栈顶换成它的迭代器，不满足可迭代协议则 `TypeError`                  |
-| `FOR_ITER t`      | `… it` | `… it v` 或 `…`（耗尽，跳） | 取到下一个元素就压栈；耗尽则弹掉迭代器并跳 `t`                      |
+| 指令              | 前     | 后                          | 行为                                                         |
+|-------------------|--------|-----------------------------|--------------------------------------------------------------|
+| `JUMP t`          | `…`    | `…`                         | 无条件跳                                                     |
+| `TO_BOOL`         | `… x`  | `… b`                       | `x` → `type(x).__bool__(x)` 的结果；不是 bool 则 `TypeError` |
+| `JUMP_IF_FALSE t` | `… b`  | `…`                         | 弹栈顶，`b` 假则跳                                           |
+| `LOAD_ITER`       | `… x`  | `… it`                      | 栈顶换成它的迭代器，不满足可迭代协议则 `TypeError`           |
+| `FOR_ITER t`      | `… it` | `… it v` 或 `…`（耗尽，跳） | 取到下一个元素就压栈；耗尽则弹掉迭代器并跳 `t`               |
+
+**`JUMP_IF_FALSE` 只认 bool，自己不做真值转换**：真值转换单独拆成 `TO_BOOL`，调用方（codegen）保证 每次
+`JUMP_IF_FALSE` 之前操作数已经是 bool。这不是随意拆分——`if`/`while`/`for` 的 `cond`、`and`/`or`、
+链式比较的每一段，一律 **先 `TO_BOOL` 再 `JUMP_IF_FALSE`**，因为它们测的东西不一定已经是 bool （`SL.md`
+只规定链式比较测"`t` 的真值"，没规定比较运算符必须返回 bool；用户重载的 `__op_lt__` 等完全 可以返回别的类型）。
+`CHECK_EXC_MATCH` 是唯一的例外：`isinstance` 是解释器内置判定，不走用户重载， 结果恒为真 bool，它后面的
+`JUMP_IF_FALSE` 不需要先垫一条 `TO_BOOL`。
+
+**不需要 `JUMP_IF_TRUE`**：`__bool__` 分派只应该发生一次，`JUMP_IF_FALSE`/假想中的 `JUMP_IF_TRUE`
+无论哪个都只会调用一次，两者在这一点上完全对称，没有效率差异。唯一的差别是"该往哪边加一条无条件
+`JUMP`"，而这已经是 `or` 的 codegen 模式自己在做的事（见下）——多一条指令换来少一种指令，指令集更小。
 
 ### 异常与 finally
 
@@ -235,37 +260,51 @@ append/extend/put/merge，元组最后补 `LIST_TO_TUPLE`；收集模式的 `for
 | `MAKE_FUNC`    | `… captures params ret_type doc code name` | `… f`      | 弹 6 项建函数对象，见下                                                                                                          |
 | `MAKE_CLASS`   | `… captures bases doc code name`           | `… c`      | 弹 5 项，新建局部帧执行类体，见下                                                                                                |
 | `RETURN_VALUE` | `… v`                                      | ——（弹帧） | 弹本帧栈顶作为值，弹帧，按 `owner_` 的种类收尾                                                                                   |
-| `IMPORT_KW n`  | `…`                                        | `… m`      | 关键字形态 `import a.b.c`：名字表第 `n` 项是完整点分名，压 `NativeFrame` 跑加载算法，最终压入**第一段**的模块对象                |
-| `IMPORT_CALL`  | `… args kwargs`                            | `… m`      | 调用形态：实参绑定同普通调用，压 `NativeFrame` 跑加载算法，最终压入**最后一段**的模块对象                                        |
+| `IMPORT n`     | `…`                                        | `… m`      | 关键字形态 `import a.b.c`：名字表第 `n` 项是完整点分名，压 `NativeFrame` 跑加载算法，最终压入**第一段**的模块对象                |
 | `EVAL`         | `… args kwargs`                            | `… v`      | 绑出 `code`（绑定失败 `DispatchError`，非 str 则 `TypeError`），解析成恰好一条表达式（否则 `SyntaxError`），编译，压 `EvalFrame` |
 
 实参与形参的绑定算法（槽位填充、`*args`/`**kwargs` 收集、类型检查、函数族逐个试）不摊成字节码，在
-`CALL` 系列指令的实现里。`IMPORT_CALL`/`EVAL` 固定走打包好的 `args`/`kwargs` 形状，不配快路径。
-`EVAL` 编译 `code` 时交给语义检查的 `in_local_scope` 取 `target_.globals_frame_ != target_`。
+`CALL` 系列指令的实现里。`EVAL` 固定走打包好的 `args`/`kwargs` 形状，不配快路径。`EVAL` 编译 `code`
+时交给语义检查的 `in_local_scope` 取 `target_.globals_frame_ != target_`。
+
+**没有 `IMPORT_CALL`**：调用形态 `import(expr, kwarg=v, ...)` 的实参形状本来就跟普通调用完全一致 （
+`SL.md` 自己也是这么定义的），没必要再写一套专用的实参绑定逻辑——直接把加载算法包成一个内部函数 对象，
+`LOAD_COMMON` 取它、后面接一次普通 `CALL`/`CALL_KW`/`CALL_EX`，复用通用调用的绑定机制。这个 函数对象只出现在这一种
+codegen 模式产出的字节码里，`import` 仍是关键字，SL 层没有任何办法引用到它、 更不能把它存起来传来传去。
+
+**`eval` 不能走同一条路，即使它的实参形状同样"跟普通调用一致"**：`import` 的调用形态在参数绑定完
+之后才开始干活（加载算法），这一步完全可以塞进一个普通的内置函数实现；`eval` 不同，它必须先拿到
+`code` 这个字符串、现场解析+编译出一份新 `Code`（可能 `SyntaxError`），而编译这一步需要的
+`in_local_scope` 来自 **发起调用的这一帧**——这个信息在参数绑定阶段根本不存在，`CALL` 的通用流程
+完全没有"先编译一份新 `Code` 再决定压哪种帧"这个步骤，硬塞等于给 `CALL` 开洞。更根本的是：`eval`
+关键字化的原因就是让"这份 `Code` 里有没有 `eval` 点"变成纯静态可判定的性质（见 `.ai/context.md`），
+为将来没有 `eval` 的函数把局部变量装进槽位铺路——如果 `eval` 也编译成 `LOAD_COMMON` + `CALL`，
+字节码层面就再分不清一次普通调用和一次 `eval`，直接废掉这条前提。`EVAL` 必须留着专用指令。
 
 ## 关键构造的 codegen 模式
 
-**`and`/`or`**：只用一个消费型的 `JUMP_IF_FALSE`（不需要额外的 `JUMP_IF_TRUE`）。先复制一份操作数
-去测试，测试用的那份被 `JUMP_IF_FALSE` 吃掉，原件留在栈上；短路时原件就是结果，不短路时先弹掉原件
-再求右操作数。`or` 只是把"假才跳"倒过来，用一条无条件 `JUMP` 换向即可，不需要"真才跳"的指令：
+**`and`/`or`**：只用一个消费型的 `JUMP_IF_FALSE`（不需要额外的 `JUMP_IF_TRUE`）。先复制一份操作数，
+拿这份副本走 `TO_BOOL` 再测试，原件全程留在栈上不受影响；短路时原件就是结果，不短路时先弹掉原件再求
+右操作数。`or` 只是把"假才跳"倒过来，用一条无条件 `JUMP` 换向即可，不需要"真才跳"的指令：
 
 ```
-a and b : <a> COPY 1 JUMP_IF_FALSE end POP_TOP <b> end:
-a or b  : <a> COPY 1 JUMP_IF_FALSE rhs JUMP end   rhs: POP_TOP <b>   end:
+a and b : <a> COPY 1 TO_BOOL JUMP_IF_FALSE end POP_TOP <b> end:
+a or b  : <a> COPY 1 TO_BOOL JUMP_IF_FALSE rhs JUMP end   rhs: POP_TOP <b>   end:
 ```
 
 **链式比较 `a < b < c < d`**（`is` 链同理，`op` 换成 `is`）。中间段把右操作数复制一份垫到左操作数下面
-再比较，用 `JUMP_IF_FALSE` 判断是否短路； **所有中间段的失败分支都跳向同一个 `fail`**——不管哪一段
-先假，清理动作都是同一句"交换、弹掉左操作数，留下比较结果"：
+再比较，`t`（比较结果）不保证已经是 bool（用户重载的比较方法可以返回别的类型），所以测试前先垫一条
+`TO_BOOL`——跟 `and`/`or` 一样，只转换用来测试的那份副本，`t` 原件不受影响； **所有中间段的失败分支都
+跳向同一个 `fail`**——不管哪一段先假，清理动作都是同一句"交换、弹掉左操作数，留下比较结果"：
 
 ```
 <a> <b>
 COPY 1 INSERT 3 BINARY_OP Lt   ; 栈: b t   (t = a < b)
-COPY 1 JUMP_IF_FALSE fail
+COPY 1 TO_BOOL JUMP_IF_FALSE fail
 POP_TOP                         ; 真：留 b，继续
 <c>
 COPY 1 INSERT 3 BINARY_OP Lt   ; 栈: c t   (t = b < c)
-COPY 1 JUMP_IF_FALSE fail
+COPY 1 TO_BOOL JUMP_IF_FALSE fail
 POP_TOP                         ; 真：留 c，继续
 <d> BINARY_OP Lt                ; 末段：t = c < d，不用再留操作数
 JUMP end
@@ -335,9 +374,10 @@ CALL 1  (由近到远，一个装饰器一条)
 COPY 1 STORE_NAME f   (命名函数才有，绑定只发生一次、绑最终值)
 ```
 
-`MAKE_FUNC` 固定弹 6 项，缺的注解/默认值/名字/`doc` 一律压一个 **纯内部的哨兵值**（不能用 `None`，
-它本身是合法默认值）。引用捕获不产生任何指令：`MAKE_FUNC` 就在当前帧里执行，直接抓一份当前帧的引用
-挂到新对象上。
+`MAKE_FUNC` 固定弹 6 项，缺的注解/默认值/名字/`doc` 一律用 `LOAD_COMMON` 压一个 **纯内部的哨兵值**
+（不能用 `None`，它本身是合法默认值；这个哨兵也是"极多份 `Code` 反复用到的同一个值"，符合
+`LOAD_COMMON` 的定位）。引用捕获不产生任何指令：`MAKE_FUNC` 就在当前帧里执行，直接抓一份当前帧的
+引用挂到新对象上。
 
 **建立类**：形状同上，基类元组代替形参那段，弹 5 项。`MAKE_CLASS` 不直接产出类对象——它新建局部帧、
 写入值捕获、压栈执行类体；类体的 `RETURN_VALUE` 收尾时才由 `owner_`（类构建器）完成属性收集、MRO、
