@@ -171,6 +171,8 @@ add_executable(SL main.cpp
         # CodeGen
         codegen/Code.cpp
         codegen/Code.h
+        codegen/ConstPool.cpp
+        codegen/ConstPool.h
         codegen/CodeGen.cpp
         codegen/CodeGen.h
 )

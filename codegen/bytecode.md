@@ -77,7 +77,8 @@ C++ 状态机。
 | 字段           | 内容                                                                                                   |
 |----------------|--------------------------------------------------------------------------------------------------------|
 | 字节码         | 见上                                                                                                   |
-| 常量表         | 不可变字面量值（见下）、**嵌套 `Code`**（函数体/类体）                                                 |
+| 常量表         | 不可变字面量值，见下                                                                                   |
+| 嵌套 `Code` 表 | 函数体/类体的 `Code`。跟常量表分开：它不是 SL 对象，不去重也不物化                                     |
 | 名字表         | 标识符、属性名、`import` 的点分名字                                                                    |
 | 栈深上限       | 编译期算出，一次性分配操作数栈                                                                         |
 | 引用捕获名集合 | 函数体/类体才有，必须持久保留——运行期每次按标识符读写都要查                                            |
@@ -107,9 +108,9 @@ C++ 状态机。
 **存的是编译期常量描述，不是 SL 对象**。codegen 不依赖对象模型与 GC——常量对象归不归 GC 管、引用计数
 初值多少，由 GC 设计定，不该被 codegen 提前钉死；`Code` 也因此是纯编译产物，可序列化。
 
-**`Code` 在常量表里，但不走 `LOAD_CONST`**：它不是 SL 对象，不该出现在操作数栈上。`MAKE_FUNC c` /
-`MAKE_CLASS c` 用参数字节直接给常量表下标（超 255 靠 `EXTENDED_ARG`）。于是 `LOAD_CONST` 压的恒为 SL
-对象。
+**嵌套 `Code` 单独一张表，不混进常量表**：它不是 SL 对象，不该出现在操作数栈上，也没有"结构相等"可言
+（两个函数体不去重）。`MAKE_FUNC c` / `MAKE_CLASS c` 用参数字节给的是这张表的下标（超 255 靠
+`EXTENDED_ARG`）。这样常量表里每一项都能去重、都能物化成 SL 对象，`LOAD_CONST` 压的恒为 SL 对象。
 
 ### 常量表的形态：扁平 + 哈希 consing
 
@@ -117,11 +118,11 @@ C++ 状态机。
 `(1, (2, 'a'))` 占 5 个槽（`1`、`2`、`'a'`、`(2,'a')`、`(1,…)`）。
 
 ```
-enum class ConstKind : uint8_t { None, Bool, Int, Decimal, Str, Ellipsis, Tuple, Code };
+enum class ConstKind : uint8_t { None, Bool, Int, Decimal, Str, Ellipsis, Tuple };
 
 struct ConstEntry {
-    // NoneTag / bool / BigInt / BigDec / u32string / EllipsisTag
-    //   / vector<uint32_t>（元组，各元素的槽号）/ 嵌套 Code
+    // ConstNone / bool / BigInt / BigDec / u32string / ConstEllipsis
+    //   / vector<uint32_t>（元组，各元素的槽号）。候选顺序与 ConstKind 一致
     std::variant<...> value_;
 };
 ```
@@ -141,8 +142,9 @@ struct ConstEntry {
 - `decimal` 逐位比 `sign`/`coeff`/`exp`：`1.5` 与 `1.50`、`0` 与 `-0` 都 `==` 为真而 `str` 不同， 不能合并；
 - 元组比 **子项槽号序列**，不递归比值。子项已经规范化过，所以这既便宜又正好绕开上面两条坑。
 
-去重查找走哈希桶（每种 `kind_` 给个便宜的 hash，冲突用 `operator==` 定案）。别用线性扫——机器生成的 SL 一份
-`Code` 里出现上万个常量并非不可能。
+去重查找走哈希桶（每种 kind 给个便宜的 hash，冲突再逐位比）。别用线性扫——机器生成的 SL 一份 `Code` 里
+出现上万个常量并非不可能。 **`BigDec` 必须用 `identical()` 比，绝不能用它的 `operator==`**：后者是按
+默认上下文的数值相等，`1.5 == 1.50` 为真、`NaN == NaN` 为假，两边都跟这里要的相反。
 
 **物化：VM 加载 `Code` 时一次性做完并缓存**，`LOAD_CONST n` 只是取第 `n` 个现成对象。不能每次现造，
 否则同一槽每次压的不是同一个对象。单例 kind（`None`/`True`/`False`/`Ellipsis`）物化成全局那一个对象
@@ -182,12 +184,12 @@ codegen 必须按实际传下去的 `want_value` 静态跟踪栈深（算栈深�
 | `COPY i`         | `… xᵢ … x₁`    | `… xᵢ … x₁ xᵢ` | 复制从栈顶数第 `i` 项（`i=1` 即栈顶）压栈        |
 | `INSERT n`       | `… xₙ … x₂ x₁` | `… x₁ xₙ … x₂` | 弹出栈顶，插回到深度 `n`（`n=2` 即交换栈顶两项） |
 | `LOAD_CONST n`   | `…`            | `… c`          | 压常量表第 `n` 项                                |
-| `LOAD_COMMON n`  | `…`            | `… v`          | 压全局共享表第 `n` 项，见下                      |
+| `LOAD_INTERNAL n`  | `…`            | `… v`          | 压全局共享表第 `n` 项，见下                      |
 
-`LOAD_COMMON` 取的是一张 **全局共享、不属于任何单个 `Code`** 的小表，只装 **SL 层拿不到的内部对象**：
+`LOAD_INTERNAL` 取的是一张 **全局共享、不属于任何单个 `Code`** 的小表，只装 **SL 层拿不到的内部对象**：
 `import` 调用形态背后的函数对象、`MAKE_FUNC` 缺省参数用的哨兵值（都见「调用与建立」）。字面量一律走
 `LOAD_CONST`，`None`/`True`/`False`/`Ellipsis` 也不例外——否则 `(None,)` 在常量表而 `None` 不在，太
-割裂。两张表互不相干，`n` 不能混用，所以特意不叫 `LOAD_COMMON_CONST`。
+割裂。两张表互不相干，`n` 不能混用，所以特意不叫 `LOAD_INTERNAL_CONST`。
 
 **`COPY`/`INSERT` 缺一不可，`INSERT` 去不掉**：`COPY` 只能在栈顶新增副本，不能把已在栈上的项挪到更深
 位置，这种下沉只能靠 `INSERT`（等价旋转，`n=2` 即交换）。三处真用到：① 赋值/复合赋值的留值——只在
@@ -332,14 +334,14 @@ CPython 对 star-unpacking 的处理一致，是真实语言限制不是内部�
 `target_.globals_frame_ != target_`。
 
 **没有 `IMPORT_CALL`**：调用形态 `import(expr, kwarg=v, ...)` 的实参形状本来就跟普通调用一致，没必要
-另写绑定逻辑——加载算法包成一个内部函数对象，`LOAD_COMMON` 取它接一次普通 `CALL`/`CALL_KW`/`CALL_EX`
+另写绑定逻辑——加载算法包成一个内部函数对象，`LOAD_INTERNAL` 取它接一次普通 `CALL`/`CALL_KW`/`CALL_EX`
 即可。这个对象只出现在这一种 codegen 产出的字节码里，`import` 仍是关键字，SL 层拿不到它。
 
 **`eval` 不能走这条路**：`import` 是参数绑完才干活，能塞进普通内置函数；`eval` 得先拿到 `code` 字符串、
 现场编译出新 `Code`（可能 `SyntaxError`），编译要用的 `in_local_scope` 来自 **发起调用的那一帧**——这
 信息在参数绑定阶段不存在，`CALL` 没有"先编译一份 Code 再决定压哪种帧"这一步。更根本的是：`eval` 关键
 字化就是为了让"这份 `Code` 有没有 `eval` 点"纯静态可判定（给未来局部变量槽位化铺路，见
-`.ai/context.md`）——若也编译成 `LOAD_COMMON`+`CALL`，字节码层面就分不清普通调用和 `eval` 调用了。
+`.ai/context.md`）——若也编译成 `LOAD_INTERNAL`+`CALL`，字节码层面就分不清普通调用和 `eval` 调用了。
 
 ## 关键构造的 codegen 模式
 
@@ -495,7 +497,7 @@ CALL 1  (由近到远，一个装饰器一条)
 COPY 1 STORE_NAME f   (命名函数才有，绑定只发生一次)
 ```
 
-`MAKE_FUNC` 固定弹 5 项，缺的注解/默认值/名字/`doc` 用 `LOAD_COMMON` 压一个纯内部哨兵值（不能用
+`MAKE_FUNC` 固定弹 5 项，缺的注解/默认值/名字/`doc` 用 `LOAD_INTERNAL` 压一个纯内部哨兵值（不能用
 `None`，它是合法默认值）。引用捕获不产生任何指令：`MAKE_FUNC` 在当前帧执行，直接抓一份当前帧的引用
 挂到新对象上。
 
