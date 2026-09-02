@@ -104,21 +104,52 @@ C++ 状态机。
 `CALL_KW` 的名字元组不单独算一类，就是个常量元组。`decimal` 能进是因为构造不舍入、精确保留全部位数 （
 `SL.md` 4.2.6），不受运行期上下文影响。
 
-**存的是编译期常量描述，不是 SL 对象**：一个小 variant——`BigInt` / `BigDec` / `str` / 单例 （`None`/
-`bool`/`Ellipsis`）/ 子描述列表（元组）/ 嵌套 `Code`。`numeric/` 的两个值类跟对象系统无关， 可以直接装。物化成
-SL 对象由 VM 在 **加载 `Code` 时一次性完成**并缓存在 `Code` 上，`LOAD_CONST` 只取
-现成的——不能每次现造，否则同一常量项每次压的不是同一个对象。相等常量项要不要去重共享是实现自由。
-**物化不允许失败**：可能构造不出来的字面量（如指数越界的 decimal）必须由前端挡下。
-
-这样 codegen 不依赖对象模型与 GC——常量对象归不归 GC 管、引用计数初值是多少，由 GC 设计定，不该被
-codegen 提前钉死；`Code` 也因此是纯编译产物，可序列化。代价只是物化时一个 switch。
+**存的是编译期常量描述，不是 SL 对象**。codegen 不依赖对象模型与 GC——常量对象归不归 GC 管、引用计数
+初值多少，由 GC 设计定，不该被 codegen 提前钉死；`Code` 也因此是纯编译产物，可序列化。
 
 **`Code` 在常量表里，但不走 `LOAD_CONST`**：它不是 SL 对象，不该出现在操作数栈上。`MAKE_FUNC c` /
 `MAKE_CLASS c` 用参数字节直接给常量表下标（超 255 靠 `EXTENDED_ARG`）。于是 `LOAD_CONST` 压的恒为 SL
 对象。
 
-顶层的 `None`/`True`/`False`/`Ellipsis` 走 `LOAD_COMMON`，不占各自 `Code` 的常量表；只有嵌在常量元组
-里时才作为描述的一个 case 出现。
+### 常量表的形态：扁平 + 哈希 consing
+
+**表是扁平的，元组存的是子项在同一张表里的下标，不是嵌套的描述树。** 每个子常量自己也占一个槽：
+`(1, (2, 'a'))` 占 5 个槽（`1`、`2`、`'a'`、`(2,'a')`、`(1,…)`）。
+
+```
+enum class ConstKind : uint8_t { None, Bool, Int, Decimal, Str, Ellipsis, Tuple, Code };
+
+struct ConstEntry {
+    // NoneTag / bool / BigInt / BigDec / u32string / EllipsisTag
+    //   / vector<uint32_t>（元组，各元素的槽号）/ 嵌套 Code
+    std::variant<...> value_;
+};
+```
+
+`numeric/` 的 `BigInt`/`BigDec` 跟对象系统无关，直接装进描述里。
+
+**不变量：子项的槽号恒小于父项的槽号。** codegen 自底向上加入，天然满足；有了它，物化就是从 0 到 n-1
+扫一遍，轮到元组时元素对象已经建好，不用递归、不会有前向引用。
+
+**加入常量时立刻按结构去重（hash consing），值相等的常量恒是同一个槽。** 这样
+`a = (1, 2)` / `b = (1, 2)` 拿到同一个对象，`a is b` 为真；也顺带保证「顶层的 `(1,2)`」和「别处
+`((1,2),3)` 里的那个 `(1,2)`」是同一个对象，不会出现只有顶层去重的割裂。
+
+去重键是 **结构标识，不是 SL 的 `==`**，这是关键区别：
+
+- 先比 `kind_`：`1` 和 `True`、`1` 和 `1.0` 都 `==` 为真，但必须是不同的槽，否则 `True is 1` 会变真；
+- `decimal` 逐位比 `sign`/`coeff`/`exp`：`1.5` 与 `1.50`、`0` 与 `-0` 都 `==` 为真而 `str` 不同， 不能合并；
+- 元组比 **子项槽号序列**，不递归比值。子项已经规范化过，所以这既便宜又正好绕开上面两条坑。
+
+去重查找走哈希桶（每种 `kind_` 给个便宜的 hash，冲突用 `operator==` 定案）。别用线性扫——机器生成的 SL 一份
+`Code` 里出现上万个常量并非不可能。
+
+**物化：VM 加载 `Code` 时一次性做完并缓存**，`LOAD_CONST n` 只是取第 `n` 个现成对象。不能每次现造，
+否则同一槽每次压的不是同一个对象。单例 kind（`None`/`True`/`False`/`Ellipsis`）物化成全局那一个对象
+而不是新建，所以跨 `Code` 的 `None is None` 照样为真—— **槽号只决定去重，不决定对象身份**。
+**物化不允许失败**：可能构造不出来的字面量（如指数越界的 decimal）必须由前端挡下。
+
+代价是子常量多占几个槽、`LOAD_CONST` 的下标更容易越过 255 而要 `EXTENDED_ARG`，可以接受。
 
 ## 栈约定
 
@@ -132,7 +163,7 @@ codegen 提前钉死；`Code` 也因此是纯编译产物，可序列化。代�
 `want_value` 往子节点传不是原样转发，按节点语义各自决定：`Compound`/`Program` 的非末尾语句恒 `false`；
 `for`/`while` 的 `init`/`inc` 恒 `false`；`and`/`or` 左操作数要不要留值取决于 **整个节点自己收到的**
 `want_value`，不是简单继承（见下面 codegen 模式）。`del`/`global`/`break`/`continue` 这类值恒为 `None`
-的构造，`want_value=true` 才补 `LOAD_COMMON` 取 `None`。
+的构造，`want_value=true` 才补 `LOAD_CONST` 取 `None`。
 
 codegen 必须按实际传下去的 `want_value` 静态跟踪栈深（算栈深上限、`break`/`continue` 裁栈都要用），两
 条路径算出来的深度不一样。
@@ -153,10 +184,10 @@ codegen 必须按实际传下去的 `want_value` 静态跟踪栈深（算栈深�
 | `LOAD_CONST n`   | `…`            | `… c`          | 压常量表第 `n` 项                                |
 | `LOAD_COMMON n`  | `…`            | `… v`          | 压全局共享表第 `n` 项，见下                      |
 
-`LOAD_COMMON` 取的是一张 **全局共享、不属于任何单个 `Code`** 的小表：`None`/`True`/`False`/`Ellipsis`、
-`import`
-调用形态背后的函数对象（见「调用与建立」）——极多份 `Code` 反复用到，没必要各自常量表都存一份。命名上 特意不叫
-`LOAD_COMMON_CONST`，跟 `LOAD_CONST` 是两张互不相干的表，`n` 不能混用。
+`LOAD_COMMON` 取的是一张 **全局共享、不属于任何单个 `Code`** 的小表，只装 **SL 层拿不到的内部对象**：
+`import` 调用形态背后的函数对象、`MAKE_FUNC` 缺省参数用的哨兵值（都见「调用与建立」）。字面量一律走
+`LOAD_CONST`，`None`/`True`/`False`/`Ellipsis` 也不例外——否则 `(None,)` 在常量表而 `None` 不在，太
+割裂。两张表互不相干，`n` 不能混用，所以特意不叫 `LOAD_COMMON_CONST`。
 
 **`COPY`/`INSERT` 缺一不可，`INSERT` 去不掉**：`COPY` 只能在栈顶新增副本，不能把已在栈上的项挪到更深
 位置，这种下沉只能靠 `INSERT`（等价旋转，`n=2` 即交换）。三处真用到：① 赋值/复合赋值的留值——只在
