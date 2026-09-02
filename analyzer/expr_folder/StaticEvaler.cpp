@@ -356,15 +356,12 @@ AstNodePtr StaticEvaler::fold_mul(const AstNodeOpBinary &node) {
         return {r, l};
     }();
 
-    // 重复次数的符号：bool 恒非负；int 只看符号即可，不需要真的转成 int64_t 才能判——
-    // 这一步刻意避免过早触碰具体数值，理由见下面空串分支的注释
+    // 重复次数的符号
     if (is_negative_int_literal(count_node)) return nullptr;
 
     // 'a' * 3
     if (const auto *s{dynamic_cast<const AstNodeLiteralStr *>(&container_node)}) {
-        // 空串重复多少次都还是空串，直接给结果，完全不需要知道重复次数具体是多少。这条必须走在
-        // 下面转具体数值之前：次数能大到没边，真去转 int64_t（含科学计数法展开）就是白费功夫，
-        // 装不下 int64_t 时还会白白错过这个本该恒为空串的可折叠结果
+        // 空串重复多少次都还是空串，直接给结果
         if (s->value_.empty()) return std::make_unique<AstNodeLiteralStr>(node.pos_, U"");
 
         const std::optional count{node_to_int64(count_node)};
@@ -403,8 +400,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpBinary &node) {
     const AstNode &l{*node.left_}, &r{*node.right_};
     if (!is_literal_pure(l) || !is_literal_pure(r)) return nullptr;
 
-    // 任何一侧是 decimal（或 `/`，其结果恒为 decimal）都不折：结果按运行期上下文舍入，
-    // 编译期不知道那时的 prec/rounding。比较不走这里，它在 fold_compare 里，也一样不折
+    // 任何一侧是 decimal（或 `/`）都不折
     if (!is_int_family(l) || !is_int_family(r) || node.op_ == Div) return nullptr;
 
     const std::optional lv{node_to_int64(l)}, rv{node_to_int64(r)};
@@ -427,7 +423,7 @@ AstNodePtr StaticEvaler::fold_arithmetic(const AstNodeOpBinary &node) {
         return make_int(node.pos_, *v);
     }
 
-    // 除零是 MathError（SL.md 3.4.2），原样留给运行期
+    // 除零是 MathError，原样留给运行期
     case DivFloor: {
         if (*rv == 0) return nullptr;
         const std::optional v{checked_floor_div(*lv, *rv)};
@@ -466,7 +462,8 @@ AstNodePtr StaticEvaler::fold_bitwise(const AstNodeOpUnary &node) {
 AstNodePtr StaticEvaler::fold_bitwise(const AstNodeOpBinary &node) {
     using enum AstNodeOpBinary::OpType;
     const AstNode &l{*node.left_}, &r{*node.right_};
-    // 同上，两侧都必须是严格的 int
+
+    // 只接 int
     if (!is_literal_pure(l) || !is_literal_pure(r) || !is_int(l) || !is_int(r)) return nullptr;
 
     const std::optional lv{node_to_int64(l)};
