@@ -38,7 +38,6 @@ EXCLUDE_DIR_PATTERNS = [
     ".idea",
     ".venv",
     "cmake-build-*",
-    "decimal_for_reference",
 ]
 # 排除的文件名
 EXCLUDE_FILE_PATTERNS = []
