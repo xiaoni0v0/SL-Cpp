@@ -1,5 +1,5 @@
 // 保留字出现即 SyntaxError；大小写变体和超集是标识符。
-#include "../../../diagnostics/SyntaxError.h"
+#include "../../../cpp_exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

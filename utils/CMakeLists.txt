@@ -5,4 +5,4 @@ sl_add_module(sl_utils
         string_utils.h
 )
 
-target_link_libraries(sl_utils PUBLIC sl_diagnostics)
+target_link_libraries(sl_utils PUBLIC sl_cpp_exceptions)

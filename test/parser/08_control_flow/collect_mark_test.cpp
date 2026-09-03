@@ -1,5 +1,5 @@
 // 收集模式记号：`$` / `$ *` / `$$` / `$$ **`。
-#include "../../../diagnostics/SyntaxError.h"
+#include "../../../cpp_exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

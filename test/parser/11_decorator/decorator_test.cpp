@@ -1,5 +1,5 @@
 // 紧邻 func/class 的 @ 挂到节点上；否则包成 Decorator 链。
-#include "../../../diagnostics/SyntaxError.h"
+#include "../../../cpp_exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

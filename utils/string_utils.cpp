@@ -1,6 +1,6 @@
 #include "string_utils.h"
 
-#include "../diagnostics/EncodingError.h"
+#include "../cpp_exceptions/EncodingError.h"
 
 #include <cstdint>
 #include <string>

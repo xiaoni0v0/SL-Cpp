@@ -1,5 +1,5 @@
 // int 字面量。科学计数法见 scientific_notation_test.cpp。
-#include "../../../diagnostics/SyntaxError.h"
+#include "../../../cpp_exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

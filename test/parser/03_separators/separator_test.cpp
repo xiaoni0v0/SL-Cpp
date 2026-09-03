@@ -1,5 +1,5 @@
 // 表达式分隔：软终止换行可续行，硬终止分号切断；if/try 跨行合并。
-#include "../../../diagnostics/SyntaxError.h"
+#include "../../../cpp_exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

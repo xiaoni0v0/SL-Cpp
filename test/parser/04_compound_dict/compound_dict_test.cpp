@@ -1,5 +1,5 @@
 // `{}`：`**` 或紧跟 `:` 是字典，否则是复合表达式。空 `{}` 是复合。
-#include "../../../diagnostics/SyntaxError.h"
+#include "../../../cpp_exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

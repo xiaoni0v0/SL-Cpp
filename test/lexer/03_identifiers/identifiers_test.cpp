@@ -1,5 +1,5 @@
 // 标识符：[a-zA-Z_][a-zA-Z0-9_]*，不含 Unicode 字母。
-#include "../../../diagnostics/SyntaxError.h"
+#include "../../../cpp_exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

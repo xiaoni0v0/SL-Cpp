@@ -1,5 +1,5 @@
 // if / elif / else。cond 禁止裸 `=`，复合赋值可以。
-#include "../../../diagnostics/SyntaxError.h"
+#include "../../../cpp_exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

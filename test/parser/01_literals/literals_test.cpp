@@ -1,5 +1,5 @@
 // 字面量 token 如何变成 AST 节点。转义已在词法测过。
-#include "../../../diagnostics/SyntaxError.h"
+#include "../../../cpp_exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

@@ -8,7 +8,7 @@
 #include "../../compiler/lexer/Lexer.h"
 #include "../../compiler/parser/Parser.h"
 #include "../../compiler/parser/ast_nodes/ast_json_dumper.h"
-#include "../../diagnostics/SyntaxError.h"
+#include "../../cpp_exceptions/SyntaxError.h"
 
 #include <doctest/doctest.h>
 #include <nlohmann/json.hpp>

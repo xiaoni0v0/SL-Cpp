@@ -1,5 +1,5 @@
 // func：形参四段、捕获、返回类型、doc。装饰器见 11_decorator。
-#include "../../../diagnostics/SyntaxError.h"
+#include "../../../cpp_exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

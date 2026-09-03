@@ -1,6 +1,6 @@
 // 科学计数法：尾数无小数点则是 int（指数非负且 ≤ 9999），有小数点则是 decimal。
 // token 文本保持原文，不做数值展开。
-#include "../../../diagnostics/SyntaxError.h"
+#include "../../../cpp_exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

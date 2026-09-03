@@ -855,7 +855,7 @@ raw 要的"行为确定"正好相反。哪天 128 位进了标准、或者项目
 
 ### 编译期 C++ 异常 vs SL 运行时异常对象：两层模型
 
-`diagnostics/SyntaxError.h` 的 `SyntaxError`（纯 C++ 异常）和 SL.md 文档化的、暴露给 SL
+`cpp_exceptions/SyntaxError.h` 的 `SyntaxError`（纯 C++ 异常）和 SL.md 文档化的、暴露给 SL
 用户代码的异常类只是碰巧重名，不是同一个东西——这不是需要二选一的问题，是本来就该分层，类比
 CPython `PyErr_SyntaxError` 这层 C API 跟 Python 层 `SyntaxError` 类。`SyntaxError` 编译期抛出，
 其余异常运行时抛出；该编译期可能包含运行时（`eval`/`eval_isolated` 动态编译）。

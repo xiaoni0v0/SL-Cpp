@@ -5,7 +5,7 @@
 #include "../compiler/parser/Parser.h"
 #include "../compiler/parser/ast_nodes/ast_json_dumper.h"
 #include "../compiler/parser/ast_nodes/details/ast_node_multi_exprs.h"
-#include "../diagnostics/SLException.h"
+#include "../cpp_exceptions/SLException.h"
 #include "../utils/file_utils.h"
 #include "../utils/string_utils.h"
 

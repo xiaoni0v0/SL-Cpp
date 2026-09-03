@@ -1,6 +1,6 @@
 #include "file_utils.h"
 
-#include "../diagnostics/FileNotFoundError.h"
+#include "../cpp_exceptions/FileNotFoundError.h"
 
 #include <fstream>
 #include <sstream>

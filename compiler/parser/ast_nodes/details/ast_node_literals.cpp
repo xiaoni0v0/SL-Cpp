@@ -1,6 +1,6 @@
 #include "ast_node_literals.h"
 
-#include "../../../../diagnostics/InternalError.h"
+#include "../../../../cpp_exceptions/InternalError.h"
 #include "../../../../utils/string_utils.h"
 
 namespace {

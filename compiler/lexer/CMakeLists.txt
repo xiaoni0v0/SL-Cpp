@@ -7,4 +7,4 @@ sl_add_module(sl_lexer
         x_token_type.inc
 )
 
-target_link_libraries(sl_lexer PUBLIC sl_diagnostics sl_utils)
+target_link_libraries(sl_lexer PUBLIC sl_cpp_exceptions sl_utils)

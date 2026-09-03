@@ -1,5 +1,5 @@
 // 单行 #、块注释 /* */。块注释不嵌套；内部换行不产生 NEWLINE。
-#include "../../../diagnostics/SyntaxError.h"
+#include "../../../cpp_exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

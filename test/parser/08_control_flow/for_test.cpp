@@ -1,5 +1,5 @@
 // for：3 槽步进或 1 槽迭代；头部换行按软终止切槽。
-#include "../../../diagnostics/SyntaxError.h"
+#include "../../../cpp_exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

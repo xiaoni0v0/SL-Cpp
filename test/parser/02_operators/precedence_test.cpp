@@ -1,5 +1,5 @@
 // 运算符优先级、结合性、后缀访问链。
-#include "../../../diagnostics/SyntaxError.h"
+#include "../../../cpp_exceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

@@ -44,7 +44,7 @@
 | `compiler/analyzer/semantic_checker/` | `SemanticChecker.{h,cpp}`（`AstConstVisitor` 的实现）：语义检查（作用域规则、lvalue 合法性、`*`/`**` 位置合法性、func/class 约束、AST 结构防御性校验……），只读不改 AST，违规抛 `SyntaxError`（真实语义错误）或 `InternalError`（AST 结构本身违反 Parser 的保证，代表实现自己有 bug）。单个节点自己字段的合法性不归这里，归节点构造函数（见 `compiler/parser/ast_nodes/details/`）。 |
 | `compiler/analyzer/expr_folder/` | `ExprFolder.{h,cpp}`（`AstVisitor` 的实现）：遍历 + 原地替换 AST 的调度层，拥有 `AstNodePtr` 槽位的所有权。`StaticEvaler.{h,cpp}`：纯函数式的"给一个节点判断能不能折、折成什么"，不遍历树、不拥有节点。 |
 | `numeric/` | `BigInt.{h,cpp}`：手写高精度整数，`int` 的底层实现（`小路径 int64_t` / `大路径 limbs` 双表示）。`BigDec.{h,cpp}`：十进制浮点数，`decimal` 的底层实现（`BigInt 系数 + int64_t 指数 + 独立符号位 + 特殊值 tag`）。`DecContext.{h,cpp}`：`decimal.Context` 的底层实现——舍入方式、精度、指数范围、信号的陷阱/标志位，以及陷阱触发时抛的 `DecTrapped`。`dec_math.{h,cpp}`：`ln`/`log10`/`exp`/`**` 用的整数层定点算法（`ilog`/`iexp`/`dlog`/`dexp`/`dpower` 等），只跟 BigInt 打交道，不认识上下文和信号。 |
-| `diagnostics/` | 宿主（C++）层的异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`），纯头文件。跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。放在顶层而不是 `compiler/` 下，是因为 `utils/` 也要用它，而 `utils/` 是纯 C++ 层、不能反过来依赖 `compiler/`。 |
+| `cpp_exceptions/` | 宿主（C++）层的异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`），纯头文件。跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。放在顶层而不是 `compiler/` 下，是因为 `utils/` 也要用它，而 `utils/` 是纯 C++ 层、不能反过来依赖 `compiler/`。 |
 | `utils/` | 自由函数工具：`string_utils`（UTF-8/UTF-32 互转等）、`file_utils`（读文件）。 |
 | `compiler/codegen/` | 只有 [`bytecode.md`](../compiler/codegen/bytecode.md)——指令集/帧/`Code` 的完整设计，动这里之前先读它。**没有代码**：曾经写过一版 `ConstPool`（编译期常量描述 + 物化），随「运行时先于编译器」的决定一起废掉了，规则本身留在 `bytecode.md` 的「常量去重」一节。 |
 | `executor/` | `Executor.{h,cpp}`：目前只是把整条编译流水线串起来、逐步打印中间结果的驱动，`main.cpp` 调它。真正的字节码虚拟机还没写，设计见 [`bytecode.md`](../compiler/codegen/bytecode.md)。 |
@@ -79,7 +79,7 @@ analyzer 不该反过来依赖对象模型，编译诊断在被 SL 代码 `try` 
 `CMakeLists.txt`**，用 `sl_add_module(sl_xxx …)` 建一个静态库并声明自己的依赖：
 
 ```
-sl_diagnostics (INTERFACE，纯头文件)
+sl_cpp_exceptions (INTERFACE，纯头文件)
     ← sl_utils ← sl_lexer ← sl_parser ← sl_analyzer ← sl_executor ← SL
 sl_numeric (不依赖任何模块)
 ```
@@ -111,7 +111,7 @@ sl_numeric (不依赖任何模块)
 7. **`eval` / `import`**。
 
 **目录调整**：`lexer`/`parser`/`analyzer`/`codegen` 已收进 `compiler/`，`builtins/exceptions/` 已挪成
-顶层的 `diagnostics/`（`builtins/` 这个名字留给真正的 SL 内置）。还没做的两件：
+顶层的 `cpp_exceptions/`（`builtins/` 这个名字留给真正的 SL 内置）。还没做的两件：
 
 - **`compiler/` 的门面**——一个把"源码 → `Code`"包起来的对外入口，同时是把 C++ `SyntaxError` 转成 SL
   异常的地方。等 `codegen` 能跑了再写，现在 `executor/Executor.cpp` 手工串着三层。
@@ -250,7 +250,7 @@ ctest 现在约 28 秒。要更大覆盖别往表里堆，用倍数参数临时�
 - **函数的隐含前提统一写"调用方保证 X"**（不是"要求 X"这种含糊说法，消除"这是函数自己检查的还是靠
   调用方保证的"这层歧义），配的校验方式看这个前提要不要在 Release 构建里也生效：只在开发期兜底的
   用 `assert(...)`（在函数开头，`NDEBUG` 下会被优化掉，所以不能拿它实现真正的校验）；`SemanticChecker`/
-  `string_utils`/`diagnostics` 这类需要在 Release 也生效的真实校验，走抛异常
+  `string_utils`/`cpp_exceptions` 这类需要在 Release 也生效的真实校验，走抛异常
   （`SyntaxError`/`InternalError`/`EncodingError`），不能用 `assert` 顶替。
 - **避免"同一产物在多个出口分头构造"**：同一种产物如果在多处提前返回、各自构造，等于制造了多份
   测试压不到的独立状态空间，历史上好几个换行容错类的 bug 都是这个模式孵出来的。能合并"同一产物多处

@@ -18,6 +18,7 @@ endif ()
 #   - clang-cl:      CMAKE_CXX_COMPILER_ID = "Clang", FRONTEND_VARIANT = "MSVC"
 #   - MSVC（不支持）: CMAKE_CXX_COMPILER_ID = "MSVC",  FRONTEND_VARIANT = ""
 # ------------------------------------------------------------
+
 if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     message(FATAL_ERROR
             "不支持的编译器 CMAKE_CXX_COMPILER_ID=\"${CMAKE_CXX_COMPILER_ID}\"，目前只支持 GCC / Clang / clang-cl")
@@ -126,9 +127,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(nlohmann_json cxxopts doctest)
 
 # ------------------------------------------------------------
-# 各模块。依赖方向：diagnostics <- utils/numeric <- compiler <- executor
+# 各模块。依赖方向：cpp_exceptions <- utils/numeric <- compiler <- executor
 # ------------------------------------------------------------
-add_subdirectory(diagnostics)
+add_subdirectory(cpp_exceptions)
 add_subdirectory(utils)
 add_subdirectory(numeric)
 add_subdirectory(compiler)
@@ -141,7 +142,7 @@ add_executable(SL main.cpp)
 sl_apply_main_target_options(SL)
 target_link_libraries(SL PRIVATE sl_executor cxxopts::cxxopts)
 
-if (NOT SL_MSVC_LIKE_FRONTEND)
+if (MINGW)
     target_link_options(SL PRIVATE
             $<$<CONFIG:Release>:-static-libgcc>
             $<$<CONFIG:Release>:-static-libstdc++>

@@ -2,7 +2,7 @@
 // in_local_scope 的转发，都是只有走这两个入口才测得到的行为——单独调 SemanticChecker/ExprFolder
 // 测不出"顺序反了"或"参数没转发"这类回归。
 #include "../../compiler/analyzer/Analyzer.h"
-#include "../../diagnostics/SyntaxError.h"
+#include "../../cpp_exceptions/SyntaxError.h"
 #include "test_utils.h"
 
 #include <doctest/doctest.h>
