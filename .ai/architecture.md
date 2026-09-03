@@ -25,7 +25,7 @@
 且有完整测试；`numeric/` 的 `BigInt`（`int` 的底层）和 `BigDec`+`DecContext`（`decimal` 的底层）已实现
 且有完整测试；`compiler/codegen/` 只剩一份设计文档 [`bytecode.md`](../compiler/codegen/bytecode.md)，
 `executor/` 目前只是串流水线的驱动。`runtime/` 已经有对象模型骨架（`Object`+`Ref`、`Type`、
-四个基础类型、单例、bootstrap）和 GC（引用计数 + 标记清扫），异常体系 / 帧与主循环还没开始——实现顺序见下面「实现路线」。
+四个基础类型、单例）、GC（引用计数 + 标记清扫）和分相位的 bootstrap，异常体系 / 帧与主循环还没开始——实现顺序见下面「实现路线」。
 **在虚拟机落地之前，SL.md 里"运行时"相关的条文（属性协议、GC、异常传播的具体机制等）大多还没有对应
 实现可以参照，只能靠 SL.md 文本本身。**
 
@@ -47,7 +47,7 @@
 | `compiler/analyzer/semantic_checker/` | `SemanticChecker.{h,cpp}`（`AstConstVisitor` 的实现）：语义检查（作用域规则、lvalue 合法性、`*`/`**` 位置合法性、func/class 约束、AST 结构防御性校验……），只读不改 AST，违规抛 `SyntaxError`（真实语义错误）或 `InternalError`（AST 结构本身违反 Parser 的保证，代表实现自己有 bug）。单个节点自己字段的合法性不归这里，归节点构造函数（见 `compiler/parser/ast_nodes/details/`）。 |
 | `compiler/analyzer/expr_folder/` | `ExprFolder.{h,cpp}`（`AstVisitor` 的实现）：遍历 + 原地替换 AST 的调度层，拥有 `AstNodePtr` 槽位的所有权。`StaticEvaler.{h,cpp}`：纯函数式的"给一个节点判断能不能折、折成什么"，不遍历树、不拥有节点。 |
 | `numeric/` | `BigInt.{h,cpp}`：手写高精度整数，`int` 的底层实现（`小路径 int64_t` / `大路径 limbs` 双表示）。`BigDec.{h,cpp}`：十进制浮点数，`decimal` 的底层实现（`BigInt 系数 + int64_t 指数 + 独立符号位 + 特殊值 tag`）。`DecContext.{h,cpp}`：`decimal.Context` 的底层实现——舍入方式、精度、指数范围、信号的陷阱/标志位，以及陷阱触发时抛的 `DecTrapped`。`dec_math.{h,cpp}`：`ln`/`log10`/`exp`/`**` 用的整数层定点算法（`ilog`/`iexp`/`dlog`/`dexp`/`dpower` 等），只跟 BigInt 打交道，不认识上下文和信号。 |
-| `runtime/` | 运行时的地基，**在编译器下面**（`compiler/` 的 codegen 要直接造真 SL 对象）。`Object.h`：一切 SL 对象的基类 + 对象头（引用计数、类型指针、`trace()`）+ 侵入式引用计数句柄 `Ref<T>` + `make_ref`。`Type.{h,cpp}`：类型对象（`name_`/`bases_`/`mro_`/`is_subtype_of`）。`Runtime.{h,cpp}`：全局单例，按序建立全部内置类型与单例并持有它们，`init()`/`shutdown()`，也是第一个 `GcRootSource`。`Heap.{h,cpp}`：全堆链表 + STW 标记清扫 `collect()` + 根源注册（`GcRootSource`）。**`collect()` 只能在主循环的安全点调用**，理由见笔记。`x_builtin_types.inc`：内置类型清单（X-macro，见下）。写这里的代码前先读 [notes/object-model-conventions.md](notes/object-model-conventions.md)。 |
+| `runtime/` | 运行时的地基，**在编译器下面**（`compiler/` 的 codegen 要直接造真 SL 对象）。`Object.h`：一切 SL 对象的基类 + 对象头（引用计数、类型指针、`trace()`）+ 侵入式引用计数句柄 `Ref<T>` + `make_ref`。`Type.{h,cpp}`：类型对象（`name_`/`bases_`/`mro_`/`is_subtype_of`）。`Runtime.{h,cpp}`：全局单例，分相位（`BootPhase`）建立全部内置类型与单例并持有它们，`init()`/`shutdown()`，也是第一个 `GcRootSource`。每个访问器都声明自己要求的最低相位，"初始化步骤排错位置"当场报错而不是拿到空类型。`Heap.{h,cpp}`：全堆链表 + STW 标记清扫 `collect()` + 根源注册（`GcRootSource`）。**`collect()` 只能在主循环的安全点调用**，理由见笔记。`x_builtin_types.inc`：内置类型清单（X-macro，见下）。写这里的代码前先读 [notes/object-model-conventions.md](notes/object-model-conventions.md)。 |
 | `runtime/objects/` | 各具体对象类型：`Int`（裹 `BigInt`）、`Decimal`（裹 `BigDec`）、`Str`（`u32string`，按码点）、`Tuple`（`vector<ObjectRef>`）、`singletons.h`（`Singleton` 无负载单例 + `Bool`）。 |
 | `cpp_exceptions/` | 宿主（C++）层的异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`），纯头文件。跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。放在顶层而不是 `compiler/` 下，是因为 `utils/` 也要用它，而 `utils/` 是纯 C++ 层、不能反过来依赖 `compiler/`。 |
 | `utils/` | 自由函数工具：`string_utils`（UTF-8/UTF-32 互转等）、`file_utils`（读文件）。 |
@@ -118,8 +118,12 @@ sl_numeric (不依赖任何模块) ← sl_runtime
    ——根集合不含 C++ 栈上的局部 `Ref`，这条前提靠的是"C++ 调用栈深度不随 SL 帧栈增长"，见
    [notes/object-model-conventions.md](notes/object-model-conventions.md)。分代、只跟踪可能成环的
    对象这类优化都还没做，等主循环能量出实际分配速率再说。
-3. **bootstrap**：分阶段初始化，明确"第一次编译之前什么必须活着"。这是「运行时先于编译器」能成立的
-   前提，顺序错了就是循环依赖。
+3. ~~**bootstrap**~~ **已完成**：`BootPhase` 把初始化切成有序相位（`Uninitialized` → `Types` →
+   `Values` → `Ready`），每个访问器声明自己要求的最低相位，`Runtime::instance(required)` 统一拦截。
+   `Values` 之后常量表要的一切就都能造了；`Ready` 是"编译器与虚拟机可以跑"的那个点，
+   `Runtime::ready()` 供以后的编译器入口断言。`Values` 和 `Ready` 之间现在是空的——异常类树、
+   内置函数表、内置模块表按各自的依赖插进去，**不是往末尾一追了事**。`init()` 中途失败会把已建的
+   部分拆干净再抛，不留半初始化的运行时。
 4. **异常体系**：SL 层异常类树；`raise` 用的统一 C++ 信封类型（装一个 SL 异常对象引用）；纯 C++ 层与
    SL 层的分界和转换约定见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。
 5. **`Code` + `CodeGen`**：按 [`bytecode.md`](../compiler/codegen/bytecode.md) 重启。常量表存真对象，去重按
