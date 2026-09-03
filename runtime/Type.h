@@ -28,6 +28,6 @@ class Type final : public Object {
     // 自己也算自己的子类，即 isinstance 的类那一半。调用方保证 other 非空
     [[nodiscard]] bool is_subtype_of(const Type *other) const;
 
-  protected:
+  private:
     void visit_own_refs(RefVisitor &visitor) override;
 };

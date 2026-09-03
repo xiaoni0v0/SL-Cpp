@@ -141,7 +141,7 @@ add_subdirectory(executor)
 # ------------------------------------------------------------
 add_executable(SL main.cpp)
 sl_apply_main_target_options(SL)
-target_link_libraries(SL PRIVATE sl_executor cxxopts::cxxopts)
+target_link_libraries(SL PRIVATE sl_executor cxxopts::cxxopts sl_runtime)
 
 if (MINGW)
     target_link_options(SL PRIVATE

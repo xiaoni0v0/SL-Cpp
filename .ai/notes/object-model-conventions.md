@@ -81,6 +81,28 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
   唯一的自动拦截点——不声明的话，早一步拿到的是个空类型指针，错误会飘到很远才炸。
 - 需要"运行时已经完全就位"的入口（编译器门面、虚拟机主循环）断言 `Runtime::ready()`。
 
+## 六、"只给 X 用"就用访问控制表达，别靠注释
+
+`runtime/` 里凡是注释写着"只给 GC 用""只给 bootstrap 用"的成员，一律是 `private` + 精确的
+`friend`，没有"public 但请自觉别碰"这种东西。当前的几处：
+
+| 成员 | 谁能碰 | 怎么做到的 |
+|---|---|---|
+| `Object::gc_prev_/gc_next_/gc_marked_` | `Heap` | `friend class Heap` |
+| `Object::visit_all_refs` | `Heap` | 同上 |
+| `Object::visit_own_refs` | 只有 `Object::visit_all_refs` | 私有虚函数（NVI），子类照常覆写 |
+| `Object::set_type` | `Runtime` | `friend class Runtime` |
+| `Heap::link/unlink` | `Object` | `friend class Object` |
+
+**踩过的坑**：`Heap` 的两个访问者（`Marker`/`Clearer`）一开始写在 `Heap.cpp` 的匿名 namespace 里，
+它们不是 `Heap` 的成员，`friend class Heap` 罩不到，于是当时把 `Object` 的标记位开了一对公开访问器
+将就过去。**正确做法是把它们做成 `Heap` 的嵌套类**——嵌套类跟其他成员一样享有外围类的友元权限
+（`[class.access.nest]`），头文件里只留两行前置声明 `class Marker; class Clearer;`，定义照旧在 `.cpp`。
+以后再遇到"某个辅助类需要访问被友元保护的东西"，先想这一招，别开公开后门。
+
+**唯一公开的例外是 `Object::refcount()`**，而且它是**只读**的：测试要靠它断言引用计数收支平衡，
+这是现阶段抓引用计数 bug 的主要手段。判据是"只读的诊断信息可以公开，可变的内部记账不行"。
+
 ## 内置类型之间唯一的环
 
 内置类型之间**唯一**的引用环是"每个类型都强引用元类 `type`，而 `type` 的元类是它自己"——

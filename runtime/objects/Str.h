@@ -19,6 +19,6 @@ class Str final : public Object {
     [[nodiscard]] static Ref<Str> from_utf8(const std::string &utf8);
     [[nodiscard]] std::string to_utf8() const;
 
-  protected:
+  private:
     void visit_own_refs(RefVisitor &) override {}
 };

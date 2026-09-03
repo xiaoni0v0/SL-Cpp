@@ -12,6 +12,6 @@ class Int final : public Object {
 
     [[nodiscard]] const BigInt &value() const { return value_; }
 
-  protected:
+  private:
     void visit_own_refs(RefVisitor &) override {}
 };

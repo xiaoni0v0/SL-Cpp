@@ -22,6 +22,6 @@ class Exception final : public Object {
 
     [[nodiscard]] Tuple *args() const { return args_.get(); }
 
-  protected:
+  private:
     void visit_own_refs(RefVisitor &visitor) override;
 };

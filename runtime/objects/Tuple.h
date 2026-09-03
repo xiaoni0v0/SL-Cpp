@@ -18,6 +18,6 @@ class Tuple final : public Object {
     // 调用方保证 index < size()
     [[nodiscard]] Object *at(std::size_t index) const;
 
-  protected:
+  private:
     void visit_own_refs(RefVisitor &visitor) override;
 };

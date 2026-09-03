@@ -30,6 +30,20 @@ class GcRootSource {
 // 这条前提能成立，靠的是 bytecode.md 那条"C++ 调用栈深度不得随 SL 帧栈深度增长"的约束：
 // 执行状态全在堆上的帧对象里，安全点上 C++ 栈本来就是空的。
 class Heap {
+    // 标记阶段和清理阶段的两个访问者，定义在 .cpp 里。
+    //
+    // 做成 Heap 的嵌套类、而不是 .cpp 里的匿名类，是为了访问权限：它们要读写 Object 的 GC 记账
+    // 字段（标记位）、还要调 Object 私有的 visit_all_refs。嵌套类跟其他成员一样享有 Heap 从
+    // Object 那里拿到的友元权限，于是那些东西可以一直待在 Object 的 private 区，
+    // 不用为了这两个类专门开公开访问器
+    class Marker;
+    class Clearer;
+
+    // 进出全堆链表。只给 Object 的构造/析构用
+    friend class Object;
+    static void link(Object *obj);
+    static void unlink(Object *obj);
+
   public:
     Heap() = delete;
 
@@ -46,8 +60,4 @@ class Heap {
     // 攒够了没有。主循环在安全点问这个，为真就 collect()。阈值是个先能跑的粗策略，
     // 等主循环真跑起来、能量出实际分配速率了再调
     [[nodiscard]] static bool should_collect();
-
-    // 只给 Object 的构造/析构用：进出全堆链表
-    static void link(Object *obj);
-    static void unlink(Object *obj);
 };

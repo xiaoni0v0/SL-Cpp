@@ -16,14 +16,16 @@ std::vector<GcRootSource *> g_root_sources;
 // 攒够这么多新对象就值得扫一轮。跟存活量挂钩，避免堆大了以后每次只回收一点点却全堆扫一遍
 constexpr std::size_t kMinAllocationsBetweenCollects{1024};
 
+} // namespace
+
 // 标记阶段：把根可达的对象全部染上标记。不清空槽位
-class Marker final : public RefVisitor {
+class Heap::Marker final : public RefVisitor {
     std::vector<Object *> pending_;
 
   protected:
     void visit_ref(Object *const target) override {
-        if (!target || target->gc_marked()) return;
-        target->gc_set_marked(true);
+        if (!target || target->gc_marked_) return;
+        target->gc_marked_ = true;
         // 显式工作栈，不递归——对象图的深度是用户数据说了算的，递归会爆 C++ 栈
         pending_.push_back(target);
     }
@@ -41,13 +43,11 @@ class Marker final : public RefVisitor {
 };
 
 // 清理阶段：把垃圾对象的每条出边就地放掉
-class Clearer final : public RefVisitor {
+class Heap::Clearer final : public RefVisitor {
   protected:
     void visit_ref(Object *) override {}
     [[nodiscard]] bool clears() const override { return true; }
 };
-
-} // namespace
 
 void Heap::link(Object *const obj) {
     obj->gc_next_ = g_head;
@@ -94,8 +94,8 @@ void Heap::collect() {
     // ——— 2. 分离：未标记的就是垃圾；顺手把标记复位，省一遍扫描 ———
     std::vector<Object *> garbage;
     for (Object *object{g_head}; object; object = object->gc_next_) {
-        if (object->gc_marked())
-            object->gc_set_marked(false);
+        if (object->gc_marked_)
+            object->gc_marked_ = false;
         else
             garbage.push_back(object);
     }

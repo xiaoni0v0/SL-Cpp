@@ -18,7 +18,7 @@ class Singleton final : public Object {
     // 名字就是它们全部的内容
     [[nodiscard]] const std::string &name() const { return name_; }
 
-  protected:
+  private:
     void visit_own_refs(RefVisitor &) override {}
 };
 
@@ -32,6 +32,6 @@ class Bool final : public Object {
 
     [[nodiscard]] bool value() const { return value_; }
 
-  protected:
+  private:
     void visit_own_refs(RefVisitor &) override {}
 };

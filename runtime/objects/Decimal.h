@@ -12,6 +12,6 @@ class Decimal final : public Object {
 
     [[nodiscard]] const BigDec &value() const { return value_; }
 
-  protected:
+  private:
     void visit_own_refs(RefVisitor &) override {}
 };

@@ -11,7 +11,11 @@ class Type;
 void incref(Object *obj);
 void decref(Object *obj);
 
-// 侵入式引用计数句柄。构造恒 +1、析构恒 -1
+/**
+ * 一条引用关系。
+ *
+ * 会改对象的引用计数，构造 Ref 恒 +1、析构 Ref 恒 -1。
+ */
 template <typename T> class Ref {
     T *ptr_{nullptr};
 
@@ -118,11 +122,14 @@ class Object {
     // 只给 bootstrap 用的后门，处理 object/type 关系
     void set_type(Type *type);
 
+    // 只给 GC 用的后门，本对象的全部强引用 = 所属类型的强引用 + 子类自己的强引用
+    void visit_all_refs(RefVisitor &visitor);
+
+    // 报告本对象自己（不含上面的 type_）的强引用。
+    virtual void visit_own_refs(RefVisitor &visitor) = 0;
+
   protected:
     explicit Object(Type *type);
-
-    // 报告本对象自己（不含上面的 type_）的强引用
-    virtual void visit_own_refs(RefVisitor &visitor) = 0;
 
   public:
     Object(const Object &) = delete;
@@ -133,13 +140,6 @@ class Object {
 
     [[nodiscard]] Type *type() const { return type_.get(); }
     [[nodiscard]] std::size_t refcount() const { return refcount_; }
-
-    // 只给 GC 用的后门，本对象的全部出边 = 所属类型的强引用 + 子类自己的的强引用
-    void visit_all_refs(RefVisitor &visitor);
-
-    // 只给 GC 用的后门，标记位的读写
-    [[nodiscard]] bool gc_marked() const { return gc_marked_; }
-    void gc_set_marked(const bool marked) { gc_marked_ = marked; }
 
     friend void incref(Object *obj);
     friend void decref(Object *obj);
