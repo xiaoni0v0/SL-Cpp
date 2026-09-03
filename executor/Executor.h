@@ -3,7 +3,7 @@
 #include <string>
 
 class Executor {
-    const std::string file_path;
+    const std::string file_path_;
 
   public:
     explicit Executor(const std::string &s);
