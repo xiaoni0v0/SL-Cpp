@@ -1,5 +1,5 @@
 // in：夹在比较和 is 之间的左结合二元运算，不收成链节点。
-#include "../../../builtins/exceptions/SyntaxError.h"
+#include "../../../diagnostics/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

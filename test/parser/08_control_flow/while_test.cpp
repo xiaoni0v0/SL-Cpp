@@ -1,5 +1,5 @@
 // while：内部是 init/inc 为空的步进 for。括号内换行是空白。
-#include "../../../builtins/exceptions/SyntaxError.h"
+#include "../../../diagnostics/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

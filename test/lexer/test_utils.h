@@ -2,7 +2,7 @@
 
 // 把 Lexer 输出转成单行字符串，方便 CHECK(lex_dump(...) == "...")。
 
-#include "../../lexer/Lexer.h"
+#include "../../compiler/lexer/Lexer.h"
 #include "../../utils/string_utils.h"
 
 #include <sstream>

@@ -1,7 +1,7 @@
 #include "ast_node_literals.h"
 
-#include "../../../builtins/exceptions/InternalError.h"
-#include "../../../utils/string_utils.h"
+#include "../../../../diagnostics/InternalError.h"
+#include "../../../../utils/string_utils.h"
 
 namespace {
 

@@ -1,5 +1,5 @@
 // del target。形状合法性由语义层检查，语法层只要求后面有表达式。
-#include "../../../builtins/exceptions/SyntaxError.h"
+#include "../../../diagnostics/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

@@ -1,9 +1,9 @@
 ﻿#include "Parser.h"
 
-#include "../builtins/exceptions/InternalError.h"
-#include "../builtins/exceptions/SyntaxError.h"
+#include "../../diagnostics/InternalError.h"
+#include "../../diagnostics/SyntaxError.h"
+#include "../../utils/string_utils.h"
 #include "../lexer/Lexer.h"
-#include "../utils/string_utils.h"
 
 #include <algorithm>
 #include <cassert>

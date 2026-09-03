@@ -5,10 +5,10 @@
 // 否则 nlohmann 会走 initializer_list 构造函数，对象被包成单元素数组。见
 // .ai/notes/json-test-brace-init-trap.md。
 
-#include "../../builtins/exceptions/SyntaxError.h"
-#include "../../lexer/Lexer.h"
-#include "../../parser/Parser.h"
-#include "../../parser/ast_nodes/ast_json_dumper.h"
+#include "../../compiler/lexer/Lexer.h"
+#include "../../compiler/parser/Parser.h"
+#include "../../compiler/parser/ast_nodes/ast_json_dumper.h"
+#include "../../diagnostics/SyntaxError.h"
 
 #include <doctest/doctest.h>
 #include <nlohmann/json.hpp>

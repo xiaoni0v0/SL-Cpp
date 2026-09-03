@@ -2,9 +2,9 @@
 
 // 解析后跑 SemanticChecker。check_throws_with 断言消息子串，避免被别的规则先拦下来。
 
-#include "../../../analyzer/semantic_checker/SemanticChecker.h"
-#include "../../../builtins/exceptions/InternalError.h"
-#include "../../../builtins/exceptions/SyntaxError.h"
+#include "../../../compiler/analyzer/semantic_checker/SemanticChecker.h"
+#include "../../../diagnostics/InternalError.h"
+#include "../../../diagnostics/SyntaxError.h"
 #include "../../parser/test_utils.h"
 
 #include <doctest/doctest.h>

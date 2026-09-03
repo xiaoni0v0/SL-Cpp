@@ -1,7 +1,7 @@
 #include "SemanticChecker.h"
 
-#include "../../builtins/exceptions/InternalError.h"
-#include "../../builtins/exceptions/SyntaxError.h"
+#include "../../../diagnostics/InternalError.h"
+#include "../../../diagnostics/SyntaxError.h"
 
 #include <unordered_set>
 

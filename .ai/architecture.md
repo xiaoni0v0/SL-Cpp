@@ -8,10 +8,10 @@
 
 ```
 源码 (.sl)
-  → Lexer      (lexer/)              词法分析，产出 Token 序列
-  → Parser     (parser/)             语法分析，产出 AST
-  → Analyzer   (analyzer/)           语义检查 + 编译期常量折叠，原地改 AST
-  → CodeGen    (codegen/)            AST → Code（字节码），还没写
+  → Lexer      (compiler/lexer/)     词法分析，产出 Token 序列
+  → Parser     (compiler/parser/)    语法分析，产出 AST
+  → Analyzer   (compiler/analyzer/)  语义检查 + 编译期常量折叠，原地改 AST
+  → CodeGen    (compiler/codegen/)   AST → Code（字节码），还没写
   → Executor   (executor/)           跑字节码的虚拟机，还没写
 ```
 
@@ -22,8 +22,8 @@
 
 **当前完成度**：Lexer/Parser 已实现且有完整测试；Analyzer 的两个子系统（语义检查、常量折叠）已实现
 且有完整测试；`numeric/` 的 `BigInt`（`int` 的底层）和 `BigDec`+`DecContext`（`decimal` 的底层）已实现
-且有完整测试；`codegen/` 只剩一份设计文档 [`bytecode.md`](../codegen/bytecode.md)，`executor/` 是占位
-空壳，运行时（对象模型/GC）尚未开始——实现顺序见下面「实现路线」。**在 `executor/` 落地之前，SL.md 里"运行时"相关的
+且有完整测试；`compiler/codegen/` 只剩一份设计文档 [`bytecode.md`](../compiler/codegen/bytecode.md)，
+`executor/` 目前只是串流水线的驱动，运行时（对象模型/GC）尚未开始——实现顺序见下面「实现路线」。**在 `executor/` 落地之前，SL.md 里"运行时"相关的
 条文（对象模型、GC、异常传播的具体机制等）都还没有对应实现可以参照，只能靠 SL.md 文本本身。**
 
 **`BigDec` 的完成度**：SL.md 里 decimal 参与的**运算符全都实现了**——四则、`//`/`%`、比较、`**`，
@@ -35,19 +35,20 @@
 
 | 目录 | 内容 |
 |---|---|
-| `lexer/` | `Lexer.{h,cpp}`：分词器。`token.h` 定义 `Token`；`x_token_type.inc`/`x_keyword.inc`/`x_reservedword.inc` 是 X-macro 列表（见下）。 |
-| `parser/` | `Parser.{h,cpp}`：递归下降 + Pratt 解析器，产出 `parser/ast_nodes/` 里定义的 AST。 |
-| `parser/ast_nodes/` | AST 节点类型定义。`ast_nodes.h` 是汇总头（引入 `details/` 下所有节点头）；`x_ast_nodes.inc` 是全部节点类型的 X-macro 列表；`ast_json_dumper.h`/`.cpp` 定义 `AstJsonDumper : public AstConstVisitor`，把 AST 序列化成 JSON（调试/测试用，不是语言语义的一部分），入口是静态方法 `AstJsonDumper::dump(node, include_pos)`，内部靠每个节点一个 `visit()` + `result_` 成员当通道完成（`.ai/notes/visitor-result-passing.md` 那个模式）；`ast_visitor.h` 定义 `AstVisitor`/`AstConstVisitor`（会改树的、只读的两套）和 `SL_AST_NODE_ACCEPT` 宏，要遍历 AST 的类继承它们，靠 `accept` + `visit` 两次虚调用完成双分派——漏实现某个节点类型是编译期错误，不是运行期 assert。 |
-| `parser/ast_nodes/details/` | 具体节点定义，按语法范畴分文件（`ast_node_class.h`、`ast_node_control_flows.h`、`ast_node_func.h`、`ast_node_import.h`、`ast_node_literals.h`、`ast_node_multi_exprs.h`（Program/Compound）、`ast_node_operators.h`、`ast_node_postfix.h`（call/index/attr）、`ast_node_var.h`（del/global/标识符）、`ast_node_decorators.h`、`ast_node_eval.h`）。`ast_node_misc.h` 放**不是** `AstNode`、但被多个节点类型共用的小聚合体（`OneCapture`、`OneKwArg`、`CallArgs`）。唯一的 `.cpp` 是 `ast_node_literals.cpp`：int/decimal 字面量的构造函数在这里校验 `raw_` 的形状（纯数字/前导零/科学计数法后缀/可选的前导负号），违反即 `InternalError`——常量折叠造出来的字面量节点不会再经过 `SemanticChecker`，只有构造函数拦得住。 |
-| `analyzer/` | `Analyzer.{h,cpp}`：入口，依次跑 `SemanticChecker` 和 `ExprFolder`。 |
-| `analyzer/semantic_checker/` | `SemanticChecker.{h,cpp}`（`AstConstVisitor` 的实现）：语义检查（作用域规则、lvalue 合法性、`*`/`**` 位置合法性、func/class 约束、AST 结构防御性校验……），只读不改 AST，违规抛 `SyntaxError`（真实语义错误）或 `InternalError`（AST 结构本身违反 Parser 的保证，代表实现自己有 bug）。单个节点自己字段的合法性不归这里，归节点构造函数（见 `parser/ast_nodes/details/`）。 |
-| `analyzer/expr_folder/` | `ExprFolder.{h,cpp}`（`AstVisitor` 的实现）：遍历 + 原地替换 AST 的调度层，拥有 `AstNodePtr` 槽位的所有权。`StaticEvaler.{h,cpp}`：纯函数式的"给一个节点判断能不能折、折成什么"，不遍历树、不拥有节点。 |
+| `compiler/` | 编译期那几层的收纳目录，本身只有一个 `CMakeLists.txt`。注意 **纯 C++ 层 / SL 层的分界是按模块划的不是按目录**：里面 `lexer`/`parser`/`analyzer` 是纯 C++ 层，`codegen` 要造真 SL 对象、属于 SL 层，见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。 |
+| `compiler/lexer/` | `Lexer.{h,cpp}`：分词器。`token.h` 定义 `Token`；`x_token_type.inc`/`x_keyword.inc`/`x_reservedword.inc` 是 X-macro 列表（见下）。 |
+| `compiler/parser/` | `Parser.{h,cpp}`：递归下降 + Pratt 解析器，产出 `ast_nodes/` 里定义的 AST。 |
+| `compiler/parser/ast_nodes/` | AST 节点类型定义。`ast_nodes.h` 是汇总头（引入 `details/` 下所有节点头）；`x_ast_nodes.inc` 是全部节点类型的 X-macro 列表；`ast_json_dumper.h`/`.cpp` 定义 `AstJsonDumper : public AstConstVisitor`，把 AST 序列化成 JSON（调试/测试用，不是语言语义的一部分），入口是静态方法 `AstJsonDumper::dump(node, include_pos)`，内部靠每个节点一个 `visit()` + `result_` 成员当通道完成（`.ai/notes/visitor-result-passing.md` 那个模式）；`ast_visitor.h` 定义 `AstVisitor`/`AstConstVisitor`（会改树的、只读的两套）和 `SL_AST_NODE_ACCEPT` 宏，要遍历 AST 的类继承它们，靠 `accept` + `visit` 两次虚调用完成双分派——漏实现某个节点类型是编译期错误，不是运行期 assert。 |
+| `compiler/parser/ast_nodes/details/` | 具体节点定义，按语法范畴分文件（`ast_node_class.h`、`ast_node_control_flows.h`、`ast_node_func.h`、`ast_node_import.h`、`ast_node_literals.h`、`ast_node_multi_exprs.h`（Program/Compound）、`ast_node_operators.h`、`ast_node_postfix.h`（call/index/attr）、`ast_node_var.h`（del/global/标识符）、`ast_node_decorators.h`、`ast_node_eval.h`）。`ast_node_misc.h` 放**不是** `AstNode`、但被多个节点类型共用的小聚合体（`OneCapture`、`OneKwArg`、`CallArgs`）。唯一的 `.cpp` 是 `ast_node_literals.cpp`：int/decimal 字面量的构造函数在这里校验 `raw_` 的形状（纯数字/前导零/科学计数法后缀/可选的前导负号），违反即 `InternalError`——常量折叠造出来的字面量节点不会再经过 `SemanticChecker`，只有构造函数拦得住。 |
+| `compiler/analyzer/` | `Analyzer.{h,cpp}`：入口，依次跑 `SemanticChecker` 和 `ExprFolder`。 |
+| `compiler/analyzer/semantic_checker/` | `SemanticChecker.{h,cpp}`（`AstConstVisitor` 的实现）：语义检查（作用域规则、lvalue 合法性、`*`/`**` 位置合法性、func/class 约束、AST 结构防御性校验……），只读不改 AST，违规抛 `SyntaxError`（真实语义错误）或 `InternalError`（AST 结构本身违反 Parser 的保证，代表实现自己有 bug）。单个节点自己字段的合法性不归这里，归节点构造函数（见 `compiler/parser/ast_nodes/details/`）。 |
+| `compiler/analyzer/expr_folder/` | `ExprFolder.{h,cpp}`（`AstVisitor` 的实现）：遍历 + 原地替换 AST 的调度层，拥有 `AstNodePtr` 槽位的所有权。`StaticEvaler.{h,cpp}`：纯函数式的"给一个节点判断能不能折、折成什么"，不遍历树、不拥有节点。 |
 | `numeric/` | `BigInt.{h,cpp}`：手写高精度整数，`int` 的底层实现（`小路径 int64_t` / `大路径 limbs` 双表示）。`BigDec.{h,cpp}`：十进制浮点数，`decimal` 的底层实现（`BigInt 系数 + int64_t 指数 + 独立符号位 + 特殊值 tag`）。`DecContext.{h,cpp}`：`decimal.Context` 的底层实现——舍入方式、精度、指数范围、信号的陷阱/标志位，以及陷阱触发时抛的 `DecTrapped`。`dec_math.{h,cpp}`：`ln`/`log10`/`exp`/`**` 用的整数层定点算法（`ilog`/`iexp`/`dlog`/`dexp`/`dpower` 等），只跟 BigInt 打交道，不认识上下文和信号。 |
-| `builtins/exceptions/` | 前端自己用的 C++ 异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`）——跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。 |
+| `diagnostics/` | 宿主（C++）层的异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`），纯头文件。跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。放在顶层而不是 `compiler/` 下，是因为 `utils/` 也要用它，而 `utils/` 是纯 C++ 层、不能反过来依赖 `compiler/`。 |
 | `utils/` | 自由函数工具：`string_utils`（UTF-8/UTF-32 互转等）、`file_utils`（读文件）。 |
-| `codegen/` | 只有 [`bytecode.md`](../codegen/bytecode.md)——指令集/帧/`Code` 的完整设计，动这里之前先读它。**没有代码**：曾经写过一版 `ConstPool`（编译期常量描述 + 物化），随「运行时先于编译器」的决定一起废掉了，规则本身留在 `bytecode.md` 的「常量去重」一节。 |
-| `executor/` | 空壳，还没写。字节码虚拟机，设计见 [`codegen/bytecode.md`](../codegen/bytecode.md)。 |
-| `test/` | 目录结构镜像 `lexer/`/`parser/`/`analyzer/`/`numeric/`，见下。 |
+| `compiler/codegen/` | 只有 [`bytecode.md`](../compiler/codegen/bytecode.md)——指令集/帧/`Code` 的完整设计，动这里之前先读它。**没有代码**：曾经写过一版 `ConstPool`（编译期常量描述 + 物化），随「运行时先于编译器」的决定一起废掉了，规则本身留在 `bytecode.md` 的「常量去重」一节。 |
+| `executor/` | `Executor.{h,cpp}`：目前只是把整条编译流水线串起来、逐步打印中间结果的驱动，`main.cpp` 调它。真正的字节码虚拟机还没写，设计见 [`bytecode.md`](../compiler/codegen/bytecode.md)。 |
+| `test/` | 目录结构镜像被测模块（`lexer`/`parser`/`analyzer`/`numeric`），见下。 |
 
 ## 运行时先于编译器
 
@@ -64,12 +65,32 @@ SL 对象塞进 `Code` 的常量表，不再有"编译期描述 → 运行期物
 `Code` 还顺带可序列化"。否决原因：`eval` 让那个依赖无论如何都存在，于是描述层只是在一条必然存在的路径
 旁边多养了一条；而且它是一个跟对象模型平行的类型层，每加一种常量都要改两处。已经写出来的 `ConstPool`
 一并删掉了——它真正的资产是那套去重规则（先比类型、`decimal` 逐位比、元组比元素身份），规则记在
-[`codegen/bytecode.md`](../codegen/bytecode.md) 的「常量去重」，代码没了也不丢。
+[`compiler/codegen/bytecode.md`](../compiler/codegen/bytecode.md) 的「常量去重」，代码没了也不丢。
 
 **这个决定不覆盖前端的错误表示**：`SyntaxError`/`InternalError` 等仍然是纯 C++ 异常，lexer/parser/
 analyzer 不该反过来依赖对象模型，编译诊断在被 SL 代码 `try` 住之前也不是 SL 值。只在 `eval` 这一个边界
 上把编译失败转成 SL 异常对象。`InternalError` 更是永远不能变成 SL 异常——它是唯一没有对应 SL 类、明确
 不可被 SL 捕获的那个。
+
+## 构建：每个模块一个静态库
+
+根 `CMakeLists.txt` 只做四件事：编译器前端识别、编译参数/预编译头的封装函数（`sl_apply_*_options`、
+`sl_apply_pch`、`sl_add_module`）、拉第三方库、`add_subdirectory`。**每个模块目录有自己的
+`CMakeLists.txt`**，用 `sl_add_module(sl_xxx …)` 建一个静态库并声明自己的依赖：
+
+```
+sl_diagnostics (INTERFACE，纯头文件)
+    ← sl_utils ← sl_lexer ← sl_parser ← sl_analyzer ← sl_executor ← SL
+sl_numeric (不依赖任何模块)
+```
+
+测试目标在 `test/CMakeLists.txt`，用本地的 `sl_add_test_target(<名字> LIBS … SOURCES …)`：只列自己的
+测试文件，被测代码靠 `LIBS` 链进来。**这是拆库的主要动机**——以前每个测试目标都要把被测模块的源文件
+清单原样抄一遍，parser 那份抄了三处，加个文件要改三个地方。
+
+新增一个模块：建目录 + 写它的 `CMakeLists.txt`（一个 `sl_add_module` + 一个
+`target_link_libraries`），在上级 `CMakeLists.txt` 里 `add_subdirectory`。新增一个文件：只改所属模块
+那一份清单。
 
 ## 实现路线
 
@@ -84,19 +105,18 @@ analyzer 不该反过来依赖对象模型，编译诊断在被 SL 代码 `try` 
    前提，顺序错了就是循环依赖。
 4. **异常体系**：SL 层异常类树；`raise` 用的统一 C++ 信封类型（装一个 SL 异常对象引用）；纯 C++ 层与
    SL 层的分界和转换约定见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。
-5. **`Code` + `CodeGen`**：按 [`bytecode.md`](../codegen/bytecode.md) 重启。常量表存真对象，去重按
+5. **`Code` + `CodeGen`**：按 [`bytecode.md`](../compiler/codegen/bytecode.md) 重启。常量表存真对象，去重按
    那份文档的「常量去重」。
 6. **`Frame` + 主循环 + 指令实现**。
 7. **`eval` / `import`**。
 
-**目录调整（计划中，还没做）**：
+**目录调整**：`lexer`/`parser`/`analyzer`/`codegen` 已收进 `compiler/`，`builtins/exceptions/` 已挪成
+顶层的 `diagnostics/`（`builtins/` 这个名字留给真正的 SL 内置）。还没做的两件：
 
-- `lexer/`+`parser/`+`analyzer/`+`codegen/` 收进 `compiler/`，门面就是那一层的对外入口（它负责把
-  C++ `SyntaxError` 转成 SL 异常）。注意 **纯 C++ / SL 层的分界是按模块划的，不是按目录**：
-  `compiler/` 里前三个是纯 C++ 层，`codegen` 要造真 SL 对象，是 SL 层。
-- 运行时那几层需要一个对称的落脚处（`runtime/`，或者把 `executor/` 扩成它），第 1 步动手前再定。
-- `builtins/exceptions/` 要挪走：它装的是 C++ 前端异常，而 `builtins/` 这个名字指向 SL 内置——等真正的
-  SL 异常类建起来，两拨同名的东西各在一处会很难认。搬去 `compiler/` 或单开 `diagnostics/`。
+- **`compiler/` 的门面**——一个把"源码 → `Code`"包起来的对外入口，同时是把 C++ `SyntaxError` 转成 SL
+  异常的地方。等 `codegen` 能跑了再写，现在 `executor/Executor.cpp` 手工串着三层。
+- **运行时那几层的落脚处**：新开 `runtime/`，还是把 `executor/` 扩成它？第 1 步动手前再定。定了之后
+  `executor/` 里那段"串流水线的驱动"也该跟虚拟机本身分开。
 
 ## AST 节点：X-macro 分发 + 双路径职责
 
@@ -107,7 +127,7 @@ analyzer 不该反过来依赖对象模型，编译诊断在被 SL 代码 `try` 
   用 const 版、`ExprFolder` 用非 const 版）继承它们，分派走**双分派**（`node.accept(*this)` →
   节点自己的 `accept` 挑中对应的 `visit`），不是 `dynamic_cast` 瀑布。**加一个新节点类型，必须在
   这里加一行**——加完之后漏实现哪个 `visit` 是**编译期**报错（纯虚函数没覆写），不会拖到运行期。
-- 新节点类型还需要：在 `parser/ast_nodes/details/` 某个合适的文件里定义结构体（继承 `AstNode`，
+- 新节点类型还需要：在 `compiler/parser/ast_nodes/details/` 某个合适的文件里定义结构体（继承 `AstNode`，
   类体里写一行 `SL_AST_NODE_ACCEPT` 宏），并把该头文件加进 `ast_nodes.h`；`ast_json_dumper.cpp` 里加
   对应的 `visit(...) override`；`SemanticChecker.h`/`.cpp` 和 `ExprFolder.h`/`.cpp` 里也各加
   对应的 `visit(...) override`（哪怕只是递归子节点、什么都不折）。
@@ -230,7 +250,7 @@ ctest 现在约 28 秒。要更大覆盖别往表里堆，用倍数参数临时�
 - **函数的隐含前提统一写"调用方保证 X"**（不是"要求 X"这种含糊说法，消除"这是函数自己检查的还是靠
   调用方保证的"这层歧义），配的校验方式看这个前提要不要在 Release 构建里也生效：只在开发期兜底的
   用 `assert(...)`（在函数开头，`NDEBUG` 下会被优化掉，所以不能拿它实现真正的校验）；`SemanticChecker`/
-  `string_utils`/`builtins/exceptions` 这类需要在 Release 也生效的真实校验，走抛异常
+  `string_utils`/`diagnostics` 这类需要在 Release 也生效的真实校验，走抛异常
   （`SyntaxError`/`InternalError`/`EncodingError`），不能用 `assert` 顶替。
 - **避免"同一产物在多个出口分头构造"**：同一种产物如果在多处提前返回、各自构造，等于制造了多份
   测试压不到的独立状态空间，历史上好几个换行容错类的 bug 都是这个模式孵出来的。能合并"同一产物多处

@@ -15,7 +15,7 @@ cmd //c "E:\Programs\SL-Cpp\.ai\run_test.bat"
 这个脚本是用户提供的，专门用来让 AI 能在 Bash 工具里自己完成"改代码 → 构建 → 跑测试"的完整闭环，不用
 每次都让用户手动到 CLion 里点构建。
 
-**how to apply**：改完 `parser/`/`lexer/`（或任何会影响这两个测试目标的代码）之后，自己跑这个脚本
+**how to apply**：改完 `compiler/` 下的代码（或任何会影响这几个测试目标的代码）之后，自己跑这个脚本
 验证，不要让用户代跑。构建失败会跳过测试、返回非零；输出里会分别报 `SL_Cpp_Numeric_BigInt_Tests`、
 `SL_Cpp_Numeric_BigDec_Tests`、`SL_Cpp_Lexer_Tests`、`SL_Cpp_Parser_Tests`、`SL_Cpp_Analyzer_Tests`
 五个独立可执行文件各自的用例数/断言数。如果构建失败但报错信息在 Bash 输出里

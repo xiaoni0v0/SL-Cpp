@@ -1,5 +1,5 @@
 // class：基类、捕获、doc。捕获语法与 func 相同。
-#include "../../../builtins/exceptions/SyntaxError.h"
+#include "../../../diagnostics/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

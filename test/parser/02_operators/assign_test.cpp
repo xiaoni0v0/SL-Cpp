@@ -1,5 +1,5 @@
 // 赋值 / 复合赋值。左值合法性由语义层检查。
-#include "../../../builtins/exceptions/SyntaxError.h"
+#include "../../../diagnostics/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

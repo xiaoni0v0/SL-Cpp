@@ -1,5 +1,5 @@
 // decimal 字面量：整数和小数部分都不能省。点号与 range 的交错见 05_operators。
-#include "../../../builtins/exceptions/SyntaxError.h"
+#include "../../../diagnostics/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

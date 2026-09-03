@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.20)
 project(SL_Cpp)
 
 set(CMAKE_CXX_STANDARD 26)
@@ -35,6 +35,8 @@ set(SL_MSVC_LIKE_FRONTEND FALSE)
 if (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     set(SL_MSVC_LIKE_FRONTEND TRUE)
     add_compile_options(/utf-8 /bigobj)
+    # 所有目标（含各静态库）统一运行时库
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "$<IF:$<CONFIG:Debug>,MultiThreadedDebugDLL,MultiThreaded>")
 endif ()
 
 # ------------------------------------------------------------
@@ -76,6 +78,31 @@ function(sl_apply_test_target_options target)
     endif ()
 endfunction()
 
+# 各模块共用的预编译头（只放标准库）
+function(sl_apply_pch target)
+    target_precompile_headers(${target} PRIVATE
+            <algorithm>
+            <charconv>
+            <filesystem>
+            <format>
+            <iostream>
+            <memory>
+            <optional>
+            <ranges>
+            <stdexcept>
+            <string>
+            <utility>
+            <vector>
+    )
+endfunction()
+
+# 建一个模块静态库
+function(sl_add_module target)
+    add_library(${target} STATIC ${ARGN})
+    sl_apply_main_target_options(${target})
+    sl_apply_pch(${target})
+endfunction()
+
 # 第三方库
 include(FetchContent)
 FetchContent_Declare(
@@ -98,375 +125,31 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json cxxopts doctest)
 
-# 所有的源文件
-add_executable(SL main.cpp
-        # utils
-        utils/file_utils.cpp
-        utils/file_utils.h
-        utils/string_utils.cpp
-        utils/string_utils.h
+# ------------------------------------------------------------
+# 各模块。依赖方向：diagnostics <- utils/numeric <- compiler <- executor
+# ------------------------------------------------------------
+add_subdirectory(diagnostics)
+add_subdirectory(utils)
+add_subdirectory(numeric)
+add_subdirectory(compiler)
+add_subdirectory(executor)
 
-        # numeric
-        numeric/BigDec.cpp
-        numeric/BigDec.h
-        numeric/BigInt.cpp
-        numeric/BigInt.h
-        numeric/dec_math.cpp
-        numeric/dec_math.h
-        numeric/DecContext.cpp
-        numeric/DecContext.h
-
-        # builtins
-        builtins/exceptions/EncodingError.h
-        builtins/exceptions/FileNotFoundError.h
-        builtins/exceptions/InternalError.h
-        builtins/exceptions/SLException.h
-        builtins/exceptions/SyntaxError.h
-
-        # Executor
-        executor/Executor.cpp
-        executor/Executor.h
-
-        # Lexer
-        lexer/Lexer.cpp
-        lexer/Lexer.h
-        lexer/token.h
-        lexer/x_keyword.inc
-        lexer/x_reservedword.inc
-        lexer/x_token_type.inc
-
-        # Parser
-        parser/Parser.cpp
-        parser/Parser.h
-        parser/ast_nodes/ast_json_dumper.cpp
-        parser/ast_nodes/ast_json_dumper.h
-        parser/ast_nodes/ast_nodes.h
-        parser/ast_nodes/ast_visitor.h
-        parser/ast_nodes/x_ast_nodes.inc
-        parser/ast_nodes/details/ast_node.h
-        parser/ast_nodes/details/ast_node_class.h
-        parser/ast_nodes/details/ast_node_control_flows.h
-        parser/ast_nodes/details/ast_node_decorators.h
-        parser/ast_nodes/details/ast_node_eval.h
-        parser/ast_nodes/details/ast_node_func.h
-        parser/ast_nodes/details/ast_node_import.h
-        parser/ast_nodes/details/ast_node_literals.cpp
-        parser/ast_nodes/details/ast_node_literals.h
-        parser/ast_nodes/details/ast_node_misc.h
-        parser/ast_nodes/details/ast_node_multi_exprs.h
-        parser/ast_nodes/details/ast_node_operators.h
-        parser/ast_nodes/details/ast_node_postfix.h
-        parser/ast_nodes/details/ast_node_var.h
-
-        # Analyzer
-        analyzer/Analyzer.cpp
-        analyzer/Analyzer.h
-        analyzer/expr_folder/ExprFolder.cpp
-        analyzer/expr_folder/ExprFolder.h
-        analyzer/expr_folder/StaticEvaler.cpp
-        analyzer/expr_folder/StaticEvaler.h
-        analyzer/semantic_checker/SemanticChecker.cpp
-        analyzer/semantic_checker/SemanticChecker.h
-)
-
-# 编译选项
+# ------------------------------------------------------------
+# 可执行文件
+# ------------------------------------------------------------
+add_executable(SL main.cpp)
 sl_apply_main_target_options(SL)
+target_link_libraries(SL PRIVATE sl_executor cxxopts::cxxopts)
 
-# 链接选项
-if (SL_MSVC_LIKE_FRONTEND)
-    set_property(TARGET SL PROPERTY
-            MSVC_RUNTIME_LIBRARY "$<IF:$<CONFIG:Debug>,MultiThreadedDebugDLL,MultiThreaded>"
-    )
-else ()
+if (NOT SL_MSVC_LIKE_FRONTEND)
     target_link_options(SL PRIVATE
             $<$<CONFIG:Release>:-static-libgcc>
             $<$<CONFIG:Release>:-static-libstdc++>
     )
 endif ()
 
-# 链接库
-target_link_libraries(SL PRIVATE nlohmann_json::nlohmann_json cxxopts::cxxopts)
-
-# 预编译头
-target_precompile_headers(SL PRIVATE
-        <algorithm>
-        <charconv>
-        <filesystem>
-        <format>
-        <iostream>
-        <memory>
-        <optional>
-        <ranges>
-        <stdexcept>
-        <string>
-        <utility>
-        <vector>
-)
-
-# ============================================================
+# ------------------------------------------------------------
 # 测试
-# ============================================================
-
+# ------------------------------------------------------------
 enable_testing()
-
-add_executable(SL_Cpp_Numeric_BigInt_Tests
-        # 被测代码
-        numeric/BigInt.cpp
-        numeric/BigInt.h
-
-        # 测试工具
-        test/numeric/main_test.cpp
-        test/numeric/01_bigint/test_utils.h
-
-        # 测试代码
-        test/numeric/01_bigint/construct_convert_test.cpp
-        test/numeric/01_bigint/arithmetic_test.cpp
-        test/numeric/01_bigint/bitwise_shift_test.cpp
-        test/numeric/01_bigint/identities_test.cpp
-        test/numeric/01_bigint/python_cross_test.cpp
-
-        # 生成的交叉验证表（不要手改）
-        test/numeric/big_int_cases.inc
-)
-sl_apply_test_target_options(SL_Cpp_Numeric_BigInt_Tests)
-target_link_libraries(SL_Cpp_Numeric_BigInt_Tests PRIVATE doctest::doctest)
-add_test(NAME SL_Cpp_Numeric_BigInt_Tests COMMAND SL_Cpp_Numeric_BigInt_Tests)
-
-add_executable(SL_Cpp_Numeric_BigDec_Tests
-        # 被测代码
-        numeric/BigInt.cpp
-        numeric/BigInt.h
-        numeric/BigDec.cpp
-        numeric/BigDec.h
-        numeric/dec_math.cpp
-        numeric/dec_math.h
-        numeric/DecContext.cpp
-        numeric/DecContext.h
-
-        # 测试工具
-        test/numeric/main_test.cpp
-        test/numeric/02_bigdec/test_utils.h
-
-        # 测试代码
-        test/numeric/02_bigdec/construct_context_test.cpp
-        test/numeric/02_bigdec/arithmetic_test.cpp
-        test/numeric/02_bigdec/identities_pow_test.cpp
-        test/numeric/02_bigdec/narrow_path_test.cpp
-        test/numeric/02_bigdec/python_cross_test.cpp
-
-        # 生成的交叉验证表（不要手改）
-        test/numeric/big_dec_cases.inc
-)
-sl_apply_test_target_options(SL_Cpp_Numeric_BigDec_Tests)
-target_link_libraries(SL_Cpp_Numeric_BigDec_Tests PRIVATE doctest::doctest)
-add_test(NAME SL_Cpp_Numeric_BigDec_Tests COMMAND SL_Cpp_Numeric_BigDec_Tests)
-
-add_executable(SL_Cpp_Lexer_Tests
-        # 被测代码
-        lexer/Lexer.cpp
-        lexer/Lexer.h
-        lexer/token.h
-        lexer/x_keyword.inc
-        lexer/x_reservedword.inc
-        lexer/x_token_type.inc
-        utils/string_utils.cpp
-        utils/string_utils.h
-
-        # 测试工具
-        test/lexer/test_utils.h
-        test/lexer/main_test.cpp
-
-        # 测试代码
-        # 注释
-        test/lexer/01_comments/comments_test.cpp
-        # 关键字与保留字
-        test/lexer/02_keywords_reserved/keywords_test.cpp
-        test/lexer/02_keywords_reserved/reserved_words_test.cpp
-        # 标识符
-        test/lexer/03_identifiers/identifiers_test.cpp
-        # 字面量
-        test/lexer/04_literals/none_bool_ellipsis_test.cpp
-        test/lexer/04_literals/int_test.cpp
-        test/lexer/04_literals/decimal_test.cpp
-        test/lexer/04_literals/scientific_notation_test.cpp
-        test/lexer/04_literals/string_test.cpp
-        test/lexer/04_literals/raw_string_test.cpp
-        # 运算符与符号
-        test/lexer/05_operators/symbols_test.cpp
-        test/lexer/05_operators/dot_disambiguation_test.cpp
-        # 空白
-        test/lexer/06_whitespace/whitespace_test.cpp
-        # 报错与位置
-        test/lexer/07_errors/error_handling_test.cpp
-        test/lexer/07_errors/position_tracking_test.cpp
-)
-sl_apply_test_target_options(SL_Cpp_Lexer_Tests)
-target_link_libraries(SL_Cpp_Lexer_Tests PRIVATE doctest::doctest)
-target_precompile_headers(SL_Cpp_Lexer_Tests PRIVATE
-        <doctest/doctest.h>
-)
-set_source_files_properties(test/lexer/main_test.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-add_test(NAME SL_Cpp_Lexer_Tests COMMAND SL_Cpp_Lexer_Tests)
-
-add_executable(SL_Cpp_Parser_Tests
-        # 被测代码
-        lexer/Lexer.cpp
-        lexer/Lexer.h
-        lexer/token.h
-        lexer/x_keyword.inc
-        lexer/x_reservedword.inc
-        lexer/x_token_type.inc
-        utils/string_utils.cpp
-        utils/string_utils.h
-        parser/Parser.cpp
-        parser/Parser.h
-        parser/ast_nodes/ast_json_dumper.cpp
-        parser/ast_nodes/ast_json_dumper.h
-        parser/ast_nodes/ast_nodes.h
-        parser/ast_nodes/ast_visitor.h
-        parser/ast_nodes/x_ast_nodes.inc
-        parser/ast_nodes/details/ast_node.h
-        parser/ast_nodes/details/ast_node_class.h
-        parser/ast_nodes/details/ast_node_control_flows.h
-        parser/ast_nodes/details/ast_node_decorators.h
-        parser/ast_nodes/details/ast_node_eval.h
-        parser/ast_nodes/details/ast_node_func.h
-        parser/ast_nodes/details/ast_node_import.h
-        parser/ast_nodes/details/ast_node_literals.cpp
-        parser/ast_nodes/details/ast_node_literals.h
-        parser/ast_nodes/details/ast_node_misc.h
-        parser/ast_nodes/details/ast_node_multi_exprs.h
-        parser/ast_nodes/details/ast_node_operators.h
-        parser/ast_nodes/details/ast_node_postfix.h
-        parser/ast_nodes/details/ast_node_var.h
-
-        # 测试工具
-        test/parser/test_utils.h
-        test/parser/main_test.cpp
-
-        # 测试代码
-        test/parser/01_literals/literals_test.cpp
-        test/parser/01_literals/literal_raw_test.cpp
-        test/parser/02_operators/precedence_test.cpp
-        test/parser/02_operators/compare_is_test.cpp
-        test/parser/02_operators/in_test.cpp
-        test/parser/02_operators/assign_test.cpp
-        test/parser/02_operators/unpack_test.cpp
-        test/parser/03_separators/separator_test.cpp
-        test/parser/04_compound_dict/compound_dict_test.cpp
-        test/parser/05_del/del_test.cpp
-        test/parser/06_global/global_test.cpp
-        test/parser/07_import/import_test.cpp
-        test/parser/08_control_flow/if_test.cpp
-        test/parser/08_control_flow/for_test.cpp
-        test/parser/08_control_flow/while_test.cpp
-        test/parser/08_control_flow/collect_mark_test.cpp
-        test/parser/08_control_flow/break_continue_test.cpp
-        test/parser/08_control_flow/return_test.cpp
-        test/parser/08_control_flow/try_test.cpp
-        test/parser/08_control_flow/raise_test.cpp
-        test/parser/09_func/func_test.cpp
-        test/parser/10_class/class_test.cpp
-        test/parser/11_decorator/decorator_test.cpp
-        test/parser/12_eval/eval_test.cpp
-        test/parser/13_cross/combination_test.cpp
-        test/parser/13_cross/error_handling_test.cpp
-        test/parser/13_cross/position_tracking_test.cpp
-        test/parser/13_cross/single_expr_entry_test.cpp
-)
-sl_apply_test_target_options(SL_Cpp_Parser_Tests)
-target_link_libraries(SL_Cpp_Parser_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
-target_precompile_headers(SL_Cpp_Parser_Tests PRIVATE
-        <nlohmann/json.hpp>
-        <doctest/doctest.h>
-)
-set_source_files_properties(test/parser/main_test.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-add_test(NAME SL_Cpp_Parser_Tests COMMAND SL_Cpp_Parser_Tests)
-
-add_executable(SL_Cpp_Analyzer_Tests
-        # 被测代码
-        lexer/Lexer.cpp
-        lexer/Lexer.h
-        lexer/token.h
-        lexer/x_keyword.inc
-        lexer/x_reservedword.inc
-        lexer/x_token_type.inc
-        utils/string_utils.cpp
-        utils/string_utils.h
-        parser/Parser.cpp
-        parser/Parser.h
-        parser/ast_nodes/ast_json_dumper.cpp
-        parser/ast_nodes/ast_json_dumper.h
-        parser/ast_nodes/ast_nodes.h
-        parser/ast_nodes/ast_visitor.h
-        parser/ast_nodes/x_ast_nodes.inc
-        parser/ast_nodes/details/ast_node.h
-        parser/ast_nodes/details/ast_node_class.h
-        parser/ast_nodes/details/ast_node_control_flows.h
-        parser/ast_nodes/details/ast_node_decorators.h
-        parser/ast_nodes/details/ast_node_eval.h
-        parser/ast_nodes/details/ast_node_func.h
-        parser/ast_nodes/details/ast_node_import.h
-        parser/ast_nodes/details/ast_node_literals.cpp
-        parser/ast_nodes/details/ast_node_literals.h
-        parser/ast_nodes/details/ast_node_misc.h
-        parser/ast_nodes/details/ast_node_multi_exprs.h
-        parser/ast_nodes/details/ast_node_operators.h
-        parser/ast_nodes/details/ast_node_postfix.h
-        parser/ast_nodes/details/ast_node_var.h
-        builtins/exceptions/InternalError.h
-        analyzer/Analyzer.cpp
-        analyzer/Analyzer.h
-        analyzer/expr_folder/ExprFolder.cpp
-        analyzer/expr_folder/ExprFolder.h
-        analyzer/expr_folder/StaticEvaler.cpp
-        analyzer/expr_folder/StaticEvaler.h
-        analyzer/semantic_checker/SemanticChecker.cpp
-        analyzer/semantic_checker/SemanticChecker.h
-
-        # 测试工具（复用 Parser 测试的 parse_as_file/parse_json 等）
-        test/parser/test_utils.h
-        test/analyzer/test_utils.h
-        test/analyzer/semantic_checker/test_utils.h
-        test/analyzer/main_test.cpp
-        test/analyzer/analyzer_facade_test.cpp
-        test/analyzer/recheck_after_fold_test.cpp
-
-        # 测试代码：semantic_checker
-        test/analyzer/semantic_checker/scope_test.cpp
-        test/analyzer/semantic_checker/lvalue_test.cpp
-        test/analyzer/semantic_checker/del_test.cpp
-        test/analyzer/semantic_checker/try_finally_test.cpp
-        test/analyzer/semantic_checker/dict_call_test.cpp
-        test/analyzer/semantic_checker/func_class_test.cpp
-        test/analyzer/semantic_checker/import_test.cpp
-        test/analyzer/semantic_checker/eval_test.cpp
-        test/analyzer/semantic_checker/single_expr_test.cpp
-        test/analyzer/semantic_checker/defensive_test.cpp
-
-        # 测试代码：expr_folder
-        test/analyzer/expr_folder/arithmetic_test.cpp
-        test/analyzer/expr_folder/bitwise_test.cpp
-        test/analyzer/expr_folder/logical_test.cpp
-        test/analyzer/expr_folder/compare_is_test.cpp
-        test/analyzer/expr_folder/container_ops_test.cpp
-        test/analyzer/expr_folder/numeric_fidelity_test.cpp
-        test/analyzer/expr_folder/dead_branch_test.cpp
-        test/analyzer/expr_folder/compound_test.cpp
-        test/analyzer/expr_folder/program_prune_test.cpp
-        test/analyzer/expr_folder/call_index_attr_assign_test.cpp
-        test/analyzer/expr_folder/try_raise_test.cpp
-        test/analyzer/expr_folder/func_class_decorator_test.cpp
-        test/analyzer/expr_folder/import_test.cpp
-        test/analyzer/expr_folder/eval_test.cpp
-        test/analyzer/expr_folder/for_iter_test.cpp
-        test/analyzer/expr_folder/del_test.cpp
-)
-sl_apply_test_target_options(SL_Cpp_Analyzer_Tests)
-target_link_libraries(SL_Cpp_Analyzer_Tests PRIVATE doctest::doctest nlohmann_json::nlohmann_json)
-target_precompile_headers(SL_Cpp_Analyzer_Tests PRIVATE
-        <nlohmann/json.hpp>
-        <doctest/doctest.h>
-)
-set_source_files_properties(test/analyzer/main_test.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
-add_test(NAME SL_Cpp_Analyzer_Tests COMMAND SL_Cpp_Analyzer_Tests)
+add_subdirectory(test)

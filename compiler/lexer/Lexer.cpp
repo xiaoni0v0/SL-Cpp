@@ -1,7 +1,7 @@
 #include "Lexer.h"
 
-#include "../builtins/exceptions/SyntaxError.h"
-#include "../utils/string_utils.h"
+#include "../../diagnostics/SyntaxError.h"
+#include "../../utils/string_utils.h"
 
 #include <cassert>
 #include <format>

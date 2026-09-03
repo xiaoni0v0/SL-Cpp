@@ -7,12 +7,13 @@
 |-----------------------------------------------|----------------------------------------------------|
 | `numeric/`（`BigInt`/`BigDec`/`DecContext`）  | 抛 C++ 异常，或返回 `optional`。不认识 SL          |
 | `utils/`                                      | 同上                                               |
-| `lexer/` `parser/` `analyzer/`                | 抛 C++ `SyntaxError`/`InternalError`。不认识 SL    |
+| `compiler/` 的 `lexer` `parser` `analyzer`     | 抛 C++ `SyntaxError`/`InternalError`。不认识 SL    |
 | `int`/`decimal`/`str`… 等内置类型的实现       | catch 下层的 C++ 异常 → 抛 SL 异常                 |
-| `codegen/`、`compiler/` 门面                  | 同上（`codegen` 要造真 SL 对象，本来就是 SL 层）   |
+| `compiler/codegen`、`compiler/` 门面          | 同上（`codegen` 要造真 SL 对象，本来就是 SL 层）   |
 
 注意 **分界是按模块划的，不是按目录**：`compiler/` 里 `lexer`/`parser`/`analyzer` 是纯 C++ 层，
-`codegen` 是 SL 层。
+`codegen` 是 SL 层。宿主异常类型本身住在顶层的 `diagnostics/`，因为 `utils/` 也要用（它是纯 C++ 层，
+不能反过来依赖 `compiler/`）。
 
 ## 为什么不让底层直接抛 SL 异常
 
@@ -23,7 +24,7 @@
   `InternalError`；`from_decimal_string` 语法不合法，从 `decimal('abc')` 来该抛
   `decimal.ConversionSyntax`，从 lexer 拿已校验的字面量来却该是 `InternalError`。抛出点只知道"物理上
   出了什么事"，只有调用方知道"这对 SL 程序意味着什么"。
-- **这些模块会在根本没有 SL 程序的场景下跑**：`numeric/`、`lexer/` 各有独立的测试目标，只链自己那几个
+- **这些模块会在根本没有 SL 程序的场景下跑**：`numeric/`、`lexer` 各有独立的测试目标，只链自己那几个
   `.cpp`。一旦调运行时门面，它们就得链进对象模型 + GC + bootstrap，或者维护一份测不到真实路径的桩。
 
 ## 怎么转

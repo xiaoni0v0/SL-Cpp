@@ -3,7 +3,7 @@
 // 解析后跑 ExprFolder，转成按 key 比较的 json。
 // 存返回值必须用 `=`，不能用 `{}`。见 .ai/notes/json-test-brace-init-trap.md。
 
-#include "../../analyzer/expr_folder/ExprFolder.h"
+#include "../../compiler/analyzer/expr_folder/ExprFolder.h"
 #include "../parser/test_utils.h"
 
 #include <nlohmann/json.hpp>

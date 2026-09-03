@@ -1,6 +1,6 @@
 // Parser 抛出的 SyntaxError：继承关系、消息里的文件名和行列。
-#include "../../../builtins/exceptions/SLException.h"
-#include "../../../builtins/exceptions/SyntaxError.h"
+#include "../../../diagnostics/SLException.h"
+#include "../../../diagnostics/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

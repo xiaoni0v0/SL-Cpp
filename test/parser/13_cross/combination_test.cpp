@@ -1,5 +1,5 @@
 // 多种语法嵌套在一起时括号栈、换行、报错位置仍正确。
-#include "../../../builtins/exceptions/SyntaxError.h"
+#include "../../../diagnostics/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

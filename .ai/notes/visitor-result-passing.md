@@ -22,7 +22,7 @@
    同一个父节点的不同子节点值不一样，塞进"整趟不变"那类里就得手工存取，容易漏。
 
 返回值同理：一个 `result_` 成员，配一个入口函数。范本见
-[AstJsonDumper](../../parser/ast_nodes/ast_json_dumper.h) 的 `dump_node`。
+[AstJsonDumper](../../compiler/parser/ast_nodes/ast_json_dumper.h) 的 `dump_node`。
 
 ## 两条硬约束（手搓唯一会出 bug 的地方）
 

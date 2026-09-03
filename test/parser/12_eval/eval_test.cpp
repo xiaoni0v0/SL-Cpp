@@ -1,5 +1,5 @@
 // eval 是关键字，括号强制；实参形状与普通调用相同。
-#include "../../../builtins/exceptions/SyntaxError.h"
+#include "../../../diagnostics/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

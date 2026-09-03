@@ -1,6 +1,6 @@
 #include "ast_json_dumper.h"
 
-#include "../../utils/string_utils.h"
+#include "../../../utils/string_utils.h"
 
 namespace {
 

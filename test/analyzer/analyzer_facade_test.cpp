@@ -1,8 +1,8 @@
 // Analyzer 门面（analyze_program/analyze_single_expr）本身：先 check 后 fold 的顺序、
 // in_local_scope 的转发，都是只有走这两个入口才测得到的行为——单独调 SemanticChecker/ExprFolder
 // 测不出"顺序反了"或"参数没转发"这类回归。
-#include "../../analyzer/Analyzer.h"
-#include "../../builtins/exceptions/SyntaxError.h"
+#include "../../compiler/analyzer/Analyzer.h"
+#include "../../diagnostics/SyntaxError.h"
 #include "test_utils.h"
 
 #include <doctest/doctest.h>

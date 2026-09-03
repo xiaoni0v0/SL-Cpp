@@ -1,5 +1,5 @@
 // try / except / finally。except 和 finally 不能同时省略（语义层）。
-#include "../../../builtins/exceptions/SyntaxError.h"
+#include "../../../diagnostics/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

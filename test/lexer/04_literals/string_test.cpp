@@ -1,5 +1,5 @@
 // 普通字符串："..." / '...'。支持转义，不支持多行。
-#include "../../../builtins/exceptions/SyntaxError.h"
+#include "../../../diagnostics/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

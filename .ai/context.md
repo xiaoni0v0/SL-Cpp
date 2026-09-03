@@ -23,7 +23,7 @@ git log/commit message 的职责，不是这里的。代码怎么组织、有哪
 - 优先级排序（用户原话）：数字字面量、`assert` 这类"加了也不会破坏什么"的功能可以往后拖；链式比较
   这类要设计的现在弄；`set`/文件 I/O/用户模块系统/内置库这些"不属于语言本身"的东西放到**最后**，
   语言核心先谈完。
-- **构建与测试**：改完 `parser/`/`lexer/`/`analyzer/` 代码后，自己用
+- **构建与测试**：改完 `compiler/` 下的代码后，自己用
   `cmd //c "E:\Programs\SL-Cpp\.ai\run_test.bat"` 构建并跑测试验证，不用请用户代跑，细节见
   [notes/build-and-test.md](notes/build-and-test.md)。
 
@@ -855,7 +855,7 @@ raw 要的"行为确定"正好相反。哪天 128 位进了标准、或者项目
 
 ### 编译期 C++ 异常 vs SL 运行时异常对象：两层模型
 
-`builtins/exceptions/SyntaxError.h` 的 `SyntaxError`（纯 C++ 异常）和 SL.md 文档化的、暴露给 SL
+`diagnostics/SyntaxError.h` 的 `SyntaxError`（纯 C++ 异常）和 SL.md 文档化的、暴露给 SL
 用户代码的异常类只是碰巧重名，不是同一个东西——这不是需要二选一的问题，是本来就该分层，类比
 CPython `PyErr_SyntaxError` 这层 C API 跟 Python 层 `SyntaxError` 类。`SyntaxError` 编译期抛出，
 其余异常运行时抛出；该编译期可能包含运行时（`eval`/`eval_isolated` 动态编译）。
@@ -1128,7 +1128,7 @@ SL.md 一直没规定 `007`/`00` 合不合法，是真实的规范空白，已�
 `raw_` 形状（纯数字、前导零、科学计数法后缀），而 `Analyzer` 的顺序是**先 check 后 fold、只 check
 这一次**，于是 `StaticEvaler::make_int`/`make_decimal` 折出来的字面量节点从来没有任何人校验过。
 
-**校验挪进构造函数**（`parser/ast_nodes/details/ast_node_literals.cpp`）。挑中这一处、而不是把
+**校验挪进构造函数**（`compiler/parser/ast_nodes/details/ast_node_literals.cpp`）。挑中这一处、而不是把
 `SemanticChecker` 里那四十来处 `InternalError` 类断言一起搬，是因为它同时占齐三条：只看自己的字段、
 构造之后 `raw_` 再也不会被改（`const`，全仓库无一处赋值），以及存在一个 `SemanticChecker` 看不见的
 生产者。其余的搬不动：节点成员是 public 的，`ExprFolder` 拿着树里槽位的引用整棵子树往里换，构造
@@ -1155,7 +1155,7 @@ SL.md 一直没规定 `007`/`00` 合不合法，是真实的规范空白，已�
 ### 字节码 / `Code` 对象设计
 
 VM 走"编译到字节码"这条路线，指令集/帧/`Code` 的完整设计在
-[../codegen/bytecode.md](../codegen/bytecode.md)，不在这里重复。这套设计通过了"是否有可观察语言行为
+[../compiler/codegen/bytecode.md](../compiler/codegen/bytecode.md)，不在这里重复。这套设计通过了"是否有可观察语言行为
 差异"的检验——换一套指令集不改变任何 SL 程序的可观察行为，所以它属于实现契约、不进 SL.md。
 
 这里只留跟**语言语义**绑定、字节码文档反过来要遵守的两条：

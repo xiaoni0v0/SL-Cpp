@@ -1,6 +1,6 @@
 # AST 节点怎么传：引用 / 非 const 引用 / 智能指针引用 各管什么
 
-`analyzer/` 里同时出现 `const AstNode &`、`AstNode &`、`const AstNodePtr &`、`AstNodePtr &`，
+`compiler/analyzer/` 里同时出现 `const AstNode &`、`AstNode &`、`const AstNodePtr &`、`AstNodePtr &`，
 乍看像是"混着用"。其实是一套规则，只是以前没写下来。
 
 ## 规则

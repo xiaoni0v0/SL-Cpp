@@ -1,5 +1,5 @@
 // 先 check 再 fold 的产物必须还能再过一遍 SemanticChecker。
-#include "../../analyzer/semantic_checker/SemanticChecker.h"
+#include "../../compiler/analyzer/semantic_checker/SemanticChecker.h"
 #include "test_utils.h"
 
 #include <doctest/doctest.h>

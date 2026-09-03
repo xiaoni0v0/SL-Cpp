@@ -13,7 +13,7 @@ Parser.cpp 里所有处理 `()`/`[]` 配对的 `finish_*` 函数（`finish_call_
 `finish_dict` 是唯一的例外：`{}` 这一层括号不是由 `finish_dict` 自己管理，而是外层的
 `parse_brace` 在调用 `finish_dict` 前后分别 `expect_open(Bracket::Brace)`/
 `expect_close(Bracket::Brace)`——这是因为 `{}` 开启的是全新的语句语境，跟"多一层括号嵌套"是不同
-的机制，详见 `parser/Parser.cpp` 里 `parse_brace` 的实现注释和 `.ai/context.md` 里对应的设计记录。
+的机制，详见 `compiler/parser/Parser.cpp` 里 `parse_brace` 的实现注释和 `.ai/context.md` 里对应的设计记录。
 `finish_dict` 本身完全不碰 `brackets_`。
 
 ## `brackets_` 解决的问题
