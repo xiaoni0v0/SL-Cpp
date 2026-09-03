@@ -50,3 +50,30 @@ VM 自己的 bug，一律 `InternalError`，不让 SL 代码捕获。
 - **`compiler/` 门面转 `SyntaxError` 是无条件的**，冷启动和 `eval` 走同一段代码：顶层把未捕获的 SL
   异常打印出来，`eval` 则让它照常沿 SL 帧栈传播。`SL.md`「SyntaxError 在编译期抛出；其他所有异常均在
   运行时抛出」说的就是这个 SL 层的 `SyntaxError`。
+
+## 宿主异常存字段，不存拼好的字符串
+
+`cpp_exceptions/` 里每个异常都把**结构化字段**留着，`what()` 只是构造时由字段渲染出来的一种呈现：
+
+| 异常 | 字段 |
+|---|---|
+| `SyntaxError` | `location()`（`SourceLocation`：file/row/col）、`message()` |
+| `InternalError` | `location()` 是 `optional`——运行期的内部错误没有"源码哪一行"、`message()` |
+| `EncodingError` | `file_path()`、`offset()`（**字节偏移**，出错时字节流还没切成行）、`message()` |
+| `FileNotFoundError` | `path()`、`message()` |
+
+**Why**：这些异常大多要在某个边界上转成 SL 异常对象，转换方要的是分开的 file/row/col/message。只留
+一个拼好的串，等于逼转换方去反解析自己刚拼出来的东西。而且同一个错误有多个消费方——冷启动打 stderr、
+`eval` 里变成 SL 对象、以后 REPL/IDE 要结构化位置——在抛出点烙死一种呈现，等于替所有消费方做了决定。
+
+**How to apply**：新增宿主异常类型时，按"这个错误天然带哪些定位信息"设计字段，不要为了统一硬套
+`SourceLocation`（`EncodingError` 就只有字节偏移，`FileNotFoundError` 连位置都没有）。渲染在构造函数
+里做一次给 `what()`，格式改动是纯呈现层的事，不影响转换方。
+
+## 转换的具体实现在 `runtime/HostErrorConversion.{h,cpp}`
+
+这条约定不是只停在文档层面：`SyntaxError`/`EncodingError`/`FileNotFoundError` 各有一个
+`exception_from(...)` 函数，把宿主异常的字段翻成对应 SL 类的 `Exception` 对象（`.args` 塞
+`message()`，不带 `what()` 那层 file:row:col 装饰）。**`InternalError` 没有对应函数、以后也不会有**
+——它没有 SL 类，这条转换对它不成立，见 [object-model-conventions.md](object-model-conventions.md)
+「异常」一节。

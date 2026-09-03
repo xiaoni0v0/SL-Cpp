@@ -17,3 +17,26 @@ X(Decimal, decimal_type, "decimal", Real)
 X(Bool, bool_type, "bool", Real)
 X(Str, str_type, "str", Object)
 X(Tuple, tuple_type, "tuple", Object)
+
+// —— 异常类树，照抄 SL.md 4.2.26 那张图 ——
+// 这里只有"全局的一批常用异常"。两处刻意没进来，它们要等对应的模块有了落脚处：
+//   - decimal 的各信号（SL.md 4.2.6.3，DecimalException 的子类），跟 decimal 模块一起走；
+//   - exceptions.EncodingError（IOError 的子类，SL.md 4.3.3），跟 exceptions 模块一起走。
+// **宿主层的 SyntaxError/InternalError/EncodingError/FileNotFoundError 跟这里的同名类不是一回事**，
+// 见 .ai/notes/cpp-layer-vs-sl-layer.md。InternalError 更是永远不会在这张表里出现
+X(BaseException, base_exception_type, "BaseException", Object)
+X(SystemExit, system_exit_type, "SystemExit", BaseException)
+X(KeyboardInterrupt, keyboard_interrupt_type, "KeyboardInterrupt", BaseException)
+X(Exception, exception_type, "Exception", BaseException)
+X(SyntaxError, syntax_error_type, "SyntaxError", Exception)
+X(TypeError, type_error_type, "TypeError", Exception)
+X(ValueError, value_error_type, "ValueError", Exception)
+X(NameError, name_error_type, "NameError", Exception)
+X(AttributeError, attribute_error_type, "AttributeError", Exception)
+X(IndexError, index_error_type, "IndexError", Exception)
+X(MathError, math_error_type, "MathError", Exception)
+X(DecimalException, decimal_exception_type, "decimal.DecimalException", MathError)
+X(DispatchError, dispatch_error_type, "DispatchError", Exception)
+X(RecursionError, recursion_error_type, "RecursionError", Exception)
+X(IOError, io_error_type, "IOError", Exception)
+X(ImportError, import_error_type, "ImportError", Exception)

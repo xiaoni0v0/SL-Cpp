@@ -1,8 +1,11 @@
 sl_add_module(sl_runtime
         Heap.cpp
         Heap.h
+        HostErrorConversion.cpp
+        HostErrorConversion.h
         Object.cpp
         Object.h
+        RaisedException.h
         Runtime.cpp
         Runtime.h
         Type.cpp
@@ -10,6 +13,8 @@ sl_add_module(sl_runtime
         x_builtin_types.inc
         objects/Decimal.cpp
         objects/Decimal.h
+        objects/Exception.cpp
+        objects/Exception.h
         objects/Int.cpp
         objects/Int.h
         objects/Str.cpp

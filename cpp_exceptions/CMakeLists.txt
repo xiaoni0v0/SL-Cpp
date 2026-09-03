@@ -5,5 +5,6 @@ add_custom_target(sl_cpp_exceptions_headers SOURCES
         FileNotFoundError.h
         InternalError.h
         SLException.h
+        SourceLocation.h
         SyntaxError.h
 )

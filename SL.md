@@ -1919,6 +1919,14 @@ BaseException
     └── ImportError                  - 模块导入失败（找不到模块/包，或名字有歧义）
 ```
 
+`BaseException(*args)`：`args` 按位置接收任意多个实参，构造后可通过属性 `.args` 取到（一个 tuple，
+可能为空）。整棵异常树都不重写 `__init__`，全部复用这一份——`TypeError("...")`、
+`DispatchError('too many arguments', 3)` 这类构造都是同一个 `__init__`，取决于 `type(异常对象)`
+是哪个子类。
+
+没有 `__cause__`/`__context__`：`raise` 的语法只有 `raise expr`，没有 `raise ... from ...` 子句，
+也不做隐式的异常链记录。要表达"因为这个异常才引出了那个异常"，现在只能用 `.args` 自己带信息。
+
 #### 4.2.27 TypeVar
 
 `TypeVar(bound=None)`。用作类型注解，见 3.4.7。

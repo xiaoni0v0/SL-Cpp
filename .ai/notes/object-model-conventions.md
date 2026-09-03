@@ -88,3 +88,23 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
 引用、摘掉根源、再 `Heap::collect()` 扫一轮，整个堆一次清空，之后 `Heap::live_count()` 应当是 0。
 
 **这也意味着 `shutdown()` 之前必须放掉所有 `Ref`**：还攥在手里的对象同样会被扫掉，句柄随即悬垂。
+
+## 五、异常：一个 C++ 类覆盖整棵树，`.args` 是唯一字段
+
+`Exception`（`runtime/objects/Exception.h`）覆盖 `BaseException` 及其全部子类，只存 `.args`
+元组——跟第一条"一个 C++ 类可以覆盖多个 SL 类"是同一个模式（`Singleton` 覆盖 `None`/`Ellipsis` 等
+是先例）。跟 CPython 对齐：`BaseException.args` 本来就是结构体槽位，不是 `__dict__`。
+
+**How to apply**：
+
+- 新增异常子类只改 `x_builtin_types.inc` 加一行，**不新增 C++ 类**——除非它需要 `.args` 之外的
+  专属字段，而这现在还没出现过（`SyntaxError` 要不要额外挂 file/row/col 是待拍板的语言设计问题，
+  见 `.ai/context.md`，没拍板之前不要在 `Exception` 里预先开这个口子）。
+- 构造 `Exception` 必须给一个 `BaseException` 的子类当 `type`，构造函数里有 `assert` 兜底，
+  别指望它在 Release 下也拦——调用方保证。
+- `RaisedException`（`runtime/RaisedException.h`）是 `raise` 用的 C++ 信封，**只能在一段不回调 SL、
+  有界的 C++ 代码里 throw/catch**，不是异常跨 SL 帧传播的机制——那条路是主循环手写的显式算法
+  （bytecode.md）。写内置操作的 C++ 实现，需要"产出一个异常"时才用它；写任何涉及 SL 帧的代码
+  都不该用它。
+- `HostErrorConversion.{h,cpp}` 是宿主异常 → SL 异常对象转换的落地实现，`InternalError` 没有对应
+  函数、以后也不会有，见 [cpp-layer-vs-sl-layer.md](cpp-layer-vs-sl-layer.md)。
