@@ -167,14 +167,6 @@ add_executable(SL main.cpp
         analyzer/expr_folder/StaticEvaler.h
         analyzer/semantic_checker/SemanticChecker.cpp
         analyzer/semantic_checker/SemanticChecker.h
-
-        # CodeGen
-        codegen/Code.cpp
-        codegen/Code.h
-        codegen/ConstPool.cpp
-        codegen/ConstPool.h
-        codegen/CodeGen.cpp
-        codegen/CodeGen.h
 )
 
 # 编译选项

@@ -11,16 +11,19 @@
   → Lexer      (lexer/)              词法分析，产出 Token 序列
   → Parser     (parser/)             语法分析，产出 AST
   → Analyzer   (analyzer/)           语义检查 + 编译期常量折叠，原地改 AST
-  → CodeGen    (codegen/)            AST → Code（字节码），空壳，还没写
-  → Executor   (executor/)           跑字节码的虚拟机，空壳，还没写
+  → CodeGen    (codegen/)            AST → Code（字节码），还没写
+  → Executor   (executor/)           跑字节码的虚拟机，还没写
 ```
+
+**但这条流水线不是启动顺序**：运行时（对象模型/GC/基础类型）先于编译器启动，见下面「运行时先于
+编译器」。
 
 `main.cpp` 目前只是个手工调用这条流水线、把每一步中间结果打印出来的调试入口，不是真正的解释器入口。
 
 **当前完成度**：Lexer/Parser 已实现且有完整测试；Analyzer 的两个子系统（语义检查、常量折叠）已实现
 且有完整测试；`numeric/` 的 `BigInt`（`int` 的底层）和 `BigDec`+`DecContext`（`decimal` 的底层）已实现
-且有完整测试；`codegen/`、`executor/` 都只是占位空壳，还没有任何代码（设计已定稿，见
-[`codegen/bytecode.md`](../codegen/bytecode.md)）。**在 `executor/` 落地之前，SL.md 里"运行时"相关的
+且有完整测试；`codegen/` 只剩一份设计文档 [`bytecode.md`](../codegen/bytecode.md)，`executor/` 是占位
+空壳，运行时（对象模型/GC）尚未开始——实现顺序见下面「实现路线」。**在 `executor/` 落地之前，SL.md 里"运行时"相关的
 条文（对象模型、GC、异常传播的具体机制等）都还没有对应实现可以参照，只能靠 SL.md 文本本身。**
 
 **`BigDec` 的完成度**：SL.md 里 decimal 参与的**运算符全都实现了**——四则、`//`/`%`、比较、`**`，
@@ -42,9 +45,58 @@
 | `numeric/` | `BigInt.{h,cpp}`：手写高精度整数，`int` 的底层实现（`小路径 int64_t` / `大路径 limbs` 双表示）。`BigDec.{h,cpp}`：十进制浮点数，`decimal` 的底层实现（`BigInt 系数 + int64_t 指数 + 独立符号位 + 特殊值 tag`）。`DecContext.{h,cpp}`：`decimal.Context` 的底层实现——舍入方式、精度、指数范围、信号的陷阱/标志位，以及陷阱触发时抛的 `DecTrapped`。`dec_math.{h,cpp}`：`ln`/`log10`/`exp`/`**` 用的整数层定点算法（`ilog`/`iexp`/`dlog`/`dexp`/`dpower` 等），只跟 BigInt 打交道，不认识上下文和信号。 |
 | `builtins/exceptions/` | 前端自己用的 C++ 异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`）——跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。 |
 | `utils/` | 自由函数工具：`string_utils`（UTF-8/UTF-32 互转等）、`file_utils`（读文件）。 |
-| `codegen/` | `Code.{h,cpp}`/`CodeGen.{h,cpp}`：空壳，还没写。[`bytecode.md`](../codegen/bytecode.md) 是指令集/帧/`Code` 的完整设计，动这两个目录之前先读它。 |
+| `codegen/` | 只有 [`bytecode.md`](../codegen/bytecode.md)——指令集/帧/`Code` 的完整设计，动这里之前先读它。**没有代码**：曾经写过一版 `ConstPool`（编译期常量描述 + 物化），随「运行时先于编译器」的决定一起废掉了，规则本身留在 `bytecode.md` 的「常量去重」一节。 |
 | `executor/` | 空壳，还没写。字节码虚拟机，设计见 [`codegen/bytecode.md`](../codegen/bytecode.md)。 |
 | `test/` | 目录结构镜像 `lexer/`/`parser/`/`analyzer/`/`numeric/`，见下。 |
+
+## 运行时先于编译器
+
+**决定：先把运行时（对象模型 + GC + 基础类型 + 单例）立起来，编译器建在它之上。** codegen 直接造真的
+SL 对象塞进 `Code` 的常量表，不再有"编译期描述 → 运行期物化"那一层。这是 CPython 的做法：它的编译器
+是跑在一个已经 `Py_Initialize()` 完的解释器里的库，所以编译期造对象和运行期造对象走同一套代码。
+
+**决定性理由是 `eval`**：SL 把它做成关键字，要在运行期编译出新 `Code`，所以"编译器必须能在一个正在跑
+的 VM 里被调用"本来就是硬需求。既然如此，再维护一条"没有 VM 也能编译"的冷启动路径就是净增成本——两条
+路径、两种常量表示、两套测试。
+
+**被否决的方案：编译期常量描述层。** 常量表存一个 `variant`（`BigInt`/`BigDec`/`u32string`/单例/子项
+槽号列表），VM 加载 `Code` 时统一物化成对象。当时的理由是"codegen 不依赖对象模型与 GC，能先写完先测，
+`Code` 还顺带可序列化"。否决原因：`eval` 让那个依赖无论如何都存在，于是描述层只是在一条必然存在的路径
+旁边多养了一条；而且它是一个跟对象模型平行的类型层，每加一种常量都要改两处。已经写出来的 `ConstPool`
+一并删掉了——它真正的资产是那套去重规则（先比类型、`decimal` 逐位比、元组比元素身份），规则记在
+[`codegen/bytecode.md`](../codegen/bytecode.md) 的「常量去重」，代码没了也不丢。
+
+**这个决定不覆盖前端的错误表示**：`SyntaxError`/`InternalError` 等仍然是纯 C++ 异常，lexer/parser/
+analyzer 不该反过来依赖对象模型，编译诊断在被 SL 代码 `try` 住之前也不是 SL 值。只在 `eval` 这一个边界
+上把编译失败转成 SL 异常对象。`InternalError` 更是永远不能变成 SL 异常——它是唯一没有对应 SL 类、明确
+不可被 SL 捕获的那个。
+
+## 实现路线
+
+从上到下有依赖，不要跳着做。
+
+1. **对象模型骨架**：`Object` 基类 + 对象头；类型对象的表示（要能在最早期就存在，CPython 靠静态分配的
+   类型结构体解决这个）；`None`/`True`/`False`/`Ellipsis` 四个单例；`int`/`decimal`/`str`/`tuple`
+   四个类型（底层分别是现成的 `BigInt`/`BigDec` 和标准容器）。够常量表用即可，`list`/`dict` 等随后。
+2. **GC**：`SL.md` 定的是引用计数为主 + 堆扫描处理循环引用。要定的是根集合——帧栈、模块表、以及
+   **每份 `Code` 的常量表**。
+3. **bootstrap**：分阶段初始化，明确"第一次编译之前什么必须活着"。这是「运行时先于编译器」能成立的
+   前提，顺序错了就是循环依赖。
+4. **异常体系**：SL 层异常类树；`raise` 用的统一 C++ 信封类型（装一个 SL 异常对象引用）；纯 C++ 层与
+   SL 层的分界和转换约定见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。
+5. **`Code` + `CodeGen`**：按 [`bytecode.md`](../codegen/bytecode.md) 重启。常量表存真对象，去重按
+   那份文档的「常量去重」。
+6. **`Frame` + 主循环 + 指令实现**。
+7. **`eval` / `import`**。
+
+**目录调整（计划中，还没做）**：
+
+- `lexer/`+`parser/`+`analyzer/`+`codegen/` 收进 `compiler/`，门面就是那一层的对外入口（它负责把
+  C++ `SyntaxError` 转成 SL 异常）。注意 **纯 C++ / SL 层的分界是按模块划的，不是按目录**：
+  `compiler/` 里前三个是纯 C++ 层，`codegen` 要造真 SL 对象，是 SL 层。
+- 运行时那几层需要一个对称的落脚处（`runtime/`，或者把 `executor/` 扩成它），第 1 步动手前再定。
+- `builtins/exceptions/` 要挪走：它装的是 C++ 前端异常，而 `builtins/` 这个名字指向 SL 内置——等真正的
+  SL 异常类建起来，两拨同名的东西各在一处会很难认。搬去 `compiler/` 或单开 `diagnostics/`。
 
 ## AST 节点：X-macro 分发 + 双路径职责
 

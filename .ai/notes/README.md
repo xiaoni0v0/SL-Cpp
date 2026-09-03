@@ -22,7 +22,8 @@
 - [parser-paren-depth-convention.md](parser-paren-depth-convention.md) — finish_* 系列函数管理括号栈 brackets_ 和括号收尾的统一约定
 - [parser-token-vs-expr-level.md](parser-token-vs-expr-level.md) — Parser 某个槽位该收紧到 token 级别还是走通用表达式再交给语义层判形状
 - [ast-node-passing-conventions.md](ast-node-passing-conventions.md) — AST 节点该传引用、非 const 引用还是智能指针引用，以及 const 在这里承载的信息
-- [visitor-result-by-member.md](visitor-result-by-member.md) — AST 访问者要返回值/带参数时怎么手搓成员通道，以及为什么不抽成模板基类
+- [visitor-result-passing.md](visitor-result-passing.md) — AST 访问者要返回值/带参数时怎么手搓成员通道，以及为什么不抽成模板基类
+- [cpp-layer-vs-sl-layer.md](cpp-layer-vs-sl-layer.md) — 哪一层才能命名 SL 异常/碰对象模型，底层出错该怎么往上转
 - [json-test-brace-init-trap.md](json-test-brace-init-trap.md) — 写 parser 测试时 nlohmann::json 花括号初始化会被吃成数组的坑
 - [grok-dsh-cli-review.md](grok-dsh-cli-review.md) — 调用本机 grok/dsh 两个 CLI 做交叉代码审查时的只读参数，避免卡在权限提示上
 
