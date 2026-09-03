@@ -95,36 +95,33 @@ class RefVisitor {
     }
 };
 
-// 一切 SL 对象的基类。
-//
-// **C++ 的类继承 ≠ SL 的类继承**：C++ 这边只表达"存储形状"（有哪些字段、怎么析构），
-// SL 那边的继承关系全存在 Type 的 bases_/mro_ 里，两套互不牵连。所以 Bool 不是 Int 的
-// C++ 子类（SL 里 bool 也不是 int 的子类，见 SL.md 4.4），而 numbers.Real 这种抽象类
-// 压根没有对应的 C++ 类——它只是一个 Type 对象。
+/**
+ * 一切 SL 对象的基类。
+ *
+ * C++ 的类继承 ≠ SL 的类继承，SL 继承关系全存在 Type 的 bases_/mro_ 里。
+ */
 class Object {
-    // 引用计数。SL 现在是单线程的（以后会有线程，那时这里要重新审视），所以是普通整数不是 atomic
+    // 引用计数
     std::size_t refcount_{0};
-    // 所属类型，强引用——用户定义的类会死，实例必须钉住自己的类。
-    // 它由 visit_all_refs 统一报告/清理，子类的 visit_own_refs 不用管它
+    // 类型
     Ref<Type> type_;
 
-    // 全堆链表的两个链接。Heap 用它枚举整个堆做清扫，Object 自己只在构造/析构时进出链表
+    // 全堆链表，侵入式
     Object *gc_prev_{nullptr};
     Object *gc_next_{nullptr};
-    // 标记位。只在一次 collect() 内部有意义，collect() 结束时保证全部复位成 false
+    // 标记位，只在一次 collect() 内部有意义
     bool gc_marked_{false};
 
     friend class Heap;
     friend class Runtime;
-    // 只给 bootstrap 用：object/type 互为对方的类型，建立时先留空、之后回填。见 Runtime
+
+    // 只给 bootstrap 用的后门，处理 object/type 关系
     void set_type(Type *type);
 
   protected:
     explicit Object(Type *type);
 
-    // 报告本对象**自己的**强引用槽位（不含上面的 type_）。
-    // 纯虚：新增对象类型时漏写是**编译期**错误。但注意"报漏一个字段"编译器管不了——
-    // 加字段时必须同步改这里，这是这一层最难查的 bug 类型
+    // 报告本对象自己（不含上面的 type_）的强引用
     virtual void visit_own_refs(RefVisitor &visitor) = 0;
 
   public:
@@ -137,10 +134,10 @@ class Object {
     [[nodiscard]] Type *type() const { return type_.get(); }
     [[nodiscard]] std::size_t refcount() const { return refcount_; }
 
-    // 本对象的全部出边 = 所属类型 + 子类自己的槽位。**只给 GC 调**，普通代码不该碰
+    // 只给 GC 用的后门，本对象的全部出边 = 所属类型的强引用 + 子类自己的的强引用
     void visit_all_refs(RefVisitor &visitor);
 
-    // 标记位的读写。同样**只给 GC 调**；一次 collect() 之外它恒为 false
+    // 只给 GC 用的后门，标记位的读写
     [[nodiscard]] bool gc_marked() const { return gc_marked_; }
     void gc_set_marked(const bool marked) { gc_marked_ = marked; }
 
