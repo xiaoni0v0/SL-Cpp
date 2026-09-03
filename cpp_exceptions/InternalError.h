@@ -9,6 +9,14 @@
 // 是 exceptions 里唯一没有对应 SL 类的异常，当然更不能在 SL 层捕获
 class InternalError : public SLException {
   public:
+    // 不带源码位置的形态：运行期（对象模型/GC/虚拟机）出的内部错误没有"出错在源码哪一行"可言
+    explicit InternalError(const std::string &message)
+        : SLException{std::format(
+              "InternalError (This is usually because the compiler/VM itself has a bug, "
+              "not a problem with your SL code): {}",
+              message
+          )} {}
+
     explicit InternalError(
         const std::string &file_path, const int row, const int col, const std::string &message
     )

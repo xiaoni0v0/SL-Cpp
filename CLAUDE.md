@@ -1,7 +1,8 @@
 # SL-Cpp 项目须知
 
-SL 是一门自定义脚本语言，本仓库是它的 C++ 实现（词法/语法分析器已实现，语义分析/表达式折叠正在做，
-执行器/虚拟机是空壳，还没写）。语言规范在 [SL.md](SL.md)。
+SL 是一门自定义脚本语言，本仓库是它的 C++ 实现（词法/语法/语义分析与表达式折叠已实现，运行时
+`runtime/` 有了对象模型骨架和 GC，异常体系 / 字节码生成 / 虚拟机都还没写）。语言规范在
+[SL.md](SL.md)。
 
 **在做任何实质性工作之前，先读**：
 1. [.ai/architecture.md](.ai/architecture.md) —— 项目结构、代码索引，从这里开始摸清代码在哪、
@@ -19,7 +20,7 @@ SL 是一门自定义脚本语言，本仓库是它的 C++ 实现（词法/语�
 
 - **全程中文交流**；代码注释也用中文，标识符/关键字用英文。
 - **不准动 git**：不主动执行任何 git 命令（只读命令也不例外），除非用户明确要求。
-- 改完 `compiler/` 下面（`lexer/`/`parser/`/`analyzer/`）的代码后，自己用 `cmd //c "E:\Programs\SL-Cpp\.ai\run_test.bat"` 构建并跑
+- 改完 `compiler/`（`lexer/`/`parser/`/`analyzer/`）或 `runtime/` 下面的代码后，自己用 `cmd //c "E:\Programs\SL-Cpp\.ai\run_test.bat"` 构建并跑
   测试验证，不要让用户代跑。细节见 [.ai/notes/build-and-test.md](.ai/notes/build-and-test.md)。
 - 用户会一边对话一边自己直接改代码；遇到"文件被修改过"的提示，正常按新内容继续干活，不要撤销、也
   不用特意提。

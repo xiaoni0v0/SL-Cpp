@@ -15,16 +15,19 @@
   → Executor   (executor/)           跑字节码的虚拟机，还没写
 ```
 
-**但这条流水线不是启动顺序**：运行时（对象模型/GC/基础类型）先于编译器启动，见下面「运行时先于
-编译器」。
+**但这条流水线不是启动顺序**：运行时（`runtime/`：对象模型/GC/基础类型）先于编译器启动，见下面
+「运行时先于编译器」。这也是链接依赖的方向——`runtime` 在 `compiler` **下面**（codegen 要造真对象），
+而虚拟机主循环因为 `eval` 反过来依赖 `compiler`。
 
 `main.cpp` 目前只是个手工调用这条流水线、把每一步中间结果打印出来的调试入口，不是真正的解释器入口。
 
 **当前完成度**：Lexer/Parser 已实现且有完整测试；Analyzer 的两个子系统（语义检查、常量折叠）已实现
 且有完整测试；`numeric/` 的 `BigInt`（`int` 的底层）和 `BigDec`+`DecContext`（`decimal` 的底层）已实现
 且有完整测试；`compiler/codegen/` 只剩一份设计文档 [`bytecode.md`](../compiler/codegen/bytecode.md)，
-`executor/` 目前只是串流水线的驱动，运行时（对象模型/GC）尚未开始——实现顺序见下面「实现路线」。**在 `executor/` 落地之前，SL.md 里"运行时"相关的
-条文（对象模型、GC、异常传播的具体机制等）都还没有对应实现可以参照，只能靠 SL.md 文本本身。**
+`executor/` 目前只是串流水线的驱动。`runtime/` 已经有对象模型骨架（`Object`+`Ref`、`Type`、
+四个基础类型、单例、bootstrap）和 GC（引用计数 + 标记清扫），异常体系 / 帧与主循环还没开始——实现顺序见下面「实现路线」。
+**在虚拟机落地之前，SL.md 里"运行时"相关的条文（属性协议、GC、异常传播的具体机制等）大多还没有对应
+实现可以参照，只能靠 SL.md 文本本身。**
 
 **`BigDec` 的完成度**：SL.md 里 decimal 参与的**运算符全都实现了**——四则、`//`/`%`、比较、`**`，
 外加 `sqrt`/`exp`/`ln`/`log10`（`**` 的一般情形要靠它们）。还没做的是 `hash`（要跟数值相等的 `int`
@@ -44,6 +47,8 @@
 | `compiler/analyzer/semantic_checker/` | `SemanticChecker.{h,cpp}`（`AstConstVisitor` 的实现）：语义检查（作用域规则、lvalue 合法性、`*`/`**` 位置合法性、func/class 约束、AST 结构防御性校验……），只读不改 AST，违规抛 `SyntaxError`（真实语义错误）或 `InternalError`（AST 结构本身违反 Parser 的保证，代表实现自己有 bug）。单个节点自己字段的合法性不归这里，归节点构造函数（见 `compiler/parser/ast_nodes/details/`）。 |
 | `compiler/analyzer/expr_folder/` | `ExprFolder.{h,cpp}`（`AstVisitor` 的实现）：遍历 + 原地替换 AST 的调度层，拥有 `AstNodePtr` 槽位的所有权。`StaticEvaler.{h,cpp}`：纯函数式的"给一个节点判断能不能折、折成什么"，不遍历树、不拥有节点。 |
 | `numeric/` | `BigInt.{h,cpp}`：手写高精度整数，`int` 的底层实现（`小路径 int64_t` / `大路径 limbs` 双表示）。`BigDec.{h,cpp}`：十进制浮点数，`decimal` 的底层实现（`BigInt 系数 + int64_t 指数 + 独立符号位 + 特殊值 tag`）。`DecContext.{h,cpp}`：`decimal.Context` 的底层实现——舍入方式、精度、指数范围、信号的陷阱/标志位，以及陷阱触发时抛的 `DecTrapped`。`dec_math.{h,cpp}`：`ln`/`log10`/`exp`/`**` 用的整数层定点算法（`ilog`/`iexp`/`dlog`/`dexp`/`dpower` 等），只跟 BigInt 打交道，不认识上下文和信号。 |
+| `runtime/` | 运行时的地基，**在编译器下面**（`compiler/` 的 codegen 要直接造真 SL 对象）。`Object.h`：一切 SL 对象的基类 + 对象头（引用计数、类型指针、`trace()`）+ 侵入式引用计数句柄 `Ref<T>` + `make_ref`。`Type.{h,cpp}`：类型对象（`name_`/`bases_`/`mro_`/`is_subtype_of`）。`Runtime.{h,cpp}`：全局单例，按序建立全部内置类型与单例并持有它们，`init()`/`shutdown()`，也是第一个 `GcRootSource`。`Heap.{h,cpp}`：全堆链表 + STW 标记清扫 `collect()` + 根源注册（`GcRootSource`）。**`collect()` 只能在主循环的安全点调用**，理由见笔记。`x_builtin_types.inc`：内置类型清单（X-macro，见下）。写这里的代码前先读 [notes/object-model-conventions.md](notes/object-model-conventions.md)。 |
+| `runtime/objects/` | 各具体对象类型：`Int`（裹 `BigInt`）、`Decimal`（裹 `BigDec`）、`Str`（`u32string`，按码点）、`Tuple`（`vector<ObjectRef>`）、`singletons.h`（`Singleton` 无负载单例 + `Bool`）。 |
 | `cpp_exceptions/` | 宿主（C++）层的异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`），纯头文件。跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。放在顶层而不是 `compiler/` 下，是因为 `utils/` 也要用它，而 `utils/` 是纯 C++ 层、不能反过来依赖 `compiler/`。 |
 | `utils/` | 自由函数工具：`string_utils`（UTF-8/UTF-32 互转等）、`file_utils`（读文件）。 |
 | `compiler/codegen/` | 只有 [`bytecode.md`](../compiler/codegen/bytecode.md)——指令集/帧/`Code` 的完整设计，动这里之前先读它。**没有代码**：曾经写过一版 `ConstPool`（编译期常量描述 + 物化），随「运行时先于编译器」的决定一起废掉了，规则本身留在 `bytecode.md` 的「常量去重」一节。 |
@@ -81,8 +86,13 @@ analyzer 不该反过来依赖对象模型，编译诊断在被 SL 代码 `try` 
 ```
 sl_cpp_exceptions (INTERFACE，纯头文件)
     ← sl_utils ← sl_lexer ← sl_parser ← sl_analyzer ← sl_executor ← SL
-sl_numeric (不依赖任何模块)
+    ← sl_runtime
+sl_numeric (不依赖任何模块) ← sl_runtime
 ```
+
+`sl_runtime` 现在还没有任何模块链接它（codegen 还没写），只有它自己的测试目标链。这是刻意的：
+一旦 `sl_codegen` 出现，它链 `sl_runtime` + `sl_analyzer`，`sl_executor` 再链 `sl_codegen`——
+方向从一开始就是对的，不用回头改。
 
 测试目标在 `test/CMakeLists.txt`，用本地的 `sl_add_test_target(<名字> LIBS … SOURCES …)`：只列自己的
 测试文件，被测代码靠 `LIBS` 链进来。**这是拆库的主要动机**——以前每个测试目标都要把被测模块的源文件
@@ -96,11 +106,18 @@ sl_numeric (不依赖任何模块)
 
 从上到下有依赖，不要跳着做。
 
-1. **对象模型骨架**：`Object` 基类 + 对象头；类型对象的表示（要能在最早期就存在，CPython 靠静态分配的
-   类型结构体解决这个）；`None`/`True`/`False`/`Ellipsis` 四个单例；`int`/`decimal`/`str`/`tuple`
-   四个类型（底层分别是现成的 `BigInt`/`BigDec` 和标准容器）。够常量表用即可，`list`/`dict` 等随后。
-2. **GC**：`SL.md` 定的是引用计数为主 + 堆扫描处理循环引用。要定的是根集合——帧栈、模块表、以及
-   **每份 `Code` 的常量表**。
+1. ~~**对象模型骨架**~~ **已完成**，落在 `runtime/`：`Object` + `Ref<T>`；`Type`（`bases_`/`mro_`/
+   `is_subtype_of`）；`Runtime` 的 bootstrap 按 `x_builtin_types.inc` 建全部内置类型，object/type
+   互为对方类型的结靠"先留空、建完回填"解开（CPython 靠静态分配的类型结构体 + `PyType_Ready` 做同一件
+   事，这里的类型对象是普通堆对象，回填就够了）；`None`/`True`/`False`/`Ellipsis`/`NotImplemented`/
+   `StopIteration` 六个单例；`int`/`decimal`/`str`/`tuple` 四个类型。`list`/`dict`、属性表/描述器表、
+   `object()` 可实例化都还没有——够常量表用即可。
+2. ~~**GC**~~ **已完成**，落在 `runtime/Heap.{h,cpp}`：引用计数那半在 `Ref<T>` 里，环靠
+   `Heap::collect()` 的 STW 标记清扫。根从注册进来的 `GcRootSource` 出发（现在只有 `Runtime`；
+   帧栈、模块表、每份 `Code` 的常量表以后各自注册一个）。**`collect()` 只能在主循环的安全点调用**
+   ——根集合不含 C++ 栈上的局部 `Ref`，这条前提靠的是"C++ 调用栈深度不随 SL 帧栈增长"，见
+   [notes/object-model-conventions.md](notes/object-model-conventions.md)。分代、只跟踪可能成环的
+   对象这类优化都还没做，等主循环能量出实际分配速率再说。
 3. **bootstrap**：分阶段初始化，明确"第一次编译之前什么必须活着"。这是「运行时先于编译器」能成立的
    前提，顺序错了就是循环依赖。
 4. **异常体系**：SL 层异常类树；`raise` 用的统一 C++ 信封类型（装一个 SL 异常对象引用）；纯 C++ 层与
@@ -115,8 +132,10 @@ sl_numeric (不依赖任何模块)
 
 - **`compiler/` 的门面**——一个把"源码 → `Code`"包起来的对外入口，同时是把 C++ `SyntaxError` 转成 SL
   异常的地方。等 `codegen` 能跑了再写，现在 `executor/Executor.cpp` 手工串着三层。
-- **运行时那几层的落脚处**：新开 `runtime/`，还是把 `executor/` 扩成它？第 1 步动手前再定。定了之后
-  `executor/` 里那段"串流水线的驱动"也该跟虚拟机本身分开。
+- **`executor/` 里那段"串流水线的驱动"要跟虚拟机本身分开**——等主循环真写出来（第 6 步）再拆。
+  运行时的落脚处已经定了：**新开 `runtime/`，不扩 `executor/`**。这不是口味问题——codegen 要造真
+  对象，所以 `codegen → 对象模型`；而虚拟机主循环因为 `eval` 要 `executor → compiler`。对象模型放进
+  `executor/` 就成了 `executor ← compiler ← executor` 的环，链接期就过不去。
 
 ## AST 节点：X-macro 分发 + 双路径职责
 
@@ -299,6 +318,9 @@ ctest 现在约 28 秒。要更大覆盖别往表里堆，用倍数参数临时�
 
 ## X-macro 清单文件
 
-除了 `x_ast_nodes.inc`，还有 `../lexer/x_token_type.inc`（全部 `TokenType` 枚举值）、`../lexer/x_keyword.inc`
-（关键字文本 → `TokenType` 映射）、`../lexer/x_reservedword.inc`（保留字但非关键字，如 `_G`/`_L`）。加新
+除了 `x_ast_nodes.inc`，还有 `../runtime/x_builtin_types.inc`（全部内置类型：枚举名、访问器名、
+SL 层类名、基类；顺序即建立顺序，同时驱动 `BuiltinType` 枚举、`Runtime::xxx_type()` 访问器和
+bootstrap 的建立循环，加一个内置类型只改这一个文件）、`../compiler/lexer/x_token_type.inc`（全部 `TokenType` 枚举值）、
+`../compiler/lexer/x_keyword.inc`（关键字文本 → `TokenType` 映射）、
+`../compiler/lexer/x_reservedword.inc`（保留字但非关键字，如 `_G`/`_L`）。加新
 关键字/token 类型时这几个文件要一起改，具体加在哪由这个 token 的性质决定（是不是关键字、是不是保留字）。

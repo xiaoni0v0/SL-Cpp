@@ -17,7 +17,7 @@ cmd //c "E:\Programs\SL-Cpp\.ai\run_test.bat"
 
 **how to apply**：改完 `compiler/` 下的代码（或任何会影响这几个测试目标的代码）之后，自己跑这个脚本
 验证，不要让用户代跑。构建失败会跳过测试、返回非零；输出里会分别报 `SL_Cpp_Numeric_BigInt_Tests`、
-`SL_Cpp_Numeric_BigDec_Tests`、`SL_Cpp_Lexer_Tests`、`SL_Cpp_Parser_Tests`、`SL_Cpp_Analyzer_Tests`
-五个独立可执行文件各自的用例数/断言数。如果构建失败但报错信息在 Bash 输出里
+`SL_Cpp_Numeric_BigDec_Tests`、`SL_Cpp_Runtime_Tests`、`SL_Cpp_Lexer_Tests`、`SL_Cpp_Parser_Tests`、
+`SL_Cpp_Analyzer_Tests` 六个独立可执行文件各自的用例数/断言数。如果构建失败但报错信息在 Bash 输出里
 被截断/看着不像真实原因，大概率是构建目录里的过时缓存状态，重新跑一次这个脚本（不用手动清理
 `cmake-build-debug`）通常就能看到真实报错或者直接跑通——这个脚本本身跑得很快，多跑一次成本很低。
