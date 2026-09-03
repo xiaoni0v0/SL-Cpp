@@ -49,6 +49,18 @@ TEST_SUITE("StaticEvaler AstNodeProgram 剪枝") {
         );
     }
 
+    // 剪枝规则判的是"是不是纯字面量"（is_literal_pure），不是"子表达式折完是不是字面量"——
+    // return 1 的节点类型是 AstNodeReturn，不管它的 value_ 折成什么都不该被剪掉，
+    // 否则 func f() { return 1 } 会被剪成空 body，调用行为从返回 1 变成返回 None
+    TEST_CASE("return 不是纯字面量，folding 后夹在字面量中间也不会被剪掉") {
+        CHECK(
+            fold_program_json(U"1; return 2; 3") ==
+            program(
+                nlohmann::json::array({nlohmann::json{{"type", "Return"}, {"value", int_lit("2")}}})
+            )
+        );
+    }
+
     TEST_CASE("函数体也会被剪枝：跟模块顶层是同一套逻辑") {
         // 注意：这里必须用 `= fold_program_json(...)` 而不是 `{fold_program_json(...)}`——
         // nlohmann::json 有 initializer_list 构造函数，`auto j{已经是个 json 的值}`

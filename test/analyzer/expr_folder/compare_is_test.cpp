@@ -123,6 +123,27 @@ TEST_SUITE("StaticEvaler 比较") {
         );
     }
 
+    TEST_CASE("链式比较里混着不同的比较运算符，不能按左结合二元运算理解") {
+        // 1 < 2 == True 等价于 (1<2) and (2==True)，不是 (1<2)==True——后者会先把 1<2 算成
+        // True 再跟 True 比较，同样是 True，但链式比较的真实语义是 2 == True，
+        // True 提升成 1 之后 2 == 1 是 False，整条链应该是 False
+        CHECK(fold_json(U"1 < 2 == True") == bool_lit(false));
+    }
+
+    TEST_CASE("链式比较部分折叠：剩下的子链自己带着不同的运算符，下标没有跟错") {
+        // 1 < 2 <= 3 != x：前两环 1<2、2<=3 都确定为 True 可以丢掉，剩下 3 != x——
+        // 如果部分折叠手动重建 ops_/positions_op_ 时下标算错，这里会拿到错误的运算符
+        // （比如错拿成第一个 '<'），或者位置指错到已经丢掉的运算符身上
+        CHECK(
+            fold_json(U"1 < 2 <= 3 != x") ==
+            nlohmann::json{
+                {"type", "Compare"},
+                {"operands", {int_lit("3"), {{"type", "Identifier"}, {"identifier", "x"}}}},
+                {"ops", {"!="}}
+            }
+        );
+    }
+
     TEST_CASE("is 一律不折（对象同一性没法在编译期安全预判，哪怕是 None）") {
         CHECK(
             fold_json(U"None is None") ==

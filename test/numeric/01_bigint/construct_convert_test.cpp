@@ -125,6 +125,12 @@ TEST_SUITE("BigInt——构造与十进制字符串往返") {
         );
         // 前导零不计入位数：下面这个去掉前导零只有 1 位，照收
         CHECK(d("1e0000000000000000000009").to_decimal_string() == "1000000000");
+        // 光看位数不是判据，只有真的装不进 int64_t 才拒绝：19 位但数值恰好等于 INT64_MAX 照单全收，
+        // 数值 = INT64_MAX + 1 才真的溢出报错（尾数用 0，靠上面那条短路，不用真去算 10^这个指数）
+        CHECK(d("0e9223372036854775807").is_zero());
+        CHECK_THROWS_AS(
+            (void) BigInt::from_decimal_string("0e9223372036854775808"), std::invalid_argument
+        );
         // 尾数是零不该走"0 直接短路"那条捷径把残缺指数的错误吞掉——得先因指数残缺抛错
         CHECK_THROWS_AS((void) BigInt::from_decimal_string("0e"), std::invalid_argument);
         CHECK_THROWS_AS((void) BigInt::from_decimal_string("0e+"), std::invalid_argument);

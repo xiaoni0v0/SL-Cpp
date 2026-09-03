@@ -17,6 +17,21 @@ TEST_SUITE("StaticEvaler 死分支消除") {
         CHECK(fold_json(U"if (False) 1 elif (False) 2") == none_lit());
     }
 
+    // 折叠正确性标准是"被丢弃的部分本来就不会被求值"，不是"被丢弃的部分本身可以折成字面量"
+    // （见 .ai/architecture.md 工程原则一节）：被丢弃的一侧即使是没法预知结果的调用，也照样能丢
+    TEST_CASE("被丢弃的一侧不需要自己能折——保留的一侧同理，不需要额外再折一遍") {
+        CHECK(fold_json(U"if (False) f() else 2") == int_lit("2"));
+        CHECK(
+            fold_json(U"if (True) f() else g()") ==
+            nlohmann::json{
+                {"type", "Call"},
+                {"object", {{"type", "Identifier"}, {"identifier", "f"}}},
+                {"positional_args", nlohmann::json::array()},
+                {"keyword_args", nlohmann::json::array()}
+            }
+        );
+    }
+
     TEST_CASE("前面若干个确定 False 的 clause 可以先丢掉，剩下不能判定的部分重新拼一个更短的 if") {
         CHECK(
             fold_json(U"if (False) 1 elif (x) 2 else 3") ==
@@ -105,6 +120,22 @@ TEST_SUITE("StaticEvaler 死分支消除") {
                                                 {"inc", nullptr},
                                                 {"body", int_lit("1")}
                                             }
+        );
+    }
+
+    // cond 判不了、循环不会被整体消除时，init_/cond_/inc_/body_ 四个槽位各自照样会被递归折叠——
+    // 这是本模块历史上最容易再犯的坑（给节点加槽位却漏了某个消费方）的对称面：死循环消除路径
+    // 已经有专门测试盯着 init_ 的副作用，但循环没被消除时四个槽位各自会不会被折，没人看过
+    TEST_CASE("cond 判不了、循环留着时，四个槽位各自仍然会被折叠") {
+        CHECK(
+            fold_json(U"for (1 + 1; x; 2 + 2) (3 + 3)") == nlohmann::json{
+                                                               {"type", "ForCond"},
+                                                               {"collect", "none"},
+                                                               {"init", int_lit("2")},
+                                                               {"cond", ident("x")},
+                                                               {"inc", int_lit("4")},
+                                                               {"body", int_lit("6")}
+                                                           }
         );
     }
 

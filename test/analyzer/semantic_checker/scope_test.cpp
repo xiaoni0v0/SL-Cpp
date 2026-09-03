@@ -40,6 +40,15 @@ TEST_SUITE("SemanticChecker 作用域") {
         check_throws_with(U"for (break as i) 1", "break outside loop");
     }
 
+    TEST_CASE("嵌套在外层循环里时，内层循环头部槽里的 break/continue 算外层循环体里的，合法") {
+        // 内层 while 的 cond 槽在 loop_depth++ 之前检查，此时 loop_depth 是外层循环已经
+        // 累加过的值——这个 break 落在外层循环的循环体（它的 expr 部分）里，跟直接写在
+        // 外层循环体里的 break 是一回事，不是"内层循环头部"这条限制要拦的对象
+        CHECK_NOTHROW(check_program(U"while (True) { while (break) 1 }"));
+        CHECK_NOTHROW(check_program(U"while (True) { for (i = 0; break; i += 1) 1 }"));
+        CHECK_NOTHROW(check_program(U"for (xs as i) { while (continue) 1 }"));
+    }
+
     TEST_CASE("return 在 Program 里都合法") {
         CHECK_NOTHROW(check_program(U"return 5"));
         CHECK_NOTHROW(check_program(U"return"));
@@ -57,5 +66,16 @@ TEST_SUITE("SemanticChecker 作用域") {
         CHECK_NOTHROW(check_program(U"func f() { class C { global x } }"));
         CHECK_THROWS_AS(check_program(U"while (True) { global x }"), SyntaxError);
         CHECK_THROWS_AS(check_program(U"for (;;) { global x }"), SyntaxError);
+    }
+
+    TEST_CASE("if/for/while/{} 不引入作用域：局部作用域里，同样的位置反过来是合法的") {
+        // 跟上一条正好对称：模块顶层的 while/for/if/{} 里 global 非法，是因为当前帧不是局部作用域，
+        // 不是因为 while/for/if/{} 本身开了一层新作用域挡住了 global——同样的写法挪到 func/class
+        // 体内部（局部作用域），应该照样合法
+        CHECK_NOTHROW(check_program(U"func f() { while (True) { global x } }"));
+        CHECK_NOTHROW(check_program(U"func f() { for (;;) { global x } }"));
+        CHECK_NOTHROW(check_program(U"func f() { if (True) { global x } }"));
+        CHECK_NOTHROW(check_program(U"func f() { { global x } }"));
+        CHECK_NOTHROW(check_program(U"class C { for (;;) { global x } }"));
     }
 }

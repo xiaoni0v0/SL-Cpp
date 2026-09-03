@@ -27,6 +27,29 @@ TEST_SUITE("SemanticChecker 捕获/形参重名") {
         // captures_ 检查跳过
         check_throws_with(U"class C[x = { break }] {}", "break outside loop");
     }
+
+    TEST_CASE("func 捕获列表的 value_expr_ 同样会被递归检查") {
+        CHECK_NOTHROW(check_program(U"func f[x, y]() {}"));
+        check_throws_with(U"func f[x = { break }]() {}", "break outside loop");
+    }
+}
+
+TEST_SUITE("SemanticChecker func/class 头部子树都会被递归检查") {
+    // 这几个位置在结构上都是"通用表达式"（doc 走通用表达式的理由同样适用），容易在新增/改动
+    // visit(AstNodeFunc)/visit(AstNodeClass) 时漏掉某一个子树的递归检查
+
+    TEST_CASE("形参的类型注解、默认值都会被递归检查") {
+        check_throws_with(U"func f(x: break) {}", "break outside loop");
+        check_throws_with(U"func f(x = break) {}", "break outside loop");
+    }
+
+    TEST_CASE("返回类型会被递归检查") {
+        check_throws_with(U"func f(): break {}", "break outside loop");
+    }
+
+    TEST_CASE("class 的基类列表会被递归检查") {
+        check_throws_with(U"class C(break) {}", "break outside loop");
+    }
 }
 
 TEST_SUITE("SemanticChecker 形参顺序") {

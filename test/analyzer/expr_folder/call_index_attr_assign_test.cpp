@@ -1,4 +1,4 @@
-// Call / Index / Attr / 赋值的子槽位折叠。
+// Call / Index / Attr / 赋值 / return 的子槽位折叠。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
@@ -95,5 +95,14 @@ TEST_SUITE("ExprFolder Assign/CompoundAssign 子表达式折叠") {
         CHECK(
             fold_json(U"a[1 + 1] += 1")["target"]["args"] == nlohmann::json::array({int_lit("2")})
         );
+    }
+}
+
+TEST_SUITE("ExprFolder Return 子表达式折叠") {
+
+    TEST_CASE("value_ 会被折叠") { CHECK(fold_json(U"return 1 + 1")["value"] == int_lit("2")); }
+
+    TEST_CASE("裸 return 的 value_ 是空指针，不受影响") {
+        CHECK(fold_json(U"return") == nlohmann::json{{"type", "Return"}, {"value", nullptr}});
     }
 }

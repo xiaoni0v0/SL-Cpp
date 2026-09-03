@@ -423,6 +423,8 @@ add_executable(SL_Cpp_Analyzer_Tests
         parser/ast_nodes/details/ast_node_postfix.h
         parser/ast_nodes/details/ast_node_var.h
         builtins/exceptions/InternalError.h
+        analyzer/Analyzer.cpp
+        analyzer/Analyzer.h
         analyzer/expr_folder/ExprFolder.cpp
         analyzer/expr_folder/ExprFolder.h
         analyzer/expr_folder/StaticEvaler.cpp
@@ -435,6 +437,7 @@ add_executable(SL_Cpp_Analyzer_Tests
         test/analyzer/test_utils.h
         test/analyzer/semantic_checker/test_utils.h
         test/analyzer/main_test.cpp
+        test/analyzer/analyzer_facade_test.cpp
         test/analyzer/recheck_after_fold_test.cpp
 
         # 测试代码：semantic_checker

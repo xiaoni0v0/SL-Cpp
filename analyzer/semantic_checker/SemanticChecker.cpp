@@ -40,6 +40,8 @@ void SemanticChecker::visit(const AstNodeClass &node) {
         require_not_empty(capture.identifier_, pos);
         // 如果是已经存在
         if (!names.insert(capture.identifier_).second) error("duplicate name in capture list", pos);
+        if (capture.capture_type_ == OneCapture::CaptureType::Reference && capture.value_expr_)
+            error_internal("reference capture with a value expression", pos);
         check_nullable(capture.value_expr_);
     }
 
@@ -198,6 +200,8 @@ void SemanticChecker::visit(const AstNodeFunc &node) {
     // 捕获
     for (const auto &capture : node.captures_) {
         require_not_empty(capture.identifier_, pos), ensure_unique(capture.identifier_);
+        if (capture.capture_type_ == OneCapture::CaptureType::Reference && capture.value_expr_)
+            error_internal("reference capture with a value expression", pos);
         check_nullable(capture.value_expr_);
     }
 

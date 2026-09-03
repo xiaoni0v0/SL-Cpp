@@ -17,6 +17,17 @@ TEST_SUITE("注释") {
         CHECK(lex_dump(U"1 # ## \"x\" 'y' `z` \\n \n2") == "LITERAL_INT(1) NEWLINE LITERAL_INT(2)");
     }
 
+    // 单行注释只认 '\n' 为行终止，'\r' 不是——这跟 "\\r 是空白" 那条规则（见 06_whitespace）
+    // 是同一个 '\r' 但不同的处理层：裸 '\r' 出现在 token 之间会被当空白跳过，出现在注释内部
+    // 则只是被吃掉的普通文本，注释不会因为遇到 '\r' 就提前结束
+    TEST_CASE("CRLF 行尾：注释正常吃到 \\n 为止，\\r 不提前结束注释") {
+        CHECK(lex_dump(U"1 #c\r\n2") == "LITERAL_INT(1) NEWLINE LITERAL_INT(2)");
+    }
+
+    TEST_CASE("单行注释内部出现孤立的 \\r（不跟着 \\n）：\\r 只是文本，注释继续吃到真正的 \\n") {
+        CHECK(lex_dump(U"1 #a\rb\n2") == "LITERAL_INT(1) NEWLINE LITERAL_INT(2)");
+    }
+
     TEST_CASE("块注释是空白，可跨行") {
         CHECK(lex_dump(U"1 /* comment */ 2") == "LITERAL_INT(1) LITERAL_INT(2)");
         CHECK(lex_dump(U"/* just a comment */") == "");

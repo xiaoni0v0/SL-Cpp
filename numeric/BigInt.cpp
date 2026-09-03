@@ -346,12 +346,12 @@ BigInt BigInt::from_decimal_string(const std::string &s) {
         while (i < s.size() && is_digit(s[i])) ++i;
         if (exp_begin == i)
             throw std::invalid_argument("BigInt::from_decimal_string: no exponent digits");
-        // 跳过前导 0 后按剩余位数挡掉装不进 int64_t 的；指数太大算不动不设限，见头文件
-        size_t exp_digits{exp_begin};
-        while (exp_digits + 1 < i && s[exp_digits] == '0') ++exp_digits;
-        if (i - exp_digits > 18)
-            throw std::invalid_argument("BigInt::from_decimal_string: exponent out of range");
-        for (size_t k{exp_digits}; k < i; ++k) exponent = exponent * 10 + (s[k] - '0');
+        // 逐位累加时用溢出检测挡真正装不进 int64_t 的输入，不是按位数估算着拒绝
+        for (size_t k{exp_begin}; k < i; ++k) {
+            if (ckd_mul(&exponent, exponent, int64_t{10}) ||
+                ckd_add(&exponent, exponent, static_cast<int64_t>(s[k] - '0')))
+                throw std::invalid_argument("BigInt::from_decimal_string: exponent out of range");
+        }
     }
     if (i != s.size())
         throw std::invalid_argument("BigInt::from_decimal_string: invalid character");

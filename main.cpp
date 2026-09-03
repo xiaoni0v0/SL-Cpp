@@ -7,7 +7,7 @@
 
 #include "executor/Executor.h"
 
-int main(const int argc, char *argv[]) {
+int main(const int argc, const char *argv[]) {
 #ifdef _WIN32
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);

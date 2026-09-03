@@ -88,6 +88,37 @@ TEST_SUITE("装饰器——通用形式") {
         );
     }
 
+    TEST_CASE("带参装饰器包裹非 func/class 的普通目标") {
+        CHECK(
+            parse_json(U"@dec(1, 2) x") ==
+            nlohmann::json{
+                {"type", "Decorator"},
+                {"decorator",
+                 {{"type", "Call"},
+                  {"object", ident("dec")},
+                  {"positional_args",
+                   nlohmann::json::array(
+                       {nlohmann::json::parse(R"({"type":"LiteralInt","raw":"1"})"),
+                        nlohmann::json::parse(R"({"type":"LiteralInt","raw":"2"})")}
+                   )},
+                  {"keyword_args", nlohmann::json::array()}}},
+                {"target", ident("x")}
+            }
+        );
+    }
+
+    TEST_CASE("装饰器比一切运算符都松：@d x + y 的目标是整个 x + y，不是只到 x") {
+        CHECK(
+            parse_json(U"@d x + y") ==
+            nlohmann::json{
+                {"type", "Decorator"},
+                {"decorator", ident("d")},
+                {"target",
+                 {{"type", "OpBinary"}, {"op", "+"}, {"left", ident("x")}, {"right", ident("y")}}}
+            }
+        );
+    }
+
     TEST_CASE("装饰器目标是赋值表达式") {
         CHECK(
             parse_json(U"@dec x = 1") ==

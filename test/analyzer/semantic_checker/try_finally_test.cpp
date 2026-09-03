@@ -40,6 +40,30 @@ TEST_SUITE("SemanticChecker try / finally") {
         CHECK_NOTHROW(check_program(U"try a finally { for (xs as x) { break } }"));
     }
 
+    // func/class 的捕获、形参默认值/类型注解、返回类型、基类都在 finally_loop_depth 被重置成 -1
+    // 之前检查——"新开的循环/函数/类不受影响"只对它们的**函数体/类体**成立，这几个头部子树的
+    // 求值仍然发生在外层，本该被外层 finally 拦住
+    TEST_CASE("func/class 头部子树（捕获/形参默认值/返回类型/基类）仍在外层 finally 范围内") {
+        check_throws_with(
+            U"try a finally { func f[x = return]() {} }", "return inside finally is not allowed"
+        );
+        check_throws_with(
+            U"try a finally { func f(x = return) {} }", "return inside finally is not allowed"
+        );
+        check_throws_with(
+            U"try a finally { func f(x: return) {} }", "return inside finally is not allowed"
+        );
+        check_throws_with(
+            U"try a finally { func f(): (return) {} }", "return inside finally is not allowed"
+        );
+        check_throws_with(
+            U"try a finally { class C[x = return] {} }", "return inside finally is not allowed"
+        );
+        check_throws_with(
+            U"try a finally { class C(return) {} }", "return inside finally is not allowed"
+        );
+    }
+
     TEST_CASE("复合表达式不引入新作用域，里面的 return 仍拦截") {
         check_throws_with(
             U"try a finally { { return 1 } }", "return inside finally is not allowed"

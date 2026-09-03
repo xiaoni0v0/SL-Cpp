@@ -236,6 +236,45 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
         check_throws_internal_error_with(*program, "unexpected empty name");
     }
 
+    TEST_CASE("AstNodeClass/AstNodeFunc：引用捕获（&x）却带着 value_expr_（语法上没有这个位置）") {
+        std::vector<OneCapture> class_captures;
+        class_captures.push_back({OneCapture::CaptureType::Reference, U"x", int_lit()});
+        AstNodeProgramPtr class_program{wrap(
+            std::make_unique<AstNodeClass>(
+                Position{0, 0},
+                std::vector<AstNodePtr>{},
+                std::vector<Position>{},
+                std::nullopt,
+                std::vector<AstNodePtr>{},
+                std::move(class_captures),
+                nullptr,
+                std::make_unique<AstNodeProgram>(Position{0, 0}, std::vector<AstNodePtr>{})
+            )
+        )};
+        check_throws_internal_error_with(
+            *class_program, "reference capture with a value expression"
+        );
+
+        std::vector<OneCapture> func_captures;
+        func_captures.push_back({OneCapture::CaptureType::Reference, U"x", int_lit()});
+        AstNodeProgramPtr func_program{wrap(
+            std::make_unique<AstNodeFunc>(
+                Position{0, 0},
+                std::vector<AstNodePtr>{},
+                std::vector<Position>{},
+                std::nullopt,
+                std::move(func_captures),
+                AstNodeFunc::AllParams{},
+                nullptr,
+                nullptr,
+                std::make_unique<AstNodeProgram>(Position{0, 0}, std::vector<AstNodePtr>{})
+            )
+        )};
+        check_throws_internal_error_with(
+            *func_program, "reference capture with a value expression"
+        );
+    }
+
     TEST_CASE(
         "AstNodeFunc：var_args_name_/var_kwargs_name_ 是空字符串（应该要么 nullopt 要么有内容）"
     ) {

@@ -130,6 +130,20 @@ TEST_SUITE("普通字符串") {
         }
     }
 
+    // CRLF 源码里，行尾反斜杠后紧跟的是 '\r' 不是 '\n'：不命中"换行"这条判断，于是转义继续往下走，
+    // 把 '\r' 本身当成待查表的转义字符——查不到，报"unknown escape"而不是上面那条"unterminated
+    // escape"。这跟 LF 源码里同样的写法走的是两条不同分支，报错文案不一样；这里只钉住当前确实会
+    // 抛出的错误类型，不去评判这条诊断信息合不合理
+    TEST_CASE("CRLF 源码里反斜杠后紧跟 \\r\\n：跟 LF 走的是不同分支，仍然抛错但文案不同") {
+        try {
+            lex(U"\"abc\\\r\ndef\"");
+            FAIL("应当抛出异常");
+        } catch (const SyntaxError &e) {
+            const std::string msg{e.what()};
+            CHECK(msg.find("unknown escape") != std::string::npos);
+        }
+    }
+
     TEST_CASE("与其它 token 组合") {
         CHECK(lex_dump(U"f(\"x\")") == "IDENTIFIER(f) SIGN_LPAREN LITERAL_STR(x) SIGN_RPAREN");
         CHECK(lex_dump(U"\"a\" + \"b\"") == "LITERAL_STR(a) SIGN_PLUS LITERAL_STR(b)");

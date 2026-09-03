@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <stdckdint.h>
 #include <stdexcept>
 #include <tuple>
 
@@ -638,11 +639,12 @@ std::optional<BigDec> BigDec::try_from_string(const std::string &s) {
         const size_t exp_begin{i};
         while (i < s.size() && is_ascii_digit(s[i])) ++i;
         if (i == exp_begin) return std::nullopt;
-        // 先跳过前导 0，再按剩下的位数挡掉大到会撑爆 int64_t 的输入（19 位就可能溢出）
-        size_t digits_begin{exp_begin};
-        while (digits_begin + 1 < i && s[digits_begin] == '0') ++digits_begin;
-        if (i - digits_begin > 18) return std::nullopt;
-        for (size_t k{digits_begin}; k < i; ++k) exp = exp * 10 + (s[k] - '0');
+        // 逐位累加时用溢出检测挡真正装不进 int64_t 的输入，不是按位数估算着拒绝
+        for (size_t k{exp_begin}; k < i; ++k) {
+            if (ckd_mul(&exp, exp, int64_t{10}) ||
+                ckd_add(&exp, exp, static_cast<int64_t>(s[k] - '0')))
+                return std::nullopt;
+        }
         if (exp_negative) exp = -exp;
     }
     if (i != s.size()) return std::nullopt; // 尾部还剩别的字符

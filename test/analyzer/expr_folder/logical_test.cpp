@@ -19,6 +19,13 @@ TEST_SUITE("StaticEvaler 逻辑运算") {
         CHECK(fold_json(U"not ...") == bool_lit(false)); // Ellipsis 不在假值列表里
     }
 
+    // 容器的真值只看是不是空，不看元素本身；元素含不折的 decimal 也不例外——
+    // 如果误写成"递归判元素真值"，这两条就会因为元素是 decimal（真值不折）而没法折出结果
+    TEST_CASE("容器真值只看空不空，元素是不折的 decimal 也不影响非空容器折成真") {
+        CHECK(fold_json(U"not (0.0,)") == bool_lit(false));
+        CHECK(fold_json(U"if ([0.0]) 111 else 222") == int_lit("111"));
+    }
+
     // decimal 的真值也不折（哪怕字面看着明显是 0），见 numeric_fidelity_test.cpp
     TEST_CASE("decimal 的真值不折") { CHECK(fold_json(U"not 0.0")["type"] == "OpUnary"); }
 
@@ -63,6 +70,13 @@ TEST_SUITE("StaticEvaler 逻辑运算") {
                 {"keyword_args", nlohmann::json::array()}
             }
         );
+    }
+
+    TEST_CASE("反过来：左边已经能确定结果时，右边不需要能折，其副作用直接被丢弃") {
+        // 左边 False 已经确定 and 的结果，右边即使是没法预知结果的调用也不需要求值
+        CHECK(fold_json(U"False and f()") == bool_lit(false));
+        // 左边 1（真值为真）已经确定 or 的结果，同理丢掉右边
+        CHECK(fold_json(U"1 or f()") == int_lit("1"));
     }
 
     TEST_CASE("左操作数含变量、真值未知时不折") {
