@@ -22,12 +22,13 @@ class GcRootSource {
  * 堆，串起全部存活对象，并在需要时做一轮 STW 标记清扫。
  */
 class Heap {
+    friend class Object;
+
     // 标记阶段和清理阶段的两个访问者
     class Marker;
     class Clearer;
 
     // 进出全堆链表
-    friend class Object;
     static void link(Object *obj);
     static void unlink(Object *obj);
 

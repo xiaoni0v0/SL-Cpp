@@ -8,7 +8,7 @@
 void Object::incref() { ++refcount_; }
 
 void Object::decref() {
-    assert(refcount_ > 0 && "decref 了一个引用计数已经为 0 的对象");
+    assert(refcount_ > 0 && "对一个引用计数已经为 0 的对象调用了 decref");
 
     if (--refcount_ == 0) delete this; // delete this 之后不得再碰任何成员
 }

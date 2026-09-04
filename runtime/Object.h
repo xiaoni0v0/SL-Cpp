@@ -13,9 +13,9 @@ class Type;
  * 会改对象的引用计数，构造 Ref 恒 +1、析构 Ref 恒 -1。
  */
 template <typename T> class Ref {
-    T *ptr_{nullptr};
-
     template <typename U> friend class Ref;
+
+    T *ptr_{nullptr};
 
   public:
     Ref() = default;
@@ -61,7 +61,7 @@ template <typename T> class Ref {
 
 using ObjectRef = Ref<Object>;
 
-// 建一个新对象并接管它。所有 SL 对象都该经由它建立
+// 所有 SL 对象都该经由它建立
 template <typename T, typename... Args> [[nodiscard]] Ref<T> make_ref(Args &&...args) {
     return Ref<T>{new T(std::forward<Args>(args)...)};
 }
@@ -104,9 +104,9 @@ class RefVisitor {
  * C++ 的类继承 ≠ SL 的类继承，SL 继承关系全存在 Type 的 bases_/mro_ 里。
  */
 class Object {
-    template <typename U> friend class Ref;
     friend class Heap;
     friend class Runtime;
+    template <typename U> friend class Ref;
 
     // 引用计数
     std::size_t refcount_{0};
@@ -116,8 +116,9 @@ class Object {
     // 全堆链表，侵入式
     Object *gc_prev_{nullptr};
     Object *gc_next_{nullptr};
-    // 标记位，只在一次 collect() 内部有意义
-    bool gc_marked_{false};
+    // 本轮 collect() 里是否已判定为根可达；只在一次 collect() 内部有意义，
+    // collect() 结束时保证全部复位回 false
+    bool gc_reachable_{false};
 
     // 引用计数的加减
     void incref();

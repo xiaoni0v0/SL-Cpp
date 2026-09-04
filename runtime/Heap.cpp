@@ -26,8 +26,8 @@ class Heap::Marker final : public RefVisitor {
 
   protected:
     void visit_ref(Object *const target) override {
-        if (!target || target->gc_marked_) return;
-        target->gc_marked_ = true;
+        if (!target || target->gc_reachable_) return;
+        target->gc_reachable_ = true;
         pending_.push(target); // 显式工作栈，不递归
     }
 
@@ -78,15 +78,6 @@ void Heap::add_root_source(GcRootSource *const source) { g_root_sources.push_bac
 
 void Heap::remove_root_source(GcRootSource *const source) { std::erase(g_root_sources, source); }
 
-std::size_t Heap::live_count() { return g_live_count; }
-
-std::size_t Heap::allocated_since_collect() { return g_allocated_since_collect; }
-
-bool Heap::should_collect() {
-    return g_allocated_since_collect >= kMinAllocationsBetweenCollects &&
-           g_allocated_since_collect >= g_live_count;
-}
-
 void Heap::collect() {
     // 1. 标记
     Marker marker;
@@ -98,32 +89,35 @@ void Heap::collect() {
     // 2. 分离
     std::vector<Object *> garbage;
     for (Object *object{g_head}; object; object = object->gc_next_) {
-        if (object->gc_marked_)
+        if (object->gc_reachable_)
             // 顺手把标记复位
-            object->gc_marked_ = false;
+            object->gc_reachable_ = false;
         else
             // 未标记的就是垃圾
             garbage.push_back(object);
     }
 
-    // 3. 保命：每个垃圾对象先 +1
-    // 下一步放边时，垃圾之间互相持有的引用会归还，谁的计数先归零谁就地析构，
-    // 而它析构时又要 decref 别的垃圾——那些可能已经被删过了。这一轮 +1 把整批的生死
-    // 统一推迟到第 5 步，析构顺序就不再是个问题
+    // 3. 保命，每个垃圾对象先 +1
     for (Object *const object : garbage) object->incref();
 
-    // 4. 清理：放掉垃圾的每条出边
-    // 指向存活对象的引用在这里被正确归还（不归还就是永久泄漏）；指向垃圾的引用有第 3 步兜着
+    // 4. 断引用
     Clearer clearer;
     for (Object *const object : garbage) object->visit_all_refs(clearer);
 
-    // 5. 释放
-    // 走到这里每个垃圾对象的计数都该恰好是第 3 步加的那个 1：所有指向它的引用要么来自垃圾
-    // （第 4 步放掉了），要么来自存活对象——而那意味着它根可达、不该在这批里
+    // 5. 销毁
     for (Object *const object : garbage) {
-        assert(object->refcount() == 1 && "垃圾对象上还挂着计数不明的引用");
+        assert(object->refcount() == 1 && "垃圾对象仍被非法引用");
         object->decref();
     }
 
     g_allocated_since_collect = 0;
+}
+
+std::size_t Heap::live_count() { return g_live_count; }
+
+std::size_t Heap::allocated_since_collect() { return g_allocated_since_collect; }
+
+bool Heap::should_collect() {
+    return g_allocated_since_collect >= kMinAllocationsBetweenCollects &&
+           g_allocated_since_collect >= g_live_count;
 }
