@@ -5,7 +5,7 @@ format.py
 
 批量格式化项目里的源文件，按文件名/后缀名分派给对应的格式化器（见 FORMATTERS_BY_NAME、FORMATTERS）：
     CMakeLists.txt                                  ->  gersemi
-    .c / .cc / .cpp / .cxx / .h / .hh / .hpp / .hxx ->  clang-format
+    .c / .cc / .cpp / .cxx / .h / .hh / .hpp / .hxx / .inc ->  clang-format
     .cmake                                          ->  gersemi
     .md                                             ->  prettier
     .py                                             ->  black
@@ -47,7 +47,10 @@ EXCLUDE_DIR_PATTERNS = [
     "cmake-build-*",
 ]
 # 排除的文件名
-EXCLUDE_FILE_PATTERNS = []
+EXCLUDE_FILE_PATTERNS = [
+    "big_int_cases.inc",  # test/numeric/gen_big_int_cases.py 生成
+    "big_dec_cases.inc",  # test/numeric/gen_big_dec_cases.py 生成
+]
 
 
 class Formatter(NamedTuple):
@@ -113,6 +116,7 @@ FORMATTERS = {
     ".hh": CLANG_FORMAT,
     ".hpp": CLANG_FORMAT,
     ".hxx": CLANG_FORMAT,
+    ".inc": CLANG_FORMAT,
     ".cmake": GERSEMI,
     ".md": PRETTIER,
     ".py": BLACK,

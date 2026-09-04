@@ -86,12 +86,12 @@ X(SIGN_LSHIFT)    // <<
 X(SIGN_RSHIFT)    // >>
 
 // 符号：比较
-X(SIGN_EQ)  // ==
+X(SIGN_EQ) // ==
 X(SIGN_NE) // !=
-X(SIGN_LT)  // <
-X(SIGN_LE)  // <=
-X(SIGN_GT)  // >
-X(SIGN_GE)  // >=
+X(SIGN_LT) // <
+X(SIGN_LE) // <=
+X(SIGN_GT) // >
+X(SIGN_GE) // >=
 
 // 符号：赋值
 X(SIGN_ASSIGN) // =
