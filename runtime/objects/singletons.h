@@ -32,7 +32,10 @@ class Bool final : public Object {
     bool value_;
 
     SL_HEAP_ONLY;
-    explicit Bool(bool value);
+    // type 参数是 bootstrap 期间由 Runtime 直接传自己的 types_[...]，不经过任何带相位检查
+    // 的公开访问器——True/False 恰好是在 bootstrap 内部建的，这样能避免"访问器要求的状态
+    // 恰好是自己正在建立的状态"这种自我循环
+    Bool(Type *type, bool value);
 
   public:
     [[nodiscard]] bool value() const { return value_; }

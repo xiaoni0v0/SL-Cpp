@@ -2,7 +2,6 @@
 
 #include "../cpp_exceptions/InternalError.h"
 
-#include <format>
 #include <memory>
 
 namespace {
@@ -22,21 +21,6 @@ constexpr BuiltinTypeSpec kBuiltinTypeSpecs[]{
 };
 
 constexpr std::size_t index_of(const BuiltinType type) { return static_cast<std::size_t>(type); }
-
-// 相位名，只用于报错
-constexpr const char *phase_name(const BootPhase phase) {
-    switch (phase) {
-    case BootPhase::Uninitialized:
-        return "Uninitialized";
-    case BootPhase::Types:
-        return "Types";
-    case BootPhase::Values:
-        return "Values";
-    case BootPhase::Ready:
-        return "Ready";
-    }
-    return "<未知相位>";
-}
 
 } // namespace
 
@@ -61,13 +45,19 @@ void Runtime::build_types() {
 }
 
 void Runtime::build_singletons() {
+    // 全部直接读 types_，不经过 none_type()/bool_type() 这类公开访问器——
+    // 这正是让 BootPhase 变得没必要的那处改动，见类注释
+    Type *const none_type{types_[index_of(BuiltinType::NoneType)].get()};
+    Type *const singleton_type{types_[index_of(BuiltinType::SingletonType)].get()};
+    Type *const bool_type{types_[index_of(BuiltinType::Bool)].get()};
+
     // None 的类型是 NoneType，另外三个是 SingletonType（SL.md 4.2.17）
-    none_ = make_ref<Singleton>(none_type(), "None");
-    ellipsis_ = make_ref<Singleton>(singleton_type(), "Ellipsis");
-    not_implemented_ = make_ref<Singleton>(singleton_type(), "NotImplemented");
-    stop_iteration_ = make_ref<Singleton>(singleton_type(), "StopIteration");
-    true_ = make_ref<Bool>(true);
-    false_ = make_ref<Bool>(false);
+    none_ = make_ref<Singleton>(none_type, "None");
+    ellipsis_ = make_ref<Singleton>(singleton_type, "Ellipsis");
+    not_implemented_ = make_ref<Singleton>(singleton_type, "NotImplemented");
+    stop_iteration_ = make_ref<Singleton>(singleton_type, "StopIteration");
+    true_ = make_ref<Bool>(bool_type, true);
+    false_ = make_ref<Bool>(bool_type, false);
 }
 
 void Runtime::visit_roots(RefVisitor &visitor) {
@@ -101,34 +91,20 @@ void Runtime::dispose() {
     g_runtime.reset();
 }
 
-Runtime &Runtime::instance(const BootPhase required) {
+Runtime &Runtime::instance() {
     if (!g_runtime) throw InternalError{"运行时还没初始化就被访问了"};
-    if (g_runtime->phase_ < required) {
-        throw InternalError{std::format(
-            "bootstrap 相位不足：这里要求 {}，而当前只到 {}。多半是某个初始化步骤排错了位置",
-            phase_name(required),
-            phase_name(g_runtime->phase_)
-        )};
-    }
     return *g_runtime;
 }
 
 void Runtime::init() {
     if (g_runtime) throw InternalError{"运行时被初始化了两次"};
-    // 先装好全局指针再建东西：各对象的构造函数要经由访问器拿自己的类型。
-    // 此时相位还是 Uninitialized，任何"早了一步"的访问都会被 instance() 挡下
     g_runtime.reset(new Runtime{});
     Heap::add_root_source(g_runtime.get());
 
     try {
-        g_runtime->build_types();
-        g_runtime->phase_ = BootPhase::Types;
-
+        g_runtime->build_types(); // 内置类型（含异常类树）
         g_runtime->build_singletons();
-        g_runtime->phase_ = BootPhase::Values;
-
-        // 异常类树、内置函数表、内置模块表将来插在这里，各自推进一个相位
-        g_runtime->phase_ = BootPhase::Ready;
+        // 内置函数表、内置模块表将来插在这里
     } catch (...) {
         // 半初始化的运行时比没有运行时更难查：拆干净再把异常放出去
         dispose();
@@ -141,25 +117,21 @@ void Runtime::shutdown() {
     dispose();
 }
 
-BootPhase Runtime::phase() { return g_runtime ? g_runtime->phase_ : BootPhase::Uninitialized; }
+bool Runtime::ready() { return g_runtime != nullptr; }
 
-Type *Runtime::builtin_type(const BuiltinType id) {
-    return instance(BootPhase::Types).types_[index_of(id)].get();
-}
+Type *Runtime::builtin_type(const BuiltinType id) { return instance().types_[index_of(id)].get(); }
 
-// 类型对象在 Types 相位就位
 #define X(field, accessor, name, base)                                                             \
     Type *Runtime::accessor() { return builtin_type(BuiltinType::field); }
 #include "x_builtin_types.inc"
 #undef X
 
-// 单例在 Values 相位才有
-Object *Runtime::none() { return instance(BootPhase::Values).none_.get(); }
-Object *Runtime::ellipsis() { return instance(BootPhase::Values).ellipsis_.get(); }
-Object *Runtime::not_implemented() { return instance(BootPhase::Values).not_implemented_.get(); }
-Object *Runtime::stop_iteration() { return instance(BootPhase::Values).stop_iteration_.get(); }
+Object *Runtime::none() { return instance().none_.get(); }
+Object *Runtime::ellipsis() { return instance().ellipsis_.get(); }
+Object *Runtime::not_implemented() { return instance().not_implemented_.get(); }
+Object *Runtime::stop_iteration() { return instance().stop_iteration_.get(); }
 
 Bool *Runtime::boolean(const bool value) {
-    const Runtime &self{instance(BootPhase::Values)};
+    const Runtime &self{instance()};
     return value ? self.true_.get() : self.false_.get();
 }

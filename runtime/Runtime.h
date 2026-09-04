@@ -5,7 +5,6 @@
 #include "objects/singletons.h"
 
 #include <array>
-#include <cstdint>
 
 // 内置类型的编号。清单在 x_builtin_types.inc
 enum class BuiltinType : std::size_t {
@@ -16,27 +15,19 @@ enum class BuiltinType : std::size_t {
     NoBase, // 只给 object 用：它没有基类
 };
 
-// bootstrap 的相位。**取值有序**，"某个东西现在能不能用"一律表达成"当前相位 >= 某个相位"。
-//
-// 每一相位的承诺（后面的相位包含前面的）：
-//
-// | 相位            | 走完之后什么可用                                                       |
-// |-----------------|------------------------------------------------------------------------|
-// | `Uninitialized` | 只有 Heap。此时建任何 SL 对象都是错的——它拿不到自己的类型             |
-// | `Types`         | 全部内置类型对象；object/type 互为对方类型的结已解开                   |
-// | `Values`        | 六个单例。**到这里为止，常量表要的一切都能造了**（见 bytecode.md）      |
-// | `Ready`         | 全部内置就位，编译器与虚拟机可以跑                                     |
-//
-// 现在 `Values` 和 `Ready` 之间是空的；异常类树（SL 层）、内置函数表、内置模块表都会插在这中间，
-// 各自一个相位。**新加的初始化步骤要按它依赖谁来决定插在哪，不是往 bootstrap 末尾一追了事。**
-enum class BootPhase : std::uint8_t {
-    Uninitialized,
-    Types,
-    Values,
-    Ready,
-};
-
 // 运行时本身：持有全部内置类型与单例，并按正确的顺序把它们建起来。
+//
+// **没有分阶段的状态机**：`init()` 内部先建类型、再建单例，看着像"两个阶段"，但这个中间状态
+// 从来没有暴露给外部——C++ 单线程同步执行，`init()` 跑到一半时不存在任何别的代码能插进来看到
+// "类型建好了、单例还没建好"这个瞬间。真正需要分辨的只有一件事："`init()` 到底有没有跑完"，
+// 这就是一个 bool（`g_runtime` 是否为空）。
+//
+// 早先版本给这个类配了个 `BootPhase` 有序枚举，本意是防"提前访问了还没建好的东西"，
+// 但那其实是自己给自己挖的坑：`build_singletons()` 内部曾经调用 `none_type()` 这类**公开的**
+// 访问器去拿自己需要的类型，而不是直接碰 `types_` 这个私有字段——`Bool`/`Singleton` 的构造
+// 函数也一样，曾经硬编码调用 `Runtime::bool_type()` 而不是接收调用方传来的 `Type*`。绕过公开
+// 接口、直接传值/直接访问私有字段之后，"类型建好但单例还没建好"这个阶段根本不会被任何代码
+// 观察到，`BootPhase` 也就没有存在的必要了
 //
 // 进程内只有一个（SL 没有"多解释器"的概念，import / eval_isolated 建的是新的**全局作用域**
 // 而不是新的运行时），所以做成全局单例、访问器是静态的——把一个 Runtime& 穿过每个对象构造函数
@@ -45,7 +36,6 @@ enum class BootPhase : std::uint8_t {
 // 它同时是第一个 GC 根源——内置类型与单例都由它攥着，以后帧栈、模块表、每份 Code 的常量表
 // 各自再注册一个。
 class Runtime final : public GcRootSource {
-    BootPhase phase_{BootPhase::Uninitialized};
     std::array<Ref<Type>, static_cast<std::size_t>(BuiltinType::Count)> types_;
     Ref<Singleton> none_;
     Ref<Singleton> ellipsis_;
@@ -56,7 +46,7 @@ class Runtime final : public GcRootSource {
 
     Runtime() = default;
 
-    // —— bootstrap 的各个相位，按声明顺序执行；每个跑完由 init() 推进 phase_ ——
+    // —— bootstrap 的两步，按声明顺序执行；都只碰 types_/私有字段，不经过任何公开访问器 ——
     void build_types();
     void build_singletons();
 
@@ -65,10 +55,8 @@ class Runtime final : public GcRootSource {
     // 把运行时拆干净：放引用、摘根源、扫一轮。init() 中途失败和正常 shutdown 共用它
     static void dispose();
 
-    // 取运行时，并核实当前相位够不够 required。**每个访问器都要如实报出自己要求的相位**——
-    // 这是"bootstrap 顺序写错了"唯一的自动拦截点：不查的话，早了一步拿到的是个空类型指针，
-    // 错误会一路飘到很远的地方才炸
-    [[nodiscard]] static Runtime &instance(BootPhase required);
+    // 取运行时；没 init() 或已经 shutdown() 就访问，抛 InternalError
+    [[nodiscard]] static Runtime &instance();
     // 各类型访问器共用的实现，省得宏展开出一堆同样的函数体
     [[nodiscard]] static Type *builtin_type(BuiltinType id);
 
@@ -82,9 +70,8 @@ class Runtime final : public GcRootSource {
     static void init();
     static void shutdown();
 
-    [[nodiscard]] static BootPhase phase();
     // 编译器/虚拟机的入口在动手之前该断言这个
-    [[nodiscard]] static bool ready() { return phase() == BootPhase::Ready; }
+    [[nodiscard]] static bool ready();
 
     // 下面这些返回的都是**借用**的裸指针：运行时活着期间它们恒有效，要长期持有请自己包 Ref。
     // shutdown 之后一律失效
