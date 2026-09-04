@@ -66,6 +66,10 @@ template <typename T, typename... Args> [[nodiscard]] Ref<T> make_ref(Args &&...
     return Ref<T>{new T(std::forward<Args>(args)...)};
 }
 
+// 对象只允许在堆上。
+// 用法：每个具体对象类型的 private 区都写这一行；把构造函数也放进 private。
+#define SL_HEAP_ONLY template <typename T, typename... Args> friend Ref<T> make_ref(Args &&...args)
+
 /**
  * 遍历一个对象每个直接强引用。
  */

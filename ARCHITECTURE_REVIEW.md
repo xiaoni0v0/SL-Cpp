@@ -61,6 +61,10 @@ C++ 这边的类只表达"存储形状"——这个对象有哪些字段、多�
 为什么不用标准库的 `shared_ptr`？因为 GC 需要能读、能改这个计数（分离垃圾之后要能把计数临时抬高，
 见下面「GC」一节的第 3 步），`shared_ptr` 的计数被封死在控制块里，够不着。
 
+所有具体对象类型的**构造函数也是私有的**，只对 `make_ref` 开放（`SL_HEAP_ONLY` 宏）。于是
+`Int x{...};` 这种栈上构造、以及 `new Int{...}` 之后忘了包 `Ref`，全都是编译错误——前者会在
+引用计数归零时对栈内存 `delete this`，后者必然泄漏。
+
 加减计数是 `Object` 的**私有成员函数** `incref()`/`decref()`，`decref()` 归零时 `delete this`。
 只有 `Ref<T>` 和 `Heap` 是友元能调它们——也就是说"手动改引用计数"这件事在 `runtime/` 之外根本
 写不出来，是编译错误而不是靠自觉。（Boost 的 `intrusive_ptr` 用自由函数是为了让任意类型都能接入，
@@ -248,8 +252,8 @@ SL 异常对象包进这个信封 `throw` 出去，由**紧挨着它的调用方
 ## 六、几个横切的设计原则（贯穿以上所有部分）
 
 1. **"只给 X 用"用访问控制表达，不靠注释**：GC 的记账字段、`visit_all_refs`、`set_type`、
-   `incref/decref`、`Heap::link/unlink` 全是 `private` + 精确的 `friend`，外部代码碰它们是编译
-   错误而不是"请自觉"。
+   `incref/decref`、`Heap::link/unlink`、以及各对象类型的构造函数，全是 `private` + 精确的
+   `friend`，外部代码碰它们是编译错误而不是"请自觉"。
    `Object::visit_own_refs` 更进一步做成私有虚函数（子类照常覆写，但谁都不能绕过 `visit_all_refs`
    直接调它——绕过去会静默漏掉 `type_` 那条边）。唯一公开的例外是**只读**的 `refcount()`，
    留给测试断言引用计数收支平衡。

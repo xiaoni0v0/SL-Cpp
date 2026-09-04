@@ -16,10 +16,11 @@
 class Exception final : public Object {
     Ref<Tuple> args_;
 
-  public:
+    SL_HEAP_ONLY;
     // type 必须是 BaseException 或其子类；调用方保证，构造时用 assert 兜底（见 .cpp）
     Exception(Type *type, std::vector<ObjectRef> args);
 
+  public:
     [[nodiscard]] Tuple *args() const { return args_.get(); }
 
   private:

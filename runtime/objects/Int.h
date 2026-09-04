@@ -7,9 +7,10 @@
 class Int final : public Object {
     BigInt value_;
 
-  public:
+    SL_HEAP_ONLY;
     explicit Int(BigInt value);
 
+  public:
     [[nodiscard]] const BigInt &value() const { return value_; }
 
   private:

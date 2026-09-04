@@ -7,9 +7,10 @@
 class Decimal final : public Object {
     BigDec value_;
 
-  public:
+    SL_HEAP_ONLY;
     explicit Decimal(BigDec value);
 
+  public:
     [[nodiscard]] const BigDec &value() const { return value_; }
 
   private:

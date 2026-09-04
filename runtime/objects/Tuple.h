@@ -10,9 +10,10 @@
 class Tuple final : public Object {
     std::vector<ObjectRef> items_;
 
-  public:
+    SL_HEAP_ONLY;
     explicit Tuple(std::vector<ObjectRef> items);
 
+  public:
     [[nodiscard]] std::size_t size() const { return items_.size(); }
     [[nodiscard]] const std::vector<ObjectRef> &items() const { return items_; }
     // 调用方保证 index < size()

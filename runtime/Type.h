@@ -16,11 +16,12 @@ class Type final : public Object {
     // mro_ 里的每个类都能沿 bases_ 链到达，本来就被强引用，GC 顺着 bases_ 也扫得到
     std::vector<Type *> mro_;
 
-  public:
+    SL_HEAP_ONLY;
     // meta 是元类（恒为 type）。只有 bootstrap 建立 object/type 这两个互相引用的类时
     // 才允许传 nullptr，之后立刻回填，见 Runtime
     Type(Type *meta, std::string name, std::vector<Ref<Type>> bases);
 
+  public:
     [[nodiscard]] const std::string &name() const { return name_; }
     [[nodiscard]] const std::vector<Ref<Type>> &bases() const { return bases_; }
     [[nodiscard]] const std::vector<Type *> &mro() const { return mro_; }

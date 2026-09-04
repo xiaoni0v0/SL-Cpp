@@ -11,9 +11,10 @@
 class Singleton final : public Object {
     std::string name_;
 
-  public:
+    SL_HEAP_ONLY;
     Singleton(Type *type, std::string name);
 
+  public:
     // 这四个单例在 SL 里都是靠名字取到的（`None`/`Ellipsis`/`NotImplemented`/`StopIteration`），
     // 名字就是它们全部的内容
     [[nodiscard]] const std::string &name() const { return name_; }
@@ -27,9 +28,10 @@ class Singleton final : public Object {
 class Bool final : public Object {
     bool value_;
 
-  public:
+    SL_HEAP_ONLY;
     explicit Bool(bool value);
 
+  public:
     [[nodiscard]] bool value() const { return value_; }
 
   private:

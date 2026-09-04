@@ -9,9 +9,10 @@
 class Str final : public Object {
     std::u32string value_;
 
-  public:
+    SL_HEAP_ONLY;
     explicit Str(std::u32string value);
 
+  public:
     [[nodiscard]] const std::u32string &value() const { return value_; }
     // 码点数，不是字节数
     [[nodiscard]] std::size_t size() const { return value_.size(); }
