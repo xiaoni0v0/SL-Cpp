@@ -25,4 +25,8 @@ sl_add_module(sl_runtime
         objects/singletons.h
 )
 
-target_link_libraries(sl_runtime PUBLIC sl_numeric sl_cpp_exceptions PRIVATE sl_utils)
+target_link_libraries(
+    sl_runtime
+    PUBLIC sl_numeric sl_cpp_exceptions
+    PRIVATE sl_utils
+)

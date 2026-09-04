@@ -3,10 +3,12 @@
 """
 format.py
 
-批量格式化项目里的源文件，按后缀名分派给对应的格式化器（见 FORMATTERS）：
+批量格式化项目里的源文件，按文件名/后缀名分派给对应的格式化器（见 FORMATTERS_BY_NAME、FORMATTERS）：
+    CMakeLists.txt                                  ->  gersemi
     .c / .cc / .cpp / .cxx / .h / .hh / .hpp / .hxx ->  clang-format
+    .cmake                                          ->  gersemi
     .py                                             ->  black
-未收录的后缀一律忽略。
+未收录的文件名/后缀一律忽略。
 
 排除规则由下面两张 pattern 表控制（glob 通配符，大小写不敏感）：
     EXCLUDE_DIR_PATTERNS    匹配目录名，命中的目录整棵子树都不进入
@@ -29,6 +31,10 @@ import sys
 from pathlib import Path
 from typing import Callable, NamedTuple
 from typing import List
+
+for _stream in sys.stdout, sys.stderr:
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="backslashreplace")
 
 # 排除的目录名
 EXCLUDE_DIR_PATTERNS = [
@@ -78,6 +84,11 @@ BLACK = Formatter(
     build_argv=lambda path: ["black", "--quiet", "--stdin-filename", str(path), "-"],
     via_stdin=True,
 )
+GERSEMI = Formatter(
+    command="gersemi",
+    build_argv=lambda path: ["gersemi", "-"],
+    via_stdin=True,
+)
 
 # 后缀名 -> 格式化器。要支持新语言就在这里加一行，别的地方不用动
 FORMATTERS = {
@@ -89,7 +100,12 @@ FORMATTERS = {
     ".hh": CLANG_FORMAT,
     ".hpp": CLANG_FORMAT,
     ".hxx": CLANG_FORMAT,
+    ".cmake": GERSEMI,
     ".py": BLACK,
+}
+# 按完整文件名分派的格式化器（大小写不敏感）
+FORMATTERS_BY_NAME = {
+    "cmakelists.txt": GERSEMI,
 }
 
 
@@ -100,8 +116,10 @@ def matches_any(name: str, patterns: list[str]) -> bool:
 
 
 def formatter_for(path: Path) -> Formatter | None:
-    """按后缀名分派格式化器，未收录的后缀返回 None"""
-    return FORMATTERS.get(path.suffix.lower())
+    """按完整文件名、再按后缀名分派格式化器，都没收录则返回 None"""
+    return FORMATTERS_BY_NAME.get(path.name.lower()) or FORMATTERS.get(
+        path.suffix.lower()
+    )
 
 
 def find_target_files(project_dir: Path) -> list[Path]:
@@ -170,17 +188,14 @@ def main():
             print(f)
         return
 
-    missing = missing_commands(files)
-    if missing:
+    if missing := missing_commands(files):
         print(
             f"错误：找不到 {'、'.join(missing)}，请先确认已安装并在 PATH 中。",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    reformatted_count = 0
-    unchanged_count = 0
-    failed_count = 0
+    reformatted_count = unchanged_count = failed_count = 0
 
     for f in files:
         try:
