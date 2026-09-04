@@ -27,3 +27,8 @@ void Type::visit_own_refs(RefVisitor &visitor) {
 bool Type::is_subtype_of(const Type *const other) const {
     return std::ranges::find(mro_, other) != mro_.end();
 }
+
+std::size_t Type::size_bytes() const {
+    return sizeof(*this) + name_.capacity() + bases_.capacity() * sizeof(Ref<Type>) +
+           mro_.capacity() * sizeof(Type *);
+}

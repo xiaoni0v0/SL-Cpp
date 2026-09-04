@@ -12,6 +12,9 @@ class Decimal final : public Object {
 
   public:
     [[nodiscard]] const BigDec &value() const { return value_; }
+    [[nodiscard]] std::size_t size_bytes() const override {
+        return sizeof(*this) + value_.heap_bytes();
+    }
 
   private:
     void visit_own_refs(RefVisitor &) override {}

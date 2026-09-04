@@ -23,6 +23,9 @@ class Exception final : public Object {
   public:
     [[nodiscard]] Tuple *args() const { return args_.get(); }
 
+    // args_ 指向的 Tuple 是独立的堆对象，建立时已经算过一次，这里不重复计费
+    [[nodiscard]] std::size_t size_bytes() const override { return sizeof(*this); }
+
   private:
     void visit_own_refs(RefVisitor &visitor) override;
 };

@@ -1915,6 +1915,7 @@ BaseException
     │   └── decimal.DecimalException - decimal 的各种信号，子类见 4.2.6.3
     ├── DispatchError                - 函数调用时参数不匹配
     ├── RecursionError               - 递归/调用嵌套过深
+    ├── MemoryError                  - 堆内存不足（触及 -Xmx 上限，回收后仍不够）
     ├── IOError                      - 输入输出失败
     └── ImportError                  - 模块导入失败（找不到模块/包，或名字有歧义）
 ```
@@ -2036,7 +2037,7 @@ $$
 \text{SystemExit} \\ \text{KeyboardInterrupt} \\
 \text{Exception}\left\{\begin{array}{l}
 \text{SyntaxError} \\ \text{TypeError} \\ \text{ValueError} \\ \text{NameError} \\ \text{AttributeError} \\
-\text{IndexError} \\ \text{DispatchError} \\ \text{RecursionError} \\ \text{ImportError} \\
+\text{IndexError} \\ \text{DispatchError} \\ \text{RecursionError} \\ \text{MemoryError} \\ \text{ImportError} \\
 \text{MathError} \to \text{decimal.DecimalException} \\
 \text{IOError} \to \text{exceptions.EncodingError}
 \end{array}\right.

@@ -119,7 +119,11 @@ sl_numeric (不依赖任何模块) ← sl_runtime
    帧栈、模块表、每份 `Code` 的常量表以后各自注册一个）。**`collect()` 只能在主循环的安全点调用**
    ——根集合不含 C++ 栈上的局部 `Ref`，这条前提靠的是"C++ 调用栈深度不随 SL 帧栈增长"，见
    [notes/object-model-conventions.md](notes/object-model-conventions.md)。分代、只跟踪可能成环的
-   对象这类优化都还没做，等主循环能量出实际分配速率再说。
+   对象这类优化都还没做，等主循环能量出实际分配速率再说。**已定design、等第 6 步主循环落地再实现**：
+   按最大堆字节数触发回收（`-Xmx` 语义）、回收后仍超则抛 `MemoryError`，见
+   [context.md](context.md) 对应小节——要点是字节计数必须是每个类型"自报"的（不能用 `sizeof(T)`，
+   否则任意精度 `int`/`decimal` 的真实负载测不出来），触发时机必须推迟到安全点（不能在分配那一刻
+   直接 `collect()`，会踩中上面那条硬前提）。
 3. ~~**bootstrap**~~ **已完成**：`BootPhase` 把初始化切成有序相位（`Uninitialized` → `Types` →
    `Values` → `Ready`），每个访问器声明自己要求的最低相位，`Runtime::instance(required)` 统一拦截。
    `Values` 之后常量表要的一切就都能造了；`Ready` 是"编译器与虚拟机可以跑"的那个点，

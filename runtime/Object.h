@@ -142,4 +142,7 @@ class Object {
 
     [[nodiscard]] Type *type() const { return type_.get(); }
     [[nodiscard]] std::size_t refcount() const { return refcount_; }
+
+    // 本对象占用的堆字节数，= sizeof(自己) + 自己独占的其他堆分配
+    [[nodiscard]] virtual std::size_t size_bytes() const = 0;
 };

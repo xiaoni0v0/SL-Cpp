@@ -18,6 +18,9 @@ class Singleton final : public Object {
     // 这四个单例在 SL 里都是靠名字取到的（`None`/`Ellipsis`/`NotImplemented`/`StopIteration`），
     // 名字就是它们全部的内容
     [[nodiscard]] const std::string &name() const { return name_; }
+    [[nodiscard]] std::size_t size_bytes() const override {
+        return sizeof(*this) + name_.capacity();
+    }
 
   private:
     void visit_own_refs(RefVisitor &) override {}
@@ -33,6 +36,7 @@ class Bool final : public Object {
 
   public:
     [[nodiscard]] bool value() const { return value_; }
+    [[nodiscard]] std::size_t size_bytes() const override { return sizeof(*this); }
 
   private:
     void visit_own_refs(RefVisitor &) override {}

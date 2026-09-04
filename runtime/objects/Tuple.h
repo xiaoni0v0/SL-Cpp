@@ -19,6 +19,10 @@ class Tuple final : public Object {
     // 调用方保证 index < size()
     [[nodiscard]] Object *at(std::size_t index) const;
 
+    [[nodiscard]] std::size_t size_bytes() const override {
+        return sizeof(*this) + items_.capacity() * sizeof(ObjectRef);
+    }
+
   private:
     void visit_own_refs(RefVisitor &visitor) override;
 };

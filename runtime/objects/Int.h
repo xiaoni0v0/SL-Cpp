@@ -12,6 +12,9 @@ class Int final : public Object {
 
   public:
     [[nodiscard]] const BigInt &value() const { return value_; }
+    [[nodiscard]] std::size_t size_bytes() const override {
+        return sizeof(*this) + value_.heap_bytes();
+    }
 
   private:
     void visit_own_refs(RefVisitor &) override {}

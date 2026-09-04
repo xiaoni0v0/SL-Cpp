@@ -101,6 +101,8 @@ class BigDec {
     [[nodiscard]] bool is_integral() const;
 
     [[nodiscard]] const BigInt &coefficient() const { return coeff_; }
+    // 系数占用的堆字节数；BigDec 自身没有别的堆分配
+    [[nodiscard]] std::size_t heap_bytes() const { return coeff_.heap_bytes(); }
     [[nodiscard]] int64_t exponent() const { return exp_; }
     // 系数的十进制位数，系数为 0 时算 1 位
     [[nodiscard]] size_t digit_count() const;

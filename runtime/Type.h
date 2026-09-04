@@ -22,4 +22,5 @@ class Type final : public Object {
     [[nodiscard]] const std::vector<Type *> &mro() const { return mro_; }
 
     [[nodiscard]] bool is_subtype_of(const Type *other) const;
+    [[nodiscard]] std::size_t size_bytes() const override;
 };

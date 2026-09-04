@@ -55,6 +55,10 @@ class BigInt {
 
     // —————————— 查询 ——————————
 
+    // 大路径 limbs_ 占用的堆字节数；小路径恒为 0。小路径收缩回来的 BigInt 是全新构造的
+    // （见 shrink()），limbs_ 不会带着旧容量——所以不用管"收缩后是不是还占着地"这个问题
+    [[nodiscard]] std::size_t heap_bytes() const { return limbs_.capacity() * sizeof(uint32_t); }
+
     [[nodiscard]] bool is_zero() const { return is_small_ ? small_ == 0 : limbs_.empty(); }
     [[nodiscard]] bool is_negative() const { return is_small_ ? small_ < 0 : negative_; }
     [[nodiscard]] bool is_odd() const {
