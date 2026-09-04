@@ -104,7 +104,7 @@ void Heap::collect() {
     // 下一步放边时，垃圾之间互相持有的引用会归还，谁的计数先归零谁就地析构，
     // 而它析构时又要 decref 别的垃圾——那些可能已经被删过了。这一轮 +1 把整批的生死
     // 统一推迟到第 5 步，析构顺序就不再是个问题
-    for (Object *const object : garbage) incref(object);
+    for (Object *const object : garbage) object->incref();
 
     // ——— 4. 清理：放掉垃圾的每条出边 ———
     // 指向存活对象的引用在这里被正确归还（不归还就是永久泄漏）；指向垃圾的引用有第 3 步兜着
@@ -116,7 +116,7 @@ void Heap::collect() {
     // （第 4 步放掉了），要么来自存活对象——而那意味着它根可达、不该在这批里
     for (Object *const object : garbage) {
         assert(object->refcount() == 1 && "垃圾对象上还挂着计数不明的引用");
-        decref(object);
+        object->decref();
     }
 
     g_allocated_since_collect = 0;

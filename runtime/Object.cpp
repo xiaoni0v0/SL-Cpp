@@ -5,12 +5,12 @@
 
 #include <cassert>
 
-void incref(Object *const obj) { ++obj->refcount_; }
+void Object::incref() { ++refcount_; }
 
-void decref(Object *const obj) {
-    assert(obj->refcount_ > 0 && "decref 了一个引用计数已经为 0 的对象");
+void Object::decref() {
+    assert(refcount_ > 0 && "decref 了一个引用计数已经为 0 的对象");
 
-    if (--obj->refcount_ == 0) delete obj;
+    if (--refcount_ == 0) delete this; // delete this 之后不得再碰任何成员
 }
 
 void Object::set_type(Type *const type) { type_ = Ref{type}; }

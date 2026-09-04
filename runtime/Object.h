@@ -7,10 +7,6 @@
 class Object;
 class Type;
 
-// 裸 Object* 一律是借用，不带所有权；持有所有权只能用 Ref
-void incref(Object *obj);
-void decref(Object *obj);
-
 /**
  * 一条引用关系。
  *
@@ -25,7 +21,7 @@ template <typename T> class Ref {
     Ref() = default;
     explicit(false) Ref(std::nullptr_t) {}
     explicit Ref(T *ptr) : ptr_{ptr} {
-        if (ptr_) incref(ptr_);
+        if (ptr_) ptr_->incref();
     }
 
     Ref(const Ref &other) : Ref{other.ptr_} {}
@@ -40,7 +36,7 @@ template <typename T> class Ref {
         : ptr_{static_cast<T *>(std::exchange(other.ptr_, nullptr))} {}
 
     ~Ref() {
-        if (ptr_) decref(ptr_);
+        if (ptr_) ptr_->decref();
     }
 
     Ref &operator=(Ref other) noexcept {
@@ -53,12 +49,12 @@ template <typename T> class Ref {
     T &operator*() const { return *ptr_; }
     explicit operator bool() const { return ptr_; }
 
-    // 指针相等，正好就是 SL 的 is
+    // 指针相等，对应 SL 的 is
     [[nodiscard]] bool operator==(const Ref &other) const { return ptr_ == other.ptr_; }
     [[nodiscard]] bool operator==(const T *other) const { return ptr_ == other; }
 
     void reset() {
-        if (ptr_) decref(ptr_);
+        if (ptr_) ptr_->decref();
         ptr_ = nullptr;
     }
 };
@@ -103,8 +99,7 @@ class RefVisitor {
  * C++ 的类继承 ≠ SL 的类继承，SL 继承关系全存在 Type 的 bases_/mro_ 里。
  */
 class Object {
-    friend void incref(Object *obj);
-    friend void decref(Object *obj);
+    template <typename U> friend class Ref;
     friend class Heap;
     friend class Runtime;
 
@@ -118,6 +113,10 @@ class Object {
     Object *gc_next_{nullptr};
     // 标记位，只在一次 collect() 内部有意义
     bool gc_marked_{false};
+
+    // 引用计数的加减
+    void incref();
+    void decref();
 
     // 只给 bootstrap 用的后门，处理 object/type 关系
     void set_type(Type *type);
