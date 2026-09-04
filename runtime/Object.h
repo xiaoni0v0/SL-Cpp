@@ -70,11 +70,9 @@ template <typename T, typename... Args> [[nodiscard]] Ref<T> make_ref(Args &&...
     return Ref<T>{new T(std::forward<Args>(args)...)};
 }
 
-// 遍历一个对象直接强引用的每个槽位。
-//
-// **GC 的标记阶段和清理阶段共用这一个入口**：标记只读、清理顺带把槽位置空。这样"标记时扫到的边"
-// 和"清理时放掉的边"在结构上就不可能不一致——拆成 trace()/clear() 两个方法各写一遍才可能不一致，
-// 而那种不一致的后果是提前回收（标记漏了）或永久泄漏（清理漏了），都极难查
+/**
+ * 遍历一个对象每个直接强引用。
+ */
 class RefVisitor {
   protected:
     // 报告一条出边，target 可能为空
@@ -93,7 +91,7 @@ class RefVisitor {
         if (clears()) slot.reset();
     }
 
-    // 容器里每个槽位都过一遍（vector<Ref<...>> 这类）
+    // 容器里每个槽位都过一遍
     template <typename C> void visit_each(C &slots) {
         for (auto &slot : slots) (*this)(slot);
     }
@@ -105,6 +103,11 @@ class RefVisitor {
  * C++ 的类继承 ≠ SL 的类继承，SL 继承关系全存在 Type 的 bases_/mro_ 里。
  */
 class Object {
+    friend void incref(Object *obj);
+    friend void decref(Object *obj);
+    friend class Heap;
+    friend class Runtime;
+
     // 引用计数
     std::size_t refcount_{0};
     // 类型
@@ -116,16 +119,12 @@ class Object {
     // 标记位，只在一次 collect() 内部有意义
     bool gc_marked_{false};
 
-    friend class Heap;
-    friend class Runtime;
-
     // 只给 bootstrap 用的后门，处理 object/type 关系
     void set_type(Type *type);
 
-    // 只给 GC 用的后门，本对象的全部强引用 = 所属类型的强引用 + 子类自己的强引用
+    // 遍历本对象的全部强引用，= 所属类型的强引用 + 子类自己的强引用
     void visit_all_refs(RefVisitor &visitor);
-
-    // 报告本对象自己（不含上面的 type_）的强引用。
+    // 本对象自己（不含上面的 type_）的强引用。
     virtual void visit_own_refs(RefVisitor &visitor) = 0;
 
   protected:
@@ -140,7 +139,4 @@ class Object {
 
     [[nodiscard]] Type *type() const { return type_.get(); }
     [[nodiscard]] std::size_t refcount() const { return refcount_; }
-
-    friend void incref(Object *obj);
-    friend void decref(Object *obj);
 };

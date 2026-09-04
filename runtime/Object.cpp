@@ -5,9 +5,13 @@
 
 #include <cassert>
 
-Object::Object(Type *const type) : type_{type} { Heap::link(this); }
+void incref(Object *const obj) { ++obj->refcount_; }
 
-Object::~Object() { Heap::unlink(this); }
+void decref(Object *const obj) {
+    assert(obj->refcount_ > 0 && "decref 了一个引用计数已经为 0 的对象");
+
+    if (--obj->refcount_ == 0) delete obj;
+}
 
 void Object::set_type(Type *const type) { type_ = Ref{type}; }
 
@@ -16,10 +20,6 @@ void Object::visit_all_refs(RefVisitor &visitor) {
     visit_own_refs(visitor);
 }
 
-void incref(Object *const obj) { ++obj->refcount_; }
+Object::Object(Type *const type) : type_{type} { Heap::link(this); }
 
-void decref(Object *const obj) {
-    assert(obj->refcount_ > 0 && "decref 了一个引用计数已经为 0 的对象");
-
-    if (--obj->refcount_ == 0) delete obj;
-}
+Object::~Object() { Heap::unlink(this); }
