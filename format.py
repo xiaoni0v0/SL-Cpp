@@ -7,6 +7,7 @@ format.py
     CMakeLists.txt                                  ->  gersemi
     .c / .cc / .cpp / .cxx / .h / .hh / .hpp / .hxx ->  clang-format
     .cmake                                          ->  gersemi
+    .md                                             ->  prettier
     .py                                             ->  black
 未收录的文件名/后缀一律忽略。
 
@@ -58,8 +59,10 @@ class Formatter(NamedTuple):
 
     def run(self, path: Path, original: bytes) -> bytes:
         """跑一遍，返回格式化后的内容；失败抛 FormatError"""
+        argv = self.build_argv(path)
+        argv[0] = shutil.which(self.command) or argv[0]
         result = subprocess.run(
-            self.build_argv(path),
+            argv,
             input=original if self.via_stdin else b"",
             capture_output=True,
         )
@@ -80,13 +83,23 @@ CLANG_FORMAT = Formatter(
 )
 BLACK = Formatter(
     command="black",
-    # black 只能从 stdin 读、往 stdout 写；--stdin-filename 让它找得到对应的 pyproject.toml
     build_argv=lambda path: ["black", "--quiet", "--stdin-filename", str(path), "-"],
     via_stdin=True,
 )
 GERSEMI = Formatter(
     command="gersemi",
     build_argv=lambda path: ["gersemi", "-"],
+    via_stdin=True,
+)
+PRETTIER = Formatter(
+    command="prettier",
+    build_argv=lambda path: [
+        "prettier",
+        "--prose-wrap",
+        "preserve",
+        "--stdin-filepath",
+        str(path),
+    ],
     via_stdin=True,
 )
 
@@ -101,6 +114,7 @@ FORMATTERS = {
     ".hpp": CLANG_FORMAT,
     ".hxx": CLANG_FORMAT,
     ".cmake": GERSEMI,
+    ".md": PRETTIER,
     ".py": BLACK,
 }
 # 按完整文件名分派的格式化器（大小写不敏感）
