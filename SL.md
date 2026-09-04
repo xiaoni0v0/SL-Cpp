@@ -2015,79 +2015,53 @@ IOError
 
 ### 4.4 内置类继承关系图
 
-<ul>
-<li><code>object</code>
-  <ul>
-    <li><code>NoneType</code></li>
-    <li><code>type</code></li>
-    <li><code>staticmethod</code></li>
-    <li><code>super</code></li>
-    <li><code>SingletonType</code></li>
-    <li><code>FuncGroup</code></li>
-    <li><code>CompoundType</code></li>
-    <li><code>TypeVar</code></li>
-    <li><code>decimal.Context</code></li>
-    <li><code>Descriptor</code>
-      <ul>
-        <li><code>property</code></li>
-        <li><code>classmethod</code></li>
-        <li><code>unsupported</code></li>
-      </ul>
-    </li>
-    <li><code>str</code></li>
-    <li><code>tuple</code></li>
-    <li><code>list</code></li>
-    <li><code>range</code></li>
-    <li><code>dict</code></li>
-    <li><code>unordered_dict</code></li>
-    <li><code>frozendict</code></li>
-    <li><code>set</code></li>
-    <li><code>frozenset</code></li>
-    <li><code>numbers.Number</code>
-      <ul>
-        <li><code>complex</code></li>
-        <li><code>numbers.Real</code>
-          <ul>
-            <li><code>decimal</code></li>
-            <li><code>int</code></li>
-            <li><code>bool</code></li>
-          </ul>
-        </li>
-      </ul>
-    </li>
-    <li><code>BaseException</code>
-      <ul>
-        <li><code>SystemExit</code></li>
-        <li><code>KeyboardInterrupt</code></li>
-        <li><code>Exception</code>
-          <ul>
-            <li><code>SyntaxError</code></li>
-            <li><code>TypeError</code></li>
-            <li><code>ValueError</code></li>
-            <li><code>NameError</code></li>
-            <li><code>AttributeError</code></li>
-            <li><code>IndexError</code></li>
-            <li><code>DispatchError</code></li>
-            <li><code>RecursionError</code></li>
-            <li><code>MemoryError</code></li>
-            <li><code>ImportError</code></li>
-            <li><code>MathError</code>
-              <ul>
-                <li><code>decimal.DecimalException</code></li>
-              </ul>
-            </li>
-            <li><code>IOError</code>
-              <ul>
-                <li><code>exceptions.EncodingError</code></li>
-              </ul>
-            </li>
-          </ul>
-        </li>
-      </ul>
-    </li>
-  </ul>
-</li>
-</ul>
+- `object`
+  - `NoneType`
+  - `type`
+  - `staticmethod`
+  - `super`
+  - `SingletonType`
+  - `FuncGroup`
+  - `CompoundType`
+  - `TypeVar`
+  - `decimal.Context`
+  - `Descriptor`
+    - `property`
+    - `classmethod`
+    - `unsupported`
+  - `str`
+  - `tuple`
+  - `list`
+  - `range`
+  - `dict`
+  - `unordered_dict`
+  - `frozendict`
+  - `set`
+  - `frozenset`
+  - `numbers.Number`
+    - `complex`
+    - `numbers.Real`
+      - `decimal`
+      - `int`
+      - `bool`
+  - `BaseException`
+    - `SystemExit`
+    - `KeyboardInterrupt`
+    - `Exception`
+      - `SyntaxError`
+      - `TypeError`
+      - `ValueError`
+      - `NameError`
+      - `AttributeError`
+      - `IndexError`
+      - `DispatchError`
+      - `RecursionError`
+      - `MemoryError`
+      - `ImportError`
+      - `MathError`
+        - `decimal.DecimalException`
+      - `IOError`
+        - `exceptions.EncodingError`
 
 ## 5 即将加入
 

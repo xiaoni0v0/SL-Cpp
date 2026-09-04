@@ -1,7 +1,7 @@
 """
 SL.md 文档工具。用法：python build_doc.py
 
-  1. 提取多级标题（跳过 ``` 代码块与 $$ 数学块），校验井号数与标题号是否匹配
+  1. 提取多级标题（跳过 ``` 代码块），校验井号数与标题号是否匹配
      （点数 == 井号数 - 2），以及编号是否逐个递增、不漏。
   2. 生成 SL_linked.md：原文复制 + 每个标题前插入不可见锚点 + [TOC] 换成手写目录。
   3. 挖出交叉引用（形如 3.5 / 2.1.4 的节号）并链到对应锚点。
@@ -12,11 +12,10 @@ SL.md 文档工具。用法：python build_doc.py
 
 import os
 import re
-
 from markdown_it import MarkdownIt
 from pygments import highlight as pyg_highlight
-from pygments.lexers import get_lexer_by_name
 from pygments.formatters import HtmlFormatter
+from pygments.lexers import get_lexer_by_name
 from pygments.util import ClassNotFound
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -26,7 +25,6 @@ HTML_DST = os.path.join(HERE, "SL_linked.html")
 
 HEADER_RE = re.compile(r"^(#{1,6})\s+(\d+(?:\.\d+)*)\s+(.*\S)\s*$")
 FENCE_RE = re.compile(r"^\s*```")  # 代码块围栏
-MATH_RE = re.compile(r"^\s*\$\$\s*$")  # $$ 数学块
 
 
 def sec_id(num):
@@ -37,28 +35,19 @@ def sec_id(num):
 # ---------------- 解析 ----------------
 def scan_lines(lines):
     """
-    逐行标注是否处于「代码块 / 数学块」内部（含围栏行本身）。
+    逐行标注是否处于代码块内部（含围栏行本身）。
     用于规避代码块里以 # 开头的注释行被误当成标题。
     """
     in_code = []
-    fence = math = False
+    fence = False
     for ln in lines:
         if fence:
             in_code.append(True)
             if FENCE_RE.match(ln):
                 fence = False
             continue
-        if math:
-            in_code.append(True)
-            if MATH_RE.match(ln):
-                math = False
-            continue
         if FENCE_RE.match(ln):
             fence = True
-            in_code.append(True)
-            continue
-        if MATH_RE.match(ln):
-            math = True
             in_code.append(True)
             continue
         in_code.append(False)
@@ -218,13 +207,6 @@ th,td { border: 1px solid #d0d7de; padding: .4em .8em; }
 }
 """
 
-MATHJAX = """
-<script>window.MathJax={tex:{displayMath:[['$$','$$']]},svg:{fontCache:'global'}};</script>
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
-"""
-
-MATH_BLOCK_RE = re.compile(r"^\$\$\s*$.*?^\$\$\s*$", re.S | re.M)
-
 
 def _highlight(code, lang, attrs):
     """已知语言用 Pygments 高亮；未知语言返回 '' 让 md 走默认转义。"""
@@ -242,16 +224,7 @@ def render_html(text):
       - breaks=True：单个换行即渲染成换行，无需末尾双空格；
       - CommonMark 列表续行规则：2 空格缩进的续行不会打断列表；
       - html=True：放行 <a id> 锚点。
-    $$...$$ 数学块先抠出占位、渲染后原样塞回，交给页面里的 MathJax。
     """
-    maths = []
-
-    def _stash(m):
-        maths.append(m.group(0))
-        return f"\n\nMATHPLACEHOLDER{len(maths) - 1}ENDPLACEHOLDER\n\n"
-
-    text = MATH_BLOCK_RE.sub(_stash, text)
-
     md = MarkdownIt(
         "commonmark",
         {
@@ -262,18 +235,12 @@ def render_html(text):
     ).enable("table")
     body = md.render(text)
 
-    def _restore(m):
-        return maths[int(m.group(1))]
-
-    body = re.sub(r"<p>MATHPLACEHOLDER(\d+)ENDPLACEHOLDER</p>", _restore, body)
-    body = re.sub(r"MATHPLACEHOLDER(\d+)ENDPLACEHOLDER", _restore, body)
-
     return (
         '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n'
         '<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         "<title>SL 语言规范</title>\n"
-        f"<style>{CSS}</style>\n{MATHJAX}</head>\n<body>\n"
+        f"<style>{CSS}</style>\n</head>\n<body>\n"
         f"{body}\n</body>\n</html>\n"
     )
 
@@ -295,12 +262,10 @@ def main():
         print(f"标题 {len(headers)} 个，编号校验通过")
 
     md_text, xrefs = build_markdown(lines, in_code, headers)
-    # newline="\n"：SL.md 本身是 LF，输出跟它保持一致，不受运行平台的文本模式换行转换影响
-    # （不加这个，Windows 上文本模式写入会把 \n 转成 \r\n，生成结果就跟平台绑定、不可复现）
-    with open(MD_DST, "w", encoding="utf-8", newline="\n") as f:
+    with open(MD_DST, "w", encoding="utf-8") as f:
         f.write(md_text)
 
-    with open(HTML_DST, "w", encoding="utf-8", newline="\n") as f:
+    with open(HTML_DST, "w", encoding="utf-8") as f:
         f.write(render_html(md_text))
 
     print(f"交叉引用 {xrefs} 处")
