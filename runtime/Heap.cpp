@@ -7,18 +7,19 @@
 
 namespace {
 
-// 全堆链表的头。侵入式双链表：进出都是 O(1)，且不额外分配内存
-Object *g_head{nullptr};
-std::size_t g_live_count{0};
-std::size_t g_allocated_since_collect{0};
-std::vector<GcRootSource *> g_root_sources;
+Object *g_head{nullptr};                    // 全堆链表的头
+std::size_t g_live_count{0};                // 当前存活对象总数
+std::size_t g_allocated_since_collect{0};   // 距上次 collect() 又建了的对象数
+std::vector<GcRootSource *> g_root_sources; // 所有引用根
 
-// 攒够这么多新对象就值得扫一轮。跟存活量挂钩，避免堆大了以后每次只回收一点点却全堆扫一遍
+// 攒够这么多新对象就值得扫一轮
 constexpr std::size_t kMinAllocationsBetweenCollects{1024};
 
 } // namespace
 
-// 标记阶段：把根可达的对象全部染上标记。不清空槽位
+/**
+ * 标记阶段，把可达对象标记
+ */
 class Heap::Marker final : public RefVisitor {
     std::vector<Object *> pending_;
 
@@ -42,7 +43,9 @@ class Heap::Marker final : public RefVisitor {
     }
 };
 
-// 清理阶段：把垃圾对象的每条出边就地放掉
+/**
+ * 清理阶段，把垃圾对象的每条出边就地放掉
+ */
 class Heap::Clearer final : public RefVisitor {
   protected:
     void visit_ref(Object *) override {}
