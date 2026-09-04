@@ -66,7 +66,7 @@ template <typename T, typename... Args> [[nodiscard]] Ref<T> make_ref(Args &&...
     return Ref<T>{new T(std::forward<Args>(args)...)};
 }
 
-// 对象只允许由 make_ref 创建。
+// 对象只允许由 make_ref 创建
 // 用法：每个具体对象类型的 private 区都写这一行；把构造函数也放进 private。
 #define SL_HEAP_ONLY template <typename T, typename... Args> friend Ref<T> make_ref(Args &&...args)
 
@@ -116,8 +116,7 @@ class Object {
     // 全堆链表，侵入式
     Object *gc_prev_{nullptr};
     Object *gc_next_{nullptr};
-    // 本轮 collect() 里是否已判定为根可达；只在一次 collect() 内部有意义，
-    // collect() 结束时保证全部复位回 false
+    // 是否可达；只在一次 collect() 内部有意义，collect() 结束时保证全部复位回 false
     bool gc_reachable_{false};
 
     // 引用计数的加减
