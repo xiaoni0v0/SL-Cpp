@@ -10,14 +10,17 @@
 enum class BuiltinType : std::size_t {
 #define X(field, accessor, name, base) field,
 #include "x_builtin_types.inc"
+
 #undef X
     Count,
     NoBase, // 只给 object 用：它没有基类
 };
 
 /**
- * 运行时本身：持有全部内置类型与单例，按顺序建好。进程内唯一（做成全局单例、访问器全是
- * 静态的），也是第一个 GC 根源。
+ * 运行时本身。
+ *
+ *持有全部内置类型与单例，按顺序建好。
+ * 进程内唯一（做成全局单例），也是第一个 GC 根源。
  */
 class Runtime final : public GcRootSource {
     std::array<Ref<Type>, static_cast<std::size_t>(BuiltinType::Count)> types_;
@@ -61,6 +64,7 @@ class Runtime final : public GcRootSource {
     // shutdown 之后一律失效
 #define X(field, accessor, name, base) [[nodiscard]] static Type *accessor();
 #include "x_builtin_types.inc"
+
 #undef X
 
     [[nodiscard]] static Object *none();
