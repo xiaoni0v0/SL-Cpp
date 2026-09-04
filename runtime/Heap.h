@@ -1,12 +1,12 @@
 #pragma once
 
-#include <cstddef>
+#include "Object.h"
 
-class Object;
-class RefVisitor;
-
-// 提供 GC 根的东西。实现它并注册进 Heap，回收时就会被问"你手上攥着哪些对象"。
-// 现在只有 Runtime（内置类型 + 单例）；以后还有帧栈、模块表、每份 Code 的常量表
+/**
+ * 提供引用根的东西。实现它并注册进 Heap。
+ *
+ * 现在只有 Runtime（内置类型 + 单例）；以后还有帧栈、模块表、每份 Code 的常量表。
+ */
 class GcRootSource {
   public:
     GcRootSource() = default;
@@ -14,7 +14,7 @@ class GcRootSource {
     GcRootSource &operator=(const GcRootSource &) = delete;
     virtual ~GcRootSource() = default;
 
-    // 报告本源持有的每个根槽位。GC 只会拿"不清空"的访问者来问，根永远不会被就地抹掉
+    // 遍历持有的每个强引用
     virtual void visit_roots(RefVisitor &visitor) = 0;
 };
 
