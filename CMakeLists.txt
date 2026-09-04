@@ -141,6 +141,7 @@ add_subdirectory(executor)
 # ------------------------------------------------------------
 add_executable(SL main.cpp)
 sl_apply_main_target_options(SL)
+# 这个 sl_runtime 是临时的，防止只构建 main target 时跳过 sl_runtime 的编译
 target_link_libraries(SL PRIVATE sl_executor cxxopts::cxxopts sl_runtime)
 
 if (MINGW)

@@ -92,7 +92,7 @@ class RefVisitor {
     }
 
     // 容器里每个槽位都过一遍
-    template <typename C> void visit_each(C &slots) {
+    template <std::ranges::range C> void visit_each(C &slots) {
         for (auto &slot : slots) (*this)(slot);
     }
 };
