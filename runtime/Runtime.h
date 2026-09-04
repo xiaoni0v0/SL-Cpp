@@ -24,12 +24,16 @@ enum class BuiltinType : std::size_t {
  */
 class Runtime final : public GcRootSource {
     std::array<Ref<Type>, static_cast<std::size_t>(BuiltinType::Count)> types_;
-    Ref<Singleton> none_;
-    Ref<Singleton> ellipsis_;
-    Ref<Singleton> not_implemented_;
-    Ref<Singleton> stop_iteration_;
-    Ref<Bool> true_;
-    Ref<Bool> false_;
+
+    // 六个单例。凑成一个聚合体，放掉它们只要 `singletons_ = {}` 一句
+    struct {
+        Ref<Singleton> none_;
+        Ref<Singleton> ellipsis_;
+        Ref<Singleton> not_implemented_;
+        Ref<Singleton> stop_iteration_;
+        Ref<Bool> true_;
+        Ref<Bool> false_;
+    } singletons_;
 
     Runtime() = default;
 

@@ -52,31 +52,26 @@ void Runtime::build_singletons() {
     Type *const bool_type{types_[index_of(BuiltinType::Bool)].get()};
 
     // None 的类型是 NoneType，另外三个是 SingletonType（SL.md 4.2.17）
-    none_ = make_ref<Singleton>(none_type, "None");
-    ellipsis_ = make_ref<Singleton>(singleton_type, "Ellipsis");
-    not_implemented_ = make_ref<Singleton>(singleton_type, "NotImplemented");
-    stop_iteration_ = make_ref<Singleton>(singleton_type, "StopIteration");
-    true_ = make_ref<Bool>(bool_type, true);
-    false_ = make_ref<Bool>(bool_type, false);
+    singletons_.none_ = make_ref<Singleton>(none_type, "None");
+    singletons_.ellipsis_ = make_ref<Singleton>(singleton_type, "Ellipsis");
+    singletons_.not_implemented_ = make_ref<Singleton>(singleton_type, "NotImplemented");
+    singletons_.stop_iteration_ = make_ref<Singleton>(singleton_type, "StopIteration");
+    singletons_.true_ = make_ref<Bool>(bool_type, true);
+    singletons_.false_ = make_ref<Bool>(bool_type, false);
 }
 
 void Runtime::visit_roots(RefVisitor &visitor) {
     visitor.visit_each(types_);
-    visitor.visit(none_);
-    visitor.visit(ellipsis_);
-    visitor.visit(not_implemented_);
-    visitor.visit(stop_iteration_);
-    visitor.visit(true_);
-    visitor.visit(false_);
+    visitor.visit(singletons_.none_);
+    visitor.visit(singletons_.ellipsis_);
+    visitor.visit(singletons_.not_implemented_);
+    visitor.visit(singletons_.stop_iteration_);
+    visitor.visit(singletons_.true_);
+    visitor.visit(singletons_.false_);
 }
 
 void Runtime::release_all() {
-    false_.reset();
-    true_.reset();
-    stop_iteration_.reset();
-    not_implemented_.reset();
-    ellipsis_.reset();
-    none_.reset();
+    singletons_ = {};
     for (Ref<Type> &type : types_) type.reset();
 }
 
@@ -126,12 +121,12 @@ Type *Runtime::builtin_type(const BuiltinType id) { return instance().types_[ind
 #include "x_builtin_types.inc"
 #undef X
 
-Object *Runtime::none() { return instance().none_.get(); }
-Object *Runtime::ellipsis() { return instance().ellipsis_.get(); }
-Object *Runtime::not_implemented() { return instance().not_implemented_.get(); }
-Object *Runtime::stop_iteration() { return instance().stop_iteration_.get(); }
+Object *Runtime::none() { return instance().singletons_.none_.get(); }
+Object *Runtime::ellipsis() { return instance().singletons_.ellipsis_.get(); }
+Object *Runtime::not_implemented() { return instance().singletons_.not_implemented_.get(); }
+Object *Runtime::stop_iteration() { return instance().singletons_.stop_iteration_.get(); }
 
 Bool *Runtime::boolean(const bool value) {
     const Runtime &self{instance()};
-    return value ? self.true_.get() : self.false_.get();
+    return value ? self.singletons_.true_.get() : self.singletons_.false_.get();
 }
