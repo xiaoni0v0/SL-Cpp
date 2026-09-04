@@ -72,12 +72,12 @@ void Runtime::build_singletons() {
 
 void Runtime::visit_roots(RefVisitor &visitor) {
     visitor.visit_each(types_);
-    visitor(none_);
-    visitor(ellipsis_);
-    visitor(not_implemented_);
-    visitor(stop_iteration_);
-    visitor(true_);
-    visitor(false_);
+    visitor.visit(none_);
+    visitor.visit(ellipsis_);
+    visitor.visit(not_implemented_);
+    visitor.visit(stop_iteration_);
+    visitor.visit(true_);
+    visitor.visit(false_);
 }
 
 void Runtime::release_all() {

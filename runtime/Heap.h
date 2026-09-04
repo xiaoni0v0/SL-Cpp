@@ -34,6 +34,7 @@ class Heap {
   public:
     Heap() = delete;
 
+    // 引用根的管理
     static void add_root_source(GcRootSource *source);
     static void remove_root_source(GcRootSource *source);
 

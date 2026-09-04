@@ -3,6 +3,7 @@
 #include "Object.h"
 
 #include <cassert>
+#include <stack>
 #include <vector>
 
 namespace {
@@ -21,14 +22,13 @@ constexpr std::size_t kMinAllocationsBetweenCollects{1024};
  * 标记阶段，把可达对象标记
  */
 class Heap::Marker final : public RefVisitor {
-    std::vector<Object *> pending_;
+    std::stack<Object *> pending_;
 
   protected:
     void visit_ref(Object *const target) override {
         if (!target || target->gc_marked_) return;
         target->gc_marked_ = true;
-        // 显式工作栈，不递归——对象图的深度是用户数据说了算的，递归会爆 C++ 栈
-        pending_.push_back(target);
+        pending_.push(target); // 显式工作栈，不递归
     }
 
     [[nodiscard]] bool clears() const override { return false; }
@@ -36,8 +36,8 @@ class Heap::Marker final : public RefVisitor {
   public:
     void drain() {
         while (!pending_.empty()) {
-            Object *const object{pending_.back()};
-            pending_.pop_back();
+            Object *const object{pending_.top()};
+            pending_.pop();
             object->visit_all_refs(*this);
         }
     }
@@ -53,6 +53,7 @@ class Heap::Clearer final : public RefVisitor {
 };
 
 void Heap::link(Object *const obj) {
+    // 顶掉原来的 head
     obj->gc_next_ = g_head;
     if (g_head) g_head->gc_prev_ = obj;
     g_head = obj;
@@ -87,34 +88,36 @@ bool Heap::should_collect() {
 }
 
 void Heap::collect() {
-    // ——— 1. 标记 ———
+    // 1. 标记
     Marker marker;
     for (GcRootSource *const source : g_root_sources) {
         source->visit_roots(marker);
         marker.drain();
     }
 
-    // ——— 2. 分离：未标记的就是垃圾；顺手把标记复位，省一遍扫描 ———
+    // 2. 分离
     std::vector<Object *> garbage;
     for (Object *object{g_head}; object; object = object->gc_next_) {
         if (object->gc_marked_)
+            // 顺手把标记复位
             object->gc_marked_ = false;
         else
+            // 未标记的就是垃圾
             garbage.push_back(object);
     }
 
-    // ——— 3. 保命：每个垃圾对象先 +1 ———
+    // 3. 保命：每个垃圾对象先 +1
     // 下一步放边时，垃圾之间互相持有的引用会归还，谁的计数先归零谁就地析构，
     // 而它析构时又要 decref 别的垃圾——那些可能已经被删过了。这一轮 +1 把整批的生死
     // 统一推迟到第 5 步，析构顺序就不再是个问题
     for (Object *const object : garbage) object->incref();
 
-    // ——— 4. 清理：放掉垃圾的每条出边 ———
+    // 4. 清理：放掉垃圾的每条出边
     // 指向存活对象的引用在这里被正确归还（不归还就是永久泄漏）；指向垃圾的引用有第 3 步兜着
     Clearer clearer;
     for (Object *const object : garbage) object->visit_all_refs(clearer);
 
-    // ——— 5. 释放 ———
+    // 5. 释放
     // 走到这里每个垃圾对象的计数都该恰好是第 3 步加的那个 1：所有指向它的引用要么来自垃圾
     // （第 4 步放掉了），要么来自存活对象——而那意味着它根可达、不该在这批里
     for (Object *const object : garbage) {

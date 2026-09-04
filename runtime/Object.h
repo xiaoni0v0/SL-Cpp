@@ -75,9 +75,9 @@ template <typename T, typename... Args> [[nodiscard]] Ref<T> make_ref(Args &&...
  */
 class RefVisitor {
   protected:
-    // 报告一条出边，target 可能为空
+    // 对每条引用具体做什么
     virtual void visit_ref(Object *target) = 0;
-    // 报告完是否顺带把这个槽位置空。GC 的清理阶段返回 true，标记阶段返回 false
+    // 是否顺带把这个槽位置空。GC 的清理阶段返回 true，标记阶段返回 false
     [[nodiscard]] virtual bool clears() const = 0;
 
   public:
@@ -86,14 +86,15 @@ class RefVisitor {
     RefVisitor &operator=(const RefVisitor &) = delete;
     virtual ~RefVisitor() = default;
 
-    template <typename T> void operator()(Ref<T> &slot) {
+    // 对每条引用的行为，外部调用
+    template <typename T> void visit(Ref<T> &slot) {
         visit_ref(slot.get());
         if (clears()) slot.reset();
     }
 
-    // 容器里每个槽位都过一遍
+    // 对容器跑 visit
     template <std::ranges::range C> void visit_each(C &slots) {
-        for (auto &slot : slots) (*this)(slot);
+        for (auto &slot : slots) visit(slot);
     }
 };
 

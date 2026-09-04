@@ -13,4 +13,4 @@ Exception::Exception(Type *const type, std::vector<ObjectRef> args)
     );
 }
 
-void Exception::visit_own_refs(RefVisitor &visitor) { visitor(args_); }
+void Exception::visit_own_refs(RefVisitor &visitor) { visitor.visit(args_); }
