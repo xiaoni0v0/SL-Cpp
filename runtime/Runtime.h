@@ -5,7 +5,6 @@
 #include "objects/singletons.h"
 
 #include <array>
-#include <cstddef>
 #include <cstdint>
 
 // 内置类型的编号。清单在 x_builtin_types.inc
@@ -66,8 +65,6 @@ class Runtime final : public GcRootSource {
     // 把运行时拆干净：放引用、摘根源、扫一轮。init() 中途失败和正常 shutdown 共用它
     static void dispose();
 
-    void visit_roots(RefVisitor &visitor) override;
-
     // 取运行时，并核实当前相位够不够 required。**每个访问器都要如实报出自己要求的相位**——
     // 这是"bootstrap 顺序写错了"唯一的自动拦截点：不查的话，早了一步拿到的是个空类型指针，
     // 错误会一路飘到很远的地方才炸
@@ -76,6 +73,10 @@ class Runtime final : public GcRootSource {
     [[nodiscard]] static Type *builtin_type(BuiltinType id);
 
   public:
+    // 覆写基类 GcRootSource 的公开接口，可见性跟基类保持一致（收紧会被 CLion/编译器警告，
+    // 而且这本来就是给 Heap 通过 GcRootSource* 调用的公开契约，不是该收紧的内部实现细节）
+    void visit_roots(RefVisitor &visitor) override;
+
     // 重复 init / 未 init 就 shutdown 都是 InternalError：这种顺序错误只可能是实现自己的 bug。
     // init() 中途抛异常时会把已经建起来的部分拆干净再把异常放出去，不留半初始化的运行时
     static void init();
