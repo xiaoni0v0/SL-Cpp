@@ -2015,36 +2015,79 @@ IOError
 
 ### 4.4 内置类继承关系图
 
-$$
-\text{object}\left\{\begin{array}{l}
-\text{NoneType} \\
-\text{type} \\
-\text{staticmethod} \\
-\text{super} \\
-\text{SingletonType} \\
-\text{FuncGroup} \\
-\text{CompoundType} \\
-\text{TypeVar} \\
-\text{decimal.Context} \\
-\text{Descriptor}\left\{\begin{array}{l}\text{property} \\ \text{classmethod} \\ \text{unsupported} \end{array}\right. \\
-\text{str} \\ \text{tuple} \\ \text{list} \\ \text{range} \\
-\text{dict} \\ \text{unordered_dict} \\ \text{frozendict} \\
-\text{set} \\ \text{frozenset} \\
-\text{numbers.Number}\left\{\begin{array}{l}
-\text{complex} \\
-\text{numbers.Real}\left\{\begin{array}{l}\text{decimal} \\ \text{int} \\ \text{bool} \end{array}\right.
-\end{array}\right. \\
-\text{BaseException}\left\{\begin{array}{l}
-\text{SystemExit} \\ \text{KeyboardInterrupt} \\
-\text{Exception}\left\{\begin{array}{l}
-\text{SyntaxError} \\ \text{TypeError} \\ \text{ValueError} \\ \text{NameError} \\ \text{AttributeError} \\
-\text{IndexError} \\ \text{DispatchError} \\ \text{RecursionError} \\ \text{MemoryError} \\ \text{ImportError} \\
-\text{MathError} \to \text{decimal.DecimalException} \\
-\text{IOError} \to \text{exceptions.EncodingError}
-\end{array}\right.
-\end{array}\right.
-\end{array}\right.
-$$
+<ul>
+<li><code>object</code>
+  <ul>
+    <li><code>NoneType</code></li>
+    <li><code>type</code></li>
+    <li><code>staticmethod</code></li>
+    <li><code>super</code></li>
+    <li><code>SingletonType</code></li>
+    <li><code>FuncGroup</code></li>
+    <li><code>CompoundType</code></li>
+    <li><code>TypeVar</code></li>
+    <li><code>decimal.Context</code></li>
+    <li><code>Descriptor</code>
+      <ul>
+        <li><code>property</code></li>
+        <li><code>classmethod</code></li>
+        <li><code>unsupported</code></li>
+      </ul>
+    </li>
+    <li><code>str</code></li>
+    <li><code>tuple</code></li>
+    <li><code>list</code></li>
+    <li><code>range</code></li>
+    <li><code>dict</code></li>
+    <li><code>unordered_dict</code></li>
+    <li><code>frozendict</code></li>
+    <li><code>set</code></li>
+    <li><code>frozenset</code></li>
+    <li><code>numbers.Number</code>
+      <ul>
+        <li><code>complex</code></li>
+        <li><code>numbers.Real</code>
+          <ul>
+            <li><code>decimal</code></li>
+            <li><code>int</code></li>
+            <li><code>bool</code></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li><code>BaseException</code>
+      <ul>
+        <li><code>SystemExit</code></li>
+        <li><code>KeyboardInterrupt</code></li>
+        <li><code>Exception</code>
+          <ul>
+            <li><code>SyntaxError</code></li>
+            <li><code>TypeError</code></li>
+            <li><code>ValueError</code></li>
+            <li><code>NameError</code></li>
+            <li><code>AttributeError</code></li>
+            <li><code>IndexError</code></li>
+            <li><code>DispatchError</code></li>
+            <li><code>RecursionError</code></li>
+            <li><code>MemoryError</code></li>
+            <li><code>ImportError</code></li>
+            <li><code>MathError</code>
+              <ul>
+                <li><code>decimal.DecimalException</code></li>
+              </ul>
+            </li>
+            <li><code>IOError</code>
+              <ul>
+                <li><code>exceptions.EncodingError</code></li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+</li>
+</ul>
 
 ## 5 即将加入
 

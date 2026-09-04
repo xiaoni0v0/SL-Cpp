@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """
 SL.md 文档工具。用法：python build_doc.py
 
@@ -297,10 +295,12 @@ def main():
         print(f"标题 {len(headers)} 个，编号校验通过")
 
     md_text, xrefs = build_markdown(lines, in_code, headers)
-    with open(MD_DST, "w", encoding="utf-8") as f:
+    # newline="\n"：SL.md 本身是 LF，输出跟它保持一致，不受运行平台的文本模式换行转换影响
+    # （不加这个，Windows 上文本模式写入会把 \n 转成 \r\n，生成结果就跟平台绑定、不可复现）
+    with open(MD_DST, "w", encoding="utf-8", newline="\n") as f:
         f.write(md_text)
 
-    with open(HTML_DST, "w", encoding="utf-8") as f:
+    with open(HTML_DST, "w", encoding="utf-8", newline="\n") as f:
         f.write(render_html(md_text))
 
     print(f"交叉引用 {xrefs} 处")
