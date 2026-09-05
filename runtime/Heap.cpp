@@ -106,7 +106,7 @@ void Heap::collect() {
 
     // 5. 销毁
     for (Object *const object : garbage) {
-        assert(object->refcount() == 1 && "垃圾对象仍被非法引用");
+        assert(object->refcount() == 1 && "garbage object still referenced");
         object->decref();
     }
 

@@ -28,7 +28,6 @@ class RaisedException final : public std::exception {
     [[nodiscard]] Object *exception() const { return exception_.get(); }
 
     [[nodiscard]] const char *what() const noexcept override {
-        return "一个 RaisedException 逃出了它该被捕获的边界（说明适配的位置选错了，是实现自己的 "
-               "bug）";
+        return "RaisedException escaped its catch boundary";
     }
 };

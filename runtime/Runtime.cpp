@@ -88,12 +88,12 @@ void Runtime::tear_down() {
 }
 
 Runtime &Runtime::instance() {
-    if (!g_runtime) throw InternalError{"运行时还没初始化就被访问了"};
+    if (!g_runtime) throw InternalError{"Runtime: use before init"};
     return *g_runtime;
 }
 
 void Runtime::init() {
-    if (g_runtime) throw InternalError{"运行时被初始化了两次"};
+    if (g_runtime) throw InternalError{"Runtime: double init"};
     g_runtime.reset(new Runtime{});
     Heap::add_root_source(g_runtime.get());
 
@@ -109,7 +109,7 @@ void Runtime::init() {
 }
 
 void Runtime::shutdown() {
-    if (!g_runtime) throw InternalError{"运行时没初始化就被关闭了"};
+    if (!g_runtime) throw InternalError{"Runtime: shutdown before init"};
     tear_down();
 }
 

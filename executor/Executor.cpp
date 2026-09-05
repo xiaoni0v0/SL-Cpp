@@ -49,10 +49,10 @@ int Executor::run() const {
         std::cerr << e.what() << std::endl;
         return 1;
     } catch (std::exception &e) {
-        std::cerr << "分词器崩溃了: " << e.what() << std::endl;
+        std::cerr << "lexer crashed: " << e.what() << std::endl;
         return 1;
     } catch (...) {
-        std::cerr << "分词器崩溃了: 未知错误" << std::endl;
+        std::cerr << "lexer crashed: unknown error" << std::endl;
         return 1;
     }
 
@@ -65,10 +65,10 @@ int Executor::run() const {
         std::cerr << e.what() << std::endl;
         return 1;
     } catch (std::exception &e) {
-        std::cerr << "解析器崩溃了: " << e.what() << std::endl;
+        std::cerr << "parser crashed: " << e.what() << std::endl;
         return 1;
     } catch (...) {
-        std::cerr << "解析器崩溃了: 未知错误" << std::endl;
+        std::cerr << "parser crashed: unknown error" << std::endl;
         return 1;
     }
 
@@ -80,16 +80,16 @@ int Executor::run() const {
         std::cerr << e.what() << std::endl;
         return 1;
     } catch (std::exception &e) {
-        std::cerr << "分析器崩溃了: " << e.what() << std::endl;
+        std::cerr << "analyzer crashed: " << e.what() << std::endl;
         return 1;
     } catch (...) {
-        std::cerr << "分析器崩溃了: 未知错误" << std::endl;
+        std::cerr << "analyzer crashed: unknown error" << std::endl;
         return 1;
     }
 
-    std::cout << "耗时: "
+    std::cout << "elapsed: "
               << std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count()
-              << " 秒" << std::endl;
+              << " s" << std::endl;
 
     return 0;
 }

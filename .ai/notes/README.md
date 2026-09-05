@@ -18,6 +18,7 @@
 - [line-endings.md](line-endings.md) — 行尾一律 LF、仓库不存 `.bat`/`.cmd`，以及这是靠什么保证的
 - [encoding.md](encoding.md) — 编码一律 UTF-8 无 BOM，以及为什么这道闸门必须卡在跑格式化器之前
 - [collaboration-conventions.md](collaboration-conventions.md) — 语言/git/并发编辑/写作禁忌/汇报风格这些硬规矩
+- [user-facing-strings.md](user-facing-strings.md) — 异常信息/assert/终端输出一律英文且简短，以及简洁到什么程度
 - [no-section-numbers.md](no-section-numbers.md) — 代码/测试/目录名里一律不许出现 SL.md 章节号，只能写文字描述
 - [parser-member-vs-lambda.md](parser-member-vs-lambda.md) — Parser.cpp 里辅助逻辑该当类成员还是局部 lambda 的判断标尺
 - [parser-prefer-expect.md](parser-prefer-expect.md) — 消耗类型确定的 token 一律用 expect(X)，不用裸 advance()
