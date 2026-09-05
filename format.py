@@ -14,14 +14,19 @@ format.py
 命中 EXCLUDE_DIR_PATTERNS（整棵子树）或 EXCLUDE_FILE_PATTERNS 的文件不处理。
 按 UTF-8 处理：非法编码报错跳过（不猜测、不转码），写回时剥 BOM。
 
--i 模式把各文件处理后的（修改时间, 大小）记入项目根目录的 CACHE_FILENAME
-（每项目一份，互不干扰），命中即跳过；脚本自身、格式化器或配置变化会使缓存
-整体失效（见 environment_fingerprint）。
+-i 与 -c 模式把“盘上内容等于格式化结果”的文件的（修改时间, 大小）记入
+项目根目录的 CACHE_FILENAME（每项目一份，互不干扰），命中即跳过，省得下次再跑
+格式化器探测；脚本自身、格式化器或配置变化会使缓存整体失效（见
+environment_fingerprint）。-c 只缓存确认为干净的已扫描文件，不把待改文件
+当作已格式化记进去。
 
-用法：python format.py [项目根目录] [-i] [--no-cache]
+用法：python format.py [项目根目录] [-i | -c] [--no-cache]
     项目根目录   默认当前目录
-    -i           原地改写；缺省仅列出候选文件
-    --no-cache   忽略缓存强制重跑（仅 -i 有效）
+    缺省          仅列出本脚本“会管到”的候选文件（不跑格式化器）
+    -i           原地改写内容有变化的文件
+    -c           打印所有会被真正改写（内容将变化）的文件，不写盘；
+                 有待改文件或出错时退出码非零，可作 CI 门禁
+    --no-cache   忽略缓存强制重跑（仅 -i / -c 有效）
 """
 
 import argparse
@@ -248,17 +253,20 @@ def write_atomic(path: Path, data: bytes) -> None:
         raise
 
 
-def format_file(path: Path) -> bool:
-    """格式化单个文件；内容有变化则写回并返回 True"""
+def format_file(path: Path, *, write: bool = True) -> bool:
+    """格式化单个文件并返回内容是否有变化。
+
+    有变化且 write 为 True 时原子写回；write=False（-c 用）只探测不改盘。"""
     original = path.read_bytes()
     ensure_utf8(original)
     # 格式化器会原样保留 BOM，进出各剥一次
     source = original.removeprefix(UTF8_BOM)
     formatted = formatter_for(path).run(path, source).removeprefix(UTF8_BOM)
-    if formatted != original:
+    if formatted == original:
+        return False
+    if write:
         write_atomic(path, formatted)
-        return True
-    return False
+    return True
 
 
 def needed_formatters(files: list[Path]) -> list[Formatter]:
@@ -342,19 +350,27 @@ def main() -> None:
     )
     parser.add_argument(
         "-i",
-        "--in-place",
+        "--inplace",
         action="store_true",
-        help="原地改写文件；缺省仅列出候选文件",
+        help="原地改写内容有变化的文件",
+    )
+    parser.add_argument(
+        "-c",
+        "--check",
+        action="store_true",
+        help="只打印会被真正改写的文件（不写盘）；有待改文件时退出码为 1",
     )
     parser.add_argument(
         "--no-cache",
         action="store_true",
-        help="忽略缓存强制重跑（仅 -i 有效）",
+        help="忽略缓存强制重跑（仅 -i / -c 有效）",
     )
     args = parser.parse_args()
-    if args.no_cache and not args.in_place:
+    if args.inplace and args.check:
+        parser.error("-i 与 -c 互斥")
+    if args.no_cache and not (args.inplace or args.check):
         # 缺省模式不读写缓存，此组合无任何效果
-        parser.error("--no-cache 仅适用于 -i")
+        parser.error("--no-cache 仅适用于 -i / -c")
 
     started_at = time.perf_counter()
     try:
@@ -375,12 +391,14 @@ def run(args: argparse.Namespace) -> None:
     global _progress_printed
     _progress_printed = False  # 多次调用（含 import 复用）也从干净状态开始
 
-    if not args.in_place:
-        # 缺省模式：stdout 只输出文件名，便于管道
+    if not args.inplace and not args.check:
+        # 缺省模式：stdout 只输出本脚本会处理的文件名，便于管道
         for f in files:
             print(f)
         return
 
+    # -i 与 -c 都依赖格式化器与缓存，流程在此汇合；二者仅差在是否写盘、
+    # 往 stdout 打什么、以及退出码。
     if missing := missing_formatters(files):
         print(
             "错误：以下格式化器不在 PATH，未处理任何文件。请安装后重试：",
@@ -398,6 +416,8 @@ def run(args: argparse.Namespace) -> None:
     current: dict[str, list[int]] = {}
 
     reformatted_count = unchanged_count = failed_count = skipped_count = 0
+    # -c 命中“会被真正改写”的文件，最后统一打到 stdout
+    needs_change: list[Path] = []
 
     for f in files:
         key = str(f)
@@ -408,22 +428,49 @@ def run(args: argparse.Namespace) -> None:
             skipped_count += 1
             continue
         try:
-            changed = format_file(f)
+            changed = format_file(f, write=args.inplace)
         except (FormatError, OSError) as e:
             # 单文件失败不中断整批；失败不记缓存，下次重试
             report_progress(f"格式化失败：{f}：{indent_detail(str(e))}", to_stderr=True)
             failed_count += 1
             continue
-        # 记录处理后的签名（改写过则随之更新）
-        if (written := stat_signature(f)) is not None:
-            current[key] = written
+        # 记录处理后的签名。-c 对“会被改写”的文件不改盘，其盘上仍是待改
+        # 状态，故不得当作已格式化写入缓存，否则下次会误跳过。
+        if not changed or args.inplace:
+            if (written := stat_signature(f)) is not None:
+                current[key] = written
         if changed:
-            report_progress(f"已重新格式化：{f}")
-            reformatted_count += 1
+            if args.check:
+                needs_change.append(f)
+            else:
+                report_progress(f"已重新格式化：{f}")
+                reformatted_count += 1
         else:
             unchanged_count += 1
 
     save_cache(cache_path, fingerprint, current)
+
+    if args.check:
+        # stdout 只输出会被真正改写的文件，便于管道/CI
+        for f in needs_change:
+            print(f)
+        print(file=sys.stderr)  # 与逐文件消息之间空一行（消息也走 stderr）
+        if needs_change or failed_count > 0:
+            print("有待格式化! 💥 💔 💥", file=sys.stderr)
+        else:
+            print("全部符合格式! ✨ 🍰 ✨", file=sys.stderr)
+        if unchanged_count > 0:
+            print(f"{unchanged_count} 个文件无变化。", file=sys.stderr)
+        if skipped_count > 0:
+            print(f"{skipped_count} 个文件已跳过（上次处理后未变）。", file=sys.stderr)
+        if needs_change:
+            print(f"{len(needs_change)} 个文件会被改写。", file=sys.stderr)
+        if failed_count > 0:
+            print(f"{failed_count} 个文件失败。", file=sys.stderr)
+        # 有待改文件或出错即非零退出，可作 CI 门禁
+        if needs_change or failed_count > 0:
+            sys.exit(1)
+        return
 
     if _progress_printed:
         print()  # 与逐文件输出之间空一行
