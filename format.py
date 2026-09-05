@@ -27,8 +27,8 @@ CACHE_FILENAME；下次跑时对得上就直接跳过，不再起格式化器进
 
 参数：
     项目根目录       默认是当前目录 "."
-    -i, --in-place   真正原地改写文件；不加这个参数只列出会被格式化的文件
-    --no-cache       忽略缓存，本次强制重新格式化每个文件
+    -i, --in-place   真正原地改写文件；不加这个参数只列出会被本脚本覆盖的文件
+    --no-cache       忽略缓存，本次强制重新格式化每个文件（只在 -i 模式下有意义）
 """
 
 import argparse
@@ -42,7 +42,6 @@ import sys
 import time
 from pathlib import Path
 from typing import Callable, NamedTuple
-from typing import List
 
 for _stream in sys.stdout, sys.stderr:
     if hasattr(_stream, "reconfigure"):
@@ -94,7 +93,7 @@ class Formatter(NamedTuple):
     """一个格式化器：叫什么、怎么拼命令行、内容走 stdin 还是给路径"""
 
     command: str  # 可执行文件名，用于 PATH 检查和报错
-    build_argv: Callable[[Path], List[str]]
+    build_argv: Callable[[Path], list[str]]
     via_stdin: bool  # True 表示把原文件内容喂给 stdin
     install_hint: str  # 没装时告诉用户怎么装
 
@@ -212,16 +211,18 @@ def matches_any(name: str, patterns: list[str]) -> bool:
 
 def formatter_for(path: Path) -> Formatter | None:
     """按完整文件名、再按后缀名分派格式化器，都没收录则返回 None"""
-    return FORMATTERS_BY_NAME.get(path.name.lower()) or FORMATTERS.get(
-        path.suffix.lower()
-    )
+    # Formatter 是 NamedTuple，也就是 tuple，真值性取决于字段个数——这里只能显式跟 None 比
+    by_name = FORMATTERS_BY_NAME.get(path.name.lower())
+    if by_name is not None:
+        return by_name
+    return FORMATTERS.get(path.suffix.lower())
 
 
 def find_target_files(project_dir: Path) -> list[Path]:
     """查找所有待格式化的文件，跳过排除目录（整棵子树）和排除文件"""
     files = []
     for dirpath, dirnames, filenames in os.walk(project_dir):
-        # 就地裁剪，别走进 build/ 这类可能有几十万文件的目录
+        # 就地裁剪
         dirnames[:] = [d for d in dirnames if not matches_any(d, EXCLUDE_DIR_PATTERNS)]
         for name in filenames:
             if formatter_for(Path(name)) is None:
@@ -252,6 +253,22 @@ def ensure_utf8(original: bytes) -> None:
         ) from None
 
 
+def write_atomic(path: Path, data: bytes) -> None:
+    """
+    先写同目录的临时文件、再 os.replace 顶上去。
+
+    直接 write_bytes 是"先截断再写"，中途断电、磁盘满、Ctrl+C，留下的就是半截甚至空的源文件，
+    原内容再也找不回来。临时文件必须跟目标同目录，跨盘的 os.replace 不是原子操作。
+    """
+    temporary = path.with_name(path.name + ".format-tmp")
+    try:
+        temporary.write_bytes(data)
+        os.replace(temporary, path)
+    except OSError:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
 def format_file(path: Path) -> bool:
     """
     格式化单个文件。
@@ -263,7 +280,7 @@ def format_file(path: Path) -> bool:
     source = original.removeprefix(UTF8_BOM)
     formatted = formatter_for(path).run(path, source).removeprefix(UTF8_BOM)
     if formatted != original:
-        path.write_bytes(formatted)
+        write_atomic(path, formatted)
         return True
     return False
 
@@ -275,7 +292,8 @@ def pluralize(count: int, noun: str) -> str:
 def needed_formatters(files: list[Path]) -> list[Formatter]:
     """这批文件用得到的格式化器，按命令名排序（排序是为了让环境指纹稳定）"""
     by_command = {formatter_for(f).command: formatter_for(f) for f in files}
-    return [fm for _, fm in sorted(by_command.items())]
+    # 只拿 command 排序：sorted(items()) 在 command 撞车时会去比 Formatter，而它装着 lambda，比不了
+    return [by_command[command] for command in sorted(by_command)]
 
 
 def missing_formatters(files: list[Path]) -> list[Formatter]:
@@ -368,14 +386,17 @@ def main() -> None:
         "-i",
         "--in-place",
         action="store_true",
-        help="真正原地改写文件；不加这个参数只列出会被格式化的文件",
+        help="真正原地改写文件；不加这个参数只列出会被本脚本覆盖的文件",
     )
     parser.add_argument(
         "--no-cache",
         action="store_true",
-        help="忽略缓存，本次强制重新格式化每个文件",
+        help="忽略缓存，本次强制重新格式化每个文件（只在 -i 模式下有意义）",
     )
     args = parser.parse_args()
+    if args.no_cache and not args.in_place:
+        # 不加 -i 时压根不碰缓存，这个组合什么也不做——与其静默无效，不如当场说清楚
+        parser.error("--no-cache 只在 -i 模式下有意义：不加 -i 时本来就不读写缓存")
 
     started_at = time.perf_counter()
     try:
@@ -397,7 +418,7 @@ def run(args: argparse.Namespace) -> None:
     _progress_printed = False  # 被当模块 import 反复调用时也从干净状态起步
 
     if not args.in_place:
-        # 默认模式：只输出命中的文件名，不输出别的任何东西，方便管道接别的命令
+        # 默认模式：stdout 上只有命中的文件名，方便管道接别的命令
         for f in files:
             print(f)
         return
