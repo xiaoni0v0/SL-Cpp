@@ -15,6 +15,9 @@ format.py
     EXCLUDE_DIR_PATTERNS    匹配目录名，命中的目录整棵子树都不进入
     EXCLUDE_FILE_PATTERNS   匹配文件名，命中的文件跳过
 
+编码一律 UTF-8：不是合法 UTF-8 的文件直接报错跳过，绝不猜编码、也绝不写回；
+带 UTF-8 BOM 的会顺手把 BOM 剥掉。
+
 用法：
     python format.py [项目根目录] [-i]
 
@@ -53,6 +56,8 @@ EXCLUDE_FILE_PATTERNS = [
 ]
 # 单个格式化器进程的超时（秒），防止某个工具挂死后整批无声无息地卡住
 TIMEOUT_SECONDS = 60
+# UTF-8 BOM。项目统一 UTF-8 无 BOM，读进来遇到就剥掉
+UTF8_BOM = b"\xef\xbb\xbf"
 
 
 class Formatter(NamedTuple):
@@ -166,13 +171,35 @@ def find_target_files(project_dir: Path) -> list[Path]:
     return sorted(files)
 
 
+def ensure_utf8(original: bytes) -> None:
+    """
+    编码闸门：不是合法 UTF-8 就抛 FormatError，让这个文件整个跳过。
+
+    这里绝不猜编码、绝不代为转换——猜错一次就是不可逆的内容损坏。拦在跑格式化器之前，是因为
+    工具们对非 UTF-8 的反应并不一致：black 和 gersemi 会拒绝（退出码非零，拦得住），但 prettier
+    会把非法字节按 UTF-8 解成一串 U+FFFD 替换字符、再编码输出，而且退出码是 0——照写回去，原文
+    就永久没了。
+    """
+    try:
+        original.decode("utf-8")
+    except UnicodeDecodeError as e:
+        raise FormatError(
+            f"不是合法的 UTF-8（第 {e.start} 字节起：{e.reason}），"
+            f"先把它转成 UTF-8 再跑"
+        ) from None
+
+
 def format_file(path: Path) -> bool:
     """
     格式化单个文件。
     返回 True 表示内容确实发生了变化，False 表示格式化后与原内容一致（未改动）。
     """
     original = path.read_bytes()
-    formatted = formatter_for(path).run(path, original)
+    ensure_utf8(original)
+    # 四个格式化器都是原样保留 BOM 的，所以进出各剥一次：喂给 stdin 的不带 BOM，
+    # clang-format / gersemi 自己读文件躲不开 BOM，就从它们的输出里剥
+    source = original.removeprefix(UTF8_BOM)
+    formatted = formatter_for(path).run(path, source).removeprefix(UTF8_BOM)
     if formatted != original:
         path.write_bytes(formatted)
         return True

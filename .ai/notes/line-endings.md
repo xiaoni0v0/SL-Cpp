@@ -10,7 +10,13 @@
   CRLF 文件原样保留，而 `format.py` 里的 prettier 和 gersemi 本来就只吐 LF——于是 `.cpp` 和
   `.md` 走两套行为。
 - git 那一层。black 没有行尾选项、固定跟随输入的第一行，所以 `.py` 的行尾 clang-format 管不着，
-  只能靠 `.gitattributes` 在检出/提交时保证。
+  只能靠 `.gitattributes` 在检出/提交时保证。同理 `// clang-format off` 保护的区块 clang-format
+  会连行尾一起原样保留，`LineEnding` 对它无效——`numeric/BigDec.cpp`、`numeric/DecContext.cpp`、
+  `runtime/Runtime.cpp` 里的 CRLF 残留当初就藏在这些区块里，跑多少遍 `format.py` 都清不掉。
+
+结论是 **git 那一层才是行尾的最终保证，格式化器只是补刀**，别指望跑格式化能把行尾扫干净。
+
+姊妹约定见 [encoding.md](encoding.md)（编码一律 UTF-8 无 BOM）。
 
 **why**：项目要交到 GitHub，diff/blame/PR review 和 Linux 上的工具链全按 LF 算，CRLF 进了仓库
 会让别人一改就是"整文件全行改动"的 diff。Windows 这边没有反作用力——MSVC/clang、CMake、Python、

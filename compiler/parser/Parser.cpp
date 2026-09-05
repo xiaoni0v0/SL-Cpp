@@ -1,4 +1,4 @@
-﻿#include "Parser.h"
+#include "Parser.h"
 
 #include "../../cpp_exceptions/InternalError.h"
 #include "../../cpp_exceptions/SyntaxError.h"
