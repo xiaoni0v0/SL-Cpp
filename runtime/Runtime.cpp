@@ -43,8 +43,7 @@ void Runtime::build_types() {
 }
 
 void Runtime::build_singletons() {
-    // 全部直接读 types_，不经过 none_type()/bool_type() 这些公开访问器——那些访问器要求
-    // 运行时已经建好，而这里恰恰是"正在建"，绕道就成了自我循环
+    // 全部直接读 types_
     Type *const none_type{types_[index_of(BuiltinType::NoneType)].get()};
     Type *const singleton_type{types_[index_of(BuiltinType::SingletonType)].get()};
     Type *const bool_type{types_[index_of(BuiltinType::Bool)].get()};
