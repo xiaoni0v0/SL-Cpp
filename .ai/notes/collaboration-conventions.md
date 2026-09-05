@@ -48,9 +48,9 @@
 （`01_literals`、`08_control_flow` 等，**不跟 SL.md 章节号绑定**，见
 [no-section-numbers.md](no-section-numbers.md)），每个目录一个或几个 `*_test.cpp`，用 doctest 的
 `TEST_SUITE`/`TEST_CASE`。
-新增测试文件要记得同步加进 `CMakeLists.txt` 里对应的 `add_executable(SL_Cpp_Parser_Tests ...)` /
-`SL_Cpp_Lexer_Tests` / `SL_Cpp_Analyzer_Tests` / `SL_Cpp_Numeric_BigInt_Tests` /
-`SL_Cpp_Numeric_BigDec_Tests` 列表（这些列表是手写的文件清单，不是 glob，漏加不会报错、只会静默
+新增测试文件要记得同步加进 `CMakeLists.txt` 里对应的 `add_executable(sl_test_parser ...)` /
+`sl_test_lexer` / `sl_test_analyzer` / `sl_test_numeric_bigint` /
+`sl_test_numeric_bigdec` 列表（这些列表是手写的文件清单，不是 glob，漏加不会报错、只会静默
 不编译）。
 
 正例用 `parse_json(...)`/`parse_program_json(...)` 转成 json 结构比对；反例（语法错误）用

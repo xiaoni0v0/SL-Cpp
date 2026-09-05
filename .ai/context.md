@@ -1352,8 +1352,7 @@ CPython 自带的两套 decimal 实现（C 的 libmpdec、纯 Python 的 `_pydec
 
 ### 覆盖率驱动补的窄路径，以及哪些分支是刻意不可达的
 
-拿 clang 的 source-based coverage（`-fprofile-instr-generate -fcoverage-mapping` 单独编一份
-`SL_Cpp_Numeric_Tests`，`llvm-cov show -show-branches=count`）量过一次 `numeric/`，据此补齐了几条
+拿 clang 的 source-based coverage（`-fprofile-instr-generate -fcoverage-mapping` 单独编一份 numeric 的测试目标，`llvm-cov show -show-branches=count`）量过一次 `numeric/`，据此补齐了几条
 生成的用例表撞不到的路径。现在 `BigDec.cpp`/`BigInt.cpp`/`dec_math.cpp` 三个文件**行覆盖都是
 100%**，剩下的只有分支级的未覆盖，而且**下面这些是刻意不可达的防御性代码，别再花时间去凑输入**：
 

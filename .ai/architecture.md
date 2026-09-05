@@ -100,13 +100,19 @@ sl_numeric (不依赖任何模块) ← sl_runtime
 `sl_runtime` + `sl_compiler_analyzer`，`sl_executor` 再链 `sl_compiler_codegen`——方向从一开始就是
 对的，不用回头改。
 
-测试目标在 `test/CMakeLists.txt`，用本地的 `sl_add_test_target(<名字> LIBS … SOURCES …)`：只列自己的
-测试文件，被测代码靠 `LIBS` 链进来。**这是拆库的主要动机**——以前每个测试目标都要把被测模块的源文件
-清单原样抄一遍，parser 那份抄了三处，加个文件要改三个地方。
+`test/CMakeLists.txt` 只定义 `sl_add_test_target(<名字> LIBS … SOURCES …)` 这个辅助函数并
+`add_subdirectory` 各套件；**每个测试套件的目标定义放在它自己的目录里**（`test/lexer/CMakeLists.txt`
+等），跟各模块的组织方式一致，加测试文件只改它旁边那一份清单。测试目标只列自己的测试文件，被测代码
+靠 `LIBS` 链进来。**这是拆库的主要动机**——以前每个测试目标都要把被测模块的源文件清单原样抄一遍，
+parser 那份抄了三处，加个文件要改三个地方。
+
+`test/numeric/` 一个目录里有两个目标（`sl_test_numeric_bigint`/`sl_test_numeric_bigdec`，共用
+`main_test.cpp`），`test/analyzer/` 会引 `../parser/test_utils.h`——这两处是套件与目录不是一一对应的
+仅有例外，不必为它们再拆目录。
 
 新增一个模块：建目录 + 写它的 `CMakeLists.txt`（一个 `sl_add_module` + 一个
 `target_link_libraries`），在上级 `CMakeLists.txt` 里 `add_subdirectory`。新增一个文件：只改所属模块
-那一份清单。
+那一份清单。测试套件同理。
 
 ## 实现路线
 
@@ -255,14 +261,14 @@ Python 内置的 int）产出，对应的 `02_bigdec/python_cross_test.cpp` /
 自己在 `**` 和 `exp` 上就有已知分歧（见 [context.md](context.md)）。这条规则是防呆用的：分歧点随
 参数漂移，往池子里加一档 `Emin`/舍入方式就可能生成出一张永远过不了的表。
 
-提交进仓库的这份表是**按跑得动来配的**：`SL_Cpp_Numeric_BigDec_Tests` 里超越函数和 `**` 那两个用例
+提交进仓库的这份表是**按跑得动来配的**：`sl_test_numeric_bigdec` 里超越函数和 `**` 那两个用例
 合起来就占了十几秒（BigDec 底下的 BigInt 是朴素算法，一次 `exp`/`ln` 要做几十次大数乘除），整个
 ctest 现在约 28 秒。要更大覆盖别往表里堆，用倍数参数临时生成一份跑完再换回来——40 倍规模
 （约 83 万个断言）跑过，全过。单条最贵的手写用例是 `log10_digits` 那个（约 1.6 秒，见
 [context.md](context.md) 里"覆盖率驱动补的窄路径"一节），嫌慢时它是第一个可以砍的。
 
-五个测试可执行目标：`SL_Cpp_Numeric_BigInt_Tests`、`SL_Cpp_Numeric_BigDec_Tests`、
-`SL_Cpp_Lexer_Tests`、`SL_Cpp_Parser_Tests`、`SL_Cpp_Analyzer_Tests`（最后这个同时覆盖
+五个测试可执行目标：`sl_test_numeric_bigint`、`sl_test_numeric_bigdec`、
+`sl_test_lexer`、`sl_test_parser`、`sl_test_analyzer`（最后这个同时覆盖
 `semantic_checker/` 和 `expr_folder/` 两个子系统）。怎么构建/跑测试见
 [notes/build-and-test.md](notes/build-and-test.md)。
 
