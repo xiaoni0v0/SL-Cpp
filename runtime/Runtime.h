@@ -19,13 +19,13 @@ enum class BuiltinType : std::size_t {
 /**
  * 运行时本身。
  *
- *持有全部内置类型与单例，按顺序建好。
- * 进程内唯一（做成全局单例），也是第一个 GC 根源。
+ * 持有全部内置类型与单例，按顺序建好。
+ * 进程内唯一（做成全局单例），也是第一个引用根。
  */
 class Runtime final : public GcRootSource {
     std::array<Ref<Type>, static_cast<std::size_t>(BuiltinType::Count)> types_;
 
-    // 六个单例。凑成一个聚合体，放掉它们只要 `singletons_ = {}` 一句
+    // 六个单例
     struct {
         Ref<NamedSingleton> none_;
         Ref<NamedSingleton> ellipsis_;
@@ -37,11 +37,11 @@ class Runtime final : public GcRootSource {
 
     Runtime() = default;
 
-    // —— bootstrap 的两步，按声明顺序执行；都只碰 types_/私有字段，不经过任何公开访问器 ——
+    // bootstrap 的两步，按声明顺序执行
     void build_types();
     void build_singletons();
 
-    // 放掉全部内置类型与单例的引用。放完它们就只剩内部互相引用，是标准的垃圾环
+    // 放掉全部内置类型与单例的引用
     void release_all();
     // 把运行时拆干净：放引用、摘根源、扫一轮。init() 中途失败和正常 shutdown 共用它
     static void dispose();
@@ -75,6 +75,5 @@ class Runtime final : public GcRootSource {
     [[nodiscard]] static Object *ellipsis();
     [[nodiscard]] static Object *not_implemented();
     [[nodiscard]] static Object *stop_iteration();
-    // True / False。SL 的 bool 恒只有这两个实例，不许再造第三个
     [[nodiscard]] static Bool *boolean(bool value);
 };
