@@ -42,7 +42,12 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
 
 - 新对象一律 `make_ref<T>(...)` 建，不要裸 `new`——裸 `new` 出来的对象引用计数是 0、没人管，必漏；
 - 存进字段/容器的用 `Ref<T>`；只在函数内看一眼、不跨越可能触发回收的操作的，用裸指针；
-- `Runtime::type_xxx()` / `Runtime::none()` 这类访问器返回的是**借用**（那些对象由 `Runtime`
+- **`Runtime` 上的静态访问器一律带族前缀**：类型是 `type_`（`type_int()`、`type_base_exception()`，
+  名字 = `type_` + SL 类名的 snake_case，去掉模块限定），单例是 `singleton_`
+  （`singleton_none()`、`singleton_bool(v)`）。等 SL.md 4.2/4.3 全铺开，这两族加起来六七十个，
+  不带前缀会把 `init`/`ready` 这些真正的 API 埋在里面；项目不开命名空间，前缀就是那个替代品。
+  `NoneType`/`SingletonType` 的尾巴不截（`type_none_type`），截了会造出 SL 里不存在的类名。
+- `Runtime::type_xxx()` / `Runtime::singleton_none()` 这类访问器返回的是**借用**（那些对象由 `Runtime`
   永久持有），要长期存下来自己包一层 `Ref`；
 - 新类型必须实现 `visit_own_refs()`，如实报出自己强引用的每个槽位。它是纯虚的，漏写是编译期
   错误；但**报漏一个字段不是**——GC 会把那条边指向的对象当成不可达提前回收，这是这一层最难查的

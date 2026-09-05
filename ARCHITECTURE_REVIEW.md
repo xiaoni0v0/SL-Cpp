@@ -191,7 +191,7 @@ SL 没有"多解释器"这种概念——`import`、`eval_isolated` 建的是新
 | `Str`            | `u32string`（按码点存，不是 UTF-8 字节流） | 按码点取长度/下标是 O(1)，代价是进出要编解码                                              |
 | `Tuple`          | `vector<ObjectRef>`                        | **不可变的是这些引用关系本身**，元素指向的对象可以是可变的                                |
 | `NamedSingleton` | 一个显示名字符串                           | `None`/`Ellipsis`/`NotImplemented`/`StopIteration` 四个共用这一个类，靠 `type()` 区分身份 |
-| `Bool`           | 一个 `bool`                                | `True`/`False` 只有唯一两个实例（`Runtime::boolean()` 保证不会有第三个）                  |
+| `Bool`           | 一个 `bool`                                | `True`/`False` 只有唯一两个实例（`Runtime::singleton_bool()` 保证不会有第三个）           |
 | `BaseException`  | `Ref<Tuple>`（叫 `args_`）                 | 整棵异常类树共用这一个 C++ 类，名字取自树根而非 SL 的 `Exception`，见下                   |
 
 **`BaseException` 值得多说两句**：为什么 `TypeError`、`ValueError`、`SyntaxError` ……十几个不同的

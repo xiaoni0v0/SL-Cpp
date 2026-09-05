@@ -69,9 +69,9 @@ class Runtime final : public GcRootSource {
 
 #undef X
 
-    [[nodiscard]] static NamedSingleton *none();
-    [[nodiscard]] static NamedSingleton *ellipsis();
-    [[nodiscard]] static NamedSingleton *not_implemented();
-    [[nodiscard]] static NamedSingleton *stop_iteration();
-    [[nodiscard]] static Bool *boolean(bool value);
+    [[nodiscard]] static NamedSingleton *singleton_none();
+    [[nodiscard]] static NamedSingleton *singleton_ellipsis();
+    [[nodiscard]] static NamedSingleton *singleton_not_implemented();
+    [[nodiscard]] static NamedSingleton *singleton_stop_iteration();
+    [[nodiscard]] static Bool *singleton_bool(bool value);
 };
