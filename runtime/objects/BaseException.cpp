@@ -8,7 +8,7 @@
 BaseException::BaseException(Type *const type, std::vector<ObjectRef> args)
     : Object{type}, args_{make_ref<Tuple>(std::move(args))} {
     assert(
-        type->is_subtype_of(Runtime::base_exception_type()) &&
+        type->is_subtype_of(Runtime::type_base_exception()) &&
         "exception type must derive from BaseException"
     );
 }

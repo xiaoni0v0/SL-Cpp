@@ -4,4 +4,4 @@
 
 #include <utility>
 
-Decimal::Decimal(BigDec value) : Object{Runtime::decimal_type()}, value_{std::move(value)} {}
+Decimal::Decimal(BigDec value) : Object{Runtime::type_decimal()}, value_{std::move(value)} {}

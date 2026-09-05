@@ -134,8 +134,8 @@ SL 没有"多解释器"这种概念——`import`、`eval_isolated` 建的是新
 
 审这块代码时被问到一个很直接的问题：这条防线拦的到底是谁？逐个查了全部 `instance(BootPhase::X)`
 的调用点，发现**没有一条来自真正意义上的外部代码**——全部来自 `Runtime` 自己生成的访问器。往下
-追，会发现"需要"区分这两个状态的根源是自己造出来的：`build_singletons()` 当时调用 `none_type()`
-去拿类型，`Bool` 的构造函数当时硬编码调用 `Runtime::bool_type()`——都是绕道公开的、带检查的静态
+追，会发现"需要"区分这两个状态的根源是自己造出来的：`build_singletons()` 当时调用 `type_none_type()`
+去拿类型，`Bool` 的构造函数当时硬编码调用 `Runtime::type_bool()`——都是绕道公开的、带检查的静态
 访问器，而不是直接读 `Runtime` 自己的私有字段，或者由调用方直接把 `Type*` 传进去。C++ 单线程
 同步执行，`init()` 跑到一半时不存在任何别的代码能观察到"类型建好、单例没建好"这个中间状态——它
 只在 `init()` 那一次函数调用内部瞬间存在。**区分它俩的检查是自己在跟自己的实现细节较劲**：检查
@@ -155,7 +155,7 @@ SL 没有"多解释器"这种概念——`import`、`eval_isolated` 建的是新
 ### 内置类型清单：`x_builtin_types.inc`
 
 这是个 X-Macro 文件，每一行 `X(枚举名, 访问器名, SL类名, 基类)` 同时驱动三处代码：
-`BuiltinType` 枚举、`Runtime` 上一批同名访问器（`int_type()`、`syntax_error_type()` 等）、
+`BuiltinType` 枚举、`Runtime` 上一批同名访问器（`type_int()`、`type_syntax_error()` 等）、
 以及 bootstrap 时真正建这些类型对象的循环。新增一个内置类型只需要在这个文件里加一行，
 不用在三个地方分别改。
 
@@ -181,7 +181,7 @@ SL 没有"多解释器"这种概念——`import`、`eval_isolated` 建的是新
 ## 四、`runtime/objects/`：具体的值类型
 
 这些都是"内置类型的存储实现"，模式很统一：每个类是 `Object` 的具体子类，构造函数里通过
-`Runtime::xxx_type()` 拿到自己该有的类型对象，`visit_own_refs()` 报出自己持有的其他 SL 对象
+`Runtime::type_xxx()` 拿到自己该有的类型对象，`visit_own_refs()` 报出自己持有的其他 SL 对象
 （没有就报空）。
 
 | 类               | 存的是什么                                 | 备注                                                                                      |

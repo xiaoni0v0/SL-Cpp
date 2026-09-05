@@ -4,4 +4,4 @@
 
 #include <utility>
 
-Int::Int(BigInt value) : Object{Runtime::int_type()}, value_{std::move(value)} {}
+Int::Int(BigInt value) : Object{Runtime::type_int()}, value_{std::move(value)} {}

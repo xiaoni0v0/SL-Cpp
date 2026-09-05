@@ -129,8 +129,8 @@ sl_numeric (不依赖任何模块) ← sl_runtime
    `Runtime::instance()` 只做一件事：`g_runtime` 是否为空。**没有分阶段的状态机**：早先版本给这个类
    配过一个有序的 `BootPhase`（`Uninitialized`→`Types`→`Values`→`Ready`），后来发现那是自己给
    自己挖的坑——之所以"需要"区分"类型建好但单例还没建好"，只是因为 `build_singletons()` 和
-   `Bool`/`NamedSingleton` 的构造函数当时绕道调用了公开的、带检查的访问器（`none_type()`、
-   `Runtime::bool_type()`），而不是直接读私有字段/接收调用方传来的 `Type*`。改成直接传值之后，
+   `Bool`/`NamedSingleton` 的构造函数当时绕道调用了公开的、带检查的访问器（`type_none_type()`、
+   `Runtime::type_bool()`），而不是直接读私有字段/接收调用方传来的 `Type*`。改成直接传值之后，
    这个中间状态从来没被任何代码观察到过（C++ 单线程同步执行，`init()` 跑到一半时没有别的代码能
    插进来看），分阶段就是纯粹的自我循环论证，见 [context.md](context.md) 对应小节。
    `Runtime::ready()` 现在就是 `g_runtime != nullptr`，供以后的编译器/虚拟机入口断言。内置函数表、
@@ -342,7 +342,7 @@ ctest 现在约 28 秒。要更大覆盖别往表里堆，用倍数参数临时�
 ## X-macro 清单文件
 
 除了 `x_ast_nodes.inc`，还有 `../runtime/x_builtin_types.inc`（全部内置类型：枚举名、访问器名、
-SL 层类名、基类；顺序即建立顺序，同时驱动 `BuiltinType` 枚举、`Runtime::xxx_type()` 访问器和
+SL 层类名、基类；顺序即建立顺序，同时驱动 `BuiltinType` 枚举、`Runtime::type_xxx()` 访问器和
 bootstrap 的建立循环，加一个内置类型只改这一个文件）、`../compiler/lexer/x_token_type.inc`（全部 `TokenType` 枚举值）、
 `../compiler/lexer/x_keyword.inc`（关键字文本 → `TokenType` 映射）、
 `../compiler/lexer/x_reservedword.inc`（保留字但非关键字，如 `_G`/`_L`）。加新

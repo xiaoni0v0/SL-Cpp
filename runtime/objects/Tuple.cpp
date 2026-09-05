@@ -6,7 +6,7 @@
 #include <utility>
 
 Tuple::Tuple(std::vector<ObjectRef> items)
-    : Object{Runtime::tuple_type()}, items_{std::move(items)} {}
+    : Object{Runtime::type_tuple()}, items_{std::move(items)} {}
 
 void Tuple::visit_own_refs(RefVisitor &visitor) { visitor.visit_each(items_); }
 
