@@ -15,6 +15,7 @@
 ## 笔记列表
 
 - [build-and-test.md](build-and-test.md) — 怎么自己构建、跑测试，不用求助用户代跑
+- [line-endings.md](line-endings.md) — 行尾一律 LF、仓库不存 `.bat`/`.cmd`，以及这是靠什么保证的
 - [collaboration-conventions.md](collaboration-conventions.md) — 语言/git/并发编辑/写作禁忌/汇报风格这些硬规矩
 - [no-section-numbers.md](no-section-numbers.md) — 代码/测试/目录名里一律不许出现 SL.md 章节号，只能写文字描述
 - [parser-member-vs-lambda.md](parser-member-vs-lambda.md) — Parser.cpp 里辅助逻辑该当类成员还是局部 lambda 的判断标尺

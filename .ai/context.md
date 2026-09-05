@@ -24,7 +24,7 @@ git log/commit message 的职责，不是这里的。代码怎么组织、有哪
   这类要设计的现在弄；`set`/文件 I/O/用户模块系统/内置库这些"不属于语言本身"的东西放到**最后**，
   语言核心先谈完。
 - **构建与测试**：改完 `compiler/` 下的代码后，自己用
-  `cmd //c "E:\Programs\SL-Cpp\.ai\run_test.bat"` 构建并跑测试验证，不用请用户代跑，细节见
+  `python E:\Programs\SL-Cpp\.ai\run_test.py` 构建并跑测试验证，不用请用户代跑，细节见
   [notes/build-and-test.md](notes/build-and-test.md)。
 
 ## `SL.md` 当前结构速览
@@ -1235,9 +1235,9 @@ BigDec、上下文和信号，好单独推敲。**里面那些常数（尤其是
 缓存，因此不是线程安全的。
 
 **别用 `std::thread` 并行跑 `big_dec_test.cpp` 里 `**`/超越函数这两个最耗时的 `TEST_CASE`**：
-验证过是反效果——`run_test.bat` 固定用 `/MDd` Debug CRT 堆，每次分配都要过全局临界区，
+验证过是反效果——`run_test.py` 固定用 `/MDd` Debug CRT 堆，每次分配都要过全局临界区，
 BigInt/BigDec 这种"每步运算都建一堆临时大数"的负载一并发就是锁竞争灾难（2 线程比单线程慢 2.5 倍，
-24 线程慢 8 倍多）。换 Release 构建可能是另一回事，但 `run_test.bat` 的构建类型是硬编码的
+24 线程慢 8 倍多）。换 Release 构建可能是另一回事，但 `run_test.py` 的构建类型是硬编码的
 Debug，验证不了。真要重拾这条路，`log10_digits`/`dexp`/`dlog`/`dlog10`/`dpower` 这条链子是唯一
 需要加锁的地方——`sqrt`/`power_exact` 精确路径不碰它，天然线程安全。
 
