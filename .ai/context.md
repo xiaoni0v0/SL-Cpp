@@ -585,12 +585,11 @@ A 文件里的函数被 B 文件调用时全局变量会跑到 B 上去，是动
 名字。函数对象的类用 `type` 从任意 `func` 表达式的值上取；`MethodDescriptor` 只能通过
 `attrs(cls, 'descriptors')` 拿到它的实例。
 
-**改过一次**：原来的结论是"这种类干脆别写进 `SL.md`"，理由是 4.2/4.5 那两处是"内置表里有哪些名字"的
+**改过一次**：原来的结论是"这种类干脆别写进 `SL.md`"，理由是内置类那一节是"内置表里有哪些名字"的
 清单。后来发现这么做等于让规范整片缺一批真实存在的类——`type(某个函数)` 是什么、绑定方法是什么类的
-实例，规范都答不上来。现在改成**单开 4.3「不入内置表的类」**：判据是"正常写 SL 时不应该、也没必要主动去动
-它们"，成员有 `NoneType`/`SingletonType`/`CompoundType`（从 4.2 挪过去的）、`Function`/
-`BuiltinFunction`/`Method`/`MethodDescriptor`。4.2 里那三个的小节号保留成一行重定向，**没有重排
-编号**——`4.2.x` 在仓库里有八十多处引用，为消除三个空位去动它们不划算。
+实例，规范都答不上来。现在**单开 4.3「不入内置表的类」**：成员有 `NoneType`/`SingletonType`/
+`CompoundType`（从 4.2 挪过去的）、`Function`/`BuiltinFunction`/`Method`/`MethodDescriptor`。
+4.2 之后的小节号因此整体重排过一轮，旧编号（如"4.2.26 异常类"）一律失效。
 
 **类体收集方法不按 `protocols.Callable`**：只把函数对象和 `FuncGroup` 的实例包成 `MethodDescriptor`。
 类、带 `__op_call__` 的实例等其它可调用对象进属性表、不绑定 `self`。装饰器也不先查 `Callable`，
@@ -992,7 +991,7 @@ CPython `PyErr_SyntaxError` 这层 C API 跟 Python 层 `SyntaxError` 类。`Syn
 `Exception`（`runtime/objects/Exception.h`）只有一个字段 `args_`，`BaseException` 全部子类共用
 同一个 C++ 类。设计参照的是 CPython 的实际实现，不是简化版：CPython 的 `BaseException.args` 也是
 C 结构体里的槽位，不走实例 `__dict__`；这里因为通用属性表机制还没落地，`.args` 现在只能从 C++
-直接取（`Exception::args()`），等属性协议接上后再挂 `getattr(exc, 'args')` 这条路——不是临时糊弄，
+直接取（`BaseException::args()`），等属性协议接上后再挂 `getattr(exc, 'args')` 这条路——不是临时糊弄，
 是提前对齐了 CPython 本来就这么做的理由。
 
 **没有 `__cause__`/`__context__`**：`raise` 的语法只有 `raise expr`，没有 `from` 子句，也不打算做
@@ -1067,6 +1066,13 @@ throw 这个信封，由**紧邻它、不跨 SL 帧的调用方**立刻接住，
 `SingletonType` 实例，比 SL 的 `SingletonType` 宽。类名说的是存储形状（零负载 + 一个显示名），叫
 `Singleton` 会暗示一个并不成立的 1:1 关系，实际引起过误会。
 
+**同一条判据也改掉了 `Exception`**：整棵异常树共用的那个 C++ 类现在叫 `BaseException`。旧名字是
+**同名不同义**——SL 里 `Exception` 只是树中间的一个具体类（`SystemExit`/`KeyboardInterrupt` 都不是
+它的子类），而这个 C++ 类连它们一起覆盖；更别扭的是同一份代码里 `BuiltinType::Exception` 指的恰恰
+是 SL 那个具体类。改用树根命名之后，"C++ 对象类名 = 它覆盖的那棵子树的根的 PascalCase"这条规律
+（`Object`/`Type`/`Int`/`Str`/`Tuple`/`Bool`）就没有例外了；`NamedSingleton` 是唯一一个刻意按存储
+形状命名的，因为它跨了 `NoneType` 和 `SingletonType` 两棵树，没有共同的根可用。
+
 **术语纪律**：SL 没有 `repr` 概念（只有 `str(x)`），别把 Python 的词带进来——`NamedSingleton` 上那个
 字段叫 `name_`。
 
@@ -1095,7 +1101,7 @@ CPython 是 `tp_traverse` + `tp_clear` 两个函数，每个类型各写一遍�
 理由是这两份清单一旦不一致，后果分别是提前回收（标记漏了字段）和永久泄漏（清理漏了字段），都极难
 查；合成一个之后这种不一致在结构上就不可表达。顺带把每加一个字段要改的地方从两处降到一处。
 
-`Object::type_` 这条边由基类的 `visit_all_refs` 统一报告/清理，不让每个子类重复写。
+`Object::type_` 这条边由基类的 `visit_refs` 统一报告/清理，不让每个子类重复写。
 
 ### 回收的五步流程里，第 3 步的"整批 +1"不是保险起见
 
@@ -1135,7 +1141,7 @@ CPython 只把容器类对象挂进 GC 链表，`int`/`str` 这类叶子不跟�
 又绕回来的自己。
 
 修法：`build_singletons()` 直接读 `types_[index_of(BuiltinType::NoneType)].get()` 这类私有字段；
-`Bool` 的构造函数改成跟 `NamedSingleton`/`Exception` 一样，接收调用方传来的 `Type*` 而不是自己反查。
+`Bool` 的构造函数改成跟 `NamedSingleton`/`BaseException` 一样，接收调用方传来的 `Type*` 而不是自己反查。
 改完之后 `Types`/`Values` 这两档在任何地方都不再被区分，`BootPhase` 整个枚举、`instance(required)`
 那份带相位名的报错都删掉了，`Runtime::instance()` 现在只剩最初就该有的那一条：`g_runtime` 是否
 为空。`ready()` 从 `phase() == BootPhase::Ready` 变成 `g_runtime != nullptr`——反正 `Ready` 那一档
@@ -1467,7 +1473,7 @@ Code），但"建立"这个操作每次执行都必须构造全新的 Function �
   这是刻意偏保守，没有替这个问题自作主张扩大 `SyntaxError` 的专属字段（那意味着要么破坏"整棵异常树
   共用同一个 C++ 类"这条现在成立的简单性质，要么等通用属性表落地才能挂"只有这一个子类多出来的字段"，
   两者现在都不想仓促定）。真要加，`file`/`row`/`col` 更像是走属性协议之后才该有的东西，不是往
-  `Exception` C++ 类里加专属字段。
+  `BaseException` C++ 类里加专属字段。
 - `str(x)` 这类内置类的构造/转换函数、以及 `repr` 之类的函数，`SL.md` 还没写但很可能要有，
   见下面"内置类的构造/转换行为整片没定"那条。这也是为什么 `.args` 现在没有配套的字符串化规则
   （Python 的 `str(BaseException)` 那套"零个参数空串/一个参数就是它/多个参数是元组"）——那条规则
@@ -1476,8 +1482,8 @@ Code），但"建立"这个操作每次执行都必须构造全新的 Function �
 - **小整数/短字符串要不要做实例缓存**（Python 的 `-5..256` 那种），SL.md 没规定，`is` 的结果会
   被它影响。常量表去重已经保证同一份 `Code` 里的字面量 `1` 是同一个对象，跨 `Code` 则不保证；
   要不要再加一层全局缓存，等 VM 能跑起来、能实测收益时再说。
-- **`object()` 目前造不出来**：`Object` 因为 `trace()` 是纯虚而抽象，而 SL.md 4.2.1 说 `object`
-  可直接实例化。要等属性表落地（实例得有地方放属性）时一起补。
+- **`object()` 目前造不出来**：`Object` 因为 `visit_own_refs()`/`size_bytes()` 是纯虚而抽象，
+  而 SL.md 4.2.1 说 `object` 可直接实例化。要等属性表落地（实例得有地方放属性）时一起补。
 - `local` 保留字去留未拍板。
 - `when` 完整语法语义未开始设计（`case` 暂留）。
 - `assert` 只占保留字位置，行为未设计。

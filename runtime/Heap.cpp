@@ -10,11 +10,11 @@ namespace {
 
 Object *g_head{nullptr};                    // 全堆链表的头
 std::size_t g_live_count{0};                // 当前存活对象总数
-std::size_t g_allocated_since_collect{0};   // 距上次 collect() 又建了的对象数
+std::size_t g_objects_since_collect{0};     // 距上次 collect() 又建了的对象数
 std::vector<GcRootSource *> g_root_sources; // 所有引用根
 
 // 攒够这么多新对象就值得扫一轮
-constexpr std::size_t kMinAllocationsBetweenCollects{1024};
+constexpr std::size_t kMinObjectsBetweenCollects{1024};
 
 } // namespace
 
@@ -25,20 +25,20 @@ class Heap::Marker final : public RefVisitor {
     std::stack<Object *> pending_;
 
   protected:
-    void visit_ref(Object *const target) override {
+    void visit_target(Object *const target) override {
         if (!target || target->gc_reachable_) return;
         target->gc_reachable_ = true;
         pending_.push(target); // 显式工作栈，不递归
     }
 
-    [[nodiscard]] bool clears() const override { return false; }
+    [[nodiscard]] bool should_clear() const override { return false; }
 
   public:
     void drain() {
         while (!pending_.empty()) {
             Object *const object{pending_.top()};
             pending_.pop();
-            object->visit_all_refs(*this);
+            object->visit_refs(*this);
         }
     }
 };
@@ -48,8 +48,8 @@ class Heap::Marker final : public RefVisitor {
  */
 class Heap::Clearer final : public RefVisitor {
   protected:
-    void visit_ref(Object *) override {}
-    [[nodiscard]] bool clears() const override { return true; }
+    void visit_target(Object *) override {}
+    [[nodiscard]] bool should_clear() const override { return true; }
 };
 
 void Heap::link(Object *const obj) {
@@ -59,7 +59,7 @@ void Heap::link(Object *const obj) {
     g_head = obj;
 
     ++g_live_count;
-    ++g_allocated_since_collect;
+    ++g_objects_since_collect;
 }
 
 void Heap::unlink(Object *const obj) {
@@ -102,7 +102,7 @@ void Heap::collect() {
 
     // 4. 断引用
     Clearer clearer;
-    for (Object *const object : garbage) object->visit_all_refs(clearer);
+    for (Object *const object : garbage) object->visit_refs(clearer);
 
     // 5. 销毁
     for (Object *const object : garbage) {
@@ -110,14 +110,14 @@ void Heap::collect() {
         object->decref();
     }
 
-    g_allocated_since_collect = 0;
+    g_objects_since_collect = 0;
 }
 
 std::size_t Heap::live_count() { return g_live_count; }
 
-std::size_t Heap::allocated_since_collect() { return g_allocated_since_collect; }
+std::size_t Heap::objects_since_collect() { return g_objects_since_collect; }
 
 bool Heap::should_collect() {
-    return g_allocated_since_collect >= kMinAllocationsBetweenCollects &&
-           g_allocated_since_collect >= g_live_count;
+    return g_objects_since_collect >= kMinObjectsBetweenCollects &&
+           g_objects_since_collect >= g_live_count;
 }

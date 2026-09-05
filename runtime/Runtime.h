@@ -2,18 +2,21 @@
 
 #include "Heap.h"
 #include "Type.h"
-#include "objects/singletons.h"
+#include "objects/Bool.h"
+#include "objects/NamedSingleton.h"
 
 #include <array>
 
 // 内置类型的编号
 enum class BuiltinType : std::size_t {
-#define X(field, accessor, name, base) field,
+#define X(id, accessor, name, base) id,
 #include "x_builtin_types.inc"
 
 #undef X
     Count,
-    NoBase, // 只给 object 用：它没有基类
+    // 不是类型，是清单里"基类"那一列的哨兵：只给 object 用，它没有基类。
+    // 排在 Count 之后，所以不计入类型个数
+    NoBase,
 };
 
 /**
@@ -44,7 +47,7 @@ class Runtime final : public GcRootSource {
     // 放掉全部内置类型与单例的引用
     void release_all();
     // 把运行时拆干净：放引用、摘根源、扫一轮。init() 中途失败和正常 shutdown 共用它
-    static void dispose();
+    static void tear_down();
 
     // 取运行时；没 init() 或已经 shutdown() 就访问，抛 InternalError
     [[nodiscard]] static Runtime &instance();
@@ -66,14 +69,14 @@ class Runtime final : public GcRootSource {
 
     // 下面这些返回的都是**借用**的裸指针：运行时活着期间它们恒有效，要长期持有请自己包 Ref。
     // shutdown 之后一律失效
-#define X(field, accessor, name, base) [[nodiscard]] static Type *accessor();
+#define X(id, accessor, name, base) [[nodiscard]] static Type *accessor();
 #include "x_builtin_types.inc"
 
 #undef X
 
-    [[nodiscard]] static Object *none();
-    [[nodiscard]] static Object *ellipsis();
-    [[nodiscard]] static Object *not_implemented();
-    [[nodiscard]] static Object *stop_iteration();
+    [[nodiscard]] static NamedSingleton *none();
+    [[nodiscard]] static NamedSingleton *ellipsis();
+    [[nodiscard]] static NamedSingleton *not_implemented();
+    [[nodiscard]] static NamedSingleton *stop_iteration();
     [[nodiscard]] static Bool *boolean(bool value);
 };

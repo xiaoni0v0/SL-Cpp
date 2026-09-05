@@ -75,10 +75,10 @@ template <typename T, typename... Args> [[nodiscard]] Ref<T> make_ref(Args &&...
  */
 class RefVisitor {
   protected:
-    // 对每条引用具体做什么
-    virtual void visit_ref(Object *target) = 0;
-    // 是否顺带把这个槽位置空。GC 的清理阶段返回 true，标记阶段返回 false
-    [[nodiscard]] virtual bool clears() const = 0;
+    // 对被指向的那个对象做什么
+    virtual void visit_target(Object *target) = 0;
+    // 是否顺带把槽位置空。GC 的标记阶段返回 false，清理阶段返回 true
+    [[nodiscard]] virtual bool should_clear() const = 0;
 
   public:
     RefVisitor() = default;
@@ -88,11 +88,11 @@ class RefVisitor {
 
     // 对每条引用的行为，外部调用
     template <typename T> void visit(Ref<T> &slot) {
-        visit_ref(slot.get());
-        if (clears()) slot.reset();
+        visit_target(slot.get());
+        if (should_clear()) slot.reset();
     }
 
-    // 对容器跑 visit
+    // 或者一整个装槽位的容器
     template <std::ranges::range C> void visit_each(C &slots) {
         for (auto &slot : slots) visit(slot);
     }
@@ -127,7 +127,7 @@ class Object {
     void set_type(Type *type);
 
     // 遍历本对象的全部强引用，= 所属类型的强引用 + 子类自己的强引用
-    void visit_all_refs(RefVisitor &visitor);
+    void visit_refs(RefVisitor &visitor);
     // 本对象自己（不含上面的 type_）的强引用。
     virtual void visit_own_refs(RefVisitor &visitor) = 0;
 

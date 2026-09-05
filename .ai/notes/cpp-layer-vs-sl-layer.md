@@ -73,7 +73,7 @@ VM 自己的 bug，一律 `InternalError`，不让 SL 代码捕获。
 ## 转换的具体实现在 `runtime/HostErrorConversion.{h,cpp}`
 
 这条约定不是只停在文档层面：`SyntaxError`/`EncodingError`/`FileNotFoundError` 各有一个
-`exception_from(...)` 函数，把宿主异常的字段翻成对应 SL 类的 `Exception` 对象（`.args` 塞
+`exception_from(...)` 函数，把宿主异常的字段翻成对应 SL 类的 `BaseException` 对象（`.args` 塞
 `message()`，不带 `what()` 那层 file:row:col 装饰）。**`InternalError` 没有对应函数、以后也不会有**
 ——它没有 SL 类，这条转换对它不成立，见 [object-model-conventions.md](object-model-conventions.md)
 「异常」一节。

@@ -50,7 +50,7 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
 
 **两个刻意的例外，别照抄成"引用就得用 Ref"**：
 
-- **`Object::type_` 由基类统一报告**：它是 `Ref<Type>`，但归 `Object::visit_all_refs()` 管，
+- **`Object::type_` 由基类统一报告**：它是 `Ref<Type>`，但归 `Object::visit_refs()` 管，
   子类的 `visit_own_refs()` 不用（也不该）报它；
 - **`Type::mro_` 存裸指针，是真·借用**：`mro_[0] == this`，如果用 `Ref` 就是每个类都自成一个环、
   引用计数永远归不了零。安全性由 `bases_` 兜着——MRO 里的每个类都能沿 `bases_` 链到达，本来就被
@@ -95,7 +95,7 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
 - `Runtime` 内部的 bootstrap 步骤（`build_types`/`build_singletons`，以后还会有更多）一律直接读写
   `types_` 等私有字段，**不要**假道 `Runtime` 自己那些公开的、静态的访问器（`int_type()` 之类）——
   这条路径迟早会在 bootstrap 内部制造新的"我需要的状态恰好是我自己正在建立的状态"这种循环依赖。
-- 对象类型的构造函数如果要在 bootstrap 期间被构造（目前是 `NamedSingleton`/`Bool`/`Exception`），
+- 对象类型的构造函数如果要在 bootstrap 期间被构造（目前是 `NamedSingleton`/`Bool`/`BaseException`），
   让它们**接收调用方传来的 `Type*`**，不要在构造函数里硬编码调用 `Runtime::xxx_type()` 去反查
   自己的类型——`Int`/`Decimal`/`Str`/`Tuple` 硬编码是可以的，因为它们不在 bootstrap 期间构造。
 - 新的初始化步骤（内置函数表、内置模块表……）插进 `init()` 现有两步之后即可，不需要为它们
@@ -112,8 +112,8 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
 | 成员 | 谁能碰 | 怎么做到的 |
 |---|---|---|
 | `Object::gc_prev_/gc_next_/gc_marked_` | `Heap` | `friend class Heap` |
-| `Object::visit_all_refs` | `Heap` | 同上 |
-| `Object::visit_own_refs` | 只有 `Object::visit_all_refs` | 私有虚函数（NVI），子类照常覆写 |
+| `Object::visit_refs` | `Heap` | 同上 |
+| `Object::visit_own_refs` | 只有 `Object::visit_refs` | 私有虚函数（NVI），子类照常覆写 |
 | `Object::set_type` | `Runtime` | `friend class Runtime` |
 | `Object::incref/decref` | `Ref<T>`、`Heap` | `template <typename U> friend class Ref` + `friend class Heap` |
 | 各具体对象类型的构造函数 | `make_ref` | `SL_HEAP_ONLY` 宏（放在 private 区） |
@@ -160,7 +160,7 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
 
 - 新增异常子类只改 `x_builtin_types.inc` 加一行，**不新增 C++ 类**——除非它需要 `.args` 之外的
   专属字段，而这现在还没出现过（`SyntaxError` 要不要额外挂 file/row/col 是待拍板的语言设计问题，
-  见 `.ai/context.md`，没拍板之前不要在 `Exception` 里预先开这个口子）。
+  见 `.ai/context.md`，没拍板之前不要在 `BaseException` 里预先开这个口子）。
 - 构造 `Exception` 必须给一个 `BaseException` 的子类当 `type`，构造函数里有 `assert` 兜底，
   别指望它在 Release 下也拦——调用方保证。
 - `RaisedException`（`runtime/RaisedException.h`）是 `raise` 用的 C++ 信封，**只能在一段不回调 SL、

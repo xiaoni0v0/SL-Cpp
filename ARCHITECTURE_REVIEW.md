@@ -142,7 +142,7 @@ SL 没有"多解释器"这种概念——`import`、`eval_isolated` 建的是新
 存在的唯一理由是"有代码会被这个检查拦下"，而那些代码正是绕出去又绕回来的自己。
 
 修法：`build_singletons()` 改成直接读 `types_[...]` 私有字段；`Bool` 的构造函数改成跟
-`NamedSingleton`/`Exception` 一样接收调用方传来的 `Type*`。改完之后两个状态在任何地方都不再需要区分，
+`NamedSingleton`/`BaseException` 一样接收调用方传来的 `Type*`。改完之后两个状态在任何地方都不再需要区分，
 整个 `BootPhase` 枚举删掉，`Runtime::instance()` 现在只剩最初就该有的那一条检查：`g_runtime`
 是否为空——也就是"`init()` 到底跑没跑完"这一个二元状态，用一个空指针检查就够。`ready()` 相应地
 变成 `g_runtime != nullptr`。
@@ -192,12 +192,12 @@ SL 没有"多解释器"这种概念——`import`、`eval_isolated` 建的是新
 | `Tuple`          | `vector<ObjectRef>`                        | **不可变的是这些引用关系本身**，元素指向的对象可以是可变的                                |
 | `NamedSingleton` | 一个显示名字符串                           | `None`/`Ellipsis`/`NotImplemented`/`StopIteration` 四个共用这一个类，靠 `type()` 区分身份 |
 | `Bool`           | 一个 `bool`                                | `True`/`False` 只有唯一两个实例（`Runtime::boolean()` 保证不会有第三个）                  |
-| `Exception`      | `Ref<Tuple>`（叫 `args_`）                 | 整棵异常类树共用这一个 C++ 类，见下                                                       |
+| `BaseException`  | `Ref<Tuple>`（叫 `args_`）                 | 整棵异常类树共用这一个 C++ 类，名字取自树根而非 SL 的 `Exception`，见下                   |
 
-**`Exception` 值得多说两句**：为什么 `TypeError`、`ValueError`、`SyntaxError` ……十几个不同的
+**`BaseException` 值得多说两句**：为什么 `TypeError`、`ValueError`、`SyntaxError` ……十几个不同的
 SL 异常类，只对应一个 C++ 类？因为它们在存储层面完全一样——都只是"构造时收到的参数元组"，
 区别只在 `type()` 是哪一个。这跟 CPython 的做法一致（`BaseException.args` 是它 C 结构体里的
-一个槽位，不是走 `__dict__`）。现在 `.args` 只能从 C++ 侧直接读（`Exception::args()`），
+一个槽位，不是走 `__dict__`）。现在 `.args` 只能从 C++ 侧直接读（`BaseException::args()`），
 还没法从 SL 代码里通过属性访问（`e.args`）拿到——因为通用的"对象属性表"机制还没实现，这是留给
 以后的坑，不是被遗忘的疏漏。
 
@@ -249,10 +249,10 @@ SL 异常对象包进这个信封 `throw` 出去，由**紧挨着它的调用方
 
 ## 六、几个横切的设计原则（贯穿以上所有部分）
 
-1. **"只给 X 用"用访问控制表达，不靠注释**：GC 的记账字段、`visit_all_refs`、`set_type`、
+1. **"只给 X 用"用访问控制表达，不靠注释**：GC 的记账字段、`visit_refs`、`set_type`、
    `incref/decref`、`Heap::link/unlink`、以及各对象类型的构造函数，全是 `private` + 精确的
    `friend`，外部代码碰它们是编译错误而不是"请自觉"。
-   `Object::visit_own_refs` 更进一步做成私有虚函数（子类照常覆写，但谁都不能绕过 `visit_all_refs`
+   `Object::visit_own_refs` 更进一步做成私有虚函数（子类照常覆写，但谁都不能绕过 `visit_refs`
    直接调它——绕过去会静默漏掉 `type_` 那条边）。唯一公开的例外是**只读**的 `refcount()`，
    留给测试断言引用计数收支平衡。
 2. **纯虚函数逼着新代码补齐该做的事**：`Object::visit_own_refs()` 是纯虚的——新增一个对象类型，

@@ -15,7 +15,7 @@ struct BuiltinTypeSpec {
 };
 
 constexpr BuiltinTypeSpec kBuiltinTypeSpecs[]{
-#define X(field, accessor, name, base) {name, BuiltinType::base},
+#define X(id, accessor, name, base) {name, BuiltinType::base},
 #include "x_builtin_types.inc"
 #undef X
 };
@@ -75,7 +75,7 @@ void Runtime::release_all() {
     for (Ref<Type> &type : types_) type.reset();
 }
 
-void Runtime::dispose() {
+void Runtime::tear_down() {
     // 顺序不能反：先放引用、再摘根源、最后扫一轮。
     // 内置类型之间那个环（每个类型都强引用元类 type，而 type 的元类是它自己）引用计数解不开，
     // 只能靠这一轮标记清扫——此时没有任何根，于是整个堆都是垃圾
@@ -102,29 +102,31 @@ void Runtime::init() {
         // 内置函数表、内置模块表将来插在这里
     } catch (...) {
         // 半初始化的运行时比没有运行时更难查：拆干净再把异常放出去
-        dispose();
+        tear_down();
         throw;
     }
 }
 
 void Runtime::shutdown() {
     if (!g_runtime) throw InternalError{"运行时没初始化就被关闭了"};
-    dispose();
+    tear_down();
 }
 
 bool Runtime::ready() { return g_runtime != nullptr; }
 
 Type *Runtime::builtin_type(const BuiltinType id) { return instance().types_[index_of(id)].get(); }
 
-#define X(field, accessor, name, base)                                                             \
-    Type *Runtime::accessor() { return builtin_type(BuiltinType::field); }
+#define X(id, accessor, name, base)                                                                \
+    Type *Runtime::accessor() { return builtin_type(BuiltinType::id); }
 #include "x_builtin_types.inc"
 #undef X
 
-Object *Runtime::none() { return instance().singletons_.none_.get(); }
-Object *Runtime::ellipsis() { return instance().singletons_.ellipsis_.get(); }
-Object *Runtime::not_implemented() { return instance().singletons_.not_implemented_.get(); }
-Object *Runtime::stop_iteration() { return instance().singletons_.stop_iteration_.get(); }
+NamedSingleton *Runtime::none() { return instance().singletons_.none_.get(); }
+NamedSingleton *Runtime::ellipsis() { return instance().singletons_.ellipsis_.get(); }
+
+NamedSingleton *Runtime::not_implemented() { return instance().singletons_.not_implemented_.get(); }
+
+NamedSingleton *Runtime::stop_iteration() { return instance().singletons_.stop_iteration_.get(); }
 
 Bool *Runtime::boolean(const bool value) {
     const Runtime &self{instance()};

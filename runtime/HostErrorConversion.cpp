@@ -4,7 +4,7 @@
 #include "../cpp_exceptions/FileNotFoundError.h"
 #include "../cpp_exceptions/SyntaxError.h"
 #include "Runtime.h"
-#include "objects/Exception.h"
+#include "objects/BaseException.h"
 #include "objects/Str.h"
 
 #include <string>
@@ -13,7 +13,7 @@
 namespace {
 ObjectRef single_arg_exception(Type *const type, const std::string &message) {
     return ObjectRef{
-        make_ref<Exception>(type, std::vector<ObjectRef>{ObjectRef{Str::from_utf8(message)}})
+        make_ref<BaseException>(type, std::vector<ObjectRef>{ObjectRef{Str::from_utf8(message)}})
     };
 }
 } // namespace

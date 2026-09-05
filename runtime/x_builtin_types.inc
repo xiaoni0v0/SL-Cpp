@@ -1,5 +1,5 @@
 // 内置类型清单
-// X(枚举名, 访问器名, SL 层类名, 基类枚举名)
+// X(枚举名, 访问器名, SL 层类名, 基类枚举名；基类那列填 NoBase 表示没有基类)
 X(Object, object_type, "object", NoBase)
 X(Type, type_type, "type", Object)
 X(NoneType, none_type, "NoneType", Object)

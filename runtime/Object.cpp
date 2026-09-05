@@ -15,7 +15,7 @@ void Object::decref() {
 
 void Object::set_type(Type *const type) { type_ = Ref{type}; }
 
-void Object::visit_all_refs(RefVisitor &visitor) {
+void Object::visit_refs(RefVisitor &visitor) {
     visitor.visit(type_);
     visit_own_refs(visitor);
 }

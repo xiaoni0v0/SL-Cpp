@@ -46,7 +46,7 @@ class Heap {
     // 当前存活对象总数
     [[nodiscard]] static std::size_t live_count();
     // 距上次 collect() 又建了的对象数
-    [[nodiscard]] static std::size_t allocated_since_collect();
+    [[nodiscard]] static std::size_t objects_since_collect();
     // 是否应该 GC，为真就 collect()
     [[nodiscard]] static bool should_collect();
 };

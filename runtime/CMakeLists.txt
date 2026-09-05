@@ -14,16 +14,18 @@ sl_add_module(
     x_builtin_types.inc
     objects/Decimal.cpp
     objects/Decimal.h
-    objects/Exception.cpp
-    objects/Exception.h
+    objects/BaseException.cpp
+    objects/BaseException.h
+    objects/Bool.cpp
+    objects/Bool.h
     objects/Int.cpp
     objects/Int.h
     objects/Str.cpp
     objects/Str.h
     objects/Tuple.cpp
     objects/Tuple.h
-    objects/singletons.cpp
-    objects/singletons.h
+    objects/NamedSingleton.cpp
+    objects/NamedSingleton.h
 )
 
 target_link_libraries(
