@@ -11,22 +11,19 @@ format.py
     .md / .json / .yaml / .yml / .clang-format  ->  prettier
     其余忽略
 
-命中 EXCLUDE_DIR_PATTERNS（整棵子树）或 EXCLUDE_FILE_PATTERNS 的文件不处理。
-按 UTF-8 处理：非法编码报错跳过（不猜测、不转码），写回时剥 BOM。
+命中 EXCLUDE_DIR_PATTERNS（整棵子树）或 EXCLUDE_FILE_PATTERNS 的文件跳过。
+按 UTF-8 处理：非法编码报错跳过，写回时剥 BOM。
 
--i 与 -c 模式把“盘上内容等于格式化结果”的文件的（修改时间, 大小）记入
-项目根目录的 CACHE_FILENAME（每项目一份，互不干扰），命中即跳过，省得下次再跑
-格式化器探测；脚本自身、格式化器或配置变化会使缓存整体失效（见
-environment_fingerprint）。-c 只缓存确认为干净的已扫描文件，不把待改文件
-当作已格式化记进去。
+-i / -c 把"盘上内容等于格式化结果"的文件的（修改时间,大小）记入根目录
+CACHE_FILENAME（每项目一份），命中即跳过；脚本、格式化器或配置变化会使缓存
+整体失效（见 environment_fingerprint）。-c 只缓存确认干净的已扫描文件。
 
 用法：python format.py [项目根目录] [-i | -c] [--no-cache]
-    项目根目录   默认当前目录
-    缺省          仅列出本脚本“会管到”的候选文件（不跑格式化器）
+    项目根目录    默认当前目录
+    缺省         仅列出会处理的候选文件（不跑格式化器）
     -i           原地改写内容有变化的文件
-    -c           打印所有会被真正改写（内容将变化）的文件，不写盘；
-                 有待改文件或出错时退出码非零，可作 CI 门禁
-    --no-cache   忽略缓存强制重跑（仅 -i / -c 有效）
+    -c           只打印会被真正改写的文件，不写盘；有待改或出错时退出码非零
+    --no-cache   忽略缓存强制重跑（仅 -i/-c 有效）
 """
 
 import argparse
@@ -41,7 +38,7 @@ import time
 from pathlib import Path
 from typing import Callable, NamedTuple
 
-# Windows 下 print 输出 \r\n、重定向时又块缓冲，会污染管道并乱序，统一修正
+# Windows 下 print 用 \r\n、重定向时又块缓冲，会污染管道并乱序，统一修正
 for _stream in sys.stdout, sys.stderr:
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(
@@ -51,7 +48,7 @@ for _stream in sys.stdout, sys.stderr:
             line_buffering=True,
         )
 
-# 缓存放被格式化的项目根目录，各项目互不干扰；结构变化时递增版本号作废旧缓存
+# 缓存放被格式化项目根目录，各项目互不干扰；结构变化时递增版本号作废旧缓存
 CACHE_FILENAME = ".format_cache.json"
 CACHE_VERSION = 1
 
@@ -95,7 +92,7 @@ class Formatter(NamedTuple):
     install_hint: str  # 未安装时的安装命令
 
     def run(self, path: Path, original: bytes) -> bytes:
-        """执行格式化，返回结果；失败抛 FormatError"""
+        """执行格式化并返回结果；失败抛 FormatError"""
         argv = self.build_argv(path)
         argv[0] = which_cached(self.command) or argv[0]
         try:
@@ -106,7 +103,6 @@ class Formatter(NamedTuple):
                 timeout=TIMEOUT_SECONDS,
             )
         except subprocess.TimeoutExpired:
-            # TimeoutExpired 非 OSError，转 FormatError 以统一捕获
             raise FormatError(
                 f"{self.command} 超过 {TIMEOUT_SECONDS} 秒未返回，放弃该文件"
             ) from None
@@ -117,7 +113,6 @@ class Formatter(NamedTuple):
             # 退出码 0 却无输出，直接写回会清空文件
             raise FormatError(detail or f"{self.command} 退出码 0 但无输出")
         if detail:
-            # 成功时的 stderr 告警也要展示
             report_progress(
                 f"警告：{self.command}（{path}）：{indent_detail(detail)}",
                 to_stderr=True,
@@ -206,7 +201,6 @@ def matches_any(name: str, patterns: list[str]) -> bool:
 
 def formatter_for(path: Path) -> Formatter | None:
     """按完整文件名、再按后缀名查找格式化器；未收录返回 None"""
-    # NamedTuple 的真值不表示“有无”，须显式与 None 比较
     by_name = FORMATTERS_BY_NAME.get(path.name.lower())
     if by_name is not None:
         return by_name
@@ -272,7 +266,6 @@ def format_file(path: Path, *, write: bool = True) -> bool:
 def needed_formatters(files: list[Path]) -> list[Formatter]:
     """本批所需格式化器，按命令名排序（保证指纹稳定）"""
     by_command = {formatter_for(f).command: formatter_for(f) for f in files}
-    # 按命令名排序查表，避免比较含 lambda 的 Formatter
     return [by_command[command] for command in sorted(by_command)]
 
 
@@ -336,7 +329,6 @@ def save_cache(
             )
         os.replace(temporary, cache_path)
     except OSError as e:
-        # 写缓存失败不影响结果，最多下次全量重跑
         print(
             f"警告：写缓存失败：{cache_path}（{e}），下次全量重跑",
             file=sys.stderr,
@@ -369,7 +361,6 @@ def main() -> None:
     if args.inplace and args.check:
         parser.error("-i 与 -c 互斥")
     if args.no_cache and not (args.inplace or args.check):
-        # 缺省模式不读写缓存，此组合无任何效果
         parser.error("--no-cache 仅适用于 -i / -c")
 
     started_at = time.perf_counter()
@@ -397,8 +388,7 @@ def run(args: argparse.Namespace) -> None:
             print(f)
         return
 
-    # -i 与 -c 都依赖格式化器与缓存，流程在此汇合；二者仅差在是否写盘、
-    # 往 stdout 打什么、以及退出码。
+    # -i 与 -c 都依赖格式化器与缓存，流程在此汇合；仅差在写盘、stdout 输出与退出码
     if missing := missing_formatters(files):
         print(
             "错误：以下格式化器不在 PATH，未处理任何文件。请安装后重试：",
@@ -409,15 +399,13 @@ def run(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     fingerprint = environment_fingerprint(project_dir, needed_formatters(files))
-    # 缓存放被格式化目录下，各项目互不干扰
     cache_path = project_dir / CACHE_FILENAME
     cached = {} if args.no_cache else load_cache(cache_path, fingerprint)
     # 只留本次仍存在的文件，顺带清掉已删除文件的旧条目
     current: dict[str, list[int]] = {}
 
     reformatted_count = unchanged_count = failed_count = skipped_count = 0
-    # -c 命中“会被真正改写”的文件，最后统一打到 stdout
-    needs_change: list[Path] = []
+    needs_change: list[Path] = []  # -c 命中的待改文件，最后统一打到 stdout
 
     for f in files:
         key = str(f)
@@ -434,8 +422,8 @@ def run(args: argparse.Namespace) -> None:
             report_progress(f"格式化失败：{f}：{indent_detail(str(e))}", to_stderr=True)
             failed_count += 1
             continue
-        # 记录处理后的签名。-c 对“会被改写”的文件不改盘，其盘上仍是待改
-        # 状态，故不得当作已格式化写入缓存，否则下次会误跳过。
+        # -c 对"会被改写"的文件不改盘，其盘上仍是待改状态，不得当作已格式化
+        # 写入缓存，否则下次会误跳过
         if not changed or args.inplace:
             if (written := stat_signature(f)) is not None:
                 current[key] = written
