@@ -6,7 +6,7 @@
 #include <vector>
 
 // SL 异常对象。`BaseException` 及其全部子类（`TypeError`/`ValueError`/……）共用这一个 C++ 类——
-// 它们在存储层面完全一样，只是 `type()` 不同，跟 `Singleton` 覆盖 `None`/`Ellipsis` 等好几个
+// 它们在存储层面完全一样，只是 `type()` 不同，跟 `NamedSingleton` 覆盖 `None`/`Ellipsis` 等好几个
 // SL 类是同一个道理（见 .ai/notes/object-model-conventions.md）。
 //
 // 只存 `args_` 一个字段，对应 SL.md 4.2.26 的 `BaseException(*args)`：`.args` 是构造时收到的

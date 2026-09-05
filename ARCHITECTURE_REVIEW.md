@@ -142,7 +142,7 @@ SL 没有"多解释器"这种概念——`import`、`eval_isolated` 建的是新
 存在的唯一理由是"有代码会被这个检查拦下"，而那些代码正是绕出去又绕回来的自己。
 
 修法：`build_singletons()` 改成直接读 `types_[...]` 私有字段；`Bool` 的构造函数改成跟
-`Singleton`/`Exception` 一样接收调用方传来的 `Type*`。改完之后两个状态在任何地方都不再需要区分，
+`NamedSingleton`/`Exception` 一样接收调用方传来的 `Type*`。改完之后两个状态在任何地方都不再需要区分，
 整个 `BootPhase` 枚举删掉，`Runtime::instance()` 现在只剩最初就该有的那一条检查：`g_runtime`
 是否为空——也就是"`init()` 到底跑没跑完"这一个二元状态，用一个空指针检查就够。`ready()` 相应地
 变成 `g_runtime != nullptr`。
@@ -184,15 +184,15 @@ SL 没有"多解释器"这种概念——`import`、`eval_isolated` 建的是新
 `Runtime::xxx_type()` 拿到自己该有的类型对象，`visit_own_refs()` 报出自己持有的其他 SL 对象
 （没有就报空）。
 
-| 类          | 存的是什么                                 | 备注                                                                                      |
-| ----------- | ------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `Int`       | 一个 `BigInt`（现成的大数库）              | 不引用别的 SL 对象                                                                        |
-| `Decimal`   | 一个 `BigDec`                              | 同上                                                                                      |
-| `Str`       | `u32string`（按码点存，不是 UTF-8 字节流） | 按码点取长度/下标是 O(1)，代价是进出要编解码                                              |
-| `Tuple`     | `vector<ObjectRef>`                        | **不可变的是这些引用关系本身**，元素指向的对象可以是可变的                                |
-| `Singleton` | 一个名字字符串                             | `None`/`Ellipsis`/`NotImplemented`/`StopIteration` 四个共用这一个类，靠 `type()` 区分身份 |
-| `Bool`      | 一个 `bool`                                | `True`/`False` 只有唯一两个实例（`Runtime::boolean()` 保证不会有第三个）                  |
-| `Exception` | `Ref<Tuple>`（叫 `args_`）                 | 整棵异常类树共用这一个 C++ 类，见下                                                       |
+| 类               | 存的是什么                                 | 备注                                                                                      |
+| ---------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `Int`            | 一个 `BigInt`（现成的大数库）              | 不引用别的 SL 对象                                                                        |
+| `Decimal`        | 一个 `BigDec`                              | 同上                                                                                      |
+| `Str`            | `u32string`（按码点存，不是 UTF-8 字节流） | 按码点取长度/下标是 O(1)，代价是进出要编解码                                              |
+| `Tuple`          | `vector<ObjectRef>`                        | **不可变的是这些引用关系本身**，元素指向的对象可以是可变的                                |
+| `NamedSingleton` | 一个显示名字符串                           | `None`/`Ellipsis`/`NotImplemented`/`StopIteration` 四个共用这一个类，靠 `type()` 区分身份 |
+| `Bool`           | 一个 `bool`                                | `True`/`False` 只有唯一两个实例（`Runtime::boolean()` 保证不会有第三个）                  |
+| `Exception`      | `Ref<Tuple>`（叫 `args_`）                 | 整棵异常类树共用这一个 C++ 类，见下                                                       |
 
 **`Exception` 值得多说两句**：为什么 `TypeError`、`ValueError`、`SyntaxError` ……十几个不同的
 SL 异常类，只对应一个 C++ 类？因为它们在存储层面完全一样——都只是"构造时收到的参数元组"，

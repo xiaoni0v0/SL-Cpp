@@ -27,10 +27,10 @@ class Runtime final : public GcRootSource {
 
     // 六个单例。凑成一个聚合体，放掉它们只要 `singletons_ = {}` 一句
     struct {
-        Ref<Singleton> none_;
-        Ref<Singleton> ellipsis_;
-        Ref<Singleton> not_implemented_;
-        Ref<Singleton> stop_iteration_;
+        Ref<NamedSingleton> none_;
+        Ref<NamedSingleton> ellipsis_;
+        Ref<NamedSingleton> not_implemented_;
+        Ref<NamedSingleton> stop_iteration_;
         Ref<Bool> true_;
         Ref<Bool> false_;
     } singletons_;

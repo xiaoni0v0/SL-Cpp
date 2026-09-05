@@ -7,6 +7,12 @@
 `runtime/` 里的 C++ 类**只表达存储形状**（这个对象有哪些字段、怎么析构）；SL 那边的继承关系
 完全存在 `Type` 的 `bases_`/`mro_` 里，两套互不牵连。
 
+**"C++ 这边跟 SL 平行铺开"是证明不可能的，不是取舍**：用户定义的类在运行期才产生
+（`class Foo {}`、`type(name, bases, ns)`），永远不会有对应的 C++ 类。所以 C++ 类 : SL 类型必然多
+对一，剩下的问题只是在哪儿划线，而线只能划在存储形状上——SL 的行为差异住在各自 `Type` 的方法表/
+描述器表里，属性查找走 `type(x)` 的 MRO，从来不经过 C++ 的 vtable，给两个字段表相同的类型各开一个
+C++ 类，那个类里一个可重写的东西都不会有。现状是 8 个 C++ 类对 34 个 SL 类型。
+
 **How to apply**：新增一个 SL 类型时，先分别回答两个问题，不要让一个答案顺带决定另一个。
 
 - "它在 SL 里的父类是谁" → 只影响 `x_builtin_types.inc` 里那一行的最后一列。
@@ -16,9 +22,10 @@
 
 - **有 SL 类、没有 C++ 类**：`numbers.Number`/`numbers.Real` 是抽象类，没有实例，只是两个
   `Type` 对象；
-- **一个 C++ 类、多个 SL 类**：`Singleton` 同时被 `None`（类型是 `NoneType`）和
-  `Ellipsis`/`NotImplemented`/`StopIteration`（类型是 `SingletonType`）使用——它们的差别只有
-  "类型是谁、打印成什么"，没有任何字段差异，不值得各开一个空类；
+- **一个 C++ 类、多个 SL 类**：`NamedSingleton` 同时被 `None`（类型是 `NoneType`）和
+  `Ellipsis`/`NotImplemented`/`StopIteration`（类型是 `SingletonType`）使用——它们的字段表逐字相同
+  （零负载 + 一个显示名），行为差异（比如 `bool(None)` 为假、另外三个为真）住在各自 `Type` 的方法表里，
+  不走 C++ 虚函数，各开一个空类买不到东西；
 - **SL 里不是子类、C++ 里也不该是子类**：`bool` 的父类是 `numbers.Real` 而**不是** `int`
   （SL.md 4.2.5/4.4，跟 Python 不同），所以 `Bool` 也不是 `Int` 的 C++ 子类。反过来说，就算
   哪天某两个类型在 SL 里是父子，也不意味着 C++ 这边就该继承——那是独立判断。
@@ -76,7 +83,7 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
 早先版本给这个类配过一个有序的 `BootPhase`（`Uninitialized`→`Types`→`Values`→`Ready`），"某个东西
 现在能不能用"表达成"当前相位 >= 某相位"，每个访问器声明自己要求的最低相位。**后来发现这是自己给
 自己挖的坑，已经删掉**：之所以"需要"区分"类型建好但单例还没建好"这两个状态，只是因为
-`build_singletons()` 和 `Bool`/`Singleton` 的构造函数当时绕道调用了公开的、带检查的静态访问器
+`build_singletons()` 和 `Bool`/`NamedSingleton` 的构造函数当时绕道调用了公开的、带检查的静态访问器
 （`none_type()`、`Runtime::bool_type()`），而不是直接读 `Runtime` 自己的私有字段 `types_` /
 接收调用方传来的 `Type*`。改成直接传值之后，这个中间状态**从来没有被任何代码观察到过**——C++
 单线程同步执行，`init()` 跑到一半时不存在任何别的代码能插进来看到"类型建好、单例没建好"这个瞬间，
@@ -88,7 +95,7 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
 - `Runtime` 内部的 bootstrap 步骤（`build_types`/`build_singletons`，以后还会有更多）一律直接读写
   `types_` 等私有字段，**不要**假道 `Runtime` 自己那些公开的、静态的访问器（`int_type()` 之类）——
   这条路径迟早会在 bootstrap 内部制造新的"我需要的状态恰好是我自己正在建立的状态"这种循环依赖。
-- 对象类型的构造函数如果要在 bootstrap 期间被构造（目前是 `Singleton`/`Bool`/`Exception`），
+- 对象类型的构造函数如果要在 bootstrap 期间被构造（目前是 `NamedSingleton`/`Bool`/`Exception`），
   让它们**接收调用方传来的 `Type*`**，不要在构造函数里硬编码调用 `Runtime::xxx_type()` 去反查
   自己的类型——`Int`/`Decimal`/`Str`/`Tuple` 硬编码是可以的，因为它们不在 bootstrap 期间构造。
 - 新的初始化步骤（内置函数表、内置模块表……）插进 `init()` 现有两步之后即可，不需要为它们
@@ -146,7 +153,7 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
 ## 五、异常：一个 C++ 类覆盖整棵树，`.args` 是唯一字段
 
 `Exception`（`runtime/objects/Exception.h`）覆盖 `BaseException` 及其全部子类，只存 `.args`
-元组——跟第一条"一个 C++ 类可以覆盖多个 SL 类"是同一个模式（`Singleton` 覆盖 `None`/`Ellipsis` 等
+元组——跟第一条"一个 C++ 类可以覆盖多个 SL 类"是同一个模式（`NamedSingleton` 覆盖 `None`/`Ellipsis` 等
 是先例）。跟 CPython 对齐：`BaseException.args` 本来就是结构体槽位，不是 `__dict__`。
 
 **How to apply**：

@@ -52,10 +52,10 @@ void Runtime::build_singletons() {
     Type *const bool_type{types_[index_of(BuiltinType::Bool)].get()};
 
     // None 的类型是 NoneType，另外三个是 SingletonType（SL.md 4.2.17）
-    singletons_.none_ = make_ref<Singleton>(none_type, "None");
-    singletons_.ellipsis_ = make_ref<Singleton>(singleton_type, "Ellipsis");
-    singletons_.not_implemented_ = make_ref<Singleton>(singleton_type, "NotImplemented");
-    singletons_.stop_iteration_ = make_ref<Singleton>(singleton_type, "StopIteration");
+    singletons_.none_ = make_ref<NamedSingleton>(none_type, "None");
+    singletons_.ellipsis_ = make_ref<NamedSingleton>(singleton_type, "Ellipsis");
+    singletons_.not_implemented_ = make_ref<NamedSingleton>(singleton_type, "NotImplemented");
+    singletons_.stop_iteration_ = make_ref<NamedSingleton>(singleton_type, "StopIteration");
     singletons_.true_ = make_ref<Bool>(bool_type, true);
     singletons_.false_ = make_ref<Bool>(bool_type, false);
 }

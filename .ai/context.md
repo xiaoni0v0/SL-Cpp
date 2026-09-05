@@ -1020,12 +1020,13 @@ throw 这个信封，由**紧邻它、不跨 SL 帧的调用方**立刻接住，
 - 代价认了：读 codegen/executor 时 `Type *`、`Code *` 这类要靠上下文认。
 
 顺带定死的两条命名：`Ref<T>` 是模板、`ObjectRef` 是 `Ref<Object>` 的别名，不是二选一（`Ref<T>` 作为
-侵入式引用计数句柄的名字有 WebKit 的先例）；`Singleton` 这个 C++ 类覆盖 `None`（类型 `NoneType`）和
-三个 `SingletonType` 实例，比 SL 的 `SingletonType` 宽，这正是 SL.md 4.2.17 说"包含**部分**单例对象"
-留出的空间，不要因为"名字像 SingletonType"去改它。
+侵入式引用计数句柄的名字有 WebKit 的先例）；无负载单例那个 C++ 类叫 `NamedSingleton` 而不是
+`Singleton`，是**故意跟 SL 的 `SingletonType` 岔开名字**：它覆盖 `None`（类型 `NoneType`）和三个
+`SingletonType` 实例，比 SL 的 `SingletonType` 宽。类名说的是存储形状（零负载 + 一个显示名），叫
+`Singleton` 会暗示一个并不成立的 1:1 关系，实际引起过误会。
 
-**术语纪律**：SL 没有 `repr` 概念（只有 `str(x)`），别把 Python 的词带进来——`Singleton` 上那个字段
-叫 `name_`。
+**术语纪律**：SL 没有 `repr` 概念（只有 `str(x)`），别把 Python 的词带进来——`NamedSingleton` 上那个
+字段叫 `name_`。
 
 ### GC 用"从根标记清扫"，不用 CPython 的 trial deletion
 
@@ -1092,7 +1093,7 @@ CPython 只把容器类对象挂进 GC 链表，`int`/`str` 这类叶子不跟�
 又绕回来的自己。
 
 修法：`build_singletons()` 直接读 `types_[index_of(BuiltinType::NoneType)].get()` 这类私有字段；
-`Bool` 的构造函数改成跟 `Singleton`/`Exception` 一样，接收调用方传来的 `Type*` 而不是自己反查。
+`Bool` 的构造函数改成跟 `NamedSingleton`/`Exception` 一样，接收调用方传来的 `Type*` 而不是自己反查。
 改完之后 `Types`/`Values` 这两档在任何地方都不再被区分，`BootPhase` 整个枚举、`instance(required)`
 那份带相位名的报错都删掉了，`Runtime::instance()` 现在只剩最初就该有的那一条：`g_runtime` 是否
 为空。`ready()` 从 `phase() == BootPhase::Ready` 变成 `g_runtime != nullptr`——反正 `Ready` 那一档
