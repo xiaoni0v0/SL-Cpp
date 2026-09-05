@@ -38,7 +38,14 @@ from typing import List
 
 for _stream in sys.stdout, sys.stderr:
     if hasattr(_stream, "reconfigure"):
-        _stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+        _stream.reconfigure(
+            encoding="utf-8",
+            errors="backslashreplace",
+            # Windows 上 print 默认把 \n 翻成 \r\n，下游 read/xargs 会收到末尾带 \r 的路径
+            newline="\n",
+            # 不设的话 stdout 在重定向时是块缓冲，stderr 却是即时的，两股输出的先后会整个错位
+            line_buffering=True,
+        )
 
 # 排除的目录名
 EXCLUDE_DIR_PATTERNS = [
@@ -66,6 +73,7 @@ class Formatter(NamedTuple):
     command: str  # 可执行文件名，用于 PATH 检查和报错
     build_argv: Callable[[Path], List[str]]
     via_stdin: bool  # True 表示把原文件内容喂给 stdin
+    install_hint: str  # 没装时告诉用户怎么装
 
     def run(self, path: Path, original: bytes) -> bytes:
         """跑一遍，返回格式化后的内容；失败抛 FormatError"""
@@ -91,7 +99,9 @@ class Formatter(NamedTuple):
             raise FormatError(detail or f"{self.command} 退出码 0 却没有任何输出")
         if detail:
             # 成功时的告警也得让人看见，别被 capture_output 吞了
-            print(f"警告：{self.command} {path}：{detail}", file=sys.stderr)
+            report_progress(
+                f"警告：{self.command} {path}：{indent_detail(detail)}", to_stderr=True
+            )
         return result.stdout
 
 
@@ -99,20 +109,47 @@ class FormatError(RuntimeError):
     """格式化器处理单个文件失败"""
 
 
+# 循环里是否已经打过逐文件的信息（reformatted 行、告警、报错），决定最后要不要空一行
+# 把它们和总结隔开。光看 reformatted 的条数不够——全部失败时一条 reformatted 都没有，
+# 报错却是实打实占了屏幕的。
+_progress_printed = False
+
+
+def report_progress(message: str, *, to_stderr: bool = False) -> None:
+    """打一行逐文件的进度/告警/报错"""
+    global _progress_printed
+    _progress_printed = True
+    print(message, file=sys.stderr if to_stderr else sys.stdout)
+
+
+def indent_detail(detail: str) -> str:
+    """
+    工具吐出来的多行信息缩进成一整块。
+    不缩的话续行顶格顶在最左边，看着像另一条独立消息，跟前后的输出糊成一片。
+    """
+    lines = detail.splitlines()
+    if len(lines) <= 1:
+        return detail
+    return "\n" + "\n".join(f"    {line}" if line else "" for line in lines)
+
+
 CLANG_FORMAT = Formatter(
     command="clang-format",
     build_argv=lambda path: ["clang-format", "--style=file", str(path)],
     via_stdin=False,
+    install_hint="pip install clang-format",
 )
 BLACK = Formatter(
     command="black",
     build_argv=lambda path: ["black", "--quiet", "--stdin-filename", str(path), "-"],
     via_stdin=True,
+    install_hint="pip install black",
 )
 GERSEMI = Formatter(
     command="gersemi",
     build_argv=lambda path: ["gersemi", str(path)],
     via_stdin=False,
+    install_hint="pip install gersemi",
 )
 PRETTIER = Formatter(
     command="prettier",
@@ -124,6 +161,7 @@ PRETTIER = Formatter(
         str(path),
     ],
     via_stdin=True,
+    install_hint="npm install -g prettier",
 )
 
 # 后缀名 -> 格式化器。要支持新语言就在这里加一行，别的地方不用动
@@ -210,10 +248,10 @@ def pluralize(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
-def missing_commands(files: list[Path]) -> list[str]:
+def missing_formatters(files: list[Path]) -> list[Formatter]:
     """这批文件用得到、但 PATH 里找不到的格式化器"""
-    needed = {formatter_for(f).command for f in files}
-    return sorted(c for c in needed if shutil.which(c) is None)
+    needed = {formatter_for(f).command: formatter_for(f) for f in files}
+    return [fm for _, fm in sorted(needed.items()) if shutil.which(fm.command) is None]
 
 
 def main():
@@ -236,17 +274,19 @@ def main():
 
     files = find_target_files(project_dir)
 
+    global _progress_printed
+    _progress_printed = False  # 被当模块 import 反复调用时也从干净状态起步
+
     if not args.in_place:
         # 默认模式：只输出命中的文件名，不输出别的任何东西，方便管道接别的命令
         for f in files:
             print(f)
         return
 
-    if missing := missing_commands(files):
-        print(
-            f"错误：找不到 {'、'.join(missing)}，请先确认已安装并在 PATH 中。",
-            file=sys.stderr,
-        )
+    if missing := missing_formatters(files):
+        print("错误：下面这些格式化器不在 PATH 里，装好再跑：", file=sys.stderr)
+        for fm in missing:
+            print(f"    {fm.command:<14}{fm.install_hint}", file=sys.stderr)
         sys.exit(1)
 
     reformatted_count = unchanged_count = failed_count = 0
@@ -256,17 +296,19 @@ def main():
             changed = format_file(f)
         except (FormatError, OSError) as e:
             # 单个文件失败不中断整批，最后统一汇总并以非零码退出
-            print(f"错误：格式化失败 {f}：{e}", file=sys.stderr)
+            report_progress(
+                f"错误：格式化失败 {f}：{indent_detail(str(e))}", to_stderr=True
+            )
             failed_count += 1
             continue
         if changed:
-            print(f"reformatted {f}")
+            report_progress(f"reformatted {f}")
             reformatted_count += 1
         else:
             unchanged_count += 1
 
-    if reformatted_count > 0:
-        print()  # 分隔 reformatted 列表和总结行
+    if _progress_printed:
+        print()  # 把上面那堆逐文件的输出和总结行隔开
 
     print("Oh no! 💥 💔 💥" if failed_count > 0 else "All done! ✨ 🍰 ✨")
 

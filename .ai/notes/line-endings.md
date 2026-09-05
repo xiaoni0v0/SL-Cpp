@@ -33,3 +33,7 @@ CLion/VS Code 全都原生吃 LF。选 `.gitattributes` 而不是 `core.autocrlf
 - 需要在 Python 脚本里拿到 Windows 控制台的 UTF-8 输出（原来 `.bat` 靠 `chcp 65001` 做的事），
   用 `ctypes.windll.kernel32.SetConsoleOutputCP(65001)` 加 `sys.stdout.reconfigure(encoding="utf-8")`，
   `.ai/run_test.py` 里有现成写法。
+- **Python 的 `print` 在 Windows 上默认吐 CRLF**：文本模式的 stdout 会把换行翻成 CRLF，管道下游的
+  `read`/`xargs` 于是收到末尾带 CR 的路径。脚本输出要给别的命令接的话，开头就用
+  `sys.stdout.reconfigure(newline=...)` 把换行钉成 LF；顺带把 `line_buffering` 打开，否则重定向时
+  stdout 是块缓冲而 stderr 是即时的，两股输出的先后会整个错位。`format.py` 顶部有现成写法。
