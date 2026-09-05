@@ -23,7 +23,7 @@ ObjectRef exception_from(const SyntaxError &error) {
 }
 
 ObjectRef exception_from(const EncodingError &error) {
-    // EncodingError 在 SL 层是 exceptions.EncodingError（IOError 的子类，SL.md 4.3.3），
+    // EncodingError 在 SL 层是 exceptions.EncodingError（IOError 的子类，SL.md 4.4.3），
     // 那个模块还没有落脚处，暂时先落到 IOError——比彻底不转好，模块建好后再改这一行
     return single_arg_exception(Runtime::io_error_type(), error.message());
 }

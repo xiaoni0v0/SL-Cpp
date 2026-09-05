@@ -576,7 +576,7 @@ try expr1 ⟦except (Exception1, ... ⟦as lvalue⟧) expr2 ...⟧ ⟦finally ex
 - `x[index, ...]`
   - 对于列表、元组、字符串等，返回下标为 `index` 的元素（此时 `index` 为 int，或 range 对象表示切片）；
   - 对于字典等，返回键为 `index` 所对应的值；
-  - 对于类型，表示构造复合类型（见 4.4.3）；
+  - 对于类型，表示构造复合类型（见 4.3.3）；
 - `x(arguments, ...)`
   调用函数 `x`，传入实参 `arguments`，返回函数的返回值。见 3.5；
 - `x.attribute`
@@ -632,7 +632,7 @@ try expr1 ⟦except (Exception1, ... ⟦as lvalue⟧) expr2 ...⟧ ⟦finally ex
   - 对于 set，返回它们的交集、并集；
   - 对于 `|`，`x`、`y` 都是 dict 时，返回两者合并后的新 dict：
     重复的 key 以 `y` 中的值为准，但该 key 在结果中的位置保持 `x` 里原来的位置，不重复的 key 按 `y` 中的顺序追加在结果末尾；
-  - 对于 `|`，`x`、`y` 都是类型时，返回复合类型（见 4.4.3）；
+  - 对于 `|`，`x`、`y` 都是类型时，返回复合类型（见 4.3.3）；
 
   以上 `~`/`<<`/`>>`/`&`/`^`/`|` 对 int 的按位语义，是把 int 看成拥有无穷多个二进制位、遵循补码表示的整数来计算，
   负数的更高位一律视为 1，正数的更高位视为 0；
@@ -736,7 +736,7 @@ try expr1 ⟦except (Exception1, ... ⟦as lvalue⟧) expr2 ...⟧ ⟦finally ex
    若 `init`、`inc` 为空，对其求值实为跳过；若 `cond` 为空，对其求值实为返回 `True`。
    先对 `init` 求值并丢弃，然后不断重复：对 `cond` 求值，真值成立则按上述方式处理 `expr`，再对 `inc` 求值并丢弃；否则跳出循环。
 2. 迭代模式 `for ⟦collect⟧ (iterable ⟦as lvalue⟧) expr`：
-   要求 `iterable` 满足可迭代协议（`protocols.Iterable`，见 4.3.2.4），否则抛出 `TypeError`。
+   要求 `iterable` 满足可迭代协议（`protocols.Iterable`，见 4.4.2.4），否则抛出 `TypeError`。
    不断从 `iterable` 取出一个元素，按 3.3 对赋值运算符规定的规则
    （简单赋值/属性赋值/元素赋值/解构赋值之一，视 `lvalue` 具体形状而定）
    赋给 `lvalue`，然后按上述方式处理 `expr`，直到迭代结束。
@@ -1043,9 +1043,9 @@ class MyClass {
 
 **原生可调用对象**是这条规则的终点，解释器直接认得它们，不会再去查它们的 `__op_call__`（尽管也有）：
 
-- `Function`（4.4.4）：按下面的实参对应规则绑定，然后执行函数体；
-- `BuiltinFunction`（4.4.5）：同上，只是函数体由解释器自身实现；
-- `Method`（4.4.6）：把被绑定的对象插到实参最前面，再调用被绑定的那个可调用对象；
+- `Function`（4.3.4）：按下面的实参对应规则绑定，然后执行函数体；
+- `BuiltinFunction`（4.3.5）：同上，只是函数体由解释器自身实现；
+- `Method`（4.3.6）：把被绑定的对象插到实参最前面，再调用被绑定的那个可调用对象；
 - `FuncGroup`（4.2.22）：自上而下逐个试，选中之后落回上面三种。
 
 没有这一步，规则就没有终点——查 `__op_call__` 查到的东西自己也得被调用。类对象不在这四种之内：
@@ -1515,7 +1515,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 本章 4.1/4.2 列出的所有内置函数、内置类，都通过一张固定、唯一的**内置表**以名字暴露给标识符解析规则（见 3.10.3）。
 
-4.4 列出的是另一批类：它们同样存在，但不在内置表里。
+4.3 列出的是另一批类：它们同样存在，但不在内置表里。
 
 ### 4.1 内置函数
 
@@ -1791,7 +1791,7 @@ decimal.DecimalException
 
 #### 4.2.10 dict
 
-可变，键需可哈希。遍历（键、值、键值对）按插入序。满足映射协议（`protocols.Mapping`，见 4.3.2）。
+可变，键需可哈希。遍历（键、值、键值对）按插入序。满足映射协议（`protocols.Mapping`，见 4.4.2）。
 
 #### 4.2.11 unordered_dict
 
@@ -1800,7 +1800,7 @@ decimal.DecimalException
 #### 4.2.12 frozendict
 
 不可变的 `dict`，建立后不能增删改其中的项，其余接口与 `dict` 一致，遍历按插入序。
-满足映射协议。若其中每个键值对均可哈希则是 `Hashable`（见 4.3.2），此时可作 `dict` 的键、`set` 的元素。
+满足映射协议。若其中每个键值对均可哈希则是 `Hashable`（见 4.4.2），此时可作 `dict` 的键、`set` 的元素。
 
 `frozendict(m)` 由一个映射对象建立；`frozendict()` 建立空的冻结字典。
 注意不可变的只是这张表本身；其中的值若是可变对象，该对象仍可被修改。
@@ -1809,7 +1809,7 @@ decimal.DecimalException
 
 容器类，可变，可迭代。元素需可哈希，不保证遍历顺序，元素不重复。
 
-`set` 自身不是 `Hashable`（见 4.3.2），不能作 `dict` 的键、`set` 的元素。
+`set` 自身不是 `Hashable`（见 4.4.2），不能作 `dict` 的键、`set` 的元素。
 
 #### 4.2.14 frozenset
 
@@ -1895,7 +1895,7 @@ f(1.0)  # 抛出 DispatchError
 
 #### 4.2.23 异常类
 
-只列全局的一批常用异常，其余更细分的见 4.3.3 `exceptions` 模块。
+只列全局的一批常用异常，其余更细分的见 4.4.3 `exceptions` 模块。
 
 ```
 BaseException
@@ -1941,74 +1941,7 @@ BaseException
 - 若不是第一次遇到，则改为检查 `isinstance(实际值, 已记录的类型)`；
   这份记录只在本次调用期间有效（随本次调用的帧一起产生、消失），不同调用互不影响。
 
-### 4.3 内置模块
-
-#### 4.3.1 `numbers`
-
-##### 4.3.1.1 Number
-
-抽象基类。定义数值的公共契约：四则运算与相等比较。`int`、`decimal`、`complex`、`bool` 均为其子类。
-
-##### 4.3.1.2 Real
-
-`Number` 的子类，抽象基类。在四则运算之上增加大小比较。`int`、`decimal`、`bool` 为其子类。
-
-#### 4.3.2 `protocols`
-
-以下几者的判定规则类似：
-`isinstance(obj, X)`/`issubclass(cls, X)` 当且仅当 `type(obj)`/`cls` 的 MRO 上有该协议要求的全部方法，
-且每个方法按 3.9.1.2 的规则查找到的那一项都不是 `unsupported` 的实例（见 4.2.20 `unsupported`）。
-
-##### 4.3.2.1 Callable
-
-抽象基类。要求 `__op_call__`。
-
-##### 4.3.2.2 Indexable
-
-抽象基类。要求 `__op_get_index__`。
-
-##### 4.3.2.3 Hashable
-
-抽象基类。要求 `__hash__`。
-
-默认按对象身份（同 `is`）计算；可重载 `__hash__(self)` 与 `__op_eq__` 改为按值比较，两者需保持一致
-（相等的对象哈希值必须相等）。
-
-`list`、`dict`、`set`、`unordered_dict` 不是 `Hashable`；`tuple`、`frozenset` 是；
-`frozendict` 在每个键值对均可哈希时可哈希。
-
-##### 4.3.2.4 Iterable
-
-抽象基类。要求 `__iter__`。
-
-##### 4.3.2.5 Iterator
-
-抽象基类。要求 `__iter__` 和 `__next__`。
-
-##### 4.3.2.6 Mapping
-
-抽象基类。
-
-`isinstance(obj, Mapping)` 当且仅当：
-
-1. `isinstance(obj, Iterable)`；
-2. `isinstance(obj, Indexable)`；
-3. `type(obj)` 的 MRO 上有 `__items__`，且找到的那一项不是 `unsupported` 的实例。
-
-`dict`、`unordered_dict`、`frozendict` 满足。
-
-#### 4.3.3 `exceptions`
-
-更细分的异常类，仅在需要时 `import`。目前只有：
-
-```
-IOError
-└── EncodingError - 编码错误，主要在打开文件时
-```
-
-以后需要更细分的 IO 异常（如文件不存在、权限不足）时，继承 `IOError` 加入本模块，不修改全局异常列表。
-
-### 4.4 不入内置表的类
+### 4.3 不入内置表的类
 
 这批类确实存在，`type(x)` 拿得到，也各有各的名字（`type(None).__name__` 就是 `'NoneType'`）——
 只是这个名字**没有进内置表**，所以源码里写下 `NoneType` 解析不到任何东西，初始时它不在任何作用域内。
@@ -2021,11 +1954,11 @@ IOError
 操作，解释器靠"被调对象是不是这几个类型"来决定直接执行还是去查 `__op_call__`（3.5），允许继承会让这个
 判定退化。要包装一个可调用对象，用普通类加 `__op_call__`。
 
-#### 4.4.1 NoneType
+#### 4.3.1 NoneType
 
 只有一个实例，即 `None`。
 
-#### 4.4.2 SingletonType
+#### 4.3.2 SingletonType
 
 包含 SL 的部分单例对象：
 
@@ -2033,7 +1966,7 @@ IOError
 - NotImplemented
 - StopIteration
 
-#### 4.4.3 CompoundType
+#### 4.3.3 CompoundType
 
 用 `|`, `!`, `?`, `[]` 可以创建**复合类**。
 
@@ -2064,14 +1997,14 @@ IOError
 以上检查均有短路性，但不应依赖于此，因为检查的顺序不确定，
 例如 `int | str?` 的实际实现*可能*为 `None | int | str` 而非 `int | str | None`。
 
-#### 4.4.4 Function
+#### 4.3.4 Function
 
 `func` 表达式（3.4.7）的值的类型，`__is_final_class__ = True`。
 
 一个函数对象持有：函数体、形参表与各处类型注解、默认值、捕获、函数名与文档字符串。调用它就是按 3.5
 绑定实参再执行函数体。能不能内省形参与函数体、通过哪些属性内省，尚未设计。
 
-#### 4.4.5 BuiltinFunction
+#### 4.3.5 BuiltinFunction
 
 内置函数（4.1）与内置类型上各方法的类型，`__is_final_class__ = True`。
 
@@ -2079,7 +2012,7 @@ IOError
 `DispatchError` 的规则与 `Function` 完全一致（3.5）——内置函数同样要声明形参与类型，走同一套绑定规则，
 不另开一套。
 
-#### 4.4.6 Method
+#### 4.3.6 Method
 
 绑定方法，`__is_final_class__ = True`。
 
@@ -2087,20 +2020,87 @@ IOError
 绑定为第一参数的可调用对象"，就是这个类的实例。它持有被绑定的对象和被绑定的可调用对象两样；调用它
 就是把前者插到实参最前面，再调用后者。
 
-#### 4.4.7 MethodDescriptor
+#### 4.3.7 MethodDescriptor
 
 `Descriptor`（4.2.16）的子类。类体收集属性时，函数对象和 `FuncGroup` 的实例被包成它存入描述器表；
 它的 `get(self, obj)` 按 `obj` 是不是类分两条路——规则都在 3.4.8。
 
 用 `attrs(cls, 'descriptors')`（4.1.8）能拿到它的实例，但写不出这个类的名字。
 
-#### 4.4.8 尚未落地的
+#### 4.3.8 尚未落地的
 
 模块对象的类同属这一批，等 `import` 那一摊的对象设计定了再补进来。
 
+### 4.4 内置模块
+
+#### 4.4.1 `numbers`
+
+##### 4.4.1.1 Number
+
+抽象基类。定义数值的公共契约：四则运算与相等比较。`int`、`decimal`、`complex`、`bool` 均为其子类。
+
+##### 4.4.1.2 Real
+
+`Number` 的子类，抽象基类。在四则运算之上增加大小比较。`int`、`decimal`、`bool` 为其子类。
+
+#### 4.4.2 `protocols`
+
+以下几者的判定规则类似：
+`isinstance(obj, X)`/`issubclass(cls, X)` 当且仅当 `type(obj)`/`cls` 的 MRO 上有该协议要求的全部方法，
+且每个方法按 3.9.1.2 的规则查找到的那一项都不是 `unsupported` 的实例（见 4.2.20 `unsupported`）。
+
+##### 4.4.2.1 Callable
+
+抽象基类。要求 `__op_call__`。
+
+##### 4.4.2.2 Indexable
+
+抽象基类。要求 `__op_get_index__`。
+
+##### 4.4.2.3 Hashable
+
+抽象基类。要求 `__hash__`。
+
+默认按对象身份（同 `is`）计算；可重载 `__hash__(self)` 与 `__op_eq__` 改为按值比较，两者需保持一致
+（相等的对象哈希值必须相等）。
+
+`list`、`dict`、`set`、`unordered_dict` 不是 `Hashable`；`tuple`、`frozenset` 是；
+`frozendict` 在每个键值对均可哈希时可哈希。
+
+##### 4.4.2.4 Iterable
+
+抽象基类。要求 `__iter__`。
+
+##### 4.4.2.5 Iterator
+
+抽象基类。要求 `__iter__` 和 `__next__`。
+
+##### 4.4.2.6 Mapping
+
+抽象基类。
+
+`isinstance(obj, Mapping)` 当且仅当：
+
+1. `isinstance(obj, Iterable)`；
+2. `isinstance(obj, Indexable)`；
+3. `type(obj)` 的 MRO 上有 `__items__`，且找到的那一项不是 `unsupported` 的实例。
+
+`dict`、`unordered_dict`、`frozendict` 满足。
+
+#### 4.4.3 `exceptions`
+
+更细分的异常类，仅在需要时 `import`。目前只有：
+
+```
+IOError
+└── EncodingError - 编码错误，主要在打开文件时
+```
+
+以后需要更细分的 IO 异常（如文件不存在、权限不足）时，继承 `IOError` 加入本模块，不修改全局异常列表。
+
 ### 4.5 类继承关系图
 
-带 `*` 的类不在内置表里，见 4.4。
+带 `*` 的类不在内置表里，见 4.3。
 
 - `object`
   - `NoneType` *

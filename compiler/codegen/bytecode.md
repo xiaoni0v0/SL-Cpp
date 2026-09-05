@@ -316,7 +316,7 @@ CPython 对 star-unpacking 的处理一致，是真实语言限制不是内部�
 | `IMPORT n`     | `…`                                   | `… m`      | 关键字形态 `import a.b.c`：名字表第 `n` 项是完整点分名，压 `NativeFrame` 跑加载算法，压入**第一段**模块对象               |
 | `EVAL`         | `… args kwargs`                       | `… v`      | 绑出 `code`（失败 `DispatchError`，非 str `TypeError`），解析成恰好一条表达式（否则 `SyntaxError`），编译，压 `EvalFrame` |
 
-**`CALL` 系列的分派**：比被调对象的 `type()` **指针**（这几个类型都是 final，见 SL.md 4.4，所以指针相等
+**`CALL` 系列的分派**：比被调对象的 `type()` **指针**（这几个类型都是 final，见 SL.md 4.3，所以指针相等
 就够，不用走 MRO）——`Function` 压 `ByteCodeFrame`；`BuiltinFunction` 纯计算就地算完、要回调 SL 就压
 `NativeFrame`；`Method` 把绑定的对象插到实参最前面重新分派；`FuncGroup` 逐个试。都不是就压一个
 `NativeFrame` 去查 `type(f)` 的 `__op_call__`，拿到结果重新分派——这一步必须压帧，因为查找会走描述器、
