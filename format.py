@@ -3,28 +3,25 @@
 """
 format.py
 
-批量格式化项目源文件，按完整文件名、其次按后缀分派给对应工具：
+批量格式化项目源文件，按完整文件名、其次按后缀分派工具：
 
     .cpp / .h / .inc                            ->  clang-format
     CMakeLists.txt / .cmake                     ->  gersemi
     .py                                         ->  black
     .md / .json / .yaml / .yml / .clang-format  ->  prettier
+    其余忽略
 
-其余文件一律忽略。匹配 EXCLUDE_DIR_PATTERNS（整棵子树）或 EXCLUDE_FILE_PATTERNS
-的文件不处理。文件一律按 UTF-8 处理：非合法 UTF-8 报错并跳过（不猜测、不转码），
-带 BOM 的在写回时剥除。
+命中 EXCLUDE_DIR_PATTERNS（整棵子树）或 EXCLUDE_FILE_PATTERNS 的文件不处理。
+按 UTF-8 处理：非法编码报错跳过（不猜测、不转码），写回时剥 BOM。
 
--i 模式把每个文件处理后的（修改时间, 大小）记入项目根目录下的 CACHE_FILENAME
-（每个被格式化的目录各一份，互不干扰），下次命中则跳过；脚本自身、格式化器或
-配置变化会使缓存整体失效（见 environment_fingerprint）。
+-i 模式把各文件处理后的（修改时间, 大小）记入项目根目录的 CACHE_FILENAME
+（每项目一份，互不干扰），命中即跳过；脚本自身、格式化器或配置变化会使缓存
+整体失效（见 environment_fingerprint）。
 
-用法：
-    python format.py [项目根目录] [-i] [--no-cache]
-
-参数：
-    项目根目录      默认当前目录
-    -i, --in-place  原地改写文件；缺省只列出将被覆盖的文件
-    --no-cache      忽略缓存，强制重跑（仅 -i 模式有意义）
+用法：python format.py [项目根目录] [-i] [--no-cache]
+    项目根目录   默认当前目录
+    -i           原地改写；缺省仅列出候选文件
+    --no-cache   忽略缓存强制重跑（仅 -i 有效）
 """
 
 import argparse
@@ -39,8 +36,7 @@ import time
 from pathlib import Path
 from typing import Callable, NamedTuple
 
-# Windows 上 print 默认把 \n 写成 \r\n，且重定向时 stdout 为块缓冲，
-# 会让下游管道收到带 \r 的路径并打乱 stdout/stderr 的输出顺序，这里统一修正
+# Windows 下 print 输出 \r\n、重定向时又块缓冲，会污染管道并乱序，统一修正
 for _stream in sys.stdout, sys.stderr:
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(
@@ -50,12 +46,11 @@ for _stream in sys.stdout, sys.stderr:
             line_buffering=True,
         )
 
-# 缓存写在被格式化的项目根目录：每个项目各一份，互不覆盖；
-# 缓存结构变化时递增版本号使旧缓存失效
+# 缓存放被格式化的项目根目录，各项目互不干扰；结构变化时递增版本号作废旧缓存
 CACHE_FILENAME = ".format_cache.json"
 CACHE_VERSION = 1
 
-# 命中则整棵子树不处理（glob 通配，大小写不敏感）
+# 命中则整棵子树跳过（glob，忽略大小写）
 EXCLUDE_DIR_PATTERNS = [
     ".ai",
     ".claude",
@@ -69,14 +64,14 @@ EXCLUDE_FILE_PATTERNS = [
     # 由 test/numeric/gen_*_cases.py 生成
     "big_int_cases.inc",
     "big_dec_cases.inc",
-    # 缓存文件（写在被格式化的项目根目录，每次运行整体重写）
+    # 缓存文件，每次运行整体重写
     CACHE_FILENAME,
 ]
-# 单个格式化器进程的超时（秒），防止工具挂起拖住整批
+# 单次格式化超时（秒），防工具挂起拖住整批
 TIMEOUT_SECONDS = 60
-# 项目统一 UTF-8 无 BOM，读入时剥除
+# UTF-8 BOM，读入时剥除
 UTF8_BOM = b"\xef\xbb\xbf"
-# 会影响格式结果的配置文件，纳入环境指纹
+# 影响格式结果的配置文件，纳入指纹
 CONFIG_FILENAMES = [".clang-format", ".gersemirc"]
 
 
@@ -106,18 +101,18 @@ class Formatter(NamedTuple):
                 timeout=TIMEOUT_SECONDS,
             )
         except subprocess.TimeoutExpired:
-            # TimeoutExpired 不是 OSError，须转成 FormatError 才能被统一捕获
+            # TimeoutExpired 非 OSError，转 FormatError 以统一捕获
             raise FormatError(
-                f"{self.command} 超过 {TIMEOUT_SECONDS} 秒未返回，已放弃该文件"
+                f"{self.command} 超过 {TIMEOUT_SECONDS} 秒未返回，放弃该文件"
             ) from None
         detail = result.stderr.decode("utf-8", errors="replace").strip()
         if result.returncode != 0:
             raise FormatError(detail or f"{self.command} 退出码 {result.returncode}")
         if original and not result.stdout:
-            # 退出码为 0 却无输出，直接写回会清空源文件
+            # 退出码 0 却无输出，直接写回会清空文件
             raise FormatError(detail or f"{self.command} 退出码 0 但无输出")
         if detail:
-            # 成功时的告警也要展示，不能被吞掉
+            # 成功时的 stderr 告警也要展示
             report_progress(
                 f"警告：{self.command}（{path}）：{indent_detail(detail)}",
                 to_stderr=True,
@@ -129,7 +124,7 @@ class FormatError(RuntimeError):
     """单个文件格式化失败"""
 
 
-# 循环中是否已输出逐文件消息，决定结尾是否补空行隔开总结
+# 是否已输出逐文件消息，决定结尾是否补空行隔开总结
 _progress_printed = False
 
 
@@ -141,7 +136,7 @@ def report_progress(message: str, *, to_stderr: bool = False) -> None:
 
 
 def indent_detail(detail: str) -> str:
-    """把多行信息缩进成整块，避免续行与其它输出混淆"""
+    """多行信息整体缩进，避免与其它输出混淆"""
     lines = detail.splitlines()
     if len(lines) <= 1:
         return detail
@@ -179,7 +174,7 @@ PRETTIER = Formatter(
     install_hint="npm install -g prettier",
 )
 
-# 后缀 -> 格式化器；支持新语言时在此追加即可
+# 后缀 -> 格式化器；支持新语言在此追加
 FORMATTERS = {
     ".cpp": CLANG_FORMAT,
     ".h": CLANG_FORMAT,
@@ -199,7 +194,7 @@ FORMATTERS_BY_NAME = {
 
 
 def matches_any(name: str, patterns: list[str]) -> bool:
-    """大小写不敏感的通配符匹配，保证跨平台行为一致"""
+    """忽略大小写的通配匹配，跨平台行为一致"""
     name = name.lower()
     return any(fnmatch.fnmatchcase(name, pattern.lower()) for pattern in patterns)
 
@@ -214,7 +209,7 @@ def formatter_for(path: Path) -> Formatter | None:
 
 
 def find_target_files(project_dir: Path) -> list[Path]:
-    """查找待格式化文件，跳过排除目录（整棵子树）与排除文件"""
+    """列出待格式化文件，跳过排除目录（整棵子树）与排除文件"""
     files = []
     for dirpath, dirnames, filenames in os.walk(project_dir):
         dirnames[:] = [d for d in dirnames if not matches_any(d, EXCLUDE_DIR_PATTERNS)]
@@ -230,23 +225,20 @@ def find_target_files(project_dir: Path) -> list[Path]:
 
 
 def ensure_utf8(original: bytes) -> None:
-    """编码闸门：非合法 UTF-8 抛 FormatError 并跳过该文件。
+    """非合法 UTF-8 抛 FormatError（只拦不转码）。
 
-    只拦截不转码。prettier 会把坏字节解成 U+FFFD 且以退出码 0 输出，
-    直接写回即损坏原文，故须在调用格式化器之前检查。"""
+    prettier 会把坏字节解成 U+FFFD 且退出码为 0，直接写回会损坏原文，
+    故须在调格式化器前检查。"""
     try:
         original.decode("utf-8")
     except UnicodeDecodeError as e:
         raise FormatError(
-            f"不是合法 UTF-8（第 {e.start} 字节起：{e.reason}），已跳过；"
-            f"请转码为 UTF-8 后重新运行"
+            f"非法 UTF-8（第 {e.start} 字节起：{e.reason}），跳过；请先转码"
         ) from None
 
 
 def write_atomic(path: Path, data: bytes) -> None:
-    """先写同目录临时文件再原子替换，避免中断留下残缺内容。
-
-    临时文件须与目标同目录，跨盘替换不是原子操作。"""
+    """写同目录临时文件后原子替换，防中断留残缺；跨盘替换非原子，临时文件须同目录"""
     temporary = path.with_name(path.name + ".format-tmp")
     try:
         temporary.write_bytes(data)
@@ -270,14 +262,14 @@ def format_file(path: Path) -> bool:
 
 
 def needed_formatters(files: list[Path]) -> list[Formatter]:
-    """本批文件所需的格式化器，按命令名排序（保证环境指纹稳定）"""
+    """本批所需格式化器，按命令名排序（保证指纹稳定）"""
     by_command = {formatter_for(f).command: formatter_for(f) for f in files}
-    # 只对命令名排序再查表，避免比较到含 lambda 的 Formatter
+    # 按命令名排序查表，避免比较含 lambda 的 Formatter
     return [by_command[command] for command in sorted(by_command)]
 
 
 def missing_formatters(files: list[Path]) -> list[Formatter]:
-    """所需但不在 PATH 中的格式化器"""
+    """所需但不在 PATH 的格式化器"""
     return [fm for fm in needed_formatters(files) if which_cached(fm.command) is None]
 
 
@@ -293,11 +285,10 @@ def stat_signature(path: Path | None) -> list[int] | None:
 
 
 def environment_fingerprint(project_dir: Path, formatters: list[Formatter]) -> str:
-    """把影响格式结果的外部因素压成指纹：脚本自身、格式化器可执行文件、配置文件。
+    """外部因素指纹：脚本自身、格式化器可执行文件、配置文件，任一变化即缓存失效。
 
-    任一项变化都视为缓存失效。用可执行文件的（路径, 修改时间, 大小）代替
-    --version 查询，省去逐工具跑版本的时间；若升级未替换可执行文件则此指纹
-    察觉不到变化，此时用 --no-cache 强制重跑。"""
+    用（路径, 修改时间, 大小）代替 --version 查询；升级未替换可执行文件时
+    指纹察觉不到，可用 --no-cache 强制重跑。"""
     parts = [f"v{CACHE_VERSION}", f"self={stat_signature(Path(__file__).resolve())}"]
     for fm in formatters:
         exe = which_cached(fm.command)
@@ -309,7 +300,7 @@ def environment_fingerprint(project_dir: Path, formatters: list[Formatter]) -> s
 
 
 def load_cache(cache_path: Path, fingerprint: str) -> dict[str, list[int]]:
-    """读缓存；文件缺失、损坏或指纹不符时一律视为无缓存"""
+    """读缓存；缺失/损坏/指纹不符均视为无缓存"""
     try:
         with cache_path.open(encoding="utf-8") as fp:
             data = json.load(fp)
@@ -324,7 +315,7 @@ def load_cache(cache_path: Path, fingerprint: str) -> dict[str, list[int]]:
 def save_cache(
     cache_path: Path, fingerprint: str, entries: dict[str, list[int]]
 ) -> None:
-    """写缓存：先写临时文件再替换，防止留下半截 JSON"""
+    """先写临时文件再替换，防留下半截 JSON"""
     temporary = cache_path.with_name(CACHE_FILENAME + ".tmp")
     try:
         with temporary.open("w", encoding="utf-8", newline="\n") as fp:
@@ -337,9 +328,9 @@ def save_cache(
             )
         os.replace(temporary, cache_path)
     except OSError as e:
-        # 缓存写失败不影响本次结果，最多下次全量重跑
+        # 写缓存失败不影响结果，最多下次全量重跑
         print(
-            f"警告：缓存写入失败：{cache_path}（{e}），下次将全量重跑",
+            f"警告：写缓存失败：{cache_path}（{e}），下次全量重跑",
             file=sys.stderr,
         )
 
@@ -353,23 +344,23 @@ def main() -> None:
         "-i",
         "--in-place",
         action="store_true",
-        help="原地改写文件；缺省只列出将被覆盖的文件",
+        help="原地改写文件；缺省仅列出候选文件",
     )
     parser.add_argument(
         "--no-cache",
         action="store_true",
-        help="忽略缓存，强制重跑（仅 -i 模式有意义）",
+        help="忽略缓存强制重跑（仅 -i 有效）",
     )
     args = parser.parse_args()
     if args.no_cache and not args.in_place:
         # 缺省模式不读写缓存，此组合无任何效果
-        parser.error("--no-cache 仅在 -i 模式下有意义")
+        parser.error("--no-cache 仅适用于 -i")
 
     started_at = time.perf_counter()
     try:
         run(args)
     finally:
-        print(f"总耗时 {time.perf_counter() - started_at:.2f} 秒", file=sys.stderr)
+        print(f"耗时 {time.perf_counter() - started_at:.2f} 秒", file=sys.stderr)
 
 
 def run(args: argparse.Namespace) -> None:
@@ -385,14 +376,14 @@ def run(args: argparse.Namespace) -> None:
     _progress_printed = False  # 多次调用（含 import 复用）也从干净状态开始
 
     if not args.in_place:
-        # 缺省模式：stdout 只输出文件名，便于管道接其它命令
+        # 缺省模式：stdout 只输出文件名，便于管道
         for f in files:
             print(f)
         return
 
     if missing := missing_formatters(files):
         print(
-            "错误：以下格式化器不在 PATH 中，未处理任何文件。请按提示安装后重新运行：",
+            "错误：以下格式化器不在 PATH，未处理任何文件。请安装后重试：",
             file=sys.stderr,
         )
         for fm in missing:
@@ -400,10 +391,10 @@ def run(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     fingerprint = environment_fingerprint(project_dir, needed_formatters(files))
-    # 缓存放被格式化的项目根目录：各项目互不干扰，交替格式化不会互相清空
+    # 缓存放被格式化目录下，各项目互不干扰
     cache_path = project_dir / CACHE_FILENAME
     cached = {} if args.no_cache else load_cache(cache_path, fingerprint)
-    # 只记录本次仍存在的文件，同时清除已删除文件的陈旧条目
+    # 只留本次仍存在的文件，顺带清掉已删除文件的旧条目
     current: dict[str, list[int]] = {}
 
     reformatted_count = unchanged_count = failed_count = skipped_count = 0
@@ -412,18 +403,18 @@ def run(args: argparse.Namespace) -> None:
         key = str(f)
         signature = stat_signature(f)
         if signature is not None and cached.get(key) == signature:
-            # 文件自上次处理后未变，无需再次格式化
+            # 自上次处理后未变，无需再格式化
             current[key] = signature
             skipped_count += 1
             continue
         try:
             changed = format_file(f)
         except (FormatError, OSError) as e:
-            # 单个文件失败不中断整批；失败文件不记缓存，下次重试
+            # 单文件失败不中断整批；失败不记缓存，下次重试
             report_progress(f"格式化失败：{f}：{indent_detail(str(e))}", to_stderr=True)
             failed_count += 1
             continue
-        # 记录处理后的状态（已改写的文件时间与大小随之更新）
+        # 记录处理后的签名（改写过则随之更新）
         if (written := stat_signature(f)) is not None:
             current[key] = written
         if changed:
@@ -437,17 +428,17 @@ def run(args: argparse.Namespace) -> None:
     if _progress_printed:
         print()  # 与逐文件输出之间空一行
 
-    print("未能全部完成! 💥 💔 💥" if failed_count > 0 else "全部完成! ✨ 🍰 ✨")
+    print("未能完成! 💥 💔 💥" if failed_count > 0 else "全部完成! ✨ 🍰 ✨")
 
     summary_parts = []
     if reformatted_count > 0:
-        summary_parts.append(f"已重新格式化 {reformatted_count} 个文件")
+        summary_parts.append(f"已格式化 {reformatted_count} 个文件")
     if unchanged_count > 0:
-        summary_parts.append(f"{unchanged_count} 个文件内容无变化")
+        summary_parts.append(f"{unchanged_count} 个文件无变化")
     if skipped_count > 0:
-        summary_parts.append(f"{skipped_count} 个文件已跳过（上次处理后未变化）")
+        summary_parts.append(f"{skipped_count} 个文件已跳过（上次处理后未变）")
     if failed_count > 0:
-        summary_parts.append(f"{failed_count} 个文件处理失败")
+        summary_parts.append(f"{failed_count} 个文件失败")
     if summary_parts:
         print("，".join(summary_parts) + "。")
     else:
