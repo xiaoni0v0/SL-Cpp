@@ -38,7 +38,7 @@ git log/commit message 的职责，不是这里的。代码怎么组织、有哪
   （属性/迭代器/映射）、作用域（帧栈/`global` 声明/作用域确定规则/捕获/惯用法）、异常。
 - **4 内置对象**：开头一段讲**内置表**（见下）；4.1 内置函数（类型自省→属性访问→类构建辅助→I/O→
   `eval`→`eval_isolated`→`exit`）；4.2 内置类（`object`/`type` 在最前）；4.3 内置模块
-  （`numbers`/`protocols`/`exceptions`）；4.4 继承关系图；4.5 无名类型（存在但不在内置表里、
+  （`numbers`/`protocols`/`exceptions`）；4.4 继承关系图；4.5 不入内置表的类（存在但写不出名字、
   写不出名字的那批）。
 
 **`⟦X⟧` 记号**：表示 `X` 可选（出现 0 或 1 次），纯粹是文档描述语法用的元符号，不是 SL 语法本身。
@@ -587,9 +587,9 @@ A 文件里的函数被 B 文件调用时全局变量会跑到 B 上去，是动
 
 **改过一次**：原来的结论是"这种类干脆别写进 `SL.md`"，理由是 4.2/4.4 那两处是"内置表里有哪些名字"的
 清单。后来发现这么做等于让规范整片缺一批真实存在的类——`type(某个函数)` 是什么、绑定方法是什么类的
-实例，规范都答不上来。现在改成**单开 4.5「无名类型」**：判据是"正常写 SL 时不应该、也没必要主动去动
-它们"，成员有 `NoneType`/`SingletonType`/`CompoundType`（从 4.2 挪过去的）、`function`/
-`builtin_function`/`method`/`MethodDescriptor`。4.2 里那三个的小节号保留成一行重定向，**没有重排
+实例，规范都答不上来。现在改成**单开 4.5「不入内置表的类」**：判据是"正常写 SL 时不应该、也没必要主动去动
+它们"，成员有 `NoneType`/`SingletonType`/`CompoundType`（从 4.2 挪过去的）、`Function`/
+`BuiltinFunction`/`Method`/`MethodDescriptor`。4.2 里那三个的小节号保留成一行重定向，**没有重排
 编号**——`4.2.x` 在仓库里有八十多处引用，为消除三个空位去动它们不划算。
 
 **类体收集方法不按 `protocols.Callable`**：只把函数对象和 `FuncGroup` 的实例包成 `MethodDescriptor`。
@@ -648,27 +648,27 @@ JS 靠 `super()` 隐式改写 `this` 躲掉了它，Smalltalk 没躲，Ruby 干�
 ### 调用的终点：`__op_call__` 必须有基础情形，四种"原语可调用"是它
 
 `f()` 走 `type(f).__op_call__` 是条**递归**规则，原来的 SL.md 3.5 只写了递归那一支，没有终点——查到的
-`__op_call__` 自己也得被调用。补上的基础情形是四种**原语可调用对象**：`function`、`builtin_function`、
-`method`、`FuncGroup`，解释器直接认得，不再查它们的 `__op_call__`。
+`__op_call__` 自己也得被调用。补上的基础情形是四种**原语可调用对象**：`Function`、`BuiltinFunction`、
+`Method`、`FuncGroup`，解释器直接认得，不再查它们的 `__op_call__`。
 
 **关键认识：基础情形是解释器里的一个判断，不是对象图里的某个节点。** 不可能靠"再定义一个
 `__op_call__`"来终止。CPython 结构相同——`type(f)->tp_call` 是 C 函数指针，不是又一个 Python 对象。
 
 类对象不是原语：`C(...)` 走 3.4.8 取 `C.__construct__`（classmethod → 绑定方法）落回原语。典型深度
-是 2 跳（`a()` → `type(a).__op_call__` 绑定成 `method` → 原语）。链**可以无限**：
+是 2 跳（`a()` → `type(a).__op_call__` 绑定成 `Method` → 原语）。链**可以无限**：
 `class A { __op_call__ = 某个 A 的实例 }`（按 3.4.8 第 7 条原样进属性表、不绑定）。按 bytecode.md
 "C++ 栈不得随 SL 帧栈增长"的硬约束，这条链在主循环里走，吃的是 `RecursionError`，不会爆 C++ 栈。
 
 ### 函数对象：SL 函数与内置函数是两个 C++ 类、两个 SL 类型
 
 C++ 侧拆开，判据就是"字段表不同"（跟 `NamedSingleton` 那四个合并的案例正好相反）：`Function` 持
-`Ref<Code>` 等一串 GC 要遍历的引用；`NativeFunction` 持一个裸 C++ 函数指针，GC 不管、不占 SL 堆。
+`Ref<Code>` 等一串 GC 要遍历的引用；`BuiltinFunction` 持一个裸 C++ 函数指针，GC 不管、不占 SL 堆。
 
-SL 侧也是两个类型（`function` / `builtin_function`，SL.md 4.5）。**不合并成一个**：合了之后 SL 层就得
+SL 侧也是两个类型（`Function` / `BuiltinFunction`，SL.md 4.5）。**不合并成一个**：合了之后 SL 层就得
 回答"`print` 的函数体怎么内省"，只能是 `None` 或抛异常，凭空造一个半成品接口。有没有 SL 函数体是真实
 差别，让类型如实反映它。
 
-**三个函数类型（含 `method`）都是 final**：`CALL` 指令靠比 `f->type()` **指针**决定是压 `ByteCodeFrame`、
+**三个函数类型（含 `Method`）都是 final**：`CALL` 指令靠比 `f->type()` **指针**决定是压 `ByteCodeFrame`、
 调 native、还是去查 `__op_call__`。允许继承的话 `type(f)` 可能是子类，指针比较失效；放宽成 MRO 查找
 会拖慢最热的指令。要包装可调用对象，用普通类加 `__op_call__`，这条路一直开着。
 

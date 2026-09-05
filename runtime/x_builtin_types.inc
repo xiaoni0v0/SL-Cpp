@@ -3,9 +3,9 @@
 // 顺序即建立顺序，基类必须排在自己的子类前面。这份清单同时驱动三处：枚举、访问器声明/定义、
 // bootstrap 的建立循环——加一个内置类型只改这一个文件。
 //
-// 这张表是"运行期存在哪些类"，不是"内置表里有哪些名字"——SL.md 4.5 那批无名类型（NoneType、
-// SingletonType 等）同样要在这里建。function/builtin_function/method/MethodDescriptor 也属于那一批，
-// 等函数对象、描述器真正落地时再加进来。
+// 这张表是"运行期存在哪些类"，不是"内置表里有哪些名字"——SL.md 4.5 那批不入内置表的类（NoneType、
+// SingletonType 等）同样要在这里建。function/builtin_function/method/MethodDescriptor
+// 也属于那一批， 等函数对象、描述器真正落地时再加进来。
 //
 // 继承关系照抄 SL.md 4.4 那张图。**注意 bool 的父类是 numbers.Real 而不是 int**
 // （跟 Python 不同，SL 里 bool 不是 int 的子类，见 SL.md 4.2.5）。
