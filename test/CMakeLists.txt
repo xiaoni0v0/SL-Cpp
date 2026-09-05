@@ -20,9 +20,10 @@ function(sl_add_test_target target)
     add_test(NAME ${target} COMMAND ${target})
 endfunction()
 
-sl_add_test_target(SL_Cpp_Numeric_BigInt_Tests
-        LIBS sl_numeric
-        SOURCES
+sl_add_test_target(
+    SL_Cpp_Numeric_BigInt_Tests
+    LIBS sl_numeric
+    SOURCES
         numeric/main_test.cpp
         numeric/01_bigint/test_utils.h
         numeric/01_bigint/construct_convert_test.cpp
@@ -34,9 +35,10 @@ sl_add_test_target(SL_Cpp_Numeric_BigInt_Tests
         numeric/big_int_cases.inc
 )
 
-sl_add_test_target(SL_Cpp_Numeric_BigDec_Tests
-        LIBS sl_numeric
-        SOURCES
+sl_add_test_target(
+    SL_Cpp_Numeric_BigDec_Tests
+    LIBS sl_numeric
+    SOURCES
         numeric/main_test.cpp
         numeric/02_bigdec/test_utils.h
         numeric/02_bigdec/construct_context_test.cpp
@@ -48,9 +50,10 @@ sl_add_test_target(SL_Cpp_Numeric_BigDec_Tests
         numeric/big_dec_cases.inc
 )
 
-sl_add_test_target(SL_Cpp_Lexer_Tests
-        LIBS sl_lexer
-        SOURCES
+sl_add_test_target(
+    SL_Cpp_Lexer_Tests
+    LIBS sl_lexer
+    SOURCES
         lexer/test_utils.h
         lexer/main_test.cpp
         # 注释
@@ -77,9 +80,10 @@ sl_add_test_target(SL_Cpp_Lexer_Tests
         lexer/07_errors/position_tracking_test.cpp
 )
 
-sl_add_test_target(SL_Cpp_Parser_Tests
-        LIBS sl_parser
-        SOURCES
+sl_add_test_target(
+    SL_Cpp_Parser_Tests
+    LIBS sl_parser
+    SOURCES
         parser/test_utils.h
         parser/main_test.cpp
         parser/01_literals/literals_test.cpp
@@ -113,9 +117,10 @@ sl_add_test_target(SL_Cpp_Parser_Tests
 )
 target_precompile_headers(SL_Cpp_Parser_Tests PRIVATE <nlohmann/json.hpp>)
 
-sl_add_test_target(SL_Cpp_Analyzer_Tests
-        LIBS sl_analyzer
-        SOURCES
+sl_add_test_target(
+    SL_Cpp_Analyzer_Tests
+    LIBS sl_analyzer
+    SOURCES
         # 测试工具（复用 Parser 测试的 parse_as_file/parse_json 等）
         parser/test_utils.h
         analyzer/test_utils.h
@@ -123,7 +128,6 @@ sl_add_test_target(SL_Cpp_Analyzer_Tests
         analyzer/main_test.cpp
         analyzer/analyzer_facade_test.cpp
         analyzer/recheck_after_fold_test.cpp
-
         # semantic_checker
         analyzer/semantic_checker/scope_test.cpp
         analyzer/semantic_checker/lvalue_test.cpp
@@ -135,7 +139,6 @@ sl_add_test_target(SL_Cpp_Analyzer_Tests
         analyzer/semantic_checker/eval_test.cpp
         analyzer/semantic_checker/single_expr_test.cpp
         analyzer/semantic_checker/defensive_test.cpp
-
         # expr_folder
         analyzer/expr_folder/arithmetic_test.cpp
         analyzer/expr_folder/bitwise_test.cpp
