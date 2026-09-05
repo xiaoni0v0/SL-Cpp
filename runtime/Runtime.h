@@ -45,11 +45,11 @@ class Runtime final : public GcRootSource {
     void build_singletons();
 
     // 放掉全部内置类型与单例的引用
-    void release_all();
-    // 把运行时拆干净：放引用、摘根源、扫一轮。init() 中途失败和正常 shutdown 共用它
+    void release_all_refs();
+    // 把运行时拆干净
     static void tear_down();
 
-    // 取运行时；没 init() 或已经 shutdown() 就访问，抛 InternalError
+    // 取单例
     [[nodiscard]] static Runtime &instance();
     // 各类型访问器共用的实现，省得宏展开出一堆同样的函数体
     [[nodiscard]] static Type *builtin_type(BuiltinType id);
@@ -59,8 +59,7 @@ class Runtime final : public GcRootSource {
     // 而且这本来就是给 Heap 通过 GcRootSource* 调用的公开契约，不是该收紧的内部实现细节）
     void visit_roots(RefVisitor &visitor) override;
 
-    // 重复 init / 未 init 就 shutdown 都是 InternalError：这种顺序错误只可能是实现自己的 bug。
-    // init() 中途抛异常时会把已经建起来的部分拆干净再把异常放出去，不留半初始化的运行时
+    // init() 中途抛异常时会回滚
     static void init();
     static void shutdown();
 

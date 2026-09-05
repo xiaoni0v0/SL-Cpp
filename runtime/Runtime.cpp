@@ -17,6 +17,7 @@ struct BuiltinTypeSpec {
 constexpr BuiltinTypeSpec kBuiltinTypeSpecs[]{
 #define X(id, accessor, name, base) {name, BuiltinType::base},
 #include "x_builtin_types.inc"
+
 #undef X
 };
 
@@ -70,7 +71,7 @@ void Runtime::visit_roots(RefVisitor &visitor) {
     visitor.visit(singletons_.false_);
 }
 
-void Runtime::release_all() {
+void Runtime::release_all_refs() {
     singletons_ = {};
     for (Ref<Type> &type : types_) type.reset();
 }
@@ -79,7 +80,7 @@ void Runtime::tear_down() {
     // 顺序不能反：先放引用、再摘根源、最后扫一轮。
     // 内置类型之间那个环（每个类型都强引用元类 type，而 type 的元类是它自己）引用计数解不开，
     // 只能靠这一轮标记清扫——此时没有任何根，于是整个堆都是垃圾
-    g_runtime->release_all();
+    g_runtime->release_all_refs();
     Heap::remove_root_source(g_runtime.get());
     Heap::collect();
 
