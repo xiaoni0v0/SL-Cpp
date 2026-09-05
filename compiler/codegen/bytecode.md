@@ -307,7 +307,7 @@ CPython 对 star-unpacking 的处理一致，是真实语言限制不是内部�
 
 | 指令           | 前                                    | 后         | 行为                                                                                                                      |
 | -------------- | ------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `CALL n`       | `… f a₁ … aₙ`                         | `… v`      | 压被调对象的帧（SL 函数 → `ByteCodeFrame`，内置 → `NativeFrame`）。只有位置实参                                           |
+| `CALL n`       | `… f a₁ … aₙ`                         | `… v`      | 按 SL.md 3.5 分派被调对象，见下。只有位置实参                                                                             |
 | `CALL_KW n`    | `… f a₁ … aₙ names`                   | `… v`      | 同上，`names` 是常量表里的名字元组，末尾 `len(names)` 个实参按名字传                                                      |
 | `CALL_EX`      | `… f args kwargs`                     | `… v`      | 同上，`*`/`**` 展开时用                                                                                                   |
 | `MAKE_FUNC c`  | `… captures params ret_type doc name` | `… f`      | 弹 5 项 + 常量表第 `c` 项的 `Code`，建函数对象，见下                                                                      |
@@ -316,8 +316,14 @@ CPython 对 star-unpacking 的处理一致，是真实语言限制不是内部�
 | `IMPORT n`     | `…`                                   | `… m`      | 关键字形态 `import a.b.c`：名字表第 `n` 项是完整点分名，压 `NativeFrame` 跑加载算法，压入**第一段**模块对象               |
 | `EVAL`         | `… args kwargs`                       | `… v`      | 绑出 `code`（失败 `DispatchError`，非 str `TypeError`），解析成恰好一条表达式（否则 `SyntaxError`），编译，压 `EvalFrame` |
 
+**`CALL` 系列的分派**：比被调对象的 `type()` **指针**（这几个类型都是 final，见 SL.md 4.5，所以指针相等
+就够，不用走 MRO）——`function` 压 `ByteCodeFrame`；`builtin_function` 纯计算就地算完、要回调 SL 就压
+`NativeFrame`；`method` 把绑定的对象插到实参最前面重新分派；`FuncGroup` 逐个试。都不是就压一个
+`NativeFrame` 去查 `type(f)` 的 `__op_call__`，拿到结果重新分派——这一步必须压帧，因为查找会走描述器、
+可能回调 SL，而且链可以无限长（靠帧栈深度吃 `RecursionError`）。
+
 实参绑定算法（槽位填充、`*args`/`**kwargs` 收集、类型检查、函数族逐个试）不摊成字节码，在 `CALL` 系列
-指令实现里。`EVAL` 编译 `code` 时交给语义检查的 `in_local_scope` 取
+指令实现里；**内置函数和 SL 函数共用这一套**，所以内置函数也要声明形参与类型注解。`EVAL` 编译 `code` 时交给语义检查的 `in_local_scope` 取
 `target_.globals_frame_ != target_`。
 
 **没有 `IMPORT_CALL`**：调用形态 `import(expr, kwarg=v, ...)` 的实参形状本来就跟普通调用一致，没必要

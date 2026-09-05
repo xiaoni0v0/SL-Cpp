@@ -1035,7 +1035,24 @@ class MyClass {
 
 ### 3.5 调用
 
-调用 `x(arg, kwarg=v, ...)` 时，在 `type(x)` 的 MRO 上查找 `__op_call__` 并调用；否则抛出 `TypeError`。
+调用 `x(arg, kwarg=v, ...)` 时，按下面两步确定实际执行什么：
+
+1. 若 `x` 是**原语可调用对象**（见下），直接执行它，结束；
+2. 否则在 `type(x)` 的 MRO 上查找 `__op_call__`——在描述器表中找到则 `get(x)`（即把 `x` 绑为第一参数），
+   在属性表中找到则原样取用，全部找不到则抛出 `TypeError`；把取到的结果当作新的被调对象，回到第 1 步。
+
+**原语可调用对象**是这条规则的终点，解释器直接认得它们，不会再去查它们的 `__op_call__`：
+
+- `function`（4.5.4）：按下面的实参对应规则绑定，然后执行函数体；
+- `builtin_function`（4.5.5）：同上，只是函数体由解释器自身实现；
+- `method`（4.5.6）：把被绑定的对象插到实参最前面，再调用被绑定的那个可调用对象；
+- `FuncGroup`（4.2.25）：自上而下逐个试，选中之后落回上面三种。
+
+没有这一步，规则就没有终点——查 `__op_call__` 查到的东西自己也得被调用。类对象不在这四种之内：
+`C(...)` 走 3.4.8 的构造协议，取到的 `C.__construct__` 是个绑定方法，于是落回第 1 步。
+
+第 2 步可以重复任意多次（`class A { __op_call__ = 某个 A 的实例 }` 就能造出一条无限的链），
+每一跳都占一层调用深度，链不收敛时抛出 `RecursionError`。
 
 调用中的实参分两组，组内顺序不限，两组顺序如下，违反则抛出 `SyntaxError`：
 
@@ -1498,6 +1515,8 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 本章 4.1/4.2 列出的所有内置函数、内置类，都通过一张固定、唯一的**内置表**以名字暴露给标识符解析规则（见 3.10.3）。
 
+4.5 列出的是另一批类：它们同样存在、`type(x)` 拿得到，但**不在内置表里**，源码中写不出它们的名字。
+
 ### 4.1 内置函数
 
 #### 4.1.1 `isinstance(obj, type)`
@@ -1626,7 +1645,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.2.3 NoneType
 
-只有一个实例，即 `None`。
+无名类型，移至 4.5.1。
 
 #### 4.2.4 int
 
@@ -1814,42 +1833,11 @@ decimal.DecimalException
 
 #### 4.2.17 SingletonType
 
-包含 SL 的部分单例对象：
-
-- Ellipsis
-- NotImplemented
-- StopIteration
+无名类型，移至 4.5.2。
 
 #### 4.2.18 CompoundType
 
-用 `|`, `!`, `?`, `[]` 可以创建**复合类**。
-
-1. `|` 表示两种类型均可。例如 `isinstance(1, int | str)` 为 `True`。
-2. `!` 表示精确类（即不允许子类）。
-   例如 `isinstance(1, int!)` 为 `True`，而 `isinstance(1, numbers.Real!)` 为 `False`。
-3. `?` 表示可以为 `None`。例如 `isinstance(None, int?)` 为 `True`。
-4. `[]` 对容器类，表示容器中元素的类型。
-   1. 对于 `tuple`
-      1. 对于 `tuple[int, str]` 可传入多个类型，表示既检查元组长度也检查元素类型
-         语义为“元组只能有两个元素且第一个元素是 int 类型且第二个元素是 str 类型”
-      2. 对于 `tuple[int, ...]` 要求只能传入两个参数，其中第一个为类型，第二个为 `...`，表示只检查元素类型
-         语义为“元组的每个元素都是 int 类型”。注意此种类型检查允许空元组
-
-   2. 对于 `list`，同上
-
-   3. 对于 `dict`
-      `dict[str, int]` 表示键的类型均为 `str`，值的类型均为 `int`。允许空字典；
-
-   4. 对于 `set`
-      `set[int]` 表示元素的类型均为 `int`。允许空集合；
-
-   **注意**：对于此种类型检查，平均时间复杂度至少是 $\mathcal O(n)$，使用前需谨慎权衡。
-   仔细考虑是否真的需要 `list[int, ...]` 而不是 `list`。
-
-以上构造复合类的方式均可嵌套使用，但应**尽量避免嵌套过深**，否则可能导致性能问题。
-
-以上检查均有短路性，但不应依赖于此，因为检查的顺序不确定，
-例如 `int | str?` 的实际实现*可能*为 `None | int | str` 而非 `int | str | None`。
+无名类型，移至 4.5.3。
 
 #### 4.2.19 Descriptor
 
@@ -2035,22 +2023,28 @@ IOError
 
 以后需要更细分的 IO 异常（如文件不存在、权限不足）时，继承 `IOError` 加入本模块，不修改全局异常列表。
 
-### 4.4 内置类继承关系图
+### 4.4 类继承关系图
+
+带 `*` 的是无名类型，见 4.5。
 
 - `object`
-  - `NoneType`
+  - `NoneType` *
   - `type`
   - `staticmethod`
   - `super`
-  - `SingletonType`
+  - `SingletonType` *
   - `FuncGroup`
-  - `CompoundType`
+  - `function` *
+  - `builtin_function` *
+  - `method` *
+  - `CompoundType` *
   - `TypeVar`
   - `decimal.Context`
   - `Descriptor`
     - `property`
     - `classmethod`
     - `unsupported`
+    - `MethodDescriptor` *
   - `str`
   - `tuple`
   - `list`
@@ -2084,6 +2078,95 @@ IOError
         - `decimal.DecimalException`
       - `IOError`
         - `exceptions.EncodingError`
+
+### 4.5 无名类型
+
+这批类确实存在、`type(x)` 拿得到，但不在内置表里，源码中**写不出它们的名字**，初始时也不在任何
+作用域内。判据是：正常写 SL 的时候不应该、也没必要主动去动它们——它们要么是某个具体对象天生的类
+（`None`、`Ellipsis`），要么是解释器造出来交给你用的东西（函数、绑定方法、描述器）。
+
+要拿到它们只能间接来：`type(None)`、`type(某个函数)`、`attrs(cls, 'descriptors')` 里的值，等等。
+
+`function`、`builtin_function`、`method` 三个都是 final（`__is_final_class__ = True`）：调用是最热的
+操作，解释器靠"被调对象是不是这几个类型"来决定直接执行还是去查 `__op_call__`（3.5），允许继承会让这个
+判定退化。要包装一个可调用对象，用普通类加 `__op_call__`。
+
+#### 4.5.1 NoneType
+
+只有一个实例，即 `None`。
+
+#### 4.5.2 SingletonType
+
+包含 SL 的部分单例对象：
+
+- Ellipsis
+- NotImplemented
+- StopIteration
+
+#### 4.5.3 CompoundType
+
+用 `|`, `!`, `?`, `[]` 可以创建**复合类**。
+
+1. `|` 表示两种类型均可。例如 `isinstance(1, int | str)` 为 `True`。
+2. `!` 表示精确类（即不允许子类）。
+   例如 `isinstance(1, int!)` 为 `True`，而 `isinstance(1, numbers.Real!)` 为 `False`。
+3. `?` 表示可以为 `None`。例如 `isinstance(None, int?)` 为 `True`。
+4. `[]` 对容器类，表示容器中元素的类型。
+   1. 对于 `tuple`
+      1. 对于 `tuple[int, str]` 可传入多个类型，表示既检查元组长度也检查元素类型
+         语义为“元组只能有两个元素且第一个元素是 int 类型且第二个元素是 str 类型”
+      2. 对于 `tuple[int, ...]` 要求只能传入两个参数，其中第一个为类型，第二个为 `...`，表示只检查元素类型
+         语义为“元组的每个元素都是 int 类型”。注意此种类型检查允许空元组
+
+   2. 对于 `list`，同上
+
+   3. 对于 `dict`
+      `dict[str, int]` 表示键的类型均为 `str`，值的类型均为 `int`。允许空字典；
+
+   4. 对于 `set`
+      `set[int]` 表示元素的类型均为 `int`。允许空集合；
+
+   **注意**：对于此种类型检查，平均时间复杂度至少是 $\mathcal O(n)$，使用前需谨慎权衡。
+   仔细考虑是否真的需要 `list[int, ...]` 而不是 `list`。
+
+以上构造复合类的方式均可嵌套使用，但应**尽量避免嵌套过深**，否则可能导致性能问题。
+
+以上检查均有短路性，但不应依赖于此，因为检查的顺序不确定，
+例如 `int | str?` 的实际实现*可能*为 `None | int | str` 而非 `int | str | None`。
+
+#### 4.5.4 function
+
+`func` 表达式（3.4.7）的值的类型，`__is_final_class__ = True`。
+
+一个函数对象持有：函数体、形参表与各处类型注解、默认值、捕获、函数名与文档字符串。调用它就是按 3.5
+绑定实参再执行函数体。能不能内省形参与函数体、通过哪些属性内省，尚未设计。
+
+#### 4.5.5 builtin_function
+
+内置函数（4.1）与内置类型上各方法的类型，`__is_final_class__ = True`。
+
+跟 `function` 的区别只有一个：函数体由解释器自身实现，不是 SL 代码，因而无法内省。实参对应、类型检查、
+`DispatchError` 的规则与 `function` 完全一致（3.5）——内置函数同样要声明形参与类型，走同一套绑定规则，
+不另开一套。
+
+#### 4.5.6 method
+
+绑定方法，`__is_final_class__ = True`。
+
+`MethodDescriptor` 经由实例访问时、以及 `classmethod`（4.2.22）的 `get` 返回的那个"把 `self`/`cls`
+绑定为第一参数的可调用对象"，就是这个类的实例。它持有被绑定的对象和被绑定的可调用对象两样；调用它
+就是把前者插到实参最前面，再调用后者。
+
+#### 4.5.7 MethodDescriptor
+
+`Descriptor`（4.2.19）的子类。类体收集属性时，函数对象和 `FuncGroup` 的实例被包成它存入描述器表；
+它的 `get(self, obj)` 按 `obj` 是不是类分两条路——规则都在 3.4.8。
+
+用 `attrs(cls, 'descriptors')`（4.1.8）能拿到它的实例，但写不出这个类的名字。
+
+#### 4.5.8 尚未落地的
+
+模块对象的类同属这一批，等 `import` 那一摊的对象设计定了再补进来。
 
 ## 5 即将加入
 
