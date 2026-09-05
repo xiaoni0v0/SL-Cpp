@@ -28,3 +28,5 @@ BreakAfterOpenBracketFunction: true
 BreakBeforeCloseBracketFunction: true
 BreakAfterOpenBracketBracedList: true
 BreakBeforeCloseBracketBracedList: true
+
+LineEnding: LF
