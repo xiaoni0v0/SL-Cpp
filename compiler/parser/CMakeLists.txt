@@ -1,5 +1,5 @@
 sl_add_module(
-    sl_parser
+    sl_compiler_parser
     Parser.cpp
     Parser.h
     ast_nodes/ast_json_dumper.cpp
@@ -23,5 +23,8 @@ sl_add_module(
     ast_nodes/details/ast_node_var.h
 )
 
-target_link_libraries(sl_parser PUBLIC sl_lexer nlohmann_json::nlohmann_json)
-target_precompile_headers(sl_parser PRIVATE <nlohmann/json.hpp>)
+target_link_libraries(
+    sl_compiler_parser
+    PUBLIC sl_compiler_lexer nlohmann_json::nlohmann_json
+)
+target_precompile_headers(sl_compiler_parser PRIVATE <nlohmann/json.hpp>)

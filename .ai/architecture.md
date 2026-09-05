@@ -83,18 +83,22 @@ analyzer 不该反过来依赖对象模型，编译诊断在被 SL 代码 `try` 
 
 根 `CMakeLists.txt` 只做四件事：编译器前端识别、编译参数/预编译头的封装函数（`sl_apply_*_options`、
 `sl_apply_pch`、`sl_add_module`）、拉第三方库、`add_subdirectory`。**每个模块目录有自己的
-`CMakeLists.txt`**，用 `sl_add_module(sl_xxx …)` 建一个静态库并声明自己的依赖：
+`CMakeLists.txt`**，用 `sl_add_module(sl_xxx …)` 建一个静态库并声明自己的依赖。
+
+**库目标名 = `sl_` + 从仓库根数下来的目录路径**（`compiler/lexer/` → `sl_compiler_lexer`），
+这样光看目标名就知道去哪找它的源码，嵌套模块也不会跟顶层模块重名：
 
 ```
 sl_cpp_exceptions (INTERFACE，纯头文件)
-    ← sl_utils ← sl_lexer ← sl_parser ← sl_analyzer ← sl_executor ← SL
+    ← sl_utils ← sl_compiler_lexer ← sl_compiler_parser ← sl_compiler_analyzer ← sl_executor ← SL
     ← sl_runtime
 sl_numeric (不依赖任何模块) ← sl_runtime
 ```
 
-`sl_runtime` 现在还没有任何模块链接它（codegen 还没写），只有它自己的测试目标链。这是刻意的：
-一旦 `sl_codegen` 出现，它链 `sl_runtime` + `sl_analyzer`，`sl_executor` 再链 `sl_codegen`——
-方向从一开始就是对的，不用回头改。
+`sl_runtime` 现在还没有任何模块链接它（codegen 还没写），是根 `CMakeLists.txt` 临时把它链进 `SL`，
+免得只构建 main target 时它整个被跳过。这是刻意的：一旦 `sl_compiler_codegen` 出现，它链
+`sl_runtime` + `sl_compiler_analyzer`，`sl_executor` 再链 `sl_compiler_codegen`——方向从一开始就是
+对的，不用回头改。
 
 测试目标在 `test/CMakeLists.txt`，用本地的 `sl_add_test_target(<名字> LIBS … SOURCES …)`：只列自己的
 测试文件，被测代码靠 `LIBS` 链进来。**这是拆库的主要动机**——以前每个测试目标都要把被测模块的源文件

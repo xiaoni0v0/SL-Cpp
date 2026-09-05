@@ -1,5 +1,5 @@
 sl_add_module(
-    sl_analyzer
+    sl_compiler_analyzer
     Analyzer.cpp
     Analyzer.h
     expr_folder/ExprFolder.cpp
@@ -10,4 +10,4 @@ sl_add_module(
     semantic_checker/SemanticChecker.h
 )
 
-target_link_libraries(sl_analyzer PUBLIC sl_parser)
+target_link_libraries(sl_compiler_analyzer PUBLIC sl_compiler_parser)

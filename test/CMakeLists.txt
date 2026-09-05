@@ -52,7 +52,7 @@ sl_add_test_target(
 
 sl_add_test_target(
     SL_Cpp_Lexer_Tests
-    LIBS sl_lexer
+    LIBS sl_compiler_lexer
     SOURCES
         lexer/test_utils.h
         lexer/main_test.cpp
@@ -82,7 +82,7 @@ sl_add_test_target(
 
 sl_add_test_target(
     SL_Cpp_Parser_Tests
-    LIBS sl_parser
+    LIBS sl_compiler_parser
     SOURCES
         parser/test_utils.h
         parser/main_test.cpp
@@ -119,7 +119,7 @@ target_precompile_headers(SL_Cpp_Parser_Tests PRIVATE <nlohmann/json.hpp>)
 
 sl_add_test_target(
     SL_Cpp_Analyzer_Tests
-    LIBS sl_analyzer
+    LIBS sl_compiler_analyzer
     SOURCES
         # 测试工具（复用 Parser 测试的 parse_as_file/parse_json 等）
         parser/test_utils.h
