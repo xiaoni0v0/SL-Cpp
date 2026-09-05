@@ -51,6 +51,8 @@ EXCLUDE_FILE_PATTERNS = [
     "big_int_cases.inc",  # test/numeric/gen_big_int_cases.py 生成
     "big_dec_cases.inc",  # test/numeric/gen_big_dec_cases.py 生成
 ]
+# 单个格式化器进程的超时（秒），防止某个工具挂死后整批无声无息地卡住
+TIMEOUT_SECONDS = 60
 
 
 class Formatter(NamedTuple):
@@ -64,14 +66,27 @@ class Formatter(NamedTuple):
         """跑一遍，返回格式化后的内容；失败抛 FormatError"""
         argv = self.build_argv(path)
         argv[0] = shutil.which(self.command) or argv[0]
-        result = subprocess.run(
-            argv,
-            input=original if self.via_stdin else b"",
-            capture_output=True,
-        )
+        try:
+            result = subprocess.run(
+                argv,
+                input=original if self.via_stdin else b"",
+                capture_output=True,
+                timeout=TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            # TimeoutExpired 不是 OSError，不转成 FormatError 的话 main 里拦不住
+            raise FormatError(
+                f"{self.command} 超过 {TIMEOUT_SECONDS} 秒没有返回"
+            ) from None
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
         if result.returncode != 0:
-            detail = result.stderr.decode("utf-8", errors="replace").strip()
             raise FormatError(detail or f"{self.command} 退出码 {result.returncode}")
+        if original and not result.stdout:
+            # 退出码 0 但什么都没输出，照写回去等于把源文件清空
+            raise FormatError(detail or f"{self.command} 退出码 0 却没有任何输出")
+        if detail:
+            # 成功时的告警也得让人看见，别被 capture_output 吞了
+            print(f"警告：{self.command} {path}：{detail}", file=sys.stderr)
         return result.stdout
 
 
@@ -226,7 +241,7 @@ def main():
     if reformatted_count > 0:
         print()  # 分隔 reformatted 列表和总结行
 
-    print("All done! ✨ 🍰 ✨")
+    print("Oh no! 💥 💔 💥" if failed_count > 0 else "All done! ✨ 🍰 ✨")
 
     summary_parts = []
     if reformatted_count > 0:
