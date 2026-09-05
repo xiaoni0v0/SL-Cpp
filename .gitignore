@@ -7,3 +7,5 @@ test/doc/*.html
 *.exe
 
 *.sl
+
+.format_cache.json
