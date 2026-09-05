@@ -106,8 +106,8 @@ BLACK = Formatter(
 )
 GERSEMI = Formatter(
     command="gersemi",
-    build_argv=lambda path: ["gersemi", "-"],
-    via_stdin=True,
+    build_argv=lambda path: ["gersemi", str(path)],
+    via_stdin=False,
 )
 PRETTIER = Formatter(
     command="prettier",

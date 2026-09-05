@@ -1,0 +1,4 @@
+# 声明项目自定义 CMake 命令的定义位置
+definitions:
+  - CMakeLists.txt
+  - test/CMakeLists.txt
