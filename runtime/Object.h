@@ -123,9 +123,6 @@ class Object {
     void incref();
     void decref();
 
-    // 只给 bootstrap 用的后门，处理 object/type 关系
-    void set_type(Type *type);
-
     // 遍历本对象的全部强引用，= 所属类型的强引用 + 子类自己的强引用
     void visit_refs(RefVisitor &visitor);
     // 本对象自己（不含上面的 type_）的强引用。

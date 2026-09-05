@@ -26,23 +26,20 @@ constexpr std::size_t index_of(const BuiltinType type) { return static_cast<std:
 } // namespace
 
 void Runtime::build_types() {
-    // object 和 type 互为对方需要的东西：type 的基类是 object，而 object 的类型是 type。
-    // 这个结只能这么解——先按清单顺序建，元类还不存在的就先留空，建完立刻回填。
-    // CPython 靠静态分配的类型结构体 + PyType_Ready 回填，是同一个套路；这里的类型对象
-    // 是普通堆对象，于是"留空再回填"就够了，不用为它们另开一套静态存储
     for (std::size_t i{0}; i < index_of(BuiltinType::Count); ++i) {
-        const BuiltinTypeSpec &spec{kBuiltinTypeSpecs[i]};
+        const auto &[name, base]{kBuiltinTypeSpecs[i]};
 
         std::vector<Ref<Type>> bases;
-        if (spec.base != BuiltinType::NoBase) bases.push_back(types_[index_of(spec.base)]);
+        if (base != BuiltinType::NoBase) bases.push_back(types_[index_of(base)]); // 父类
 
         // 清单里 type 排在第二位，所以只有 object 和 type 自己会拿到空元类
-        types_[i] = make_ref<Type>(types_[index_of(BuiltinType::Type)].get(), spec.name, bases);
+        types_[i] = make_ref<Type>(types_[index_of(BuiltinType::Type)].get(), name, bases);
     }
 
+    // 回填 Object 和 Type 的类型为 Type
     Type *const meta{types_[index_of(BuiltinType::Type)].get()};
-    types_[index_of(BuiltinType::Object)]->set_type(meta);
-    meta->set_type(meta);
+    types_[index_of(BuiltinType::Object)]->type_ = Ref{meta};
+    meta->type_ = Ref{meta};
 }
 
 void Runtime::build_singletons() {
@@ -52,7 +49,7 @@ void Runtime::build_singletons() {
     Type *const singleton_type{types_[index_of(BuiltinType::SingletonType)].get()};
     Type *const bool_type{types_[index_of(BuiltinType::Bool)].get()};
 
-    // None 的类型是 NoneType，另外三个是 SingletonType（SL.md 4.3.2）
+    // None 的类型是 NoneType，另外三个是 SingletonType
     singletons_.none_ = make_ref<NamedSingleton>(none_type, "None");
     singletons_.ellipsis_ = make_ref<NamedSingleton>(singleton_type, "Ellipsis");
     singletons_.not_implemented_ = make_ref<NamedSingleton>(singleton_type, "NotImplemented");

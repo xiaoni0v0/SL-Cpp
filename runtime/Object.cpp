@@ -13,8 +13,6 @@ void Object::decref() {
     if (--refcount_ == 0) delete this; // delete this 之后不得再碰任何成员
 }
 
-void Object::set_type(Type *const type) { type_ = Ref{type}; }
-
 void Object::visit_refs(RefVisitor &visitor) {
     visitor.visit(type_);
     visit_own_refs(visitor);
