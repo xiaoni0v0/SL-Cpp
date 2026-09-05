@@ -2,8 +2,8 @@ sl_add_module(
     sl_runtime
     Heap.cpp
     Heap.h
-    HostErrorConversion.cpp
-    HostErrorConversion.h
+    host_error_conversion.cpp
+    host_error_conversion.h
     Object.cpp
     Object.h
     RaisedException.h
