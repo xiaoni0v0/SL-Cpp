@@ -977,12 +977,29 @@ MRO 的计算：
 查到的结果仍是 `__is_abstract_method__` 则保留，否则（被具体实现覆盖）从集合中去掉；
 剩下的即为该类的 `__abstractmethods__`。
 
-`C(x)` 调用时（构造实例）：
+`C(...)` 调用时（构造实例）：
 
-1. 若 `C.__abstractmethods__` 非空，抛出 `TypeError`（不能实例化含未实现抽象方法的类）；
-2. `obj = C.__new__(C, *args, **kwargs)`；
-3. 若 `isinstance(obj, C)`，再调用 `obj.__init__(*args, **kwargs)`；
-4. 最终返回 `obj`。
+1. 按 3.9.1.2 的读属性规则取 `C.__construct__`（它是 `classmethod`，`get` 把 `cls` 绑为 `C`），
+   以同一批实参调用它，得到 `obj`；
+2. 若 `isinstance(obj, C)` 为假，抛出 `TypeError`；
+3. 返回 `obj`。
+
+`__construct__` 必须是 `classmethod`。
+上面收集属性那一步，若收集到名为 `__construct__` 的项而它 `not isinstance(它, classmethod)`，则抛出 `TypeError`。
+
+典型写法（`super` 的第二个实参传类，见 4.2.24）：
+
+```
+class Point {
+    @classmethod
+    func __construct__(cls, x, y) {
+        self = super(Point, cls).__construct__()
+        self.x = x
+        self.y = y
+        return self
+    }
+}
+```
 
 #### 3.4.9 装饰器表达式的值
 
@@ -1453,11 +1470,16 @@ func f() {
 }
 ```
 
-更推荐的方式仍是使用匿名类显式维护状态，例如：
+更推荐的方式仍是使用类显式维护状态，例如：
 
 ```
 stack = class {
-    func __init__(self) { self.data = [] }
+    @classmethod
+    func __construct__(cls) {
+        self = super(Stack, cls).__construct__()
+        self.data = []
+        return self
+    }
     func push(self, x) { self.data.append(x) }
     func pop(self) { return self.data.pop() }
 } ()
@@ -1591,8 +1613,9 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 `__op_eq__`（是同一个对象则返回 `True`，否则返回 `NotImplemented`，让 3.8 的回退链继续下去）、
 `__hash__`、`__bool__`（无条件返回 `True`，见 3.2）、`__is_final_class__ = False`、
 `__is_abstract_method__ = False`；`__abstractmethods__ = ()`；
-`__new__(cls)` 分配一个 `cls` 的空实例；
-`__init__(self)` 什么都不做。
+`__construct__(cls)`（`classmethod`）分配并返回一个 `cls` 的空实例，不做任何初始化；
+分配之前先检查，`cls.__abstractmethods__` 非空则抛出 `TypeError`。
+它只接受 `cls`，多给实参就是 `DispatchError`。
 
 #### 4.2.2 type
 
@@ -1870,13 +1893,13 @@ decimal.DecimalException
 
 #### 4.2.24 super
 
-`super(cls, obj)`。
+`super(cls, obj)`。`obj` 既可以是实例，也可以是类。
 
 `super` 对象的 `__getattr__(self, attr)`：
 
-在 `type(obj)` 的 MRO 中找到 `cls` 的位置，从下一个类开始查找 `attr`。
-在描述器表中找到则 `get(obj)`；
-在属性表中找到则原样返回；
+取一条 MRO，`isinstance(obj, type)` 为真时取 `obj` 自己的 MRO，否则取 `type(obj)` 的 MRO。
+在这条 MRO 中找到 `cls` 的位置，从下一个类开始查找 `attr`。
+在描述器表中找到则 `get(obj)`；在属性表中找到则原样返回；
 全部找不到则 `AttributeError`。
 
 #### 4.2.25 FuncGroup(*functions, name=None)
@@ -1921,10 +1944,9 @@ BaseException
     └── ImportError                  - 模块导入失败（找不到模块/包，或名字有歧义）
 ```
 
-`BaseException(*args)`：`args` 按位置接收任意多个实参，构造后可通过属性 `.args` 取到（一个 tuple，
-可能为空）。整棵异常树都不重写 `__init__`，全部复用这一份——`TypeError("...")`、
-`DispatchError('too many arguments', 3)` 这类构造都是同一个 `__init__`，取决于 `type(异常对象)`
-是哪个子类。
+`BaseException(*args)`：
+`args` 按位置接收任意多个实参，构造后可通过属性 `.args` 取到（一个 tuple，可能为空）。
+整棵异常树都不重写 `__construct__`，全部复用这一份。
 
 没有 `__cause__`/`__context__`：`raise` 的语法只有 `raise expr`，没有 `raise ... from ...` 子句，
 也不做隐式的异常链记录。要表达"因为这个异常才引出了那个异常"，现在只能用 `.args` 自己带信息。
