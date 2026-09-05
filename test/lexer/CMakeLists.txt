@@ -3,7 +3,6 @@ sl_add_test_target(
     LIBS sl_compiler_lexer
     SOURCES
         test_utils.h
-        main_test.cpp
         # 注释
         01_comments/comments_test.cpp
         # 关键字与保留字

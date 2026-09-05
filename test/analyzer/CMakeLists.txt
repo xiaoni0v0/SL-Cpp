@@ -6,7 +6,6 @@ sl_add_test_target(
         ../parser/test_utils.h
         test_utils.h
         semantic_checker/test_utils.h
-        main_test.cpp
         analyzer_facade_test.cpp
         recheck_after_fold_test.cpp
         # semantic_checker

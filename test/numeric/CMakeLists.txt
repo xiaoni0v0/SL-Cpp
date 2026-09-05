@@ -2,7 +2,6 @@ sl_add_test_target(
     sl_test_numeric_bigint
     LIBS sl_numeric
     SOURCES
-        main_test.cpp
         01_bigint/test_utils.h
         01_bigint/construct_convert_test.cpp
         01_bigint/arithmetic_test.cpp
@@ -17,7 +16,6 @@ sl_add_test_target(
     sl_test_numeric_bigdec
     LIBS sl_numeric
     SOURCES
-        main_test.cpp
         02_bigdec/test_utils.h
         02_bigdec/construct_context_test.cpp
         02_bigdec/arithmetic_test.cpp

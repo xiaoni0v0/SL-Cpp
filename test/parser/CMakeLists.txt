@@ -3,7 +3,6 @@ sl_add_test_target(
     LIBS sl_compiler_parser
     SOURCES
         test_utils.h
-        main_test.cpp
         01_literals/literals_test.cpp
         01_literals/literal_raw_test.cpp
         02_operators/precedence_test.cpp
