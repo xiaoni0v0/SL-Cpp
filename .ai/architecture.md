@@ -136,7 +136,7 @@ sl_numeric (不依赖任何模块) ← sl_runtime
    `Runtime::ready()` 现在就是 `g_runtime != nullptr`，供以后的编译器/虚拟机入口断言。内置函数表、
    内置模块表这些还没做的初始化步骤，插进 `init()` 的两步之后即可，不需要为它们预先开新的状态。
    `init()` 中途失败会把已建的部分拆干净再抛，不留半初始化的运行时。
-4. ~~**异常体系**~~ **已完成**：`SL.md` 4.2.26 补了 `BaseException(*args)` 的构造与 `.args` 属性
+4. ~~**异常体系**~~ **已完成**：`SL.md` 4.2.23 补了 `BaseException(*args)` 的构造与 `.args` 属性
    （参照 CPython——`args` 是结构体槽位不是 `__dict__`，没有 `__cause__`/`__context__`，因为 `raise`
    没有 `from` 子句）；`runtime/objects/Exception.h` 是它的 C++ 落地，`BaseException` 及其全部子类
    共用同一个类；`runtime/RaisedException.h` 是 `raise` 用的 C++ 信封；

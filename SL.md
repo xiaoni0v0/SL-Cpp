@@ -71,7 +71,7 @@ SL 中有以下**字面量**类型：
   负数不是字面量，是一元符号和整数的运算结果；
 - decimal: `123.45`；整数、小数部分都不能省略，`1.`、`.1` 不是合法的 decimal 字面量；
   整数部分同样遵守 int 的前导零限制（`007.5` 不合法），小数部分没有这个限制（`0.05` 合法）；
-  字面量按写下的样子精确表示，不做任何舍入，末尾零也保留（`1.50` 与 `1.5` 值相等但标度不同，见 4.2.6）；
+  字面量按写下的样子精确表示，不做任何舍入，末尾零也保留（`1.50` 与 `1.5` 值相等但标度不同，见 4.2.5）；
 - int、decimal 字面量都可以带科学计数法后缀 `[eE][+-]?digits`
   （指数部分同样不允许前导零，单独一个 `0` 除外），表示“尾数 * 10**指数”：
   - 指数的 `+` 可以省略（`1e9` 与 `1e+9` 等价），`-` 不可省略；
@@ -570,13 +570,13 @@ try expr1 ⟦except (Exception1, ... ⟦as lvalue⟧) expr2 ...⟧ ⟦finally ex
 
 以下描述的是内置类的实例的语义。自定义类型见 3.8。
 
-凡结果为 decimal 的运算，结果都要按当前上下文舍入到至多 `prec` 位有效数字（见 4.2.6），
+凡结果为 decimal 的运算，结果都要按当前上下文舍入到至多 `prec` 位有效数字（见 4.2.5），
 因此不一定是精确值（如 `1 / 3`）；下文不再逐条重复。
 
 - `x[index, ...]`
   - 对于列表、元组、字符串等，返回下标为 `index` 的元素（此时 `index` 为 int，或 range 对象表示切片）；
   - 对于字典等，返回键为 `index` 所对应的值；
-  - 对于类型，表示构造复合类型（见 4.2.18）；
+  - 对于类型，表示构造复合类型（见 4.4.3）；
 - `x(arguments, ...)`
   调用函数 `x`，传入实参 `arguments`，返回函数的返回值。见 3.5；
 - `x.attribute`
@@ -591,7 +591,7 @@ try expr1 ⟦except (Exception1, ... ⟦as lvalue⟧) expr2 ...⟧ ⟦finally ex
   - 有一方是 decimal 时按 IBM 规范触发 `decimal.InvalidOperation`（默认上下文里它是陷阱，所以默认设置下就是抛异常）；
 - `+x`, `-x` 返回正 `x`，负 `x`。
   对于 int，`+x` 等于 `x`，`-x` 等于 `x` 的相反数；
-  对于 decimal，二者都是运算，结果按当前上下文舍入（`+x` 不一定恒等于 `x`，见 4.2.6）；
+  对于 decimal，二者都是运算，结果按当前上下文舍入（`+x` 不一定恒等于 `x`，见 4.2.5）；
 - `~x`
   对于 int，返回 `x` 的按位取反；
 - `x * y`
@@ -606,7 +606,7 @@ try expr1 ⟦except (Exception1, ... ⟦as lvalue⟧) expr2 ...⟧ ⟦finally ex
   - `//`、`%` 结果仍是 int。
     `y` 为 `0` 时：
   - `x`、`y` 都是 int 或 bool 则一律抛 `MathError`；
-  - 有一方是 decimal 则按当前上下文的陷阱设置处理（见 4.2.6.3），默认同样是抛异常；
+  - 有一方是 decimal 则按当前上下文的陷阱设置处理（见 4.2.5.3），默认同样是抛异常；
     `//` 永远向负无穷方向取整，`%` 的符号跟 `//` 的取整方向一致
     （`x`、`y` 均为 int 时严格满足 `x % y == x - (x // y) * y`）；
     对于 `x` 是 str，`%` 表示字符串格式化，`y` 为替换参数；
@@ -632,7 +632,7 @@ try expr1 ⟦except (Exception1, ... ⟦as lvalue⟧) expr2 ...⟧ ⟦finally ex
   - 对于 set，返回它们的交集、并集；
   - 对于 `|`，`x`、`y` 都是 dict 时，返回两者合并后的新 dict：
     重复的 key 以 `y` 中的值为准，但该 key 在结果中的位置保持 `x` 里原来的位置，不重复的 key 按 `y` 中的顺序追加在结果末尾；
-  - 对于 `|`，`x`、`y` 都是类型时，返回复合类型（见 4.2.18）；
+  - 对于 `|`，`x`、`y` 都是类型时，返回复合类型（见 4.4.3）；
 
   以上 `~`/`<<`/`>>`/`&`/`^`/`|` 对 int 的按位语义，是把 int 看成拥有无穷多个二进制位、遵循补码表示的整数来计算，
   负数的更高位一律视为 1，正数的更高位视为 0；
@@ -913,7 +913,7 @@ func f() {}
 若确实需要对某个类型（包括类自身尚未定义完毕、无法写成普通注解的自引用场景）做运行时类型检查，
 可直接在函数体内手动 `isinstance` 检查。
 
-类型注解是 `TypeVar`（表达多个形参/返回值位置的类型必须彼此一致）时，调用时的一致性检查规则见 4.2.27。
+类型注解是 `TypeVar`（表达多个形参/返回值位置的类型必须彼此一致）时，调用时的一致性检查规则见 4.2.24。
 
 以上涉及函数定义时检查的地方，都在整个函数表达式的捕获、全部形参的注解与默认值、返回类型全部求值完毕之后统一进行。
 
@@ -987,7 +987,7 @@ MRO 的计算：
 `__construct__` 必须是 `classmethod`。
 上面收集属性那一步，若收集到名为 `__construct__` 的项而它 `not isinstance(它, classmethod)`，则抛出 `TypeError`。
 
-典型写法（`super` 的第二个实参传类，见 4.2.24）：
+典型写法（`super` 的第二个实参传类，见 4.2.21）：
 
 ```
 class Point {
@@ -1037,16 +1037,16 @@ class MyClass {
 
 调用 `x(arg, kwarg=v, ...)` 时，按下面两步确定实际执行什么：
 
-1. 若 `x` 是**原语可调用对象**（见下），直接执行它，结束；
+1. 若 `x` 是**原生可调用对象**（见下），直接执行它，结束；
 2. 否则在 `type(x)` 的 MRO 上查找 `__op_call__`——在描述器表中找到则 `get(x)`（即把 `x` 绑为第一参数），
    在属性表中找到则原样取用，全部找不到则抛出 `TypeError`；把取到的结果当作新的被调对象，回到第 1 步。
 
 **原生可调用对象**是这条规则的终点，解释器直接认得它们，不会再去查它们的 `__op_call__`（尽管也有）：
 
-- `Function`（4.5.4）：按下面的实参对应规则绑定，然后执行函数体；
-- `BuiltinFunction`（4.5.5）：同上，只是函数体由解释器自身实现；
-- `Method`（4.5.6）：把被绑定的对象插到实参最前面，再调用被绑定的那个可调用对象；
-- `FuncGroup`（4.2.25）：自上而下逐个试，选中之后落回上面三种。
+- `Function`（4.4.4）：按下面的实参对应规则绑定，然后执行函数体；
+- `BuiltinFunction`（4.4.5）：同上，只是函数体由解释器自身实现；
+- `Method`（4.4.6）：把被绑定的对象插到实参最前面，再调用被绑定的那个可调用对象；
+- `FuncGroup`（4.2.22）：自上而下逐个试，选中之后落回上面三种。
 
 没有这一步，规则就没有终点——查 `__op_call__` 查到的东西自己也得被调用。类对象不在这四种之内：
 `C(...)` 走 3.4.8 的构造协议，取到的 `C.__construct__` 是个绑定方法，于是落回第 1 步。
@@ -1116,7 +1116,7 @@ f(*args, x=1, **extra) # 调用时展开
 
 SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Function Group）对象实现运行时 dispatch，而非通过同名函数定义。
 
-见 4.2.25。
+见 4.2.22。
 
 ### 3.8 运算符重载
 
@@ -1515,7 +1515,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 本章 4.1/4.2 列出的所有内置函数、内置类，都通过一张固定、唯一的**内置表**以名字暴露给标识符解析规则（见 3.10.3）。
 
-4.5 列出的是另一批类：它们同样存在，但不在内置表里。
+4.4 列出的是另一批类：它们同样存在，但不在内置表里。
 
 ### 4.1 内置函数
 
@@ -1619,7 +1619,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 #### 4.1.14 `exit(code=0)`
 
-抛出 `SystemExit(code)`（见 4.2.26）。该异常未被捕获、一路传播到解释器顶层时，解释器终止，退出码为 `code`。
+抛出 `SystemExit(code)`（见 4.2.23）。该异常未被捕获、一路传播到解释器顶层时，解释器终止，退出码为 `code`。
 
 要求 `code` 为 int 或 `None`，其中 `None` 被视为 0。
 
@@ -1643,17 +1643,13 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 1. `type(x)`：单参数，返回 `x` 的类；
 2. `type(name, bases, namespace)`：三参数，动态创建一个类，等价于 `class` 表达式的效果。
 
-#### 4.2.3 NoneType
-
-不在内置表里，移至 4.5.1。
-
-#### 4.2.4 int
+#### 4.2.3 int
 
 表示整数，自带高精度。
 
 继承 `numbers.Real`。
 
-#### 4.2.5 bool
+#### 4.2.4 bool
 
 只有两个实例，即 `True` 和 `False`。
 
@@ -1664,7 +1660,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 `bool` 没有 `int` 特有的位运算等方法。但 `numbers.Real` 要求的四则运算、大小比较，`bool` 自己实现：
 参与运算前先把 `True`/`False` 按 `1`/`0` 折算成 `int`，再复用 `int` 的实现，结果类型是 `int`（不是 `bool`）。
 
-#### 4.2.6 decimal
+#### 4.2.5 decimal
 
 十进制浮点数，自带高精度。
 
@@ -1700,15 +1696,15 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 
 `decimal` 是类不是模块，下面的 `Context`、`getcontext`、`setcontext` 以及各信号类都是它的类属性。
 
-##### 4.2.6.1 decimal.Context
+##### 4.2.5.1 decimal.Context
 
 算术环境，`decimal` 的嵌套类。按关键字构造，没传的字段取默认值：
 
 | 字段       | 默认值                                         | 含义                                       |
 | ---------- | ---------------------------------------------- | ------------------------------------------ |
 | `prec`     | `28`                                           | 运算结果保留的有效数字位数上限，正 int     |
-| `rounding` | `Context.ROUND_HALF_EVEN`                      | 舍入方式，见 4.2.6.2                       |
-| `traps`    | `[DivisionByZero, Overflow, InvalidOperation]` | 要抛异常的信号集合，见 4.2.6.3             |
+| `rounding` | `Context.ROUND_HALF_EVEN`                      | 舍入方式，见 4.2.5.2                       |
+| `traps`    | `[DivisionByZero, Overflow, InvalidOperation]` | 要抛异常的信号集合，见 4.2.5.3             |
 | `flags`    | `[]`                                           | 已发生过的信号集合，粘滞，只能手动清空     |
 | `Emax`     | `999999`                                       | 指数上限，超出触发 `Overflow`              |
 | `Emin`     | `-999999`                                      | 指数下限，低于触发 `Subnormal`/`Underflow` |
@@ -1727,7 +1723,7 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 decimal 上所有会查上下文的方法都带一个可选的末位参数 `ctx`，如 `__op_div__(self, other, ctx=None)`，
 传入时按该上下文计算，且不改动当前上下文；运算符语法只传操作数，因此永远走当前上下文。
 
-##### 4.2.6.2 舍入方式
+##### 4.2.5.2 舍入方式
 
 `Context` 的类属性，即 `rounding` 字段的全部合法取值：
 
@@ -1742,7 +1738,7 @@ decimal 上所有会查上下文的方法都带一个可选的末位参数 `ctx`
 | `ROUND_FLOOR`     | 一律向 `-Infinity`                           |
 | `ROUND_05UP`      | 向零截断；但截断后末位是 0 或 5 时改为远离零 |
 
-##### 4.2.6.3 信号与陷阱
+##### 4.2.5.3 信号与陷阱
 
 运算中出现的异常情况称为**信号**：在当前上下文的 `traps` 里就抛出对应异常，
 否则记进 `flags`（粘滞位，只能手动清空）并按规范返回一个结果继续算。
@@ -1765,7 +1761,7 @@ decimal.DecimalException
 └── decimal.Underflow               - 指数低于 Emin 且结果不为零。同时是 Inexact、Rounded、Subnormal 的子类
 ```
 
-#### 4.2.7 complex
+#### 4.2.6 complex
 
 表示复数。
 
@@ -1773,13 +1769,13 @@ decimal.DecimalException
 
 其中实部和虚部分别用一个 decimal 存储，因此复数运算同样受当前上下文约束。
 
-#### 4.2.8 str
+#### 4.2.7 str
 
 表示字符串。严格按 Unicode 码点分割，可迭代且逐码点迭代。
 
 **注意**：str 对象不可变。
 
-#### 4.2.9 tuple
+#### 4.2.8 tuple
 
 容器类。不可变，可迭代。
 
@@ -1787,21 +1783,21 @@ decimal.DecimalException
 
 **注意**：“不可变”指的是这些引用关系不可变，不蕴含引用的对象自己不可变。
 
-#### 4.2.10 list
+#### 4.2.9 list
 
 容器类，可变，可迭代。
 
 包含任意多个对象的引用。
 
-#### 4.2.11 dict
+#### 4.2.10 dict
 
 可变，键需可哈希。遍历（键、值、键值对）按插入序。满足映射协议（`protocols.Mapping`，见 4.3.2）。
 
-#### 4.2.12 unordered_dict
+#### 4.2.11 unordered_dict
 
 除不保证遍历顺序外，与 `dict` 接口一致。满足映射协议。
 
-#### 4.2.13 frozendict
+#### 4.2.12 frozendict
 
 不可变的 `dict`，建立后不能增删改其中的项，其余接口与 `dict` 一致，遍历按插入序。
 满足映射协议。若其中每个键值对均可哈希则是 `Hashable`（见 4.3.2），此时可作 `dict` 的键、`set` 的元素。
@@ -1809,13 +1805,13 @@ decimal.DecimalException
 `frozendict(m)` 由一个映射对象建立；`frozendict()` 建立空的冻结字典。
 注意不可变的只是这张表本身；其中的值若是可变对象，该对象仍可被修改。
 
-#### 4.2.14 set
+#### 4.2.13 set
 
 容器类，可变，可迭代。元素需可哈希，不保证遍历顺序，元素不重复。
 
 `set` 自身不是 `Hashable`（见 4.3.2），不能作 `dict` 的键、`set` 的元素。
 
-#### 4.2.15 frozenset
+#### 4.2.14 frozenset
 
 不可变的 `set`，建立后不能增删其中的元素，其余接口与 `set` 一致。
 
@@ -1823,7 +1819,7 @@ decimal.DecimalException
 
 `frozenset(it)` 由一个可迭代对象建立；`frozenset()` 建立空的冻结集合。
 
-#### 4.2.16 range
+#### 4.2.15 range
 
 可迭代。参数为 int、decimal 或 None。
 
@@ -1831,44 +1827,33 @@ decimal.DecimalException
 2. `range(start, stop)`
 3. `range(start, stop, step)`
 
-#### 4.2.17 SingletonType
-
-不在内置表里，移至 4.5.2。
-
-#### 4.2.18 CompoundType
-
-不在内置表里，移至 4.5.3。
-
-#### 4.2.19 Descriptor
+#### 4.2.16 Descriptor
 
 描述器的基类，`get`/`set`/`delete` 三个方法的语义、以及描述器表的规则见 3.9.1.1。
 自定义属性行为需继承它。
-
-另有一个内部实现类 `MethodDescriptor`（`Descriptor` 的子类，类体收集方法时使用，见 3.4.8），
-不通过内置表暴露，本节不展开。
 
 `get(self, obj)` 标记为 `@abstractmethod`，子类必须实现；
 `set(self, obj, value)`、`delete(self, obj)` 有默认实现，调用即无条件抛出 `AttributeError`，
 需要可写、可删就重写它们。
 
-#### 4.2.20 property
+#### 4.2.17 property
 
 `property(func_get, func_set=None, func_del=None)`，`Descriptor` 的子类。
 `func_set`、`func_del` 为 `None` 时对应操作按 `Descriptor` 默认行为抛 `AttributeError`。
 `get(self, obj)`：若 `isinstance(obj, type)` 返回 `self`（供内省），否则返回 `func_get(obj)`。
 
-#### 4.2.21 staticmethod
+#### 4.2.18 staticmethod
 
 `staticmethod(func)`，`self.func = func`。纯标签，不是描述器，仅在类体收集属性时取出 `v.func` 使用，
 本身不会成为类属性。
 
-#### 4.2.22 classmethod
+#### 4.2.19 classmethod
 
 `classmethod(func)`，`Descriptor` 的子类。
 `get(self, obj)`：令 `cls = obj if isinstance(obj, type) else type(obj)`，
 返回把 `cls` 绑定为第一参数的可调用对象。
 
-#### 4.2.23 unsupported
+#### 4.2.20 unsupported
 
 `unsupported(name=None)`，`Descriptor` 的子类，用于在类体中显式声明某个继承来的方法/属性协议不受支持。
 
@@ -1879,7 +1864,7 @@ decimal.DecimalException
 （`name` 即 `some_attr`）存入描述器表，见 3.4.8；
 写 `some_attr = unsupported('自定义消息')` 时使用给定实例，不再改写。
 
-#### 4.2.24 super
+#### 4.2.21 super
 
 `super(cls, obj)`。`obj` 既可以是实例，也可以是类。
 
@@ -1890,7 +1875,7 @@ decimal.DecimalException
 在描述器表中找到则 `get(obj)`；在属性表中找到则原样返回；
 全部找不到则 `AttributeError`。
 
-#### 4.2.25 FuncGroup(*functions, name=None)
+#### 4.2.22 FuncGroup(*functions, name=None)
 
 以下例子说明 FuncGroup 的用法：
 
@@ -1908,7 +1893,7 @@ f(1, 2) # 输出 4
 f(1.0)  # 抛出 DispatchError
 ```
 
-#### 4.2.26 异常类
+#### 4.2.23 异常类
 
 只列全局的一批常用异常，其余更细分的见 4.3.3 `exceptions` 模块。
 
@@ -1924,7 +1909,7 @@ BaseException
     ├── AttributeError               - 属性不存在或不支持该操作
     ├── IndexError                   - `[]` 下标或键不存在或越界（序列与映射统一用此异常）
     ├── MathError                    - 数学运算错误（除以零、负数开偶次方根、对非正数取对数、对[-1, 1]以外的数取反三角等）
-    │   └── decimal.DecimalException - decimal 的各种信号，子类见 4.2.6.3
+    │   └── decimal.DecimalException - decimal 的各种信号，子类见 4.2.5.3
     ├── DispatchError                - 函数调用时参数不匹配
     ├── RecursionError               - 递归/调用嵌套过深
     ├── MemoryError                  - 堆内存不足（触及 -Xmx 上限，回收后仍不够）
@@ -1939,7 +1924,7 @@ BaseException
 没有 `__cause__`/`__context__`：`raise` 的语法只有 `raise expr`，没有 `raise ... from ...` 子句，
 也不做隐式的异常链记录。要表达"因为这个异常才引出了那个异常"，现在只能用 `.args` 自己带信息。
 
-#### 4.2.27 TypeVar
+#### 4.2.24 TypeVar
 
 `TypeVar(bound=None)`。用作类型注解，见 3.4.7。
 
@@ -1972,7 +1957,7 @@ BaseException
 
 以下几者的判定规则类似：
 `isinstance(obj, X)`/`issubclass(cls, X)` 当且仅当 `type(obj)`/`cls` 的 MRO 上有该协议要求的全部方法，
-且每个方法按 3.9.1.2 的规则查找到的那一项都不是 `unsupported` 的实例（见 4.2.23 `unsupported`）。
+且每个方法按 3.9.1.2 的规则查找到的那一项都不是 `unsupported` 的实例（见 4.2.20 `unsupported`）。
 
 ##### 4.3.2.1 Callable
 
@@ -2023,9 +2008,99 @@ IOError
 
 以后需要更细分的 IO 异常（如文件不存在、权限不足）时，继承 `IOError` 加入本模块，不修改全局异常列表。
 
-### 4.4 类继承关系图
+### 4.4 不入内置表的类
 
-带 `*` 的类不在内置表里，见 4.5。
+这批类确实存在，`type(x)` 拿得到，也各有各的名字（`type(None).__name__` 就是 `'NoneType'`）——
+只是这个名字**没有进内置表**，所以源码里写下 `NoneType` 解析不到任何东西，初始时它不在任何作用域内。
+要拿到它们只能间接来：`type(None)`、`type(某个函数)`、`attrs(cls, 'descriptors')` 里的值，等等。
+
+判据是：正常写 SL 的时候不应该、也没必要主动去动它们——它们要么是某个具体对象天生的类
+（`None`、`Ellipsis`），要么是解释器造出来交给你用的东西（函数、绑定方法、描述器）。
+
+`Function`、`BuiltinFunction`、`Method` 三个都是 final（`__is_final_class__ = True`）：调用是最热的
+操作，解释器靠"被调对象是不是这几个类型"来决定直接执行还是去查 `__op_call__`（3.5），允许继承会让这个
+判定退化。要包装一个可调用对象，用普通类加 `__op_call__`。
+
+#### 4.4.1 NoneType
+
+只有一个实例，即 `None`。
+
+#### 4.4.2 SingletonType
+
+包含 SL 的部分单例对象：
+
+- Ellipsis
+- NotImplemented
+- StopIteration
+
+#### 4.4.3 CompoundType
+
+用 `|`, `!`, `?`, `[]` 可以创建**复合类**。
+
+1. `|` 表示两种类型均可。例如 `isinstance(1, int | str)` 为 `True`。
+2. `!` 表示精确类（即不允许子类）。
+   例如 `isinstance(1, int!)` 为 `True`，而 `isinstance(1, numbers.Real!)` 为 `False`。
+3. `?` 表示可以为 `None`。例如 `isinstance(None, int?)` 为 `True`。
+4. `[]` 对容器类，表示容器中元素的类型。
+   1. 对于 `tuple`
+      1. 对于 `tuple[int, str]` 可传入多个类型，表示既检查元组长度也检查元素类型
+         语义为“元组只能有两个元素且第一个元素是 int 类型且第二个元素是 str 类型”
+      2. 对于 `tuple[int, ...]` 要求只能传入两个参数，其中第一个为类型，第二个为 `...`，表示只检查元素类型
+         语义为“元组的每个元素都是 int 类型”。注意此种类型检查允许空元组
+
+   2. 对于 `list`，同上
+
+   3. 对于 `dict`
+      `dict[str, int]` 表示键的类型均为 `str`，值的类型均为 `int`。允许空字典；
+
+   4. 对于 `set`
+      `set[int]` 表示元素的类型均为 `int`。允许空集合；
+
+   **注意**：对于此种类型检查，平均时间复杂度至少是 $\mathcal O(n)$，使用前需谨慎权衡。
+   仔细考虑是否真的需要 `list[int, ...]` 而不是 `list`。
+
+以上构造复合类的方式均可嵌套使用，但应**尽量避免嵌套过深**，否则可能导致性能问题。
+
+以上检查均有短路性，但不应依赖于此，因为检查的顺序不确定，
+例如 `int | str?` 的实际实现*可能*为 `None | int | str` 而非 `int | str | None`。
+
+#### 4.4.4 Function
+
+`func` 表达式（3.4.7）的值的类型，`__is_final_class__ = True`。
+
+一个函数对象持有：函数体、形参表与各处类型注解、默认值、捕获、函数名与文档字符串。调用它就是按 3.5
+绑定实参再执行函数体。能不能内省形参与函数体、通过哪些属性内省，尚未设计。
+
+#### 4.4.5 BuiltinFunction
+
+内置函数（4.1）与内置类型上各方法的类型，`__is_final_class__ = True`。
+
+跟 `Function` 的区别只有一个：函数体由解释器自身实现，不是 SL 代码，因而无法内省。实参对应、类型检查、
+`DispatchError` 的规则与 `Function` 完全一致（3.5）——内置函数同样要声明形参与类型，走同一套绑定规则，
+不另开一套。
+
+#### 4.4.6 Method
+
+绑定方法，`__is_final_class__ = True`。
+
+`MethodDescriptor` 经由实例访问时、以及 `classmethod`（4.2.19）的 `get` 返回的那个"把 `self`/`cls`
+绑定为第一参数的可调用对象"，就是这个类的实例。它持有被绑定的对象和被绑定的可调用对象两样；调用它
+就是把前者插到实参最前面，再调用后者。
+
+#### 4.4.7 MethodDescriptor
+
+`Descriptor`（4.2.16）的子类。类体收集属性时，函数对象和 `FuncGroup` 的实例被包成它存入描述器表；
+它的 `get(self, obj)` 按 `obj` 是不是类分两条路——规则都在 3.4.8。
+
+用 `attrs(cls, 'descriptors')`（4.1.8）能拿到它的实例，但写不出这个类的名字。
+
+#### 4.4.8 尚未落地的
+
+模块对象的类同属这一批，等 `import` 那一摊的对象设计定了再补进来。
+
+### 4.5 类继承关系图
+
+带 `*` 的类不在内置表里，见 4.4。
 
 - `object`
   - `NoneType` *
@@ -2078,96 +2153,6 @@ IOError
         - `decimal.DecimalException`
       - `IOError`
         - `exceptions.EncodingError`
-
-### 4.5 不入内置表的类
-
-这批类确实存在，`type(x)` 拿得到，也各有各的名字（`type(None).__name__` 就是 `'NoneType'`）——
-只是这个名字**没有进内置表**，所以源码里写下 `NoneType` 解析不到任何东西，初始时它不在任何作用域内。
-要拿到它们只能间接来：`type(None)`、`type(某个函数)`、`attrs(cls, 'descriptors')` 里的值，等等。
-
-判据是：正常写 SL 的时候不应该、也没必要主动去动它们——它们要么是某个具体对象天生的类
-（`None`、`Ellipsis`），要么是解释器造出来交给你用的东西（函数、绑定方法、描述器）。
-
-`Function`、`BuiltinFunction`、`Method` 三个都是 final（`__is_final_class__ = True`）：调用是最热的
-操作，解释器靠"被调对象是不是这几个类型"来决定直接执行还是去查 `__op_call__`（3.5），允许继承会让这个
-判定退化。要包装一个可调用对象，用普通类加 `__op_call__`。
-
-#### 4.5.1 NoneType
-
-只有一个实例，即 `None`。
-
-#### 4.5.2 SingletonType
-
-包含 SL 的部分单例对象：
-
-- Ellipsis
-- NotImplemented
-- StopIteration
-
-#### 4.5.3 CompoundType
-
-用 `|`, `!`, `?`, `[]` 可以创建**复合类**。
-
-1. `|` 表示两种类型均可。例如 `isinstance(1, int | str)` 为 `True`。
-2. `!` 表示精确类（即不允许子类）。
-   例如 `isinstance(1, int!)` 为 `True`，而 `isinstance(1, numbers.Real!)` 为 `False`。
-3. `?` 表示可以为 `None`。例如 `isinstance(None, int?)` 为 `True`。
-4. `[]` 对容器类，表示容器中元素的类型。
-   1. 对于 `tuple`
-      1. 对于 `tuple[int, str]` 可传入多个类型，表示既检查元组长度也检查元素类型
-         语义为“元组只能有两个元素且第一个元素是 int 类型且第二个元素是 str 类型”
-      2. 对于 `tuple[int, ...]` 要求只能传入两个参数，其中第一个为类型，第二个为 `...`，表示只检查元素类型
-         语义为“元组的每个元素都是 int 类型”。注意此种类型检查允许空元组
-
-   2. 对于 `list`，同上
-
-   3. 对于 `dict`
-      `dict[str, int]` 表示键的类型均为 `str`，值的类型均为 `int`。允许空字典；
-
-   4. 对于 `set`
-      `set[int]` 表示元素的类型均为 `int`。允许空集合；
-
-   **注意**：对于此种类型检查，平均时间复杂度至少是 $\mathcal O(n)$，使用前需谨慎权衡。
-   仔细考虑是否真的需要 `list[int, ...]` 而不是 `list`。
-
-以上构造复合类的方式均可嵌套使用，但应**尽量避免嵌套过深**，否则可能导致性能问题。
-
-以上检查均有短路性，但不应依赖于此，因为检查的顺序不确定，
-例如 `int | str?` 的实际实现*可能*为 `None | int | str` 而非 `int | str | None`。
-
-#### 4.5.4 Function
-
-`func` 表达式（3.4.7）的值的类型，`__is_final_class__ = True`。
-
-一个函数对象持有：函数体、形参表与各处类型注解、默认值、捕获、函数名与文档字符串。调用它就是按 3.5
-绑定实参再执行函数体。能不能内省形参与函数体、通过哪些属性内省，尚未设计。
-
-#### 4.5.5 BuiltinFunction
-
-内置函数（4.1）与内置类型上各方法的类型，`__is_final_class__ = True`。
-
-跟 `Function` 的区别只有一个：函数体由解释器自身实现，不是 SL 代码，因而无法内省。实参对应、类型检查、
-`DispatchError` 的规则与 `Function` 完全一致（3.5）——内置函数同样要声明形参与类型，走同一套绑定规则，
-不另开一套。
-
-#### 4.5.6 Method
-
-绑定方法，`__is_final_class__ = True`。
-
-`MethodDescriptor` 经由实例访问时、以及 `classmethod`（4.2.22）的 `get` 返回的那个"把 `self`/`cls`
-绑定为第一参数的可调用对象"，就是这个类的实例。它持有被绑定的对象和被绑定的可调用对象两样；调用它
-就是把前者插到实参最前面，再调用后者。
-
-#### 4.5.7 MethodDescriptor
-
-`Descriptor`（4.2.19）的子类。类体收集属性时，函数对象和 `FuncGroup` 的实例被包成它存入描述器表；
-它的 `get(self, obj)` 按 `obj` 是不是类分两条路——规则都在 3.4.8。
-
-用 `attrs(cls, 'descriptors')`（4.1.8）能拿到它的实例，但写不出这个类的名字。
-
-#### 4.5.8 尚未落地的
-
-模块对象的类同属这一批，等 `import` 那一摊的对象设计定了再补进来。
 
 ## 5 即将加入
 

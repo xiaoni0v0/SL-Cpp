@@ -15,7 +15,7 @@ class FileNotFoundError;
 // **`InternalError` 故意没有对应函数，以后也不会有**：它没有 SL 类，也绝不能被 SL 代码捕获，
 // 转换这件事对它不成立。
 //
-// 每个函数按 `.args` 只塞一个字符串——跟 `TypeError("...")` 那个例子一致（见 SL.md 4.2.26）。
+// 每个函数按 `.args` 只塞一个字符串——跟 `TypeError("...")` 那个例子一致（见 SL.md 4.2.23）。
 // `SyntaxError` 要不要在 `.args` 之外再暴露 file/row/col（类似 CPython 那样），
 // 是需要另外拍板的语言设计问题，见 .ai/context.md 悬而未决一节，这里先不越权替它做决定
 [[nodiscard]] ObjectRef exception_from(const SyntaxError &error);

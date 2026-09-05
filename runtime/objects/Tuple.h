@@ -6,7 +6,7 @@
 #include <vector>
 
 // SL 的 tuple 对象。不可变指的是这些**引用关系**不可变，不蕴含被引用的对象自己不可变
-// （SL.md 4.2.9）
+// （SL.md 4.2.8）
 class Tuple final : public Object {
     std::vector<ObjectRef> items_;
 

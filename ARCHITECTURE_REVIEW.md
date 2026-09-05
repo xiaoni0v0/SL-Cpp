@@ -277,7 +277,7 @@ SL 异常对象包进这个信封 `throw` 出去，由**紧挨着它的调用方
 2. `Type.h` / `Type.cpp`
 3. `Heap.h` / `Heap.cpp`（这时候 `Object`/`Type` 已经懂了，`collect()` 的五步会比较好懂）
 4. `Runtime.h` / `Runtime.cpp`（重点看 `init()` 那两步为什么直接读私有字段、不经过公开访问器）
-5. `x_builtin_types.inc`（一分钟就能看完，但建议对着 SL.md 4.4/4.2.26 那两张继承图核对一遍）
+5. `x_builtin_types.inc`（一分钟就能看完，但建议对着 SL.md 4.5/4.2.23 那两张继承图核对一遍）
 6. `objects/` 目录下随便挑几个看，模式都一样，看懂一个基本等于看懂全部
 7. `cpp_exceptions/`（几个异常类的字段设计）
 8. `HostErrorConversion.h/.cpp`、`RaisedException.h`（最后看，因为它们依赖前面全部概念）
