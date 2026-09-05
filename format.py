@@ -4,19 +4,19 @@
 format.py
 
 批量格式化项目里的源文件，按文件名/后缀名分派给对应的格式化器（见 FORMATTERS_BY_NAME、FORMATTERS）：
-    .cpp / .h / .inc ->  clang-format
-    CMakeLists.txt   ->  gersemi
-    .cmake           ->  gersemi
-    .py              ->  black
-    .md              ->  prettier
+    .cpp / .h / .inc                           ->  clang-format
+    CMakeLists.txt                             ->  gersemi
+    .cmake                                     ->  gersemi
+    .py                                        ->  black
+    .md / .json / .yaml / .yml / .clang-format ->  prettier
 未收录的文件名/后缀一律忽略。
 
 排除规则由下面两张 pattern 表控制（glob 通配符，大小写不敏感）：
     EXCLUDE_DIR_PATTERNS    匹配目录名，命中的目录整棵子树都不进入
     EXCLUDE_FILE_PATTERNS   匹配文件名，命中的文件跳过
 
-编码一律 UTF-8：不是合法 UTF-8 的文件直接报错跳过，绝不猜编码、也绝不写回；
-带 UTF-8 BOM 的会顺手把 BOM 剥掉。
+编码一律 UTF-8：本脚本不猜编码、也不代为转换，遇到不是合法 UTF-8 的文件只报错并跳过，要转码得由你自己来；
+带 UTF-8 BOM 的则会在写回时顺手把 BOM 剥掉。
 
 用法：
     python format.py [项目根目录] [-i]
@@ -32,6 +32,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Callable, NamedTuple
 from typing import List
@@ -89,7 +90,7 @@ class Formatter(NamedTuple):
         except subprocess.TimeoutExpired:
             # TimeoutExpired 不是 OSError，不转成 FormatError 的话 main 里拦不住
             raise FormatError(
-                f"{self.command} 超过 {TIMEOUT_SECONDS} 秒没有返回"
+                f"{self.command} 超过 {TIMEOUT_SECONDS} 秒还没返回，已放弃这个文件"
             ) from None
         detail = result.stderr.decode("utf-8", errors="replace").strip()
         if result.returncode != 0:
@@ -109,9 +110,7 @@ class FormatError(RuntimeError):
     """格式化器处理单个文件失败"""
 
 
-# 循环里是否已经打过逐文件的信息（reformatted 行、告警、报错），决定最后要不要空一行
-# 把它们和总结隔开。光看 reformatted 的条数不够——全部失败时一条 reformatted 都没有，
-# 报错却是实打实占了屏幕的。
+# 循环里是否已经打过逐文件的信息（reformatted 行、告警、报错），决定最后要不要空一行把它们和总结隔开
 _progress_printed = False
 
 
@@ -172,10 +171,14 @@ FORMATTERS = {
     ".cmake": GERSEMI,
     ".py": BLACK,
     ".md": PRETTIER,
+    ".json": PRETTIER,
+    ".yaml": PRETTIER,
+    ".yml": PRETTIER,
 }
 # 按完整文件名分派的格式化器（大小写不敏感）
 FORMATTERS_BY_NAME = {
     "cmakelists.txt": GERSEMI,
+    ".clang-format": PRETTIER,
 }
 
 
@@ -222,8 +225,8 @@ def ensure_utf8(original: bytes) -> None:
         original.decode("utf-8")
     except UnicodeDecodeError as e:
         raise FormatError(
-            f"不是合法的 UTF-8（第 {e.start} 字节起：{e.reason}），"
-            f"先把它转成 UTF-8 再跑"
+            f"不是合法的 UTF-8（第 {e.start} 字节起：{e.reason}），已跳过不动；"
+            f"请你把它转成 UTF-8 之后重新运行本脚本"
         ) from None
 
 
@@ -234,8 +237,7 @@ def format_file(path: Path) -> bool:
     """
     original = path.read_bytes()
     ensure_utf8(original)
-    # 四个格式化器都是原样保留 BOM 的，所以进出各剥一次：喂给 stdin 的不带 BOM，
-    # clang-format / gersemi 自己读文件躲不开 BOM，就从它们的输出里剥
+    # 四个格式化器都是原样保留 BOM 的，所以进出各剥一次
     source = original.removeprefix(UTF8_BOM)
     formatted = formatter_for(path).run(path, source).removeprefix(UTF8_BOM)
     if formatted != original:
@@ -254,7 +256,7 @@ def missing_formatters(files: list[Path]) -> list[Formatter]:
     return [fm for _, fm in sorted(needed.items()) if shutil.which(fm.command) is None]
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="批量格式化项目源文件")
     parser.add_argument(
         "project_dir", nargs="?", default=".", help="项目根目录，默认为当前目录"
@@ -267,6 +269,15 @@ def main():
     )
     args = parser.parse_args()
 
+    started_at = time.perf_counter()
+    try:
+        run(args)
+    finally:
+        print(f"耗时 {time.perf_counter() - started_at:.2f} 秒", file=sys.stderr)
+
+
+def run(args: argparse.Namespace) -> None:
+    """参数已经解析好之后的正事"""
     project_dir = Path(args.project_dir).resolve()
     if not project_dir.is_dir():
         print(f"错误：目录不存在：{project_dir}", file=sys.stderr)
@@ -284,7 +295,11 @@ def main():
         return
 
     if missing := missing_formatters(files):
-        print("错误：下面这些格式化器不在 PATH 里，装好再跑：", file=sys.stderr)
+        print(
+            "错误：下面这些格式化器不在 PATH 里，一个文件都没处理。"
+            "请你按右边的命令装好，然后重新运行本脚本：",
+            file=sys.stderr,
+        )
         for fm in missing:
             print(f"    {fm.command:<14}{fm.install_hint}", file=sys.stderr)
         sys.exit(1)

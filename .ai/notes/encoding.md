@@ -34,5 +34,6 @@
 - BOM 本身不影响编译（clang-cl 对带 BOM 的源文件 `rc=0`），也不影响 `.clang-format`/`.gersemirc`
   这些配置文件被正确读取——之所以还是要清掉，是因为它污染 diff、破坏 `#!` shebang、在 grep 和正则
   里制造一个看不见的首字符。
-- 闸门只覆盖 `format.py` 收录的那些后缀。`.gitattributes`、`.clang-format`、`.gersemirc`、
-  `.json` 这类不在分派表里的文件盖不到，但实测它们对 BOM 都不敏感，风险可以接受。
+- 闸门只覆盖 `format.py` 收录的那些文件名/后缀。`.gitattributes`、`.gersemirc`、`.gitignore`
+  这类不在分派表里的盖不到，但实测配置文件对 BOM 都不敏感（clang-format 和 gersemi 读带 BOM 的
+  配置照样正常），风险可以接受。
