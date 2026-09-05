@@ -4,11 +4,11 @@
 format.py
 
 批量格式化项目里的源文件，按文件名/后缀名分派给对应的格式化器（见 FORMATTERS_BY_NAME、FORMATTERS）：
-    CMakeLists.txt                                  ->  gersemi
-    .c / .cc / .cpp / .cxx / .h / .hh / .hpp / .hxx / .inc ->  clang-format
-    .cmake                                          ->  gersemi
-    .md                                             ->  prettier
-    .py                                             ->  black
+    .cpp / .h / .inc ->  clang-format
+    CMakeLists.txt   ->  gersemi
+    .cmake           ->  gersemi
+    .py              ->  black
+    .md              ->  prettier
 未收录的文件名/后缀一律忽略。
 
 排除规则由下面两张 pattern 表控制（glob 通配符，大小写不敏感）：
@@ -108,18 +108,12 @@ PRETTIER = Formatter(
 
 # 后缀名 -> 格式化器。要支持新语言就在这里加一行，别的地方不用动
 FORMATTERS = {
-    ".c": CLANG_FORMAT,
-    ".cc": CLANG_FORMAT,
     ".cpp": CLANG_FORMAT,
-    ".cxx": CLANG_FORMAT,
     ".h": CLANG_FORMAT,
-    ".hh": CLANG_FORMAT,
-    ".hpp": CLANG_FORMAT,
-    ".hxx": CLANG_FORMAT,
     ".inc": CLANG_FORMAT,
     ".cmake": GERSEMI,
-    ".md": PRETTIER,
     ".py": BLACK,
+    ".md": PRETTIER,
 }
 # 按完整文件名分派的格式化器（大小写不敏感）
 FORMATTERS_BY_NAME = {
