@@ -49,6 +49,12 @@ for _stream in sys.stdout, sys.stderr:
             line_buffering=True,
         )
 
+# 缓存放脚本旁；缓存结构变化时递增版本号使旧缓存失效
+CACHE_FILENAME = ".format_cache.json"
+CACHE_VERSION = 1
+# 固定放脚本旁（换目录会互相覆盖，仅多一次全量重跑）
+CACHE_PATH = Path(__file__).resolve().parent / CACHE_FILENAME
+
 # 命中则整棵子树不处理（glob 通配，大小写不敏感）
 EXCLUDE_DIR_PATTERNS = [
     ".ai",
@@ -58,9 +64,6 @@ EXCLUDE_DIR_PATTERNS = [
     ".venv",
     "cmake-build-*",
 ]
-# 缓存放脚本旁；缓存结构变化时递增版本号使旧缓存失效
-CACHE_FILENAME = ".format_cache.json"
-CACHE_VERSION = 1
 # 命中则跳过
 EXCLUDE_FILE_PATTERNS = [
     # 由 test/numeric/gen_*_cases.py 生成
@@ -305,15 +308,10 @@ def environment_fingerprint(project_dir: Path, formatters: list[Formatter]) -> s
     return "|".join(parts)
 
 
-def cache_path() -> Path:
-    """缓存固定放脚本旁，换目录会互相覆盖记录（仅多一次全量重跑）"""
-    return Path(__file__).resolve().parent / CACHE_FILENAME
-
-
 def load_cache(fingerprint: str) -> dict[str, list[int]]:
     """读缓存；文件缺失、损坏或指纹不符时一律视为无缓存"""
     try:
-        with cache_path().open(encoding="utf-8") as fp:
+        with CACHE_PATH.open(encoding="utf-8") as fp:
             data = json.load(fp)
     except (OSError, ValueError):
         return {}
@@ -325,7 +323,7 @@ def load_cache(fingerprint: str) -> dict[str, list[int]]:
 
 def save_cache(fingerprint: str, entries: dict[str, list[int]]) -> None:
     """写缓存：先写临时文件再替换，防止留下半截 JSON"""
-    temporary = cache_path().with_name(CACHE_FILENAME + ".tmp")
+    temporary = CACHE_PATH.with_name(CACHE_FILENAME + ".tmp")
     try:
         with temporary.open("w", encoding="utf-8", newline="\n") as fp:
             json.dump(
@@ -335,11 +333,11 @@ def save_cache(fingerprint: str, entries: dict[str, list[int]]) -> None:
                 indent=1,
                 sort_keys=True,
             )
-        os.replace(temporary, cache_path())
+        os.replace(temporary, CACHE_PATH)
     except OSError as e:
         # 缓存写失败不影响本次结果，最多下次全量重跑
         print(
-            f"警告：缓存写入失败：{cache_path()}（{e}），下次将全量重跑",
+            f"警告：缓存写入失败：{CACHE_PATH}（{e}），下次将全量重跑",
             file=sys.stderr,
         )
 
@@ -435,7 +433,7 @@ def run(args: argparse.Namespace) -> None:
     if _progress_printed:
         print()  # 与逐文件输出之间空一行
 
-    print("存在处理失败的文件。" if failed_count > 0 else "全部处理完成。")
+    print("未能全部完成! 💥 💔 💥" if failed_count > 0 else "全部完成! ✨ 🍰 ✨")
 
     summary_parts = []
     if reformatted_count > 0:
