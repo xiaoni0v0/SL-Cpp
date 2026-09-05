@@ -7,7 +7,7 @@
 class Int final : public Object {
     BigInt value_;
 
-    SL_HEAP_ONLY;
+    SL_MAKE_REF_ONLY;
     explicit Int(BigInt value);
 
   public:

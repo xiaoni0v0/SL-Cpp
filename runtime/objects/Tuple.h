@@ -10,7 +10,7 @@
 class Tuple final : public Object {
     std::vector<ObjectRef> items_;
 
-    SL_HEAP_ONLY;
+    SL_MAKE_REF_ONLY;
     explicit Tuple(std::vector<ObjectRef> items);
 
   public:

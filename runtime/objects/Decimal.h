@@ -7,7 +7,7 @@
 class Decimal final : public Object {
     BigDec value_;
 
-    SL_HEAP_ONLY;
+    SL_MAKE_REF_ONLY;
     explicit Decimal(BigDec value);
 
   public:

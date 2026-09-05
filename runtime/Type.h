@@ -11,7 +11,7 @@ class Type final : public Object {
     std::vector<Ref<Type>> bases_;
     std::vector<Type *> mro_; // 第 0 项是自己。存裸指针、不是强引用
 
-    SL_HEAP_ONLY;
+    SL_MAKE_REF_ONLY;
     Type(Type *meta, std::string name, std::vector<Ref<Type>> bases);
 
     void visit_own_refs(RefVisitor &visitor) override;

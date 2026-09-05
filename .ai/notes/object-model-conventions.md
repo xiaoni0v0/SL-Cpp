@@ -121,7 +121,7 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
 | `Object::visit_own_refs` | 只有 `Object::visit_refs` | 私有虚函数（NVI），子类照常覆写 |
 | `Object::set_type` | `Runtime` | `friend class Runtime` |
 | `Object::incref/decref` | `Ref<T>`、`Heap` | `template <typename U> friend class Ref` + `friend class Heap` |
-| 各具体对象类型的构造函数 | `make_ref` | `SL_HEAP_ONLY` 宏（放在 private 区） |
+| 各具体对象类型的构造函数 | `make_ref` | `SL_MAKE_REF_ONLY` 宏（放在 private 区） |
 | `Heap::link/unlink` | `Object` | `friend class Object` |
 
 **踩过的坑**：`Heap` 的两个访问者（`Marker`/`Clearer`）一开始写在 `Heap.cpp` 的匿名 namespace 里，
@@ -135,7 +135,7 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
 "手动改引用计数"在 `runtime/` 之外直接写不出来。`decref()` 归零时 `delete this`——注意它之后不得
 再碰任何成员。
 
-**每个具体对象类型的 private 区都要写 `SL_HEAP_ONLY;`，构造函数也放在 private 区**（宏定义在
+**每个具体对象类型的 private 区都要写 `SL_MAKE_REF_ONLY;`，构造函数也放在 private 区**（宏定义在
 `Object.h`）。这样这类对象只能由 `make_ref` 在堆上建。拦的是两件事：
 
 - **栈上/静态存储期的对象**：`Int x{BigInt{1}};` 语法上完全合法、写起来还很自然，可它一旦被 `Ref`

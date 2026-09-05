@@ -9,7 +9,7 @@
 class Str final : public Object {
     std::u32string value_;
 
-    SL_HEAP_ONLY;
+    SL_MAKE_REF_ONLY;
     explicit Str(std::u32string value);
 
   public:

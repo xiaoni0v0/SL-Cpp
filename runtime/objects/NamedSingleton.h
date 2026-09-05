@@ -10,7 +10,7 @@
 class NamedSingleton final : public Object {
     std::string name_;
 
-    SL_HEAP_ONLY;
+    SL_MAKE_REF_ONLY;
     NamedSingleton(Type *type, std::string name);
 
   public:

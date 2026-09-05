@@ -8,7 +8,7 @@
 class Bool final : public Object {
     bool value_;
 
-    SL_HEAP_ONLY;
+    SL_MAKE_REF_ONLY;
     Bool(Type *type, bool value);
 
   public:

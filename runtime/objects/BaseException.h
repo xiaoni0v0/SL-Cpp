@@ -19,7 +19,7 @@
 class BaseException final : public Object {
     Ref<Tuple> args_;
 
-    SL_HEAP_ONLY;
+    SL_MAKE_REF_ONLY;
     // type 必须是 BaseException 或其子类；调用方保证，构造时用 assert 兜底（见 .cpp）
     BaseException(Type *type, std::vector<ObjectRef> args);
 
