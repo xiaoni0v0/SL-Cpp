@@ -14,8 +14,9 @@ format.py
 的文件不处理。文件一律按 UTF-8 处理：非合法 UTF-8 报错并跳过（不猜测、不转码），
 带 BOM 的在写回时剥除。
 
--i 模式把每个文件处理后的（修改时间, 大小）记入脚本旁的 CACHE_FILENAME，下次
-命中则跳过；脚本自身、格式化器或配置变化会使缓存整体失效（见 environment_fingerprint）。
+-i 模式把每个文件处理后的（修改时间, 大小）记入项目根目录下的 CACHE_FILENAME
+（每个被格式化的目录各一份，互不干扰），下次命中则跳过；脚本自身、格式化器或
+配置变化会使缓存整体失效（见 environment_fingerprint）。
 
 用法：
     python format.py [项目根目录] [-i] [--no-cache]
@@ -49,11 +50,10 @@ for _stream in sys.stdout, sys.stderr:
             line_buffering=True,
         )
 
-# 缓存放脚本旁；缓存结构变化时递增版本号使旧缓存失效
+# 缓存写在被格式化的项目根目录：每个项目各一份，互不覆盖；
+# 缓存结构变化时递增版本号使旧缓存失效
 CACHE_FILENAME = ".format_cache.json"
 CACHE_VERSION = 1
-# 固定放脚本旁（换目录会互相覆盖，仅多一次全量重跑）
-CACHE_PATH = Path(__file__).resolve().parent / CACHE_FILENAME
 
 # 命中则整棵子树不处理（glob 通配，大小写不敏感）
 EXCLUDE_DIR_PATTERNS = [
@@ -69,7 +69,7 @@ EXCLUDE_FILE_PATTERNS = [
     # 由 test/numeric/gen_*_cases.py 生成
     "big_int_cases.inc",
     "big_dec_cases.inc",
-    # 本脚本缓存，处理完即被覆盖
+    # 缓存文件（写在被格式化的项目根目录，每次运行整体重写）
     CACHE_FILENAME,
 ]
 # 单个格式化器进程的超时（秒），防止工具挂起拖住整批
@@ -308,10 +308,10 @@ def environment_fingerprint(project_dir: Path, formatters: list[Formatter]) -> s
     return "|".join(parts)
 
 
-def load_cache(fingerprint: str) -> dict[str, list[int]]:
+def load_cache(cache_path: Path, fingerprint: str) -> dict[str, list[int]]:
     """读缓存；文件缺失、损坏或指纹不符时一律视为无缓存"""
     try:
-        with CACHE_PATH.open(encoding="utf-8") as fp:
+        with cache_path.open(encoding="utf-8") as fp:
             data = json.load(fp)
     except (OSError, ValueError):
         return {}
@@ -321,9 +321,11 @@ def load_cache(fingerprint: str) -> dict[str, list[int]]:
     return entries if isinstance(entries, dict) else {}
 
 
-def save_cache(fingerprint: str, entries: dict[str, list[int]]) -> None:
+def save_cache(
+    cache_path: Path, fingerprint: str, entries: dict[str, list[int]]
+) -> None:
     """写缓存：先写临时文件再替换，防止留下半截 JSON"""
-    temporary = CACHE_PATH.with_name(CACHE_FILENAME + ".tmp")
+    temporary = cache_path.with_name(CACHE_FILENAME + ".tmp")
     try:
         with temporary.open("w", encoding="utf-8", newline="\n") as fp:
             json.dump(
@@ -333,11 +335,11 @@ def save_cache(fingerprint: str, entries: dict[str, list[int]]) -> None:
                 indent=1,
                 sort_keys=True,
             )
-        os.replace(temporary, CACHE_PATH)
+        os.replace(temporary, cache_path)
     except OSError as e:
         # 缓存写失败不影响本次结果，最多下次全量重跑
         print(
-            f"警告：缓存写入失败：{CACHE_PATH}（{e}），下次将全量重跑",
+            f"警告：缓存写入失败：{cache_path}（{e}），下次将全量重跑",
             file=sys.stderr,
         )
 
@@ -398,7 +400,9 @@ def run(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     fingerprint = environment_fingerprint(project_dir, needed_formatters(files))
-    cached = {} if args.no_cache else load_cache(fingerprint)
+    # 缓存放被格式化的项目根目录：各项目互不干扰，交替格式化不会互相清空
+    cache_path = project_dir / CACHE_FILENAME
+    cached = {} if args.no_cache else load_cache(cache_path, fingerprint)
     # 只记录本次仍存在的文件，同时清除已删除文件的陈旧条目
     current: dict[str, list[int]] = {}
 
@@ -428,7 +432,7 @@ def run(args: argparse.Namespace) -> None:
         else:
             unchanged_count += 1
 
-    save_cache(fingerprint, current)
+    save_cache(cache_path, fingerprint, current)
 
     if _progress_printed:
         print()  # 与逐文件输出之间空一行
