@@ -8,7 +8,7 @@ namespace {
 
 std::unique_ptr<Runtime> g_runtime;
 
-// 每个内置类型的静态描述，跟 x_builtin_types.inc 一一对应
+// 每个内置类型的静态描述，编号 + 名字
 struct BuiltinTypeSpec {
     const char *name;
     BuiltinType base;
@@ -61,16 +61,6 @@ void Runtime::build_singletons() {
     singletons_.false_ = make_ref<Bool>(bool_type, false);
 }
 
-void Runtime::visit_roots(RefVisitor &visitor) {
-    visitor.visit_each(types_);
-    visitor.visit(singletons_.none_);
-    visitor.visit(singletons_.ellipsis_);
-    visitor.visit(singletons_.not_implemented_);
-    visitor.visit(singletons_.stop_iteration_);
-    visitor.visit(singletons_.true_);
-    visitor.visit(singletons_.false_);
-}
-
 void Runtime::tear_down() {
     g_runtime->singletons_ = {};
     for (Ref<Type> &type : g_runtime->types_) type.reset();
@@ -86,17 +76,27 @@ Runtime &Runtime::instance() {
     return *g_runtime;
 }
 
+Type *Runtime::builtin_type(const BuiltinType id) { return instance().types_[index_of(id)].get(); }
+
+void Runtime::visit_roots(RefVisitor &visitor) {
+    visitor.visit_each(types_);
+    visitor.visit(singletons_.none_);
+    visitor.visit(singletons_.ellipsis_);
+    visitor.visit(singletons_.not_implemented_);
+    visitor.visit(singletons_.stop_iteration_);
+    visitor.visit(singletons_.true_);
+    visitor.visit(singletons_.false_);
+}
+
 void Runtime::init() {
     if (g_runtime) throw InternalError{"Runtime: double init"};
     g_runtime.reset(new Runtime{});
     Heap::add_root_source(g_runtime.get());
 
     try {
-        g_runtime->build_types(); // 内置类型（含异常类树）
+        g_runtime->build_types();
         g_runtime->build_singletons();
-        // 内置函数表、内置模块表将来插在这里
     } catch (...) {
-        // 半初始化的运行时比没有运行时更难查：拆干净再把异常放出去
         tear_down();
         throw;
     }
@@ -109,14 +109,13 @@ void Runtime::shutdown() {
 
 bool Runtime::ready() { return g_runtime != nullptr; }
 
-Type *Runtime::builtin_type(const BuiltinType id) { return instance().types_[index_of(id)].get(); }
-
 #define X(id, accessor, name, base)                                                                \
     Type *Runtime::accessor() { return builtin_type(BuiltinType::id); }
 #include "x_builtin_types.inc"
 #undef X
 
 NamedSingleton *Runtime::none() { return instance().singletons_.none_.get(); }
+
 NamedSingleton *Runtime::ellipsis() { return instance().singletons_.ellipsis_.get(); }
 
 NamedSingleton *Runtime::not_implemented() { return instance().singletons_.not_implemented_.get(); }
