@@ -14,8 +14,8 @@ enum class BuiltinType : std::size_t {
 
 #undef X
     Count,
-    // 不是类型，是清单里"基类"那一列的哨兵：只给 object 用，它没有基类。
-    // 排在 Count 之后，所以不计入类型个数
+
+    // 不是类型，只给 object 用
     NoBase,
 };
 
@@ -44,12 +44,10 @@ class Runtime final : public GcRootSource {
     void build_types();
     void build_singletons();
 
-    // 放掉全部内置类型与单例的引用
-    void release_all_refs();
-    // 把运行时拆干净
+    // 把运行时拆干净。跟 init() 一样是对全局槽位本身的操作（末尾要把它置空），所以是 static
     static void tear_down();
 
-    // 取单例
+    // 取那个唯一的运行时对象；没 init() 或已经 shutdown() 就访问，抛 InternalError
     [[nodiscard]] static Runtime &instance();
     // 各类型访问器共用的实现，省得宏展开出一堆同样的函数体
     [[nodiscard]] static Type *builtin_type(BuiltinType id);
