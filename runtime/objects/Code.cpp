@@ -47,8 +47,8 @@ void Code::visit_own_refs(RefVisitor &visitor) {
     for (RefBase &ref : parts_.value_captured) visitor.visit(ref);
 
     if (parts_.params) {
-        for (OneParam &param : parts_.params->positional) visitor.visit(param.name);
-        for (OneParam &param : parts_.params->kw_only) visitor.visit(param.name);
+        for (OneParamShape &param : parts_.params->positional) visitor.visit(param.name);
+        for (OneParamShape &param : parts_.params->kw_only) visitor.visit(param.name);
         visitor.visit(parts_.params->var_args);
         visitor.visit(parts_.params->var_kwargs);
     }

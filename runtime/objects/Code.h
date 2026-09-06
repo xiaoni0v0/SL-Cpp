@@ -9,23 +9,16 @@
 #include <vector>
 
 /**
- * 一份编译好的代码：一份文件、一个函数体、一个类体各一个。
- *
- * 是 SL 对象但 SL 层完全接触不到（SL.md 4.3.8）。做成对象是为了让引用计数与 GC 的追踪能穿过它——
- * 它强引用着常量表、嵌套 Code 表、各处名字，标记器只顺着 Object 走，不做成对象这条链就断了。
- *
- * 建好之后不再改变。字段清单与语义见 compiler/codegen/bytecode.md。
+ * 一份编译好的代码。
  */
 class Code final : public Object {
   public:
     /**
      * 单个形参的形状。
      *
-     * 默认值与类型注解本身不在 Code 里（它们在外层作用域求值、挂在函数对象上），
-     * Code 只需要知道"有没有"——实参绑定要靠它决定缺参是报错还是取默认值，
-     * 也要靠它把默认值/注解元组里的项对应回具体形参。
+     * 默认值与类型注解本身不在 Code 里（它们挂在函数对象上），
      */
-    struct OneParam {
+    struct OneParamShape {
         Ref<Str> name;
         bool has_default{false};
         bool has_annotation{false};
@@ -33,19 +26,18 @@ class Code final : public Object {
 
     /**
      * 形参形状，只有函数体的 Code 有。
-     *
-     * 照 SL.md 3.5 的四段切分成四个字段，不用打了 tag 的扁平表——
-     * "第几个之后算 kw_only"这种状态机式的表达是漏边界情况的常客。
      */
     struct ParamShape {
-        std::vector<OneParam> positional; // *args 之前
-        std::vector<OneParam> kw_only;    // *args 之后、**kwargs 之前，只能按关键字传
-        Ref<Str> var_args;                // *identifier，空表示没有
-        Ref<Str> var_kwargs;              // **identifier，空表示没有
+        std::vector<OneParamShape> positional; // *args 之前
+        std::vector<OneParamShape> kw_only;    // *args 之后、**kwargs 之前，只能按关键字传
+        Ref<Str> var_args;                     // *identifier，空表示没有
+        Ref<Str> var_kwargs;                   // **identifier，空表示没有
         bool has_return_annotation{false};
     };
 
-    // 行位置表的一项：从 pc 起的指令都算在这个行列上
+    /**
+     * 行位置表的一项
+     */
     struct LineEntry {
         std::uint32_t pc{0};
         int row{0};
@@ -54,9 +46,6 @@ class Code final : public Object {
 
     /**
      * 建 Code 用的一整包字段。
-     *
-     * Code 本身不可变，而 codegen 是一路往各张表里追加的；与其给 Code 开一串 setter 或者一个
-     * 十来个参数的构造函数，不如让 codegen 填好这个聚合体再整个搬进去。
      */
     struct Parts {
         std::vector<std::uint16_t> bytecode;
