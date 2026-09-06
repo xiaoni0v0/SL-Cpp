@@ -11,6 +11,7 @@ X(Decimal, type_decimal, "decimal", Real)
 X(Bool, type_bool, "bool", Real)
 X(Str, type_str, "str", Object)
 X(Tuple, type_tuple, "tuple", Object)
+X(Code, type_code, "code", Object)
 
 // 异常类型清单
 X(BaseException, type_base_exception, "BaseException", Object)

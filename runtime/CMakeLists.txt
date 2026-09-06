@@ -18,6 +18,8 @@ sl_add_module(
     objects/BaseException.h
     objects/Bool.cpp
     objects/Bool.h
+    objects/Code.cpp
+    objects/Code.h
     objects/Int.cpp
     objects/Int.h
     objects/Str.cpp

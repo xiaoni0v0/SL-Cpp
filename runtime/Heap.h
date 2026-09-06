@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 class Object;
 class RefVisitor;
 template <typename T> class Ref;
@@ -7,7 +9,7 @@ template <typename T> class Ref;
 /**
  * 能提供引用根的东西。实现它并注册进 Heap。
  *
- * 现在只有 Runtime（内置类型 + 单例）；以后还有帧栈、模块表、每份 Code 的常量表。
+ * 现在只有 Runtime（内置类型 + 单例）；以后还有帧栈、模块表等。
  */
 class GcRootSource {
   public:

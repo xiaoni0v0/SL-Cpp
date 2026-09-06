@@ -2015,7 +2015,14 @@ BaseException
 `Descriptor`（4.2.16）的子类。类体收集属性时，函数对象和 `FuncGroup` 的实例被包成它存入描述器表；
 它的 `get(self, obj)` 规则都在 3.4.8。
 
-#### 4.3.8 尚未落地的
+#### 4.3.8 Code
+
+已编译的代码，`__is_final_class__ = True`。
+一份文件、一个函数体、一个类体各对应一个 `Code` 实例。
+
+`Code` 是不可变的：一经编译完成，其内容不再改变。
+
+#### 4.3.9 尚未落地的
 
 模块对象的类同属这一批，等 `import` 设计定了再补进来。
 
@@ -2102,6 +2109,7 @@ IOError
   - `Function` *
   - `BuiltinFunction` *
   - `Method` *
+  - `Code` *
   - `CompoundType` *
   - `TypeVar`
   - `decimal.Context`
