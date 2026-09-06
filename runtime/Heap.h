@@ -24,9 +24,9 @@ class GcRootSource {
 class Heap {
     friend class Object;
 
-    // 标记阶段和清理阶段的两个访问者
+    // 标记阶段和拆环阶段的两个访问者
     class Marker;
-    class Clearer;
+    class RefDropper;
 
     // 进出全堆链表
     static void link(Object *obj);

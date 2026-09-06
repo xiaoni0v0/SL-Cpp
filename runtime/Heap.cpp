@@ -3,7 +3,6 @@
 #include "Object.h"
 
 #include <cassert>
-#include <stack>
 #include <vector>
 
 namespace {
@@ -22,34 +21,31 @@ constexpr std::size_t kMinObjectsBetweenCollects{1024};
  * 标记阶段，把可达对象标记
  */
 class Heap::Marker final : public RefVisitor {
-    std::stack<Object *> pending_;
-
-  protected:
-    void visit_target(Object *const target) override {
-        if (!target || target->gc_reachable_) return;
-        target->gc_reachable_ = true;
-        pending_.push(target); // 显式工作栈，不递归
-    }
-
-    [[nodiscard]] bool should_clear() const override { return false; }
+    std::vector<Object *> pending_; // 显式工作栈，不递归
 
   public:
+    void visit(RefBase &ref) override {
+        Object *const target{ref.target()};
+        if (!target || target->gc_reachable_) return;
+        target->gc_reachable_ = true;
+        pending_.push_back(target);
+    }
+
     void drain() {
         while (!pending_.empty()) {
-            Object *const object{pending_.top()};
-            pending_.pop();
+            Object *const object{pending_.back()};
+            pending_.pop_back();
             object->visit_refs(*this);
         }
     }
 };
 
 /**
- * 清理阶段，把垃圾对象的每条出边就地放掉
+ * 拆环阶段，把垃圾对象的每条出边就地放掉
  */
-class Heap::Clearer final : public RefVisitor {
-  protected:
-    void visit_target(Object *) override {}
-    [[nodiscard]] bool should_clear() const override { return true; }
+class Heap::RefDropper final : public RefVisitor {
+  public:
+    void visit(RefBase &ref) override { ref.reset(); }
 };
 
 void Heap::link(Object *const obj) {
@@ -100,9 +96,9 @@ void Heap::collect() {
     // 3. 保命，每个垃圾对象先 +1
     for (Object *const object : garbage) object->incref();
 
-    // 4. 断引用
-    Clearer clearer;
-    for (Object *const object : garbage) object->visit_refs(clearer);
+    // 4. 拆环：释放垃圾对象的每条出边
+    RefDropper dropper;
+    for (Object *const object : garbage) object->visit_refs(dropper);
 
     // 5. 销毁
     for (Object *const object : garbage) {

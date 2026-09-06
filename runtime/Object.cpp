@@ -5,6 +5,19 @@
 
 #include <cassert>
 
+RefBase::RefBase(Object *const ptr) : ptr_{ptr} {
+    if (ptr_) ptr_->incref();
+}
+
+RefBase::~RefBase() {
+    if (ptr_) ptr_->decref();
+}
+
+void RefBase::reset() {
+    if (ptr_) ptr_->decref();
+    ptr_ = nullptr;
+}
+
 void Object::incref() { ++refcount_; }
 
 void Object::decref() {

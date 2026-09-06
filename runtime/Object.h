@@ -9,35 +9,53 @@ class Object;
 class Type;
 
 /**
+ * 一条引用关系里跟 T 无关的那一半，指向某个 Object。
+ *
+ * 只能作为 Ref<T> 的基类。
+ */
+class RefBase {
+  protected:
+    Object *ptr_{nullptr};
+
+    RefBase() = default;
+    // +1
+    explicit RefBase(Object *ptr);
+    // -1
+    ~RefBase();
+
+  public:
+    RefBase(const RefBase &) = delete;
+    RefBase &operator=(const RefBase &) = delete;
+
+    // 指向的对象，可能为空。借用，不改引用计数
+    [[nodiscard]] Object *target() const { return ptr_; }
+    // 放掉这条引用并置空
+    void reset();
+};
+
+/**
  * 一条引用关系。
  *
  * 会改对象的引用计数，构造 Ref 恒 +1、析构 Ref 恒 -1。
  */
-template <typename T> class Ref {
+template <typename T> class Ref final : public RefBase {
     template <typename U> friend class Ref;
-
-    T *ptr_{nullptr};
 
   public:
     Ref() = default;
     explicit(false) Ref(std::nullptr_t) {}
-    explicit Ref(T *ptr) : ptr_{ptr} {
-        if (ptr_) ptr_->incref();
-    }
+    explicit Ref(T *ptr) : RefBase{ptr} {}
 
-    Ref(const Ref &other) : Ref{other.ptr_} {}
-    Ref(Ref &&other) noexcept : ptr_{std::exchange(other.ptr_, nullptr)} {}
+    Ref(const Ref &other) : RefBase{other.ptr_} {}
+    Ref(Ref &&other) noexcept { ptr_ = std::exchange(other.ptr_, nullptr); }
 
     template <typename U>
         requires std::convertible_to<U *, T *>
-    explicit(false) Ref(const Ref<U> &other) : Ref{static_cast<T *>(other.ptr_)} {}
+    explicit(false) Ref(const Ref<U> &other) : RefBase{other.ptr_} {}
     template <typename U>
         requires std::convertible_to<U *, T *>
-    explicit(false) Ref(Ref<U> &&other) noexcept
-        : ptr_{static_cast<T *>(std::exchange(other.ptr_, nullptr))} {}
-
-    ~Ref() {
-        if (ptr_) ptr_->decref();
+    explicit(false) Ref(Ref<U> &&other) noexcept {
+        ptr_ = std::exchange(other.ptr_, nullptr);
     }
 
     Ref &operator=(Ref other) noexcept {
@@ -45,19 +63,14 @@ template <typename T> class Ref {
         return *this;
     }
 
-    [[nodiscard]] T *get() const { return ptr_; }
-    T *operator->() const { return ptr_; }
-    T &operator*() const { return *ptr_; }
+    [[nodiscard]] T *get() const { return static_cast<T *>(ptr_); }
+    T *operator->() const { return get(); }
+    T &operator*() const { return *get(); }
     explicit operator bool() const { return ptr_; }
 
     // 指针相等，对应 SL 的 is
     [[nodiscard]] bool operator==(const Ref &other) const { return ptr_ == other.ptr_; }
     [[nodiscard]] bool operator==(const T *other) const { return ptr_ == other; }
-
-    void reset() {
-        if (ptr_) ptr_->decref();
-        ptr_ = nullptr;
-    }
 };
 
 using ObjectRef = Ref<Object>;
@@ -73,29 +86,22 @@ template <typename T, typename... Args> [[nodiscard]] Ref<T> make_ref(Args &&...
 
 /**
  * 遍历一个对象每个直接强引用。
+ *
+ * 拿到的是引用本身而不是它指向的对象，所以"看一眼"和"放掉"两种用法共用同一份字段清单
+ * （见 Object::visit_own_refs），标记扫到的边和拆环放掉的边不可能对不上。
  */
 class RefVisitor {
-  protected:
-    // 对被指向的那个对象做什么
-    virtual void visit_target(Object *target) = 0;
-    // 是否顺带把槽位置空。GC 的标记阶段返回 false，清理阶段返回 true
-    [[nodiscard]] virtual bool should_clear() const = 0;
-
   public:
     RefVisitor() = default;
     RefVisitor(const RefVisitor &) = delete;
     RefVisitor &operator=(const RefVisitor &) = delete;
     virtual ~RefVisitor() = default;
 
-    // 对每条引用的行为，外部调用
-    template <typename T> void visit(Ref<T> &slot) {
-        visit_target(slot.get());
-        if (should_clear()) slot.reset();
-    }
+    // 对一条引用调用一次
+    virtual void visit(RefBase &ref) = 0;
 
-    // 或者一整个装槽位的容器
-    template <std::ranges::range C> void visit_each(C &slots) {
-        for (auto &slot : slots) visit(slot);
+    template <std::ranges::range C> void visit_each(C &refs) {
+        for (RefBase &ref : refs) visit(ref);
     }
 };
 
@@ -107,7 +113,7 @@ class RefVisitor {
 class Object {
     friend class Heap;
     friend class Runtime;
-    template <typename U> friend class Ref;
+    friend class RefBase;
 
     // 引用计数
     std::size_t refcount_{0};
@@ -139,7 +145,9 @@ class Object {
     Object &operator=(Object &&) = delete;
     virtual ~Object();
 
-    [[nodiscard]] Type *type() const { return type_.get(); }
+    // 定义在 Type.h 里——取出 Type* 要求 Type 是完整类型，而这里它只是前置声明
+    [[nodiscard]] Type *type() const;
+
     [[nodiscard]] std::size_t refcount() const { return refcount_; }
 
     // 本对象占用的堆字节数，= sizeof(自己) + 自己独占的其他堆分配

@@ -52,6 +52,8 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
 - 新类型必须实现 `visit_own_refs()`，如实报出自己强引用的每个槽位。它是纯虚的，漏写是编译期
   错误；但**报漏一个字段不是**——GC 会把那条边指向的对象当成不可达提前回收，这是这一层最难查的
   bug 类型。加字段时同步改 `visit_own_refs()`，跟 AST 那边"加槽位要过三个消费方"是同一个自查动作。
+  报的时候把**引用本身**交出去（`visitor.visit(某个 Ref)` / `visit_each(某个装 Ref 的容器)`），
+  不是交出目标指针——GC 的标记阶段和拆环阶段共用这一份清单，后者要能就地把槽位放掉。
 
 **两个刻意的例外，别照抄成"引用就得用 Ref"**：
 
@@ -120,15 +122,15 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
 | `Object::visit_refs` | `Heap` | 同上 |
 | `Object::visit_own_refs` | 只有 `Object::visit_refs` | 私有虚函数（NVI），子类照常覆写 |
 | `Object::set_type` | `Runtime` | `friend class Runtime` |
-| `Object::incref/decref` | `Ref<T>`、`Heap` | `template <typename U> friend class Ref` + `friend class Heap` |
+| `Object::incref/decref` | `RefBase`、`Heap` | `friend class RefBase` + `friend class Heap` |
 | 各具体对象类型的构造函数 | `make_ref` | `SL_MAKE_REF_ONLY` 宏（放在 private 区） |
 | `Heap::link/unlink` | `Object` | `friend class Object` |
 
-**踩过的坑**：`Heap` 的两个访问者（`Marker`/`Clearer`）一开始写在 `Heap.cpp` 的匿名 namespace 里，
-它们不是 `Heap` 的成员，`friend class Heap` 罩不到，于是当时把 `Object` 的标记位开了一对公开访问器
-将就过去。**正确做法是把它们做成 `Heap` 的嵌套类**——嵌套类跟其他成员一样享有外围类的友元权限
-（`[class.access.nest]`），头文件里只留两行前置声明 `class Marker; class Clearer;`，定义照旧在 `.cpp`。
-以后再遇到"某个辅助类需要访问被友元保护的东西"，先想这一招，别开公开后门。
+**踩过的坑**：`Heap` 的两个访问者（`Marker`/`RefDropper`）一开始写在 `Heap.cpp` 的匿名 namespace
+里，它们不是 `Heap` 的成员，`friend class Heap` 罩不到，于是当时把 `Object` 的标记位开了一对公开
+访问器将就过去。**正确做法是把它们做成 `Heap` 的嵌套类**——嵌套类跟其他成员一样享有外围类的友元
+权限（`[class.access.nest]`），头文件里只留两行前置声明 `class Marker; class RefDropper;`，定义照旧
+在 `.cpp`。以后再遇到"某个辅助类需要访问被友元保护的东西"，先想这一招，别开公开后门。
 
 **`incref`/`decref` 是成员而不是自由函数**：自由函数（Boost `intrusive_ptr` 那套）的意义在于让
 任意类型都能接入侵入式计数，而 `Ref` 只服务 `Object` 一族，用不上那份通用性；做成私有成员之后，

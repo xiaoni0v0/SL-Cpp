@@ -24,3 +24,6 @@ class Type final : public Object {
     [[nodiscard]] bool is_subtype_of(const Type *other) const;
     [[nodiscard]] std::size_t size_bytes() const override;
 };
+
+// 声明在 Object.h，定义只能放这儿：Ref<Type>::get() 的下转要求 Type 完整
+inline Type *Object::type() const { return type_.get(); }
