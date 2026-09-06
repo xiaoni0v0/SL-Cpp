@@ -3,7 +3,7 @@
 #include "../lexer/token.h"
 #include "ast_nodes/ast_nodes.h"
 
-#include <functional>
+#include <concepts>
 #include <optional>
 #include <stack>
 #include <string>
@@ -153,7 +153,9 @@ class Parser {
      * @param parse_item 回调函数，对每一项怎么解析
      * @return           是否真的消耗过至少一个 ','
      */
-    bool finish_comma_batch(TokenType close, const std::function<void()> &parse_item);
+    template <typename F>
+        requires std::invocable<F &> && std::same_as<std::invoke_result_t<F &>, void>
+    bool finish_comma_batch(TokenType close, F &&parse_item);
 
     // 完成解析捕获列表。消耗括号、管理括号栈
     [[nodiscard]] std::vector<OneCapture> finish_captures();

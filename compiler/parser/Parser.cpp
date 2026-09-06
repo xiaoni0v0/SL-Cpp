@@ -1213,7 +1213,9 @@ AstNodePtr Parser::parse_eval() {
     return std::make_unique<AstNodeEval>(start_pos, finish_call_args()); // 消耗 '(' ... ')'
 }
 
-bool Parser::finish_comma_batch(const TokenType close, const std::function<void()> &parse_item) {
+template <typename F>
+    requires std::invocable<F &> && std::same_as<std::invoke_result_t<F &>, void>
+bool Parser::finish_comma_batch(const TokenType close, F &&parse_item) {
     skip_newline();
     bool has_seen_comma{false};
     if (!check(close)) {
