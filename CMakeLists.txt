@@ -62,7 +62,11 @@ endif()
 #   /EHsc 是 MSVC 下开启标准 C++ 异常处理语义所必需的。
 # ------------------------------------------------------------
 
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+
 function(sl_apply_target_options target)
+    target_compile_definitions(${target} PRIVATE $<$<CONFIG:Release>:NDEBUG>)
+
     if(SL_MSVC_LIKE_FRONTEND)
         target_compile_options(
             ${target}
