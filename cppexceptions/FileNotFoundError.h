@@ -6,7 +6,7 @@
 #include <string>
 #include <utility>
 
-// 文件打不开。没有位置可言，只有那个路径本身
+// 文件不存在
 class FileNotFoundError : public SLException {
     std::string path_;
 

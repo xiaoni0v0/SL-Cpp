@@ -7,8 +7,7 @@
 #include <string>
 #include <utility>
 
-// 语法/语义错误。是唯一一个**必定**要在 `eval` 边界上转成 SL 异常对象的宿主异常，
-// 所以位置三件套必须原样留着
+// 语法错误。是唯一一个必定要在 `eval` 边界上转成 SL 异常对象的宿主异常
 class SyntaxError : public SLException {
     SourceLocation location_;
 
