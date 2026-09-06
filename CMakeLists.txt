@@ -62,7 +62,7 @@ endif()
 #   /EHsc 是 MSVC 下开启标准 C++ 异常处理语义所必需的。
 # ------------------------------------------------------------
 
-function(sl_apply_main_target_options target)
+function(sl_apply_target_options target)
     if(SL_MSVC_LIKE_FRONTEND)
         target_compile_options(
             ${target}
@@ -94,20 +94,6 @@ function(sl_apply_main_target_options target)
     endif()
 endfunction()
 
-function(sl_apply_test_target_options target)
-    if(SL_MSVC_LIKE_FRONTEND)
-        target_compile_options(
-            ${target}
-            PRIVATE /W4 /permissive- /EHsc -Wshadow /WX /Od
-        )
-    else()
-        target_compile_options(
-            ${target}
-            PRIVATE -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Werror -O0
-        )
-    endif()
-endfunction()
-
 # 各模块共用的预编译头（只放标准库）
 function(sl_apply_pch target)
     target_precompile_headers(
@@ -131,7 +117,7 @@ endfunction()
 # 建一个模块静态库
 function(sl_add_module target)
     add_library(${target} STATIC ${ARGN})
-    sl_apply_main_target_options(${target})
+    sl_apply_target_options(${target})
     sl_apply_pch(${target})
 endfunction()
 
@@ -171,7 +157,7 @@ add_subdirectory(executor)
 # 可执行文件
 # ------------------------------------------------------------
 add_executable(SL main.cpp)
-sl_apply_main_target_options(SL)
+sl_apply_target_options(SL)
 # 这个 sl_runtime 是临时的，防止只构建 main target 时跳过 sl_runtime 的编译
 target_link_libraries(SL PRIVATE sl_executor cxxopts::cxxopts sl_runtime)
 

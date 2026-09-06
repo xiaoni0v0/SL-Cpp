@@ -3,7 +3,7 @@ function(sl_add_test_target target)
     cmake_parse_arguments(ARG "" "" "LIBS;SOURCES" ${ARGN})
 
     add_executable(${target} ${ARG_SOURCES})
-    sl_apply_test_target_options(${target})
+    sl_apply_target_options(${target})
     target_link_libraries(${target} PRIVATE ${ARG_LIBS} doctest::doctest)
     target_precompile_headers(${target} PRIVATE <doctest/doctest.h>)
 
