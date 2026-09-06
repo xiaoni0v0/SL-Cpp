@@ -147,7 +147,6 @@ class Object {
     Object &operator=(Object &&) = delete;
     virtual ~Object();
 
-    // 定义在 Type.h 里——取出 Type* 要求 Type 是完整类型，而这里它只是前置声明
     [[nodiscard]] Type *type() const;
 
     [[nodiscard]] std::size_t refcount() const { return refcount_; }
