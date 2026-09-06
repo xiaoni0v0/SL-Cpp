@@ -23,6 +23,8 @@ class Code final : public Object {
         Ref<Str> name;
         bool has_default{false};
         bool has_annotation{false};
+
+        [[nodiscard]] static constexpr std::size_t heap_bytes() { return 0; }
     };
 
     /**
@@ -35,7 +37,6 @@ class Code final : public Object {
         Ref<Str> var_kwargs;                   // **identifier，空表示没有
         bool has_return_annotation{false};
 
-        // 自报额外占的堆内存，供 mem::heap_bytes 递归到（两个 Ref 指向的是独立堆对象，不计）
         [[nodiscard]] std::size_t heap_bytes() const {
             return mem::heap_bytes(positional) + mem::heap_bytes(kw_only);
         }

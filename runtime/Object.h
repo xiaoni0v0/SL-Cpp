@@ -35,6 +35,8 @@ class RefBase {
 
     // 指向的对象，可能为空。借用，不改引用计数
     [[nodiscard]] Object *target() const { return ptr_; }
+
+    [[nodiscard]] static constexpr std::size_t heap_bytes() { return 0; }
 };
 
 /**

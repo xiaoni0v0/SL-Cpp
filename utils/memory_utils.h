@@ -3,8 +3,10 @@
 #include <climits>
 #include <concepts>
 #include <cstddef>
+#include <functional>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 /**
@@ -18,12 +20,17 @@ template <typename T>
 concept SelfReportsHeapBytes = requires(const T &value) {
     { value.heap_bytes() } -> std::convertible_to<std::size_t>;
 };
+
+// 平凡可复制 = 没有析构函数 = 不可能拥有需要释放的堆内存
+template <typename T>
+concept NoOwnedHeap = std::is_trivially_copyable_v<T> && !SelfReportsHeapBytes<T>;
+
 template <SelfReportsHeapBytes T> [[nodiscard]] constexpr std::size_t heap_bytes(const T &value);
 
-template <typename T> [[nodiscard]] constexpr std::size_t heap_bytes(const T &value);
+template <NoOwnedHeap T> [[nodiscard]] constexpr std::size_t heap_bytes(const T &value);
 
 template <typename C, typename Tr, typename A>
-[[nodiscard]] std::size_t heap_bytes(const std::basic_string<C, Tr, A> &value);
+[[nodiscard]] constexpr std::size_t heap_bytes(const std::basic_string<C, Tr, A> &value);
 
 template <typename T, typename A>
 [[nodiscard]] constexpr std::size_t heap_bytes(const std::vector<T, A> &value);
@@ -37,13 +44,16 @@ template <SelfReportsHeapBytes T> constexpr std::size_t heap_bytes(const T &valu
     return value.heap_bytes();
 }
 
-// 兜底
-template <typename T> constexpr std::size_t heap_bytes(const T &) { return 0; }
+template <NoOwnedHeap T> constexpr std::size_t heap_bytes(const T &) { return 0; }
 
 // 重载 string
 template <typename C, typename Tr, typename A>
-std::size_t heap_bytes(const std::basic_string<C, Tr, A> &value) {
-    if (value.capacity() <= std::basic_string<C, Tr, A>{}.capacity()) return 0;
+constexpr std::size_t heap_bytes(const std::basic_string<C, Tr, A> &value) {
+    const auto *const begin{reinterpret_cast<const std::byte *>(&value)};
+    const auto *const end{begin + sizeof(std::basic_string<C, Tr, A>)};
+    const auto *const at{reinterpret_cast<const std::byte *>(value.data())};
+
+    if (constexpr std::less<> before; !before(at, begin) && before(at, end)) return 0;
     return (value.capacity() + 1) * sizeof(C); // + 1 for '\0'
 }
 
