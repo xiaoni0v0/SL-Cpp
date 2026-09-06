@@ -25,7 +25,7 @@
 且有完整测试；`numeric/` 的 `BigInt`（`int` 的底层）和 `BigDec`+`DecContext`（`decimal` 的底层）已实现
 且有完整测试；`compiler/codegen/` 只剩一份设计文档 [`bytecode.md`](../compiler/codegen/bytecode.md)，
 `executor/` 目前只是串流水线的驱动。`runtime/` 已经有对象模型骨架（`Object`+`Ref`、`Type`、
-四个基础类型、单例）、GC（引用计数 + 标记清扫）和分相位的 bootstrap，异常体系 / 帧与主循环还没开始——实现顺序见下面「实现路线」。
+四个基础类型、单例）、GC（引用计数 + 标记清扫）、bootstrap 和异常体系，帧与主循环还没开始——实现顺序见下面「实现路线」。
 **在虚拟机落地之前，SL.md 里"运行时"相关的条文（属性协议、GC、异常传播的具体机制等）大多还没有对应
 实现可以参照，只能靠 SL.md 文本本身。**
 
@@ -47,7 +47,7 @@
 | `compiler/analyzer/semantic_checker/` | `SemanticChecker.{h,cpp}`（`AstConstVisitor` 的实现）：语义检查（作用域规则、lvalue 合法性、`*`/`**` 位置合法性、func/class 约束、AST 结构防御性校验……），只读不改 AST，违规抛 `SyntaxError`（真实语义错误）或 `InternalError`（AST 结构本身违反 Parser 的保证，代表实现自己有 bug）。单个节点自己字段的合法性不归这里，归节点构造函数（见 `compiler/parser/ast_nodes/details/`）。 |
 | `compiler/analyzer/expr_folder/` | `ExprFolder.{h,cpp}`（`AstVisitor` 的实现）：遍历 + 原地替换 AST 的调度层，拥有 `AstNodePtr` 槽位的所有权。`StaticEvaler.{h,cpp}`：纯函数式的"给一个节点判断能不能折、折成什么"，不遍历树、不拥有节点。 |
 | `numeric/` | `BigInt.{h,cpp}`：手写高精度整数，`int` 的底层实现（`小路径 int64_t` / `大路径 limbs` 双表示）。`BigDec.{h,cpp}`：十进制浮点数，`decimal` 的底层实现（`BigInt 系数 + int64_t 指数 + 独立符号位 + 特殊值 tag`）。`DecContext.{h,cpp}`：`decimal.Context` 的底层实现——舍入方式、精度、指数范围、信号的陷阱/标志位，以及陷阱触发时抛的 `DecTrapped`。`dec_math.{h,cpp}`：`ln`/`log10`/`exp`/`**` 用的整数层定点算法（`ilog`/`iexp`/`dlog`/`dexp`/`dpower` 等），只跟 BigInt 打交道，不认识上下文和信号。 |
-| `runtime/` | 运行时的地基，**在编译器下面**（`compiler/` 的 codegen 要直接造真 SL 对象）。`Object.h`：一切 SL 对象的基类 + 对象头（引用计数、类型指针、`trace()`）+ 侵入式引用计数句柄 `Ref<T>` + `make_ref`。`Type.{h,cpp}`：类型对象（`name_`/`bases_`/`mro_`/`is_subtype_of`）。`Runtime.{h,cpp}`：全局单例，`init()` 两步建全部内置类型与单例并持有它们（都直接读私有字段，不经过公开访问器）、`shutdown()`，也是第一个 `GcRootSource`。`instance()` 只检查"init() 到底跑没跑完"（`g_runtime` 是否为空）——没有分阶段的状态机，见 [context.md](context.md)。`Heap.{h,cpp}`：全堆链表 + STW 标记清扫 `collect()` + 根源注册（`GcRootSource`）。**`collect()` 只能在主循环的安全点调用**，理由见笔记。`x_builtin_types.inc`：内置类型清单（X-macro，见下）。写这里的代码前先读 [notes/object-model-conventions.md](notes/object-model-conventions.md)。 |
+| `runtime/` | 运行时的地基，**在编译器下面**（`compiler/` 的 codegen 要直接造真 SL 对象）。`Object.h`：一切 SL 对象的基类 + 对象头（引用计数、类型指针、GC 链表与标记位）+ 引用句柄 `RefBase`/`Ref<T>` + 遍历器 `RefVisitor` + `make_ref`（唯一的建对象入口，各类型构造函数私有、只对它开放）。`Type.{h,cpp}`：类型对象（`name_`/`bases_`/`mro_`/`is_subtype_of`）。`Runtime.{h,cpp}`：全局单例，`init()` 两步建全部内置类型与单例并持有它们（都直接读私有字段，不经过公开访问器）、`shutdown()`，也是第一个 `GcRootSource`。`instance()` 只检查"init() 到底跑没跑完"（`g_runtime` 是否为空）——没有分阶段的状态机，见 [context.md](context.md)。`Heap.{h,cpp}`：全堆链表 + STW 标记清扫 `collect()` + 根源注册（`GcRootSource`）+ 按**字节**计的回收触发（`should_collect()`；字节数由 `make_ref` 在对象构造完之后记账，`collect()` 时重算存活量）。**`collect()` 只能在主循环的安全点调用**，理由见笔记。`x_builtin_types.inc`：内置类型清单（X-macro，见下）。写这里的代码前先读 [notes/object-model-conventions.md](notes/object-model-conventions.md)。 |
 | `runtime/objects/` | 各具体对象类型：`Int`（裹 `BigInt`）、`Decimal`（裹 `BigDec`）、`Str`（`u32string`，按码点）、`Tuple`（`vector<ObjectRef>`）、`BaseException`（整棵异常树共用，只存 `.args` 元组）、`NamedSingleton`（无负载单例）、`Bool`。 |
 | `runtime/RaisedException.h` | `raise` 用的 C++ 信封（装一个 `ObjectRef`），只在一段不回调 SL、有界的 C++ 代码里 throw/catch，不是异常跨 SL 帧传播的机制——那个仍是主循环手写的显式算法，见 bytecode.md。 |
 | `runtime/HostErrorConversion.{h,cpp}` | 宿主异常 → SL 异常对象的转换函数（`SyntaxError`/`EncodingError`/`FileNotFoundError` 各一个），`InternalError` 故意没有对应函数。 |
@@ -129,11 +129,12 @@ parser 那份抄了三处，加个文件要改三个地方。
    帧栈、模块表、每份 `Code` 的常量表以后各自注册一个）。**`collect()` 只能在主循环的安全点调用**
    ——根集合不含 C++ 栈上的局部 `Ref`，这条前提靠的是"C++ 调用栈深度不随 SL 帧栈增长"，见
    [notes/object-model-conventions.md](notes/object-model-conventions.md)。分代、只跟踪可能成环的
-   对象这类优化都还没做，等主循环能量出实际分配速率再说。**已定design、等第 6 步主循环落地再实现**：
-   按最大堆字节数触发回收（`-Xmx` 语义）、回收后仍超则抛 `MemoryError`，见
-   [context.md](context.md) 对应小节——要点是字节计数必须是每个类型"自报"的（不能用 `sizeof(T)`，
-   否则任意精度 `int`/`decimal` 的真实负载测不出来），触发时机必须推迟到安全点（不能在分配那一刻
-   直接 `collect()`，会踩中上面那条硬前提）。
+   对象这类优化都还没做，等主循环能量出实际分配速率再说。
+   **回收的触发按字节算**：`Object::size_bytes()` 是每个类型自报的纯虚钩子（不能用 `sizeof(T)`
+   ——任意精度 `int`/`decimal` 的真实负载在 `BigInt`/`BigDec` 内部另一次堆分配里），`make_ref` 在
+   对象构造完之后记一笔（`Heap::link()` 在构造函数里，那时问不到派生类的大小），`collect()` 顺着
+   全堆遍历重算存活字节数。**还差**：`-Xmx` 上限参数、"超预算 → 安全点回收 → 仍超则抛
+   `MemoryError`"这条流程，要等第 6 步主循环才有地方挂安全点，见 [context.md](context.md)。
 3. ~~**bootstrap**~~ **已完成**：`init()` 就两步——`build_types()` 建全部内置类型（含异常类树），
    `build_singletons()` 建六个单例——都只碰 `Runtime` 自己的私有字段 `types_`，不经过任何公开访问器。
    `Runtime::instance()` 只做一件事：`g_runtime` 是否为空。**没有分阶段的状态机**：早先版本给这个类

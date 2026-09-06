@@ -1,19 +1,20 @@
 #include "Heap.h"
 
+#include "../cpp_exceptions/InternalError.h"
 #include "Object.h"
 
-#include <cassert>
 #include <vector>
 
 namespace {
 
 Object *g_head{nullptr};                    // 全堆链表的头
 std::size_t g_live_count{0};                // 当前存活对象总数
-std::size_t g_objects_since_collect{0};     // 距上次 collect() 又建了的对象数
+std::size_t g_live_bytes{0};                // 上一轮 collect() 结束时的存活字节数
+std::size_t g_bytes_since_collect{0};       // 距上次 collect() 又分配了多少字节
 std::vector<GcRootSource *> g_root_sources; // 所有引用根
 
-// 攒够这么多新对象就值得扫一轮
-constexpr std::size_t kMinObjectsBetweenCollects{1024};
+// 分配压力攒够这么多字节就值得扫一轮
+constexpr std::size_t kMinBytesBetweenCollects{1 << 20};
 
 } // namespace
 
@@ -55,7 +56,6 @@ void Heap::link(Object *const obj) {
     g_head = obj;
 
     ++g_live_count;
-    ++g_objects_since_collect;
 }
 
 void Heap::unlink(Object *const obj) {
@@ -69,6 +69,8 @@ void Heap::unlink(Object *const obj) {
     obj->gc_next_ = nullptr;
     --g_live_count;
 }
+
+void Heap::note_allocated(const Object *const obj) { g_bytes_since_collect += obj->size_bytes(); }
 
 void Heap::add_root_source(GcRootSource *const source) { g_root_sources.push_back(source); }
 
@@ -84,13 +86,16 @@ void Heap::collect() {
 
     // 2. 分离
     std::vector<Object *> garbage;
+    g_live_bytes = 0;
     for (Object *object{g_head}; object; object = object->gc_next_) {
-        if (object->gc_reachable_)
-            // 顺手把标记复位
+        if (object->gc_reachable_) {
+            // 顺手把标记复位、算字节
             object->gc_reachable_ = false;
-        else
+            g_live_bytes += object->size_bytes();
+        } else {
             // 未标记的就是垃圾
             garbage.push_back(object);
+        }
     }
 
     // 3. 保命，每个垃圾对象先 +1
@@ -102,18 +107,24 @@ void Heap::collect() {
 
     // 5. 销毁
     for (Object *const object : garbage) {
-        assert(object->refcount() == 1 && "garbage object still referenced");
+        if (object->refcount() != 1)
+            throw InternalError{
+                "GC: garbage object still referenced (collect() called outside a safe point?)"
+            };
+
         object->decref();
     }
 
-    g_objects_since_collect = 0;
+    g_bytes_since_collect = 0;
 }
 
 std::size_t Heap::live_count() { return g_live_count; }
 
-std::size_t Heap::objects_since_collect() { return g_objects_since_collect; }
+std::size_t Heap::live_bytes() { return g_live_bytes; }
+
+std::size_t Heap::bytes_since_collect() { return g_bytes_since_collect; }
 
 bool Heap::should_collect() {
-    return g_objects_since_collect >= kMinObjectsBetweenCollects &&
-           g_objects_since_collect >= g_live_count;
+    return g_bytes_since_collect >= kMinBytesBetweenCollects &&
+           g_bytes_since_collect >= g_live_bytes;
 }

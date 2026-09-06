@@ -8,6 +8,9 @@ class Str final : public Object {
     std::u32string value_; // 底层是 u32string
 
     SL_MAKE_REF_ONLY;
+    // 主构造
+    Str(Type *type, std::u32string value);
+    // 便利构造
     explicit Str(std::u32string value);
 
   public:

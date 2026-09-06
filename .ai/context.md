@@ -1044,9 +1044,20 @@ throw 这个信封，由**紧邻它、不跨 SL 帧的调用方**立刻接住，
 两者都是"解释器资源耗尽"类；没有放在 `SystemExit`/`KeyboardInterrupt` 那种直接挂 `BaseException`
 下的致命错误里，因为应该允许 SL 代码 `except (MemoryError)` 自己兜底），`Type` 对象也已经建了
 （`runtime/x_builtin_types.inc` 里的 `MemoryError`）——这两步现在做代价很低、跟其它异常类型的
-处境一样（`RecursionError`/`DispatchError` 现在也都是"类存在、触发机制还没写"）。**没做的**：
-`Object` 的字节计数钩子、`Heap` 里的总字节数账本、`Runtime::init()` 接受 `-Xmx` 参数、真正的
-"超预算 → 安全点回收 → 仍超则抛 `MemoryError`" 这条流程，全部推迟到主循环落地（第 6 步）再回来做。
+处境一样（`RecursionError`/`DispatchError` 现在也都是"类存在、触发机制还没写"）。
+
+**上面第 1、2 条的"账本"部分已经落地**：`Object::size_bytes()` 是纯虚的自报钩子（不给默认实现，
+新类型漏写是编译错误）；`Heap` 里 `bytes_since_collect()` 记分配压力、`live_bytes()` 记存活量，
+`should_collect()` 完全按字节判断，对象个数只留 `live_count()` 给调试用。
+
+记账的位置有个不能绕的约束：**字节数只能由 `make_ref` 在 `new T(...)` 返回之后记**。
+`Heap::link()` 是从 `Object` 的构造函数里调的，那时派生类还没构造完，`size_bytes()` 是纯虚调用；
+`Heap::unlink()` 从 `~Object()` 里调，那时派生部分已经析构完，同样问不到。所以"分配了多少字节"
+只增不减，是**分配压力**而不是存活量；准确的存活字节数在 `collect()` 第 2 步那趟全堆遍历里重算
+（那趟本来就要走完整条链表，顺手加起来不额外花钱）。
+
+**还没做的**：`Runtime::init()` 接受 `-Xmx` 参数、"超预算 → 安全点回收 → 仍超则抛 `MemoryError`"
+这条流程本身——它要等主循环（第 6 步）才有地方挂那个安全点。
 
 ### `runtime/` 的类型名保持全局短名，不加 `Sl` 前缀、不开命名空间
 

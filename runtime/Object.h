@@ -1,8 +1,9 @@
 #pragma once
 
+#include "Heap.h"
+
 #include <concepts>
 #include <cstddef>
-#include <ranges>
 #include <utility>
 
 class Object;
@@ -83,7 +84,9 @@ using ObjectRef = Ref<Object>;
 
 // 所有 SL 对象都该经由它建立
 template <typename T, typename... Args> [[nodiscard]] Ref<T> make_ref(Args &&...args) {
-    return Ref<T>{new T(std::forward<Args>(args)...)};
+    T *const object{new T(std::forward<Args>(args)...)};
+    Heap::note_allocated(object);
+    return Ref<T>{object};
 }
 
 // 只能经由 make_ref 建立，构造函数放进 private，再写一行 `SL_MAKE_REF_ONLY;`
@@ -114,7 +117,6 @@ class RefVisitor {
  */
 class Object {
     friend class Heap;
-    friend class Runtime;
     friend class RefBase;
 
     // 引用计数
@@ -139,6 +141,9 @@ class Object {
 
   protected:
     explicit Object(Type *type);
+
+    // 改写自己的类型。唯一的用途是 bootstrap 回填 object/type 的类
+    void set_type(Type *type);
 
   public:
     Object(const Object &) = delete;

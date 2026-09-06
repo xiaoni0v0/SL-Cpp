@@ -3,6 +3,7 @@
 #include "../cpp_exceptions/InternalError.h"
 
 #include <memory>
+#include <vector>
 
 namespace {
 
@@ -38,8 +39,8 @@ void Runtime::build_types() {
 
     // 回填 Object 和 Type 的类型为 Type
     Type *const meta{types_[index_of(BuiltinType::Type)].get()};
-    types_[index_of(BuiltinType::Object)]->type_ = Ref{meta};
-    meta->type_ = Ref{meta};
+    types_[index_of(BuiltinType::Object)]->set_meta(meta);
+    meta->set_meta(meta);
 }
 
 void Runtime::build_singletons() {

@@ -2,13 +2,15 @@
 
 #include "../Object.h"
 
-#include <cstddef>
 #include <vector>
 
 class Tuple final : public Object {
     std::vector<ObjectRef> items_;
 
     SL_MAKE_REF_ONLY;
+    // 主构造
+    Tuple(Type *type, std::vector<ObjectRef> items);
+    // 便利构造
     explicit Tuple(std::vector<ObjectRef> items);
 
   public:

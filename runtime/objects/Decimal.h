@@ -7,6 +7,9 @@ class Decimal final : public Object {
     BigDec value_;
 
     SL_MAKE_REF_ONLY;
+    // 主构造
+    Decimal(Type *type, BigDec value);
+    // 便利构造
     explicit Decimal(BigDec value);
 
   public:

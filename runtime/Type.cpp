@@ -3,6 +3,7 @@
 #include "../cpp_exceptions/InternalError.h"
 
 #include <algorithm>
+#include <format>
 #include <utility>
 
 Type::Type(Type *const meta, std::string name, std::vector<Ref<Type>> bases)
@@ -23,6 +24,8 @@ void Type::visit_own_refs(RefVisitor &visitor) {
     // 只报 bases_
     for (RefBase &ref : bases_) visitor.visit(ref);
 }
+
+void Type::set_meta(Type *meta) { set_type(meta); };
 
 bool Type::is_subtype_of(const Type *const other) const {
     return std::ranges::find(mro_, other) != mro_.end();

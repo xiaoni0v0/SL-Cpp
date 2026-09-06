@@ -33,6 +33,8 @@ void Object::visit_refs(RefVisitor &visitor) {
 
 Object::Object(Type *const type) : type_{type} { Heap::link(this); }
 
+void Object::set_type(Type *const type) { type_ = Ref{type}; }
+
 Object::~Object() { Heap::unlink(this); }
 
 Type *Object::type() const { return type_.get(); }

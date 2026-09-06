@@ -30,6 +30,6 @@ sl_add_module(
 
 target_link_libraries(
     sl_runtime
-    PUBLIC sl_numeric sl_cpp_exceptions
-    PRIVATE sl_utils
+    PUBLIC sl_numeric
+    PRIVATE sl_cpp_exceptions sl_utils
 )

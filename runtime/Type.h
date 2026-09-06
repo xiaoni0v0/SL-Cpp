@@ -9,6 +9,8 @@
  * SL 的类型对象
  */
 class Type final : public Object {
+    friend class Runtime;
+
     std::string name_;
     std::vector<Ref<Type>> bases_;
     std::vector<Type *> mro_; // 第 0 项是自己。存裸指针、不是强引用
@@ -17,6 +19,9 @@ class Type final : public Object {
     Type(Type *meta, std::string name, std::vector<Ref<Type>> bases);
 
     void visit_own_refs(RefVisitor &visitor) override;
+
+    // 只给 bootstrap 用
+    void set_meta(Type *meta);
 
   public:
     [[nodiscard]] const std::string &name() const { return name_; }

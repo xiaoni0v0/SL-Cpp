@@ -100,6 +100,11 @@ GC 拆环时（`collect()` 第 4 步）会先把垃圾对象的全部 `Ref` 槽�
 这条前提能成立不是运气，是 `bytecode.md` 那条"C++ 调用栈深度不得随 SL 帧栈深度增长"的约束换来的：
 执行状态全在堆上的帧对象里，安全点上 C++ 栈本来就是空的。**改动这条约束等于改动 GC 的正确性前提。**
 
+**违反了会怎样**：不是崩溃，是**静默产生僵尸对象**。栈上那个 `Ref` 让计数没归零，对象活了下来，
+但它的 `type_` 和自有引用已经在拆环阶段被清空——`type()` 返回空、容器变空，还能被继续使用。
+所以 `collect()` 第 5 步那条"计数必须恰好是 1"的核对是 `throw InternalError` 而不是 `assert`，
+Release 下也要响。
+
 ## 四、bootstrap 内部只碰私有字段，不经过公开访问器；没有分阶段的状态机
 
 `Runtime::init()` 就两步：`build_types()` 建全部内置类型（含异常类树），`build_singletons()` 建
@@ -120,9 +125,12 @@ GC 拆环时（`collect()` 第 4 步）会先把垃圾对象的全部 `Ref` 槽�
 - `Runtime` 内部的 bootstrap 步骤（`build_types`/`build_singletons`，以后还会有更多）一律直接读写
   `types_` 等私有字段，**不要**假道 `Runtime` 自己那些公开的、静态的访问器（`type_int()` 之类）——
   这条路径迟早会在 bootstrap 内部制造新的"我需要的状态恰好是我自己正在建立的状态"这种循环依赖。
-- 对象类型的构造函数如果要在 bootstrap 期间被构造（目前是 `NamedSingleton`/`Bool`/`BaseException`），
-  让它们**接收调用方传来的 `Type*`**，不要在构造函数里硬编码调用 `Runtime::type_xxx()` 去反查
-  自己的类型——`Int`/`Decimal`/`Str`/`Tuple` 硬编码是可以的，因为它们不在 bootstrap 期间构造。
+- **每个对象类型的主构造函数都收一个 `Type*`**，不在构造函数里反查 `Runtime::type_xxx()`。
+  两个理由：bootstrap 期间构造的那几个（`NamedSingleton`/`Bool`）反查会撞上上面那种循环依赖；
+  而且 SL.md 没把 `int`/`str`/`tuple` 标成 final，以后 `class MyStr : str` 的实例需要一个
+  `type()` 是 `MyStr` 的 `Str` 对象，硬编码就造不出来。
+  `Int`/`Decimal`/`Str`/`Tuple` 另外提供一个不带 `Type*` 的便利构造（委托给主构造、类型取内置的
+  那个），给"就是要一个普通 int/str"的常见场合用，**主构造函数仍然是收 `Type*` 的那个**。
 - 新的初始化步骤（内置函数表、内置模块表……）插进 `init()` 现有两步之后即可，不需要为它们
   预先开一个新的状态量——除非真的出现了"外部代码需要区分两个中间状态"的场景，那时候再加，
   不要现在就为假设中的需求设计。
@@ -139,7 +147,9 @@ GC 拆环时（`collect()` 第 4 步）会先把垃圾对象的全部 `Ref` 槽�
 | `Object::gc_prev_/gc_next_/gc_marked_` | `Heap` | `friend class Heap` |
 | `Object::visit_refs` | `Heap` | 同上 |
 | `Object::visit_own_refs` | 只有 `Object::visit_refs` | 私有虚函数（NVI），子类照常覆写 |
-| `Object::set_type` | `Runtime` | `friend class Runtime` |
+| `Object::set_type` | `Object` 的子类 | `protected`（唯一用途是 `Type::set_meta`） |
+| `Type::set_meta` | `Runtime` | `friend class Runtime`（口子只开在 `Type` 上，不开在 `Object` 上） |
+| `Heap::note_allocated` | `make_ref` | `friend` 声明 `make_ref` 模板 |
 | `Object::incref/decref` | `RefBase`、`Heap` | `friend class RefBase` + `friend class Heap` |
 | `RefBase::reset` | `Heap` | `friend class Heap`（`Ref<T>::reset()` 另开一个公开的，见下） |
 | 各具体对象类型的构造函数 | `make_ref` | `SL_MAKE_REF_ONLY` 宏（放在 private 区） |
