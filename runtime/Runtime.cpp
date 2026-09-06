@@ -75,7 +75,8 @@ Runtime &Runtime::instance() {
 Type *Runtime::builtin_type(const BuiltinType id) { return instance().types_[index_of(id)].get(); }
 
 void Runtime::visit_roots(RefVisitor &visitor) {
-    visitor.visit_each(types_);
+    for (RefBase &ref : types_) visitor.visit(ref);
+
     visitor.visit(singletons_.none_);
     visitor.visit(singletons_.ellipsis_);
     visitor.visit(singletons_.not_implemented_);

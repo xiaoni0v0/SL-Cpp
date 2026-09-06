@@ -99,10 +99,6 @@ class RefVisitor {
 
     // 对一条引用调用一次
     virtual void visit(RefBase &ref) = 0;
-
-    template <std::ranges::range C> void visit_each(C &refs) {
-        for (RefBase &ref : refs) visit(ref);
-    }
 };
 
 /**

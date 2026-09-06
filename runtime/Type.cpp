@@ -20,10 +20,8 @@ Type::Type(Type *const meta, std::string name, std::vector<Ref<Type>> bases)
 }
 
 void Type::visit_own_refs(RefVisitor &visitor) {
-    // 只报 bases_：mro_ 存的是借用，且其中每一项都能沿 bases_ 到达，不用重复报。
-    // 拆环阶段把 bases_ 抹空之后 mro_ 里的裸指针就可能悬垂——那时这个对象已经是待释放的
-    // 垃圾，没人会再读它
-    visitor.visit_each(bases_);
+    // 只报 bases_
+    for (RefBase &ref : bases_) visitor.visit(ref);
 }
 
 bool Type::is_subtype_of(const Type *const other) const {
