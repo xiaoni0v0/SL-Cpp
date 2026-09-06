@@ -13,14 +13,7 @@ int main(const int argc, const char *argv[]) {
     SetConsoleOutputCP(CP_UTF8);
 #endif
 
-    // 没有输入文件
-    if (argc != 2) {
-        std::cerr << "Usage: " << std::filesystem::path{argv[0]}.filename().string()
-                  << " <input_file>" << std::endl;
-        return 1;
-    }
-
-    const Executor executor{argv[1]};
+    const Executor executor{argc, argv};
 
     return executor.run();
 }

@@ -1,12 +1,13 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 class Executor {
-    const std::string file_path_;
+    const std::vector<std::string> argv_;
 
   public:
-    explicit Executor(const std::string &s);
+    explicit Executor(int argc, const char *argv[]);
 
     [[nodiscard]] int run() const;
 };

@@ -22,21 +22,30 @@ std::string path_abspath(const std::string &path) {
 
 } // namespace
 
-Executor::Executor(const std::string &s) : file_path_{path_abspath(s)} {}
+Executor::Executor(const int argc, const char *argv[]) : argv_{argv, argv + argc} {}
 
 int Executor::run() const {
     const auto t0 = std::chrono::steady_clock::now();
 
+    // 没有输入文件
+    if (argv_.size() != 2) {
+        std::cerr << "Usage: " << std::filesystem::path{argv_[0]}.filename().string()
+                  << " <input_file>" << std::endl;
+        return 1;
+    }
+
+    const std::string file_path{path_abspath(argv_[1])};
+
     // 输入文件不存在
-    if (!std::filesystem::exists(file_path_)) {
-        std::cerr << "Source code file \"" << file_path_ << "\" does not exist." << std::endl;
+    if (!std::filesystem::exists(file_path)) {
+        std::cerr << "Source code file \"" << file_path << "\" does not exist." << std::endl;
         return 1;
     }
 
     // 1. 分词器（源代码 -> token 数组）
     std::vector<Token> tokens;
     try {
-        tokens = Lexer{utf8_to_u32(file_read_all(file_path_), file_path_), file_path_}.tokenize();
+        tokens = Lexer{utf8_to_u32(file_read_all(file_path), file_path), file_path}.tokenize();
         for (const auto &token : tokens) {
             std::cout << Lexer::get_typename_by_tokentype(token.type);
             if (!(token.type == TokenType::NEWLINE || token.type == TokenType::END_OF_FILE)) {
@@ -59,7 +68,7 @@ int Executor::run() const {
     // 2. 解析器（token 数组 -> AST）
     AstNodeProgramPtr ast;
     try {
-        ast = Parser{std::move(tokens), file_path_}.parse_as_file();
+        ast = Parser{std::move(tokens), file_path}.parse_as_file();
         std::cout << AstJsonDumper::dump(*ast).dump(2) << std::endl << std::endl;
     } catch (SLException &e) {
         std::cerr << e.what() << std::endl;
@@ -74,7 +83,7 @@ int Executor::run() const {
 
     // 3. 分析器（检查 AST）
     try {
-        Analyzer::analyze_program(*ast, file_path_);
+        Analyzer::analyze_program(*ast, file_path);
         std::cout << AstJsonDumper::dump(*ast).dump(2) << std::endl << std::endl;
     } catch (SLException &e) {
         std::cerr << e.what() << std::endl;
