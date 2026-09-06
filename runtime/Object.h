@@ -2,6 +2,7 @@
 
 #include <concepts>
 #include <cstddef>
+#include <ranges>
 #include <utility>
 
 class Object;
