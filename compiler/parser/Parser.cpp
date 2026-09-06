@@ -1,7 +1,7 @@
 #include "Parser.h"
 
-#include "../../cpp_exceptions/InternalError.h"
-#include "../../cpp_exceptions/SyntaxError.h"
+#include "../../cppexceptions/InternalError.h"
+#include "../../cppexceptions/SyntaxError.h"
 #include "../../utils/string_utils.h"
 #include "../lexer/Lexer.h"
 

@@ -1,6 +1,6 @@
 #include "Type.h"
 
-#include "../cpp_exceptions/InternalError.h"
+#include "../cppexceptions/InternalError.h"
 #include "../utils/memory_utils.h"
 
 #include <algorithm>

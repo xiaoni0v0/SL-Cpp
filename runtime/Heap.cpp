@@ -1,6 +1,6 @@
 #include "Heap.h"
 
-#include "../cpp_exceptions/InternalError.h"
+#include "../cppexceptions/InternalError.h"
 #include "Object.h"
 
 #include <vector>

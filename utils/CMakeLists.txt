@@ -7,4 +7,4 @@ sl_add_module(
     string_utils.h
 )
 
-target_link_libraries(sl_utils PUBLIC sl_cpp_exceptions)
+target_link_libraries(sl_utils PUBLIC sl_cppexceptions)

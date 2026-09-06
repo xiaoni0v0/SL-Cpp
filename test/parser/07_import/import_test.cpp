@@ -1,5 +1,5 @@
 // import：关键字形态 `import a.b`，调用形态 `import(...)`。
-#include "../../../cpp_exceptions/SyntaxError.h"
+#include "../../../cppexceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

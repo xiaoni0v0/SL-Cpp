@@ -1,5 +1,5 @@
 // global identifier。目标必须恰好是一个标识符。
-#include "../../../cpp_exceptions/SyntaxError.h"
+#include "../../../cppexceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

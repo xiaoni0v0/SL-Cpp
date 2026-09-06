@@ -148,9 +148,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(nlohmann_json cxxopts doctest)
 
 # ------------------------------------------------------------
-# 各模块。依赖方向：cpp_exceptions <- utils/numeric <- runtime <- compiler <- executor
+# 各模块。依赖方向：cppexceptions <- utils/numeric <- runtime <- compiler <- executor
 # ------------------------------------------------------------
-add_subdirectory(cpp_exceptions)
+add_subdirectory(cppexceptions)
 add_subdirectory(utils)
 add_subdirectory(numeric)
 add_subdirectory(runtime)

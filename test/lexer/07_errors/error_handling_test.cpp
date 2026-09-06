@@ -1,6 +1,6 @@
 // SyntaxError 的类型、消息格式、遇错即停。具体触发条件分散在各主题文件。
-#include "../../../cpp_exceptions/SLException.h"
-#include "../../../cpp_exceptions/SyntaxError.h"
+#include "../../../cppexceptions/SLException.h"
+#include "../../../cppexceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

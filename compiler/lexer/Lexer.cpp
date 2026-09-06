@@ -1,6 +1,6 @@
 #include "Lexer.h"
 
-#include "../../cpp_exceptions/SyntaxError.h"
+#include "../../cppexceptions/SyntaxError.h"
 #include "../../utils/string_utils.h"
 
 #include <cassert>

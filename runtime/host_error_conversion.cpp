@@ -1,8 +1,8 @@
 #include "host_error_conversion.h"
 
-#include "../cpp_exceptions/EncodingError.h"
-#include "../cpp_exceptions/FileNotFoundError.h"
-#include "../cpp_exceptions/SyntaxError.h"
+#include "../cppexceptions/EncodingError.h"
+#include "../cppexceptions/FileNotFoundError.h"
+#include "../cppexceptions/SyntaxError.h"
 #include "Runtime.h"
 #include "objects/BaseException.h"
 #include "objects/Str.h"

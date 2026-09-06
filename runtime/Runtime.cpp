@@ -1,6 +1,6 @@
 #include "Runtime.h"
 
-#include "../cpp_exceptions/InternalError.h"
+#include "../cppexceptions/InternalError.h"
 
 #include <memory>
 #include <vector>

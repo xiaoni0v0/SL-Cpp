@@ -1,5 +1,5 @@
 // int/decimal 节点构造时校验 raw_ 形状。违反即 InternalError。
-#include "../../../cpp_exceptions/InternalError.h"
+#include "../../../cppexceptions/InternalError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

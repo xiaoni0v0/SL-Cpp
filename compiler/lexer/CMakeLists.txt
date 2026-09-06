@@ -8,4 +8,4 @@ sl_add_module(
     x_token_type.inc
 )
 
-target_link_libraries(sl_compiler_lexer PUBLIC sl_cpp_exceptions sl_utils)
+target_link_libraries(sl_compiler_lexer PUBLIC sl_cppexceptions sl_utils)

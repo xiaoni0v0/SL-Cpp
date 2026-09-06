@@ -1,7 +1,7 @@
-add_library(sl_cpp_exceptions INTERFACE)
+add_library(sl_cppexceptions INTERFACE)
 
 add_custom_target(
-    sl_cpp_exceptions_headers
+    sl_cppexceptions_headers
     SOURCES
         EncodingError.h
         FileNotFoundError.h

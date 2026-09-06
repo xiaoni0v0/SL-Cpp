@@ -1,5 +1,5 @@
 // 符号识别与最长匹配。点号见 dot_disambiguation_test.cpp。
-#include "../../../cpp_exceptions/SyntaxError.h"
+#include "../../../cppexceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>

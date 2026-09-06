@@ -1,5 +1,5 @@
 // 反引号原始字符串：不转义，可多行，内部不能出现反引号。
-#include "../../../cpp_exceptions/SyntaxError.h"
+#include "../../../cppexceptions/SyntaxError.h"
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
