@@ -2,9 +2,6 @@
 
 #include "../Object.h"
 
-/**
- * 有负载的单例：True、False
- */
 class Bool final : public Object {
     bool value_;
 

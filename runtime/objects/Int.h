@@ -3,7 +3,6 @@
 #include "../../numeric/BigInt.h"
 #include "../Object.h"
 
-// SL 的 int 对象。值语义那部分全在 BigInt 里，这里只负责"是个 SL 对象"
 class Int final : public Object {
     BigInt value_;
 

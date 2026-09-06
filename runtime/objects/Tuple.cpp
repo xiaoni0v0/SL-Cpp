@@ -14,5 +14,6 @@ void Tuple::visit_own_refs(RefVisitor &visitor) {
 
 Object *Tuple::at(const std::size_t index) const {
     assert(index < items_.size());
+
     return items_[index].get();
 }

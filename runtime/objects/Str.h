@@ -4,10 +4,8 @@
 
 #include <string>
 
-// SL 的 str 对象。不可变，按 Unicode 码点分割（SL.md 4.2.7），所以底层是 u32string
-// 而不是 UTF-8 的 std::string——按码点取下标/求长度是 O(1)，代价是转进转出要编解码
 class Str final : public Object {
-    std::u32string value_;
+    std::u32string value_; // 底层是 u32string
 
     SL_MAKE_REF_ONLY;
     explicit Str(std::u32string value);
