@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../utils/memory_utils.h"
 #include "../Object.h"
 
 #include <vector>
@@ -20,7 +21,7 @@ class Tuple final : public Object {
     [[nodiscard]] Object *at(std::size_t index) const;
 
     [[nodiscard]] std::size_t size_bytes() const override {
-        return sizeof(*this) + items_.capacity() * sizeof(ObjectRef);
+        return sizeof(*this) + mem::heap_bytes(items_);
     }
 
   private:

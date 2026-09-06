@@ -2,6 +2,7 @@ sl_add_module(
     sl_utils
     file_utils.cpp
     file_utils.h
+    memory_utils.h
     string_utils.cpp
     string_utils.h
 )

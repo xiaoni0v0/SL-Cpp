@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../utils/memory_utils.h"
 #include "../Object.h"
 
 #include <string>
@@ -16,7 +17,7 @@ class NamedSingleton final : public Object {
   public:
     [[nodiscard]] const std::string &name() const { return name_; }
     [[nodiscard]] std::size_t size_bytes() const override {
-        return sizeof(*this) + name_.capacity();
+        return sizeof(*this) + mem::heap_bytes(name_);
     }
 
   private:

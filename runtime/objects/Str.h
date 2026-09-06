@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../utils/memory_utils.h"
 #include "../Object.h"
 
 #include <string>
@@ -22,7 +23,7 @@ class Str final : public Object {
     [[nodiscard]] std::string to_utf8() const;
 
     [[nodiscard]] std::size_t size_bytes() const override {
-        return sizeof(*this) + value_.capacity() * sizeof(char32_t);
+        return sizeof(*this) + mem::heap_bytes(value_);
     }
 
   private:

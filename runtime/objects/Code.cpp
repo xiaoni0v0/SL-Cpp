@@ -1,21 +1,12 @@
 #include "Code.h"
 
+#include "../../utils/memory_utils.h"
 #include "../Runtime.h"
 
 #include <algorithm>
 #include <cassert>
-#include <climits>
 #include <iterator>
 #include <utility>
-
-namespace {
-
-// 一张 vector<Ref<...>> 自己占的堆字节数。指向的对象各自算各自的，不重复计入
-template <typename T> std::size_t table_bytes(const std::vector<T> &table) {
-    return table.capacity() * sizeof(T);
-}
-
-} // namespace
 
 Code::Code(Parts parts) : Object{Runtime::type_code()}, parts_{std::move(parts)} {
     assert(
@@ -55,16 +46,9 @@ void Code::visit_own_refs(RefVisitor &visitor) {
 }
 
 std::size_t Code::size_bytes() const {
-    std::size_t bytes{
-        sizeof(*this) + table_bytes(parts_.bytecode) + table_bytes(parts_.constants_table) +
-        table_bytes(parts_.codes_table) + table_bytes(parts_.names_table) +
-        table_bytes(parts_.value_captured) + table_bytes(parts_.lines_table) +
-        parts_.ref_captured.capacity() / CHAR_BIT + parts_.source_name.capacity()
-    };
-
-    if (parts_.params) {
-        bytes += table_bytes(parts_.params->positional) + table_bytes(parts_.params->kw_only);
-    }
-
-    return bytes;
+    return sizeof(*this) + mem::heap_bytes(parts_.bytecode) +
+           mem::heap_bytes(parts_.constants_table) + mem::heap_bytes(parts_.codes_table) +
+           mem::heap_bytes(parts_.names_table) + mem::heap_bytes(parts_.ref_captured) +
+           mem::heap_bytes(parts_.value_captured) + mem::heap_bytes(parts_.params) +
+           mem::heap_bytes(parts_.lines_table) + mem::heap_bytes(parts_.source_name);
 }

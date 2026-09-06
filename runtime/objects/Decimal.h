@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../numeric/BigDec.h"
+#include "../../utils/memory_utils.h"
 #include "../Object.h"
 
 class Decimal final : public Object {
@@ -15,7 +16,7 @@ class Decimal final : public Object {
   public:
     [[nodiscard]] const BigDec &value() const { return value_; }
     [[nodiscard]] std::size_t size_bytes() const override {
-        return sizeof(*this) + value_.heap_bytes();
+        return sizeof(*this) + mem::heap_bytes(value_);
     }
 
   private:
