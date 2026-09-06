@@ -14,6 +14,8 @@ class Type;
  * 只能作为 Ref<T> 的基类。
  */
 class RefBase {
+    friend class Heap;
+
   protected:
     Object *ptr_{nullptr};
 
@@ -23,14 +25,15 @@ class RefBase {
     // -1
     ~RefBase();
 
+    // 放掉这条引用并置空
+    void reset();
+
   public:
     RefBase(const RefBase &) = delete;
     RefBase &operator=(const RefBase &) = delete;
 
     // 指向的对象，可能为空。借用，不改引用计数
     [[nodiscard]] Object *target() const { return ptr_; }
-    // 放掉这条引用并置空
-    void reset();
 };
 
 /**
@@ -62,6 +65,9 @@ template <typename T> class Ref final : public RefBase {
         std::swap(ptr_, other.ptr_);
         return *this;
     }
+
+    // 放掉自己这条引用并置空，等价于 `*this = nullptr`
+    void reset() { RefBase::reset(); }
 
     [[nodiscard]] T *get() const { return static_cast<T *>(ptr_); }
     T *operator->() const { return get(); }

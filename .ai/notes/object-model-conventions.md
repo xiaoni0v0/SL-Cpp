@@ -63,6 +63,24 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
   引用计数永远归不了零。安全性由 `bases_` 兜着——MRO 里的每个类都能沿 `bases_` 链到达，本来就被
   强引用着，GC 顺着 `bases_` 也扫得到，所以 `Type::visit_own_refs()` 只报 `bases_`。
 
+**"放掉一条引用"分两种能力，别混成一个 `reset()`**：
+
+- **放掉自己手上的句柄**——`Ref<T>::reset()`，公开。它不是什么特权：`r = nullptr` 一直就能做同样
+  的事，空 `Ref` 本来也是合法状态（`Runtime::types_` 默认构造就是一片空的，`type_` 在 bootstrap
+  回填前也是空的）。**"`Ref` 在就保引用"从来不是这里的不变量**，真正的不变量是"**非空** `Ref` 恰好
+  持有一份引用，计数等于非空 `Ref` 的个数"。
+- **放掉别人对象槽位里的引用**——`RefBase::reset()`，`protected` + `friend class Heap`。经由
+  `RefVisitor` 拿到的 `RefBase &` 是别人对象的私有字段，能改它的只该是 GC 的拆环阶段。
+  这条不是洁癖：`Object::visit_refs` 虽然是 `Heap` 私有的，但 `GcRootSource::visit_roots` 是公开
+  虚函数，等 `Code`、帧栈成为根源并被 VM 代码持有之后，"随手写个访问者把别人的根清了"就成了写得
+  出来的事。
+
+**由此来的一条硬规矩：`Object` 子类的析构函数不得依赖任何 `Ref` 字段的目标，也不得用 `type()`。**
+GC 拆环时（`collect()` 第 4 步）会先把垃圾对象的全部 `Ref` 槽位置空，第 5 步才销毁——所以析构函数
+跑起来时，`type_` 和自己的每个 `Ref` 字段都已经是空的了。走引用计数正常释放的那条路上它们不空，
+两条路行为不一致，**别写依赖它们的析构逻辑**。现在所有类型的析构函数都是隐式的，这条规矩是给以后
+想在析构里做点事的人看的。
+
 ## 三、`Heap::collect()` 只能在安全点调用
 
 **硬前提：调用 `collect()` 时，当前 C++ 调用栈上不能有任何活的 `Ref`。**
@@ -123,6 +141,7 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
 | `Object::visit_own_refs` | 只有 `Object::visit_refs` | 私有虚函数（NVI），子类照常覆写 |
 | `Object::set_type` | `Runtime` | `friend class Runtime` |
 | `Object::incref/decref` | `RefBase`、`Heap` | `friend class RefBase` + `friend class Heap` |
+| `RefBase::reset` | `Heap` | `friend class Heap`（`Ref<T>::reset()` 另开一个公开的，见下） |
 | 各具体对象类型的构造函数 | `make_ref` | `SL_MAKE_REF_ONLY` 宏（放在 private 区） |
 | `Heap::link/unlink` | `Object` | `friend class Object` |
 
