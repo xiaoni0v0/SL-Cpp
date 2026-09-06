@@ -31,7 +31,6 @@ std::optional<Code::LineEntry> Code::line_at(const std::uint32_t pc) const {
 }
 
 void Code::visit_own_refs(RefVisitor &visitor) {
-    // 加了新的引用字段一定要在这里补一笔，漏了就是提前回收
     for (RefBase &ref : parts_.constants_table) visitor.visit(ref);
     for (RefBase &ref : parts_.codes_table) visitor.visit(ref);
     for (RefBase &ref : parts_.names_table) visitor.visit(ref);
