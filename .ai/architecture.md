@@ -8,6 +8,7 @@
 
 ```
 源码 (.sl)
+  → Compiler   (compiler/)           把下面三层串成一条流水线的对外门面
   → Lexer      (compiler/lexer/)     词法分析，产出 Token 序列
   → Parser     (compiler/parser/)    语法分析，产出 AST
   → Analyzer   (compiler/analyzer/)  语义检查 + 编译期常量折叠，原地改 AST
@@ -24,7 +25,7 @@
 **当前完成度**：Lexer/Parser 已实现且有完整测试；Analyzer 的两个子系统（语义检查、常量折叠）已实现
 且有完整测试；`numeric/` 的 `BigInt`（`int` 的底层）和 `BigDec`+`DecContext`（`decimal` 的底层）已实现
 且有完整测试；`compiler/codegen/` 有了常量池（`ConstPool`）和设计文档 [`bytecode.md`](../compiler/codegen/bytecode.md)、`CodeGen` 本身还没写，
-`executor/` 目前只是串流水线的驱动。`runtime/` 已经有对象模型骨架（`Object`+`Ref`、`Type`、
+`executor/` 目前只是命令行驱动（串流水线的活在 `compiler/Compiler` 门面里）。`runtime/` 已经有对象模型骨架（`Object`+`Ref`、`Type`、
 四个基础类型、单例）、GC（引用计数 + 标记清扫）、bootstrap 和异常体系，帧与主循环还没开始——实现顺序见下面「实现路线」。
 **在虚拟机落地之前，SL.md 里"运行时"相关的条文（属性协议、GC、异常传播的具体机制等）大多还没有对应
 实现可以参照，只能靠 SL.md 文本本身。**
@@ -38,7 +39,7 @@
 
 | 目录 | 内容 |
 |---|---|
-| `compiler/` | 编译期那几层的收纳目录，本身只有一个 `CMakeLists.txt`。注意 **纯 C++ 层 / SL 层的分界是按模块划的不是按目录**：里面 `lexer`/`parser`/`analyzer` 是纯 C++ 层，`codegen` 要造真 SL 对象、属于 SL 层，见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。 |
+| `compiler/` | `Compiler.{h,cpp}`：对外门面，把 lexer → parser → analyzer 串成一条流水线；各阶段漏出来的非 `SLException` 一律包成 `InternalError` 并标上阶段名，中间产物通过可选的 `Hooks` 回调交给调用方去打印（门面自己不碰 stdout——`eval` 将来也走这条路）。注意 **纯 C++ 层 / SL 层的分界是按模块划的不是按目录**：里面 `lexer`/`parser`/`analyzer` 是纯 C++ 层，`codegen` 要造真 SL 对象、属于 SL 层，见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。 |
 | `compiler/lexer/` | `Lexer.{h,cpp}`：分词器。`token.h` 定义 `Token`；`x_token_type.inc`/`x_keyword.inc`/`x_reservedword.inc` 是 X-macro 列表（见下）。 |
 | `compiler/parser/` | `Parser.{h,cpp}`：递归下降 + Pratt 解析器，产出 `ast_nodes/` 里定义的 AST。 |
 | `compiler/parser/ast_nodes/` | AST 节点类型定义。`ast_nodes.h` 是汇总头（引入 `details/` 下所有节点头）；`x_ast_nodes.inc` 是全部节点类型的 X-macro 列表；`ast_json_dumper.h`/`.cpp` 定义 `AstJsonDumper : public AstConstVisitor`，把 AST 序列化成 JSON（调试/测试用，不是语言语义的一部分），入口是静态方法 `AstJsonDumper::dump(node, include_pos)`，内部靠每个节点一个 `visit()` + `result_` 成员当通道完成（`.ai/notes/visitor-result-passing.md` 那个模式）；`ast_visitor.h` 定义 `AstVisitor`/`AstConstVisitor`（会改树的、只读的两套）和 `SL_AST_NODE_ACCEPT` 宏，要遍历 AST 的类继承它们，靠 `accept` + `visit` 两次虚调用完成双分派——漏实现某个节点类型是编译期错误，不是运行期 assert。 |
@@ -54,7 +55,7 @@
 | `cpp_exceptions/` | 宿主（C++）层的异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`）加 `SourceLocation.h`，纯头文件。**信息以结构化字段为准，`what()` 只是构造时渲染出来的一种呈现**——转成 SL 异常对象时要的是分开的 file/row/col/message，见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。放在顶层而不是 `compiler/` 下，是因为 `utils/` 也要用它，而 `utils/` 是纯 C++ 层、不能反过来依赖 `compiler/`。 |
 | `utils/` | 自由函数工具：`string_utils`（UTF-8/UTF-32 互转等）、`file_utils`（读文件）、`memory_utils.h`（`mem::heap_bytes`，各对象类型 `size_bytes()` 的公共零件；**没有兜底重载**，认不出的类型是编译错误，见 [notes/object-model-conventions.md](notes/object-model-conventions.md)）。 |
 | `compiler/codegen/` | [`bytecode.md`](../compiler/codegen/bytecode.md)：指令集/帧/`Code` 的完整设计，动这里之前先读它。`ConstPool.{h,cpp}`：常量表的去重池，`intern()` 返回槽号、值相等的常量恒占同一个槽（`a = (1,2)` / `b = (1,2)` 的 `a is b` 因此为真）。**去重判据是「结构标识」，跟 SL 的 `==`/`hash` 好些地方正好相反**——放在 codegen 而不是 runtime 正是为了不让它跟对象模型里的相等混淆，见 [context.md](context.md)。`CodeGen` 本身还没写。 |
-| `executor/` | `Executor.{h,cpp}`：目前只是把整条编译流水线串起来、逐步打印中间结果的驱动，`main.cpp` 调它。真正的字节码虚拟机还没写，设计见 [`bytecode.md`](../compiler/codegen/bytecode.md)。 |
+| `executor/` | `Executor.{h,cpp}`：命令行入口的驱动——解析 argv、调 `Compiler::compile_file()`、把中间产物和错误打到 stdout/stderr，`main.cpp` 调它。串流水线的活在 `compiler/Compiler` 里，不在这。真正的字节码虚拟机还没写，设计见 [`bytecode.md`](../compiler/codegen/bytecode.md)。 |
 | `test/` | 目录结构镜像被测模块（`lexer`/`parser`/`analyzer`/`numeric`），见下。 |
 
 ## 运行时先于编译器
@@ -165,8 +166,11 @@ parser 那份抄了三处，加个文件要改三个地方。
 **目录调整**：`lexer`/`parser`/`analyzer`/`codegen` 已收进 `compiler/`，`builtins/exceptions/` 已挪成
 顶层的 `cpp_exceptions/`（`builtins/` 这个名字留给真正的 SL 内置）。还没做的两件：
 
-- **`compiler/` 的门面**——一个把"源码 → `Code`"包起来的对外入口，同时是把 C++ `SyntaxError` 转成 SL
-  异常的地方。等 `codegen` 能跑了再写，现在 `executor/Executor.cpp` 手工串着三层。
+- **`compiler/` 的门面已经有了**（`compiler/Compiler.{h,cpp}`），但只做到"源码 → 分析完的 AST"。
+  还差两件，各自等后面的步骤：产物应该是 `Ref<Code>`（等 `CodeGen`）；按
+  [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)，门面该无条件把 `SyntaxError`
+  转成 SL 异常对象，让冷启动和 `eval` 走同一段代码（等帧栈和主循环——现在唯一的消费方只是往
+  stderr 打一行，转成 SL 对象再取回来是白绕）。
 - **`executor/` 里那段"串流水线的驱动"要跟虚拟机本身分开**——等主循环真写出来（第 6 步）再拆。
   运行时的落脚处已经定了：**新开 `runtime/`，不扩 `executor/`**。这不是口味问题——codegen 要造真
   对象，所以 `codegen → 对象模型`；而虚拟机主循环因为 `eval` 要 `executor → compiler`。对象模型放进
@@ -315,10 +319,14 @@ ctest 现在约 28 秒。要更大覆盖别往表里堆，用倍数参数临时�
   `1 < 2 < 'a'` 已经确定为 `True` 的前缀可以丢，即使后面的 `2 < 'a'` 类型不可比没法继续折。新增
   折叠规则时按这条判断"能不能丢"，不要跟"能不能折成字面量"混为一谈。
 - **折叠涉及"复制值 vs 共享引用"时要考虑 `is`**：SL 的 `is` 不可重载、纯粹判断对象同一性，跟内容
-  是否可变无关，"深度不可变就能安全地用 clone 代替共享"这个直觉是错的——哪怕内容完全不可变，
-  克隆出来的两份和真正共享的同一份在 `is` 面前也能被区分出来。这是 `tuple`/`list` 的 `*` 重复恒
-  不折的原因（AST 是纯 `unique_ptr` 独占树，没有"共享子树"的表示能力，折叠成克隆等于悄悄改变了
-  `is` 语义，只能不折）。
+  是否可变无关，所以"深度不可变就能安全地用 clone 代替共享"这个直觉本身是错的——哪怕内容完全
+  不可变，克隆出来的两份和真正共享的同一份在 `is` 面前也能被区分出来。AST 是纯 `unique_ptr` 独占
+  树，没有"共享子树"的表示能力。
+  **但共享不必由 AST 表示**：codegen 的常量表加入时就按结构去重，克隆出来的 n 份字面量各自 `intern`
+  之后恒落在同一个槽、因而恒是同一个对象（`compiler/codegen/bytecode.md`「常量去重」）。所以
+  `tuple`/`list` 的 `*` 重复**可以折**，判据落在"每个元素能不能进常量表"上（`is_literal_const`，
+  比 `is_literal_pure` 严一档）：含 `list`/`dict` 的一律不折——它们每次求值都要新建一个对象，
+  去重救不回来，折了就会把 `x[0] is x[1]` 从真变假。
 
 ## ExprFolder / SemanticChecker 的非显然算法事实
 

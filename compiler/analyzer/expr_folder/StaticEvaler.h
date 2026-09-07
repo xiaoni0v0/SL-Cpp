@@ -21,12 +21,12 @@
  *
  * 二元：
  *            int  bool  decimal  str  tuple  list
- *       int   A     B      G      E     F      F
+ *       int   A     B      G      E     E      E
  *      bool   B     B      G      F     F      F
  *   decimal   G     G      G      F     F      F
  *       str   E     F      F      C     F      F
- *     tuple   F     F      F      F     C      F
- *      list   F     F      F      F     F      C
+ *     tuple   E     F      F      F     C      F
+ *      list   E     F      F      F     F      C
  *
  * A = { ** * // % + - == != < <= > >= << >> & ^ | } // 算数、比较、位运算
  * B = { ** * // % + - == != < <= > >= }             // 算数、比较
@@ -40,7 +40,7 @@
  * 规模上限：
  * - int 如果能用 int64_t 装下则折，科学计数法写法如果够小则字面展开；
  * - str 的 + 拼接、* 重复，结果长度不超过 nMaxStrLength 时折叠；
- * - tuple/list 的 + 拼接，结果元素个数不超过 nMaxContainerItems 时折叠；
+ * - tuple/list 的 + 拼接、* 重复，结果元素个数不超过 nMaxContainerItems 时折叠；
  *
  * 运行期必然报错的一律不折，把错误原样留给运行期。
  *
@@ -115,6 +115,12 @@ class StaticEvaler final {
      */
     [[nodiscard]] static bool is_literal_pure(const AstNode &node);
 
+    /**
+     * node 会不会被 codegen 放进常量表，也就是重复出现时恒是同一个对象。
+     * 比 is_literal_pure 少 list。
+     */
+    [[nodiscard]] static bool is_literal_const(const AstNode &node);
+
     // —————————— 数值分类与取值 ——————————
 
     // 是不是 int。只有位运算该用它
@@ -129,9 +135,13 @@ class StaticEvaler final {
     // int64_t 装不下（含指数超过 nMaxIntScientificExponent）时一律返回 nullopt
     [[nodiscard]] static std::optional<int64_t> node_to_int64(const AstNode &node);
 
+    // tuple/list 重复：把 items 重复 count_node 次。折不动返回 nullopt
+    [[nodiscard]] static std::optional<std::vector<AstNodePtr>>
+    repeat_items(const std::vector<AstNodePtr> &items, size_t count);
+
     // —————————— 折叠上限 ——————————
 
-    // tuple/list：+ 拼接的结果元素个数上限
+    // tuple/list：+ 拼接、* 重复的结果元素个数上限
     static constexpr size_t nMaxContainerItems{256};
     // str：+ 拼接、* 重复，结果字符数上限
     static constexpr size_t nMaxStrLength{4096};
@@ -146,6 +156,8 @@ class StaticEvaler final {
     [[nodiscard]] static std::optional<bool> literal_equal(const AstNode &a, const AstNode &b);
     // 字面量之间的值比较。调用方保证 is_literal_pure(a) 且 is_literal_pure(b)
     [[nodiscard]] static std::partial_ordering literal_compare(const AstNode &a, const AstNode &b);
+    // 深拷贝一个字面量节点。调用方保证 is_literal_const(node)
+    [[nodiscard]] static AstNodePtr clone_const_literal(const AstNode &node);
 
   public:
     StaticEvaler() = delete;

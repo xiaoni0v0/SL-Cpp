@@ -361,27 +361,38 @@ AstNodePtr StaticEvaler::fold_mul(const AstNodeOpBinary &node) {
         return {r, l};
     }();
 
-    // 重复次数的符号
-    if (is_negative_int_literal(count_node)) return nullptr;
+    // 尝试塞进 int64_t
+    const std::optional count_optional{node_to_int64(count_node)};
+    if (!count_optional) return nullptr;
+    const size_t count{static_cast<size_t>(*count_optional)};
 
     // 'a' * 3
     if (const auto *s{dynamic_cast<const AstNodeLiteralStr *>(&container_node)}) {
         // 空串重复多少次都还是空串，直接给结果
         if (s->value_.empty()) return std::make_unique<AstNodeLiteralStr>(node.pos_, U"");
 
-        const std::optional count{node_to_int64(count_node)};
-        if (!count) return nullptr;
-        const size_t n{static_cast<size_t>(*count)};
-
-        if (mul_exceeds(s->value_.size(), n, nMaxStrLength)) return nullptr;
+        if (mul_exceeds(s->value_.size(), count, nMaxStrLength)) return nullptr;
 
         std::u32string value;
-        value.reserve(s->value_.size() * n);
-        for (size_t i{0}; i < n; ++i) value += s->value_;
+        value.reserve(s->value_.size() * count);
+        for (size_t i{0}; i < count; ++i) value += s->value_;
         return std::make_unique<AstNodeLiteralStr>(node.pos_, std::move(value));
     }
 
-    // (a, b) * 3、[a, b] * 3：恒不折
+    // (a, b) * 3
+    if (const auto *tuple{dynamic_cast<const AstNodeLiteralTuple *>(&container_node)}) {
+        std::optional items{repeat_items(tuple->items_, count)};
+        if (!items) return nullptr;
+        return std::make_unique<AstNodeLiteralTuple>(node.pos_, std::move(*items));
+    }
+
+    // [a, b] * 3。列表本身每次求值都新建，重复的是元素，判据跟元组的一样
+    if (const auto *list{dynamic_cast<const AstNodeLiteralList *>(&container_node)}) {
+        std::optional items{repeat_items(list->items_, count)};
+        if (!items) return nullptr;
+        return std::make_unique<AstNodeLiteralList>(node.pos_, std::move(*items));
+    }
+
     return nullptr;
 }
 
@@ -569,6 +580,25 @@ bool StaticEvaler::is_literal_pure(const AstNode &node) {
     return false; // dict、_G/_L、标识符等都不是
 }
 
+bool StaticEvaler::is_literal_const(const AstNode &node) {
+    // 天然满足的
+    if (dynamic_cast<const AstNodeLiteralNone *>(&node) ||
+        dynamic_cast<const AstNodeLiteralBool *>(&node) ||
+        dynamic_cast<const AstNodeLiteralInt *>(&node) ||
+        dynamic_cast<const AstNodeLiteralDecimal *>(&node) ||
+        dynamic_cast<const AstNodeLiteralStr *>(&node) ||
+        dynamic_cast<const AstNodeLiteralEllipsis *>(&node))
+        return true;
+
+    // 容器类（只有 tuple）的递归判断
+    if (const auto *t{dynamic_cast<const AstNodeLiteralTuple *>(&node)})
+        return std::ranges::all_of(t->items_, [](const AstNodePtr &item) {
+            return is_literal_const(*item);
+        });
+
+    return false;
+}
+
 bool StaticEvaler::is_int(const AstNode &node) {
     return dynamic_cast<const AstNodeLiteralInt *>(&node);
 }
@@ -589,7 +619,7 @@ std::optional<int64_t> StaticEvaler::node_to_int64(const AstNode &node) {
 
     const auto &i{dynamic_cast<const AstNodeLiteralInt &>(node)};
     const std::u32string_view raw{i.raw_};
-    const bool negative{!raw.empty() && raw[0] == U'-'};
+    const bool is_negative{!raw.empty() && raw[0] == U'-'};
     // raw_ 的形状已经在构造时校验过，这里不会真的触发内部报错
     const auto [mantissa, exponent]{
         strip_literal_exponent(strip_literal_sign(raw), false, 4, i.pos_)
@@ -612,13 +642,31 @@ std::optional<int64_t> StaticEvaler::node_to_int64(const AstNode &node) {
     }
 
     std::string text{u32_to_utf8(digits)}; // 展开后的数字字符串
-    if (negative) text.insert(text.begin(), '-');
+    if (is_negative) text.insert(text.begin(), '-');
 
     int64_t result{0};
     const char *begin{text.data()}, *end{begin + text.size()};
     if (const auto [ptr, ec]{std::from_chars(begin, end, result)}; ec != std::errc{} || ptr != end)
         return std::nullopt;
     return result;
+}
+
+std::optional<std::vector<AstNodePtr>>
+StaticEvaler::repeat_items(const std::vector<AstNodePtr> &items, const size_t count) {
+    if (items.empty()) return std::vector<AstNodePtr>{};
+
+    if (!std::ranges::all_of(items, [](const AstNodePtr &item) { return is_literal_const(*item); }))
+        return std::nullopt;
+
+    if (mul_exceeds(items.size(), count, nMaxContainerItems)) return std::nullopt;
+
+    std::vector<AstNodePtr> repeated;
+    repeated.reserve(items.size() * count);
+    for (size_t i{0}; i < count; ++i) {
+        for (const AstNodePtr &item : items) repeated.push_back(clone_const_literal(*item));
+    }
+
+    return repeated;
 }
 
 AstNodePtr StaticEvaler::make_bool(const Position pos, const bool value) {
@@ -735,6 +783,32 @@ std::partial_ordering StaticEvaler::literal_compare(const AstNode &a, const AstN
 
     // 类型不同、或类型本身不支持序比较（None/Ellipsis 等）。交给运行期报错
     return std::partial_ordering::unordered;
+}
+
+AstNodePtr StaticEvaler::clone_const_literal(const AstNode &node) {
+    assert(is_literal_const(node));
+    const Position pos{node.pos_};
+
+    if (dynamic_cast<const AstNodeLiteralNone *>(&node))
+        return std::make_unique<AstNodeLiteralNone>(pos);
+    if (dynamic_cast<const AstNodeLiteralEllipsis *>(&node))
+        return std::make_unique<AstNodeLiteralEllipsis>(pos);
+    if (const auto *b{dynamic_cast<const AstNodeLiteralBool *>(&node)})
+        return std::make_unique<AstNodeLiteralBool>(pos, b->value_);
+    if (const auto *i{dynamic_cast<const AstNodeLiteralInt *>(&node)})
+        return std::make_unique<AstNodeLiteralInt>(pos, i->raw_);
+    if (const auto *d{dynamic_cast<const AstNodeLiteralDecimal *>(&node)})
+        return std::make_unique<AstNodeLiteralDecimal>(pos, d->raw_);
+    if (const auto *s{dynamic_cast<const AstNodeLiteralStr *>(&node)})
+        return std::make_unique<AstNodeLiteralStr>(pos, s->value_);
+    if (const auto *t{dynamic_cast<const AstNodeLiteralTuple *>(&node)}) {
+        std::vector<AstNodePtr> items;
+        items.reserve(t->items_.size());
+        for (const AstNodePtr &item : t->items_) items.push_back(clone_const_literal(*item));
+        return std::make_unique<AstNodeLiteralTuple>(pos, std::move(items));
+    }
+
+    return nullptr; // is_literal_const 只放行上面这些，走不到
 }
 
 AstNodePtr StaticEvaler::fold(AstNode &node) {

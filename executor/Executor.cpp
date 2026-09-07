@@ -1,14 +1,13 @@
 #include "Executor.h"
 
-#include "../compiler/analyzer/Analyzer.h"
+#include "../compiler/Compiler.h"
 #include "../compiler/lexer/Lexer.h"
-#include "../compiler/parser/Parser.h"
 #include "../compiler/parser/ast_nodes/ast_json_dumper.h"
-#include "../compiler/parser/ast_nodes/details/ast_node_multi_exprs.h"
 #include "../cppexceptions/SLException.h"
-#include "../utils/file_utils.h"
 #include "../utils/string_utils.h"
 
+#include <chrono>
+#include <exception>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -18,6 +17,30 @@ namespace {
 std::string path_abspath(const std::string &path) {
     std::error_code ec;
     return std::filesystem::absolute(path, ec).string();
+}
+
+// 开发期用的中间产物观察点
+Compiler::Hooks make_debug_hooks() {
+    const auto dump_ast{[](const AstNodeProgram &ast) {
+        std::cout << AstJsonDumper::dump(ast).dump(2) << std::endl << std::endl;
+    }};
+
+    return {
+        .after_tokenize =
+            [](const std::vector<Token> &tokens) {
+                for (const auto &token : tokens) {
+                    std::cout << Lexer::get_typename_by_tokentype(token.type);
+                    if (!(token.type == TokenType::NEWLINE ||
+                          token.type == TokenType::END_OF_FILE)) {
+                        std::cout << " \"" << u32_to_utf8(token.lexeme) << "\"";
+                    }
+                    std::cout << std::endl;
+                }
+                std::cout << std::endl << std::endl;
+            },
+        .after_parse = dump_ast,
+        .after_analyze = dump_ast,
+    };
 }
 
 } // namespace
@@ -42,57 +65,17 @@ int Executor::run() const {
         return 1;
     }
 
-    // 1. 分词器（源代码 -> token 数组）
-    std::vector<Token> tokens;
     try {
-        tokens = Lexer{utf8_to_u32(file_read_all(file_path), file_path), file_path}.tokenize();
-        for (const auto &token : tokens) {
-            std::cout << Lexer::get_typename_by_tokentype(token.type);
-            if (!(token.type == TokenType::NEWLINE || token.type == TokenType::END_OF_FILE)) {
-                std::cout << " \"" << u32_to_utf8(token.lexeme) << "\"";
-            }
-            std::cout << std::endl;
-        }
-        std::cout << std::endl << std::endl;
-    } catch (SLException &e) {
+        const AstNodeProgramPtr ast{Compiler::compile_file(file_path, make_debug_hooks())};
+    } catch (const SLException &e) {
+        // 编译器内部崩了的情况已经在门面里被包成 InternalError，这里只剩一条出口
         std::cerr << e.what() << std::endl;
         return 1;
-    } catch (std::exception &e) {
-        std::cerr << "lexer crashed: " << e.what() << std::endl;
+    } catch (const std::exception &e) {
+        std::cerr << "compiler crashed: " << e.what() << std::endl;
         return 1;
     } catch (...) {
-        std::cerr << "lexer crashed: unknown error" << std::endl;
-        return 1;
-    }
-
-    // 2. 解析器（token 数组 -> AST）
-    AstNodeProgramPtr ast;
-    try {
-        ast = Parser{std::move(tokens), file_path}.parse_as_file();
-        std::cout << AstJsonDumper::dump(*ast).dump(2) << std::endl << std::endl;
-    } catch (SLException &e) {
-        std::cerr << e.what() << std::endl;
-        return 1;
-    } catch (std::exception &e) {
-        std::cerr << "parser crashed: " << e.what() << std::endl;
-        return 1;
-    } catch (...) {
-        std::cerr << "parser crashed: unknown error" << std::endl;
-        return 1;
-    }
-
-    // 3. 分析器（检查 AST）
-    try {
-        Analyzer::analyze_program(*ast, file_path);
-        std::cout << AstJsonDumper::dump(*ast).dump(2) << std::endl << std::endl;
-    } catch (SLException &e) {
-        std::cerr << e.what() << std::endl;
-        return 1;
-    } catch (std::exception &e) {
-        std::cerr << "analyzer crashed: " << e.what() << std::endl;
-        return 1;
-    } catch (...) {
-        std::cerr << "analyzer crashed: unknown error" << std::endl;
+        std::cerr << "compiler crashed: unknown error" << std::endl;
         return 1;
     }
 
