@@ -16,7 +16,7 @@
 namespace {
 
 void hash_combine(std::size_t &seed, const std::size_t value) {
-    // Boost 那个经典配方，够散且够便宜
+    // Boost 经典配方
     seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
