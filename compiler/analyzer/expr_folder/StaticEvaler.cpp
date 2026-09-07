@@ -367,30 +367,60 @@ AstNodePtr StaticEvaler::fold_mul(const AstNodeOpBinary &node) {
     const size_t count{static_cast<size_t>(*count_optional)};
 
     // 'a' * 3
-    if (const auto *s{dynamic_cast<const AstNodeLiteralStr *>(&container_node)}) {
+    if (const auto *ls{dynamic_cast<const AstNodeLiteralStr *>(&container_node)}) {
         // 空串重复多少次都还是空串，直接给结果
-        if (s->value_.empty()) return std::make_unique<AstNodeLiteralStr>(node.pos_, U"");
+        if (ls->value_.empty()) return std::make_unique<AstNodeLiteralStr>(node.pos_, U"");
 
-        if (mul_exceeds(s->value_.size(), count, nMaxStrLength)) return nullptr;
+        if (mul_exceeds(ls->value_.size(), count, nMaxStrLength)) return nullptr;
 
         std::u32string value;
-        value.reserve(s->value_.size() * count);
-        for (size_t i{0}; i < count; ++i) value += s->value_;
+        value.reserve(ls->value_.size() * count);
+        for (size_t i{0}; i < count; ++i) value += ls->value_;
         return std::make_unique<AstNodeLiteralStr>(node.pos_, std::move(value));
     }
 
     // (a, b) * 3
-    if (const auto *tuple{dynamic_cast<const AstNodeLiteralTuple *>(&container_node)}) {
-        std::optional items{repeat_items(tuple->items_, count)};
-        if (!items) return nullptr;
-        return std::make_unique<AstNodeLiteralTuple>(node.pos_, std::move(*items));
+    if (const auto *lt{dynamic_cast<const AstNodeLiteralTuple *>(&container_node)}) {
+        if (lt->items_.empty())
+            return std::make_unique<AstNodeLiteralTuple>(node.pos_, std::vector<AstNodePtr>{});
+
+        if (!std::ranges::all_of(lt->items_, [](const AstNodePtr &item) {
+                return is_literal_const(*item);
+            }))
+            return nullptr;
+
+        if (mul_exceeds(lt->items_.size(), count, nMaxContainerItems)) return nullptr;
+
+        std::vector<AstNodePtr> repeated;
+        repeated.reserve(lt->items_.size() * count);
+        for (size_t i{0}; i < count; ++i) {
+            for (const AstNodePtr &item : lt->items_)
+                repeated.push_back(clone_const_literal(*item));
+        }
+
+        return std::make_unique<AstNodeLiteralTuple>(node.pos_, std::move(repeated));
     }
 
     // [a, b] * 3。列表本身每次求值都新建，重复的是元素，判据跟元组的一样
-    if (const auto *list{dynamic_cast<const AstNodeLiteralList *>(&container_node)}) {
-        std::optional items{repeat_items(list->items_, count)};
-        if (!items) return nullptr;
-        return std::make_unique<AstNodeLiteralList>(node.pos_, std::move(*items));
+    if (const auto *ll{dynamic_cast<const AstNodeLiteralList *>(&container_node)}) {
+        if (ll->items_.empty())
+            return std::make_unique<AstNodeLiteralList>(node.pos_, std::vector<AstNodePtr>{});
+
+        if (!std::ranges::all_of(ll->items_, [](const AstNodePtr &item) {
+                return is_literal_const(*item);
+            }))
+            return nullptr;
+
+        if (mul_exceeds(ll->items_.size(), count, nMaxContainerItems)) return nullptr;
+
+        std::vector<AstNodePtr> repeated;
+        repeated.reserve(ll->items_.size() * count);
+        for (size_t i{0}; i < count; ++i) {
+            for (const AstNodePtr &item : ll->items_)
+                repeated.push_back(clone_const_literal(*item));
+        }
+
+        return std::make_unique<AstNodeLiteralList>(node.pos_, std::move(repeated));
     }
 
     return nullptr;
@@ -651,24 +681,6 @@ std::optional<int64_t> StaticEvaler::node_to_int64(const AstNode &node) {
     return result;
 }
 
-std::optional<std::vector<AstNodePtr>>
-StaticEvaler::repeat_items(const std::vector<AstNodePtr> &items, const size_t count) {
-    if (items.empty()) return std::vector<AstNodePtr>{};
-
-    if (!std::ranges::all_of(items, [](const AstNodePtr &item) { return is_literal_const(*item); }))
-        return std::nullopt;
-
-    if (mul_exceeds(items.size(), count, nMaxContainerItems)) return std::nullopt;
-
-    std::vector<AstNodePtr> repeated;
-    repeated.reserve(items.size() * count);
-    for (size_t i{0}; i < count; ++i) {
-        for (const AstNodePtr &item : items) repeated.push_back(clone_const_literal(*item));
-    }
-
-    return repeated;
-}
-
 AstNodePtr StaticEvaler::make_bool(const Position pos, const bool value) {
     return std::make_unique<AstNodeLiteralBool>(pos, value);
 }
@@ -808,7 +820,7 @@ AstNodePtr StaticEvaler::clone_const_literal(const AstNode &node) {
         return std::make_unique<AstNodeLiteralTuple>(pos, std::move(items));
     }
 
-    return nullptr; // is_literal_const 只放行上面这些，走不到
+    return nullptr;
 }
 
 AstNodePtr StaticEvaler::fold(AstNode &node) {

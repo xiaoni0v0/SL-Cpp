@@ -135,10 +135,6 @@ class StaticEvaler final {
     // int64_t 装不下（含指数超过 nMaxIntScientificExponent）时一律返回 nullopt
     [[nodiscard]] static std::optional<int64_t> node_to_int64(const AstNode &node);
 
-    // tuple/list 重复：把 items 重复 count_node 次。折不动返回 nullopt
-    [[nodiscard]] static std::optional<std::vector<AstNodePtr>>
-    repeat_items(const std::vector<AstNodePtr> &items, size_t count);
-
     // —————————— 折叠上限 ——————————
 
     // tuple/list：+ 拼接、* 重复的结果元素个数上限
