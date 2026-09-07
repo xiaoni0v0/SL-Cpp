@@ -19,7 +19,8 @@ class ConstPool {
     // 结构哈希 -> 候选槽号。同一个桶里再逐个按 structural_identical() 确定
     std::unordered_map<std::size_t, std::vector<std::uint32_t>> buckets_;
 
-    // value 在表里的那个规范对象。元组会先把元素逐个规范化，必要时重建
+    // 返回 value 在表里的那个规范对象。
+    // 当且仅当是元组时会先把元素逐个规范化。
     [[nodiscard]] ObjectRef canonicalize(const ObjectRef &value);
 
   public:
