@@ -23,7 +23,7 @@
 
 **当前完成度**：Lexer/Parser 已实现且有完整测试；Analyzer 的两个子系统（语义检查、常量折叠）已实现
 且有完整测试；`numeric/` 的 `BigInt`（`int` 的底层）和 `BigDec`+`DecContext`（`decimal` 的底层）已实现
-且有完整测试；`compiler/codegen/` 只剩一份设计文档 [`bytecode.md`](../compiler/codegen/bytecode.md)，
+且有完整测试；`compiler/codegen/` 有了常量池（`ConstPool`）和设计文档 [`bytecode.md`](../compiler/codegen/bytecode.md)、`CodeGen` 本身还没写，
 `executor/` 目前只是串流水线的驱动。`runtime/` 已经有对象模型骨架（`Object`+`Ref`、`Type`、
 四个基础类型、单例）、GC（引用计数 + 标记清扫）、bootstrap 和异常体系，帧与主循环还没开始——实现顺序见下面「实现路线」。
 **在虚拟机落地之前，SL.md 里"运行时"相关的条文（属性协议、GC、异常传播的具体机制等）大多还没有对应
@@ -52,8 +52,8 @@
 | `runtime/RaisedException.h` | `raise` 用的 C++ 信封（装一个 `ObjectRef`），只在一段不回调 SL、有界的 C++ 代码里 throw/catch，不是异常跨 SL 帧传播的机制——那个仍是主循环手写的显式算法，见 bytecode.md。 |
 | `runtime/HostErrorConversion.{h,cpp}` | 宿主异常 → SL 异常对象的转换函数（`SyntaxError`/`EncodingError`/`FileNotFoundError` 各一个），`InternalError` 故意没有对应函数。 |
 | `cpp_exceptions/` | 宿主（C++）层的异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`）加 `SourceLocation.h`，纯头文件。**信息以结构化字段为准，`what()` 只是构造时渲染出来的一种呈现**——转成 SL 异常对象时要的是分开的 file/row/col/message，见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。放在顶层而不是 `compiler/` 下，是因为 `utils/` 也要用它，而 `utils/` 是纯 C++ 层、不能反过来依赖 `compiler/`。 |
-| `utils/` | 自由函数工具：`string_utils`（UTF-8/UTF-32 互转等）、`file_utils`（读文件）。 |
-| `compiler/codegen/` | 只有 [`bytecode.md`](../compiler/codegen/bytecode.md)——指令集/帧/`Code` 的完整设计，动这里之前先读它。**没有代码**：曾经写过一版 `ConstPool`（编译期常量描述 + 物化），随「运行时先于编译器」的决定一起废掉了，规则本身留在 `bytecode.md` 的「常量去重」一节。 |
+| `utils/` | 自由函数工具：`string_utils`（UTF-8/UTF-32 互转等）、`file_utils`（读文件）、`memory_utils.h`（`mem::heap_bytes`，各对象类型 `size_bytes()` 的公共零件；**没有兜底重载**，认不出的类型是编译错误，见 [notes/object-model-conventions.md](notes/object-model-conventions.md)）。 |
+| `compiler/codegen/` | [`bytecode.md`](../compiler/codegen/bytecode.md)：指令集/帧/`Code` 的完整设计，动这里之前先读它。`ConstPool.{h,cpp}`：常量表的去重池，`intern()` 返回槽号、值相等的常量恒占同一个槽（`a = (1,2)` / `b = (1,2)` 的 `a is b` 因此为真）。**去重判据是「结构标识」，跟 SL 的 `==`/`hash` 好些地方正好相反**——放在 codegen 而不是 runtime 正是为了不让它跟对象模型里的相等混淆，见 [context.md](context.md)。`CodeGen` 本身还没写。 |
 | `executor/` | `Executor.{h,cpp}`：目前只是把整条编译流水线串起来、逐步打印中间结果的驱动，`main.cpp` 调它。真正的字节码虚拟机还没写，设计见 [`bytecode.md`](../compiler/codegen/bytecode.md)。 |
 | `test/` | 目录结构镜像被测模块（`lexer`/`parser`/`analyzer`/`numeric`），见下。 |
 
@@ -157,7 +157,7 @@ parser 那份抄了三处，加个文件要改三个地方。
    （`BaseException::args()`），要等属性协议落地才能接上 `getattr`；`SyntaxError` 要不要在 `.args` 之外
    再暴露 file/row/col（类似 CPython），是待拍板的语言设计问题，见 [context.md](context.md)。分界与
    转换约定见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。
-5. **`Code` + `CodeGen`**：按 [`bytecode.md`](../compiler/codegen/bytecode.md) 重启。常量表存真对象，去重按
+5. **`Code` + `CodeGen`**（进行中：`Code` 对象、`ConstPool` 已完成，`CodeGen` 未开始）：按 [`bytecode.md`](../compiler/codegen/bytecode.md) 重启。常量表存真对象，去重按
    那份文档的「常量去重」。
 6. **`Frame` + 主循环 + 指令实现**。
 7. **`eval` / `import`**。

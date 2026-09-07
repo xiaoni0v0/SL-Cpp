@@ -207,3 +207,37 @@ Release 下也要响。
   都不该用它。
 - `HostErrorConversion.{h,cpp}` 是宿主异常 → SL 异常对象转换的落地实现，`InternalError` 没有对应
   函数、以后也不会有，见 [cpp-layer-vs-sl-layer.md](cpp-layer-vs-sl-layer.md)。
+
+## 六、`size_bytes()` 与 `mem::heap_bytes`：新类型怎么接进内存账本
+
+每个对象类型都要实现 `size_bytes()`（纯虚），语义是"这个对象占的堆字节数"。写法固定：
+
+    sizeof(*this) + mem::heap_bytes(字段a) + mem::heap_bytes(字段b) + ...
+
+`mem::heap_bytes`（`utils/memory_utils.h`）算的是**自身 `sizeof` 之外**额外占的堆内存，所以字段的
+`sizeof` 不会被重复计——它已经含在外层的 `sizeof(*this)` 里了。
+
+**它没有兜底重载：认不出的类型是编译错误。** 这是刻意的——静默返回 0 会让"某个字段没被算进去"
+变成一个查不出来的漏报（`optional<ParamShape>` 就差点栽在这上面）。认得的只有这几类：
+
+| 情况 | 怎么被认出来 |
+|---|---|
+| 有 `heap_bytes()` 成员 | 概念 `SelfReportsHeapBytes`（`BigInt`/`BigDec`/`Ref`/各聚合体） |
+| 平凡可复制类型 | 概念 `NoOwnedHeap`——没有析构函数就不可能拥有要释放的堆内存 |
+| `basic_string` / `vector<T>` / `vector<bool>` / `optional<T>` | 显式重载 |
+
+**How to apply**：
+
+- 新加一个**自定义聚合体**并把它放进某个 `size_bytes()` 的路径上，如果它不是平凡可复制类型
+  （典型：含 `Ref`），就必须给它加一个 `heap_bytes()` 成员。不加是编译错误，不是静默 0。
+- **不要给 `utils/memory_utils.h` 加"兜底"重载**，那等于把上面这条保护拆掉。
+- 想让一个类型被认出来，**只能加成员函数，不能在别处加 `mem::heap_bytes` 自由函数重载**：
+  容器那个重载递归调 `heap_bytes(元素)` 时，普通查找只看模板**定义点**（`memory_utils.h` 内），
+  而 `Ref` 之类在全局命名空间、ADL 也够不到 `mem`，后加的自由函数重载**永远不会被找到**。
+  成员函数经由概念约束在实例化点求值，才走得通。
+
+两个已知的边界：
+
+- `basic_string` 判"数据在不在对象内部"是**直接比缓冲区地址**，不猜 SSO 阈值——小缓冲优化不在
+  标准里（实现可以没有），而且"容量小就一定在对象内部"也不成立。
+- `vector<bool>` 的 `capacity()` 单位是**位**不是元素，套通用重载会虚报 8 倍，所以单独一个重载。
