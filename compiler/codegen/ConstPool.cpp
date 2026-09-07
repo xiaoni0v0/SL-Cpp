@@ -45,6 +45,62 @@ bool can_be_constant(const Object *const value) {
 
 } // namespace
 
+ObjectRef ConstPool::canonicalize(const ObjectRef &value) {
+    const auto *const tuple{dynamic_cast<const Tuple *>(value.target())};
+    if (!tuple) return value;
+
+    // 自底向上：先让每个元素进表，换成表里那个规范对象
+    std::vector<ObjectRef> items;
+    items.reserve(tuple->size());
+    bool changed{false};
+    for (std::size_t i{0}; i < tuple->size(); ++i) {
+        ObjectRef item{table_[intern(ObjectRef{tuple->at(i)})]};
+        changed = changed || item.target() != tuple->at(i);
+        items.push_back(std::move(item));
+    }
+    // 元素本来就都是规范对象，原样用，省一次分配
+    if (!changed) return value;
+
+    return ObjectRef{make_ref<Tuple>(value.target()->type(), std::move(items))};
+}
+
+std::uint32_t ConstPool::intern(const ObjectRef &value) {
+    if (!value) throw InternalError{"ConstPool: interning a null constant"};
+    if (!can_be_constant(value.target())) {
+        throw InternalError{
+            std::format("ConstPool: '{}' cannot go into the constant table", value->type()->name())
+        };
+    }
+
+    // 先规范化再取桶：canonicalize 会递归 intern 元素，那会往 buckets_ 里插东西、
+    // 让先取到的引用失效
+    const ObjectRef entry{canonicalize(value)};
+    const std::size_t hash{structural_hash(entry.target())};
+
+    std::vector<std::uint32_t> &bucket{buckets_[hash]};
+    for (const std::uint32_t slot : bucket) {
+        if (structural_identical(table_[slot].target(), entry.target())) return slot;
+    }
+
+    if (table_.size() >= std::numeric_limits<std::uint32_t>::max()) {
+        throw InternalError{"ConstPool: too many constants in one Code"};
+    }
+
+    const auto slot{static_cast<std::uint32_t>(table_.size())};
+    table_.push_back(entry);
+    bucket.push_back(slot);
+
+    return slot;
+}
+
+std::vector<ObjectRef> ConstPool::take_table() {
+    std::vector<ObjectRef> table{std::move(table_)};
+    table_.clear();
+    buckets_.clear();
+
+    return table;
+}
+
 bool ConstPool::structural_identical(const Object *const lhs, const Object *const rhs) {
     if (lhs == rhs) return true;
     // 先比类型。这一条同时挡住 1/True/1.0 三者互相合并
@@ -115,60 +171,4 @@ std::size_t ConstPool::structural_hash(const Object *const value) {
     // Bool / NamedSingleton：单例，身份就是全部信息
     hash_combine(hash, hash_pointer(value));
     return hash;
-}
-
-ObjectRef ConstPool::canonicalize(const ObjectRef &value) {
-    const auto *const tuple{dynamic_cast<const Tuple *>(value.target())};
-    if (!tuple) return value;
-
-    // 自底向上：先让每个元素进表，换成表里那个规范对象
-    std::vector<ObjectRef> items;
-    items.reserve(tuple->size());
-    bool changed{false};
-    for (std::size_t i{0}; i < tuple->size(); ++i) {
-        ObjectRef item{table_[intern(ObjectRef{tuple->at(i)})]};
-        changed = changed || item.target() != tuple->at(i);
-        items.push_back(std::move(item));
-    }
-    // 元素本来就都是规范对象，原样用，省一次分配
-    if (!changed) return value;
-
-    return ObjectRef{make_ref<Tuple>(value.target()->type(), std::move(items))};
-}
-
-std::uint32_t ConstPool::intern(const ObjectRef &value) {
-    if (!value) throw InternalError{"ConstPool: interning a null constant"};
-    if (!can_be_constant(value.target())) {
-        throw InternalError{
-            std::format("ConstPool: '{}' cannot go into the constant table", value->type()->name())
-        };
-    }
-
-    // 先规范化再取桶：canonicalize 会递归 intern 元素，那会往 buckets_ 里插东西、
-    // 让先取到的引用失效
-    const ObjectRef entry{canonicalize(value)};
-    const std::size_t hash{structural_hash(entry.target())};
-
-    std::vector<std::uint32_t> &bucket{buckets_[hash]};
-    for (const std::uint32_t slot : bucket) {
-        if (structural_identical(table_[slot].target(), entry.target())) return slot;
-    }
-
-    if (table_.size() >= std::numeric_limits<std::uint32_t>::max()) {
-        throw InternalError{"ConstPool: too many constants in one Code"};
-    }
-
-    const auto slot{static_cast<std::uint32_t>(table_.size())};
-    table_.push_back(entry);
-    bucket.push_back(slot);
-
-    return slot;
-}
-
-std::vector<ObjectRef> ConstPool::take_table() {
-    std::vector<ObjectRef> table{std::move(table_)};
-    table_.clear();
-    buckets_.clear();
-
-    return table;
 }

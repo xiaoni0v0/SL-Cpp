@@ -10,7 +10,6 @@
 /**
  * 常量表的去重池。
  *
- * codegen 一边编译一边往里塞常量，编完把整张表交给 Code::Parts。
  * 去重的判据是“结构标识”，见 structural_identical()。
  */
 class ConstPool {
@@ -24,9 +23,7 @@ class ConstPool {
     [[nodiscard]] ObjectRef canonicalize(const ObjectRef &value);
 
   public:
-    /**
-     * 把 value 放进常量表，返回它的槽号；已经有结构上相同的常量就复用那个槽。
-     */
+    // 把 value 放进常量表，返回它的槽号；已经有结构上相同的常量就复用那个槽。
     [[nodiscard]] std::uint32_t intern(const ObjectRef &value);
 
     [[nodiscard]] const std::vector<ObjectRef> &table() const { return table_; }
@@ -35,14 +32,10 @@ class ConstPool {
     // 把整张表搬走，池子随之清空
     [[nodiscard]] std::vector<ObjectRef> take_table();
 
-    /**
-     * 两个常量该不该共用一个槽。
-     * 调用方保证：元组的元素已经是表里的规范对象。
-     */
+    // 两个常量该不该共用一个槽。
+    // 调用方保证：元组的元素已经是表里的规范对象。
     [[nodiscard]] static bool structural_identical(const Object *lhs, const Object *rhs);
 
-    /**
-     * structural_identical 配套的哈希。
-     */
+    // structural_identical 配套的哈希。
     [[nodiscard]] static std::size_t structural_hash(const Object *value);
 };
