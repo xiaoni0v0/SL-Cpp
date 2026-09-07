@@ -24,10 +24,11 @@ CLion 里点构建。脚本写成 Python 而不是 `.bat`，是因为仓库不�
 **有一类缓存问题重跑解决不了**：报错形如 `error: Assume extern C functions don't unwind was
 disabled in precompiled file '...cmake_pch.hxx.pch' but is currently enabled`，说明预编译头是用
 另一套编译选项生成的，而 ninja 认为 `.pch` 已经是最新的、不会去重新生成它，所以跑多少次都是同一个
-错。删掉 `.pch` 让它重建即可，不用清整个构建目录：
+错。
 
-```
-find cmake-build-debug -name "*.pch" -delete
-```
+**根因是编译器混用**，不是构建目录脏了：这个脚本用的是 clang-cl，而 CLion 的工具链里如果配的是
+clang，两边共用同一个 `cmake-build-debug`，谁编译谁就把对方的 `.pch` 顶掉。**开发期间统一用
+clang-cl**（CLion 里也选 clang-cl）之后这个错不再出现。
 
-（大批源文件的时间戳被一次性改动过之后容易触发，比如全仓库跑了一遍格式化。）
+**how to apply**：见到这个错，先确认两边用的是不是同一个编译器，而不是去删 `.pch`——更不要删整个
+`cmake-build-debug`。删掉只是绕过症状，下次从另一边编译又会犯，而且重建构建目录很慢。
