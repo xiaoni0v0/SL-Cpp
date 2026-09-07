@@ -24,7 +24,7 @@ std::size_t hash_pointer(const void *const pointer) { return std::hash<const voi
 
 // BigInt 没有现成的哈希，这里按「符号 + 位长 + 转成 double 的位模式」凑一个。
 // 大到 double 装不下时 to_double() 给 ±infinity、于是这一项失去区分度，但位长还在，够用；
-// 反正哈希只负责分桶，最终定案靠 identical()
+// 反正哈希只负责分桶，最终定案靠 structural_identical()
 std::size_t hash_bigint(const BigInt &value) {
     std::size_t hash{static_cast<std::size_t>(value.sign() + 1)};
     hash_combine(hash, value.bit_length());
@@ -45,24 +45,31 @@ bool can_be_constant(const Object *const value) {
 
 } // namespace
 
-bool ConstPool::identical(const Object *const lhs, const Object *const rhs) {
+bool ConstPool::structural_identical(const Object *const lhs, const Object *const rhs) {
     if (lhs == rhs) return true;
     // 先比类型。这一条同时挡住 1/True/1.0 三者互相合并
     if (lhs->type() != rhs->type()) return false;
 
+    // 两边都要 dynamic_cast。"SL 类型相同 => C++ 类相同"只是运行时的一条隐含不变量，
+    // 没有任何地方强制它（Int 的构造函数收 Type*，理论上能造出类型为 int 的别的东西），
+    // 拿它当前提去 static_cast 就是把一个别处的 bug 变成这里的 UB。
+    // 转不过去就当作不相同——保守，最多是多占一个槽，不会错
     if (const auto *const left{dynamic_cast<const Int *>(lhs)}) {
-        return left->value().equals(static_cast<const Int *>(rhs)->value());
+        const auto *const right{dynamic_cast<const Int *>(rhs)};
+        return right && left->value().equals(right->value());
     }
     if (const auto *const left{dynamic_cast<const Decimal *>(lhs)}) {
+        const auto *const right{dynamic_cast<const Decimal *>(rhs)};
         // 逐位比。用 operator== 会把 1.5 和 1.50 合成一个槽，而 str 分得出它们
-        return left->value().identical(static_cast<const Decimal *>(rhs)->value());
+        return right && left->value().identical(right->value());
     }
     if (const auto *const left{dynamic_cast<const Str *>(lhs)}) {
-        return left->value() == static_cast<const Str *>(rhs)->value();
+        const auto *const right{dynamic_cast<const Str *>(rhs)};
+        return right && left->value() == right->value();
     }
     if (const auto *const left{dynamic_cast<const Tuple *>(lhs)}) {
-        const auto *const right{static_cast<const Tuple *>(rhs)};
-        if (left->size() != right->size()) return false;
+        const auto *const right{dynamic_cast<const Tuple *>(rhs)};
+        if (!right || left->size() != right->size()) return false;
         // 比元素的对象身份，不递归比值——元素已经规范化过了
         for (std::size_t i{0}; i < left->size(); ++i) {
             if (left->at(i) != right->at(i)) return false;
@@ -77,7 +84,7 @@ bool ConstPool::identical(const Object *const lhs, const Object *const rhs) {
 }
 
 std::size_t ConstPool::structural_hash(const Object *const value) {
-    // 类型编进 key，跟 identical() 的第一条对齐
+    // 类型编进 key，跟 structural_identical() 的第一条对齐
     std::size_t hash{hash_pointer(value->type())};
 
     if (const auto *const number{dynamic_cast<const Int *>(value)}) {
@@ -86,7 +93,7 @@ std::size_t ConstPool::structural_hash(const Object *const value) {
     }
     if (const auto *const number{dynamic_cast<const Decimal *>(value)}) {
         const BigDec &decimal{number->value()};
-        // 逐位取：kind + 符号 + 指数 + 系数，跟 identical() 用的是同一组字段
+        // 逐位取：kind + 符号 + 指数 + 系数，跟 structural_identical() 用的是同一组字段
         hash_combine(hash, static_cast<std::size_t>(decimal.kind()));
         hash_combine(hash, decimal.is_negative() ? 1u : 0u);
         hash_combine(hash, static_cast<std::size_t>(decimal.exponent()));
@@ -99,7 +106,7 @@ std::size_t ConstPool::structural_hash(const Object *const value) {
     }
     if (const auto *const tuple{dynamic_cast<const Tuple *>(value)}) {
         hash_combine(hash, tuple->size());
-        // 元素按对象身份算，跟 identical() 对齐
+        // 元素按对象身份算，跟 structural_identical() 对齐
         for (std::size_t i{0}; i < tuple->size(); ++i)
             hash_combine(hash, hash_pointer(tuple->at(i)));
         return hash;
@@ -110,7 +117,7 @@ std::size_t ConstPool::structural_hash(const Object *const value) {
     return hash;
 }
 
-ObjectRef ConstPool::canonical(const ObjectRef &value) {
+ObjectRef ConstPool::canonicalize(const ObjectRef &value) {
     const auto *const tuple{dynamic_cast<const Tuple *>(value.target())};
     if (!tuple) return value;
 
@@ -137,12 +144,14 @@ std::uint32_t ConstPool::intern(const ObjectRef &value) {
         };
     }
 
-    const ObjectRef entry{canonical(value)};
+    // 先规范化再取桶：canonicalize 会递归 intern 元素，那会往 buckets_ 里插东西、
+    // 让先取到的引用失效
+    const ObjectRef entry{canonicalize(value)};
     const std::size_t hash{structural_hash(entry.target())};
 
     std::vector<std::uint32_t> &bucket{buckets_[hash]};
     for (const std::uint32_t slot : bucket) {
-        if (identical(table_[slot].target(), entry.target())) return slot;
+        if (structural_identical(table_[slot].target(), entry.target())) return slot;
     }
 
     if (table_.size() >= std::numeric_limits<std::uint32_t>::max()) {
@@ -156,8 +165,10 @@ std::uint32_t ConstPool::intern(const ObjectRef &value) {
     return slot;
 }
 
-std::vector<ObjectRef> ConstPool::take_table() && {
+std::vector<ObjectRef> ConstPool::take_table() {
+    std::vector<ObjectRef> table{std::move(table_)};
+    table_.clear();
     buckets_.clear();
 
-    return std::move(table_);
+    return table;
 }

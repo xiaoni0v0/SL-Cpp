@@ -11,17 +11,17 @@
  * 常量表的去重池。
  *
  * codegen 一边编译一边往里塞常量，编完把整张表交给 Code::Parts。
- * 去重的判据是“结构标识”。
+ * 去重的判据是“结构标识”，见 structural_identical()。
  */
 class ConstPool {
     // 常量表
     std::vector<ObjectRef> table_;
 
-    // 结构哈希 -> 候选槽号。同一个桶里再逐个按 identical() 定案。
+    // 结构哈希 -> 候选槽号。同一个桶里再逐个按 structural_identical() 确定
     std::unordered_map<std::size_t, std::vector<std::uint32_t>> buckets_;
 
     // value 在表里的那个规范对象。元组会先把元素逐个规范化，必要时重建
-    [[nodiscard]] ObjectRef canonical(const ObjectRef &value);
+    [[nodiscard]] ObjectRef canonicalize(const ObjectRef &value);
 
   public:
     /**
@@ -32,17 +32,17 @@ class ConstPool {
     [[nodiscard]] const std::vector<ObjectRef> &table() const { return table_; }
     [[nodiscard]] std::uint32_t size() const { return static_cast<std::uint32_t>(table_.size()); }
 
-    // 整理出整张表
-    [[nodiscard]] std::vector<ObjectRef> take_table() &&;
+    // 把整张表搬走，池子随之清空
+    [[nodiscard]] std::vector<ObjectRef> take_table();
 
     /**
      * 两个常量该不该共用一个槽。
-     * 调用方保证：两边都是能进常量表的类型，且元组的元素已经是表里的规范对象。
+     * 调用方保证：元组的元素已经是表里的规范对象。
      */
-    [[nodiscard]] static bool identical(const Object *lhs, const Object *rhs);
+    [[nodiscard]] static bool structural_identical(const Object *lhs, const Object *rhs);
 
     /**
-     * identical 意义下的 hash
+     * structural_identical 配套的哈希。
      */
     [[nodiscard]] static std::size_t structural_hash(const Object *value);
 };
