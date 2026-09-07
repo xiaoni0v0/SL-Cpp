@@ -11,6 +11,7 @@
 #include <concepts>
 #include <format>
 #include <functional>
+#include <optional>
 #include <utility>
 
 namespace {
@@ -35,6 +36,14 @@ std::size_t hash_bigint(const BigInt &value) {
     );
 }
 
+// 元组的结构哈希只取决于类型和元素的对象身份
+std::size_t hash_tuple(const Type *const type, const std::vector<ObjectRef> &items) {
+    std::size_t hash{hash_combine(hash_pointer(type), items.size())};
+    for (const ObjectRef &item : items) hash = hash_combine(hash, hash_pointer(item.target()));
+
+    return hash;
+}
+
 // 这个对象能不能进常量表。判据是不可变，见 bytecode.md「常量表存什么」
 bool can_be_constant(const Object *const value) {
     const Type *const type{value->type()};
@@ -46,6 +55,20 @@ bool can_be_constant(const Object *const value) {
 }
 
 } // namespace
+
+std::optional<std::uint32_t>
+ConstPool::find_tuple(const Type *const type, const std::vector<ObjectRef> &items) const {
+    const auto bucket{buckets_.find(hash_tuple(type, items))};
+    if (bucket == buckets_.end()) return std::nullopt;
+
+    for (const std::uint32_t slot : bucket->second) {
+        if (const auto other{dynamic_cast<const Tuple *>(table_[slot].target())};
+            other && other->type() == type && other->items() == items)
+            return slot;
+    }
+
+    return std::nullopt;
+}
 
 ObjectRef ConstPool::canonicalize(const ObjectRef &value) {
     const auto tuple{dynamic_cast<const Tuple *>(value.target())};
@@ -65,7 +88,12 @@ ObjectRef ConstPool::canonicalize(const ObjectRef &value) {
     // 没变过，元素本来就都是规范对象
     if (!changed) return value;
 
-    return ObjectRef{make_ref<Tuple>(value.target()->type(), std::move(items))};
+    // 元素定了，这个元组的结构标识也就定了。表里已经有一个就直接用那个
+    if (const std::optional found{find_tuple(tuple->type(), items)}) {
+        return table_[*found];
+    }
+
+    return ObjectRef{make_ref<Tuple>(tuple->type(), std::move(items))};
 }
 
 std::uint32_t ConstPool::intern(const ObjectRef &value) {
@@ -153,11 +181,7 @@ std::size_t ConstPool::structural_hash(const Object *const value) {
         return hash_combine(seed, std::hash<std::u32string>{}(str->value()));
     }
     if (const auto *const tuple{dynamic_cast<const Tuple *>(value)}) {
-        std::size_t hash{hash_combine(seed, tuple->size())};
-        for (std::size_t i{0}; i < tuple->size(); ++i) {
-            hash = hash_combine(hash, hash_pointer(tuple->at(i)));
-        }
-        return hash;
+        return hash_tuple(tuple->type(), tuple->items());
     }
 
     // 单例，身份就是全部信息
