@@ -26,7 +26,7 @@ std::size_t hash_combine(std::size_t seed, const Values... values) {
     return seed;
 }
 
-std::size_t hash_pointer(const void *const pointer) { return std::hash<const void *>{}(pointer); }
+std::size_t hash_pointer(const void *pointer) { return std::hash<const void *>{}(pointer); }
 
 // 眼下没有现成的，按「符号 + 位长 + 转成 double 的位模式」凑一个。
 // TODO: BigInt 有了自己的哈希之后，换成用 BigInt / BigDec 自己的
@@ -37,7 +37,7 @@ std::size_t hash_bigint(const BigInt &value) {
 }
 
 // 元组的结构哈希只取决于类型和元素的对象身份
-std::size_t hash_tuple(const Type *const type, const std::vector<ObjectRef> &items) {
+std::size_t hash_tuple(const Type *type, const std::vector<ObjectRef> &items) {
     std::size_t hash{hash_combine(hash_pointer(type), items.size())};
     for (const ObjectRef &item : items) hash = hash_combine(hash, hash_pointer(item.target()));
 
@@ -45,8 +45,8 @@ std::size_t hash_tuple(const Type *const type, const std::vector<ObjectRef> &ite
 }
 
 // 这个对象能不能进常量表。判据是不可变，见 bytecode.md「常量表存什么」
-bool can_be_constant(const Object *const value) {
-    const Type *const type{value->type()};
+bool can_be_constant(const Object *value) {
+    const Type *type{value->type()};
 
     return type == Runtime::type_none_type() || type == Runtime::type_singleton_type() ||
            type == Runtime::type_bool() || type == Runtime::type_int() ||
@@ -57,7 +57,7 @@ bool can_be_constant(const Object *const value) {
 } // namespace
 
 std::optional<std::uint32_t>
-ConstPool::find_tuple(const Type *const type, const std::vector<ObjectRef> &items) const {
+ConstPool::find_tuple(const Type *type, const std::vector<ObjectRef> &items) const {
     const auto bucket{buckets_.find(hash_tuple(type, items))};
     if (bucket == buckets_.end()) return std::nullopt;
 
@@ -128,26 +128,27 @@ std::vector<ObjectRef> ConstPool::take_table() {
     return table;
 }
 
-bool ConstPool::structural_identical(const Object *const lhs, const Object *const rhs) {
+bool ConstPool::structural_identical(const Object *lhs, const Object *rhs) {
     if (lhs == rhs) return true;
 
     // 先比类型
     if (lhs->type() != rhs->type()) return false;
 
     // 再比值
-    if (auto left{dynamic_cast<const Int *>(lhs)}, right{dynamic_cast<const Int *>(rhs)};
+    if (const auto left{dynamic_cast<const Int *>(lhs)}, right{dynamic_cast<const Int *>(rhs)};
         left && right) {
         return left->value().equals(right->value());
     }
-    if (auto left{dynamic_cast<const Decimal *>(lhs)}, right{dynamic_cast<const Decimal *>(rhs)};
+    if (const auto left{dynamic_cast<const Decimal *>(lhs)},
+        right{dynamic_cast<const Decimal *>(rhs)};
         left && right) {
         return left->value().identical(right->value()); // 不能用 operator==
     }
-    if (auto left{dynamic_cast<const Str *>(lhs)}, right{dynamic_cast<const Str *>(rhs)};
+    if (const auto left{dynamic_cast<const Str *>(lhs)}, right{dynamic_cast<const Str *>(rhs)};
         left && right) {
         return left->value() == right->value();
     }
-    if (auto left{dynamic_cast<const Tuple *>(lhs)}, right{dynamic_cast<const Tuple *>(rhs)};
+    if (const auto left{dynamic_cast<const Tuple *>(lhs)}, right{dynamic_cast<const Tuple *>(rhs)};
         left && right) {
         if (left->size() != right->size()) return false;
         for (std::size_t i{0}; i < left->size(); ++i) {
@@ -159,14 +160,14 @@ bool ConstPool::structural_identical(const Object *const lhs, const Object *cons
     return false;
 }
 
-std::size_t ConstPool::structural_hash(const Object *const value) {
+std::size_t ConstPool::structural_hash(const Object *value) {
     // 类型编进 key，跟 structural_identical() 的第一条对齐
     const std::size_t seed{hash_pointer(value->type())};
 
-    if (const auto *const number{dynamic_cast<const Int *>(value)}) {
+    if (const auto number{dynamic_cast<const Int *>(value)}) {
         return hash_combine(seed, hash_bigint(number->value()));
     }
-    if (const auto *const number{dynamic_cast<const Decimal *>(value)}) {
+    if (const auto number{dynamic_cast<const Decimal *>(value)}) {
         const BigDec &decimal{number->value()};
         // kind + 符号 + 指数 + 系数，正是 BigDec::identical() 比的那四个字段
         return hash_combine(
@@ -177,10 +178,10 @@ std::size_t ConstPool::structural_hash(const Object *const value) {
             hash_bigint(decimal.coefficient())
         );
     }
-    if (const auto *const str{dynamic_cast<const Str *>(value)}) {
+    if (const auto str{dynamic_cast<const Str *>(value)}) {
         return hash_combine(seed, std::hash<std::u32string>{}(str->value()));
     }
-    if (const auto *const tuple{dynamic_cast<const Tuple *>(value)}) {
+    if (const auto tuple{dynamic_cast<const Tuple *>(value)}) {
         return hash_tuple(tuple->type(), tuple->items());
     }
 
