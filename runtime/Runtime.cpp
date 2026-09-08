@@ -62,7 +62,6 @@ void Runtime::tear_down() {
     g_runtime->singletons_ = {};
     for (Ref<Type> &type : g_runtime->types_) type.reset();
 
-    Heap::remove_root_source(g_runtime.get());
     Heap::collect();
 
     g_runtime.reset();
@@ -76,20 +75,21 @@ Runtime &Runtime::instance() {
 Type *Runtime::builtin_type(const BuiltinType id) { return instance().types_[index_of(id)].get(); }
 
 void Runtime::visit_roots(RefVisitor &visitor) {
-    for (RefBase &ref : types_) visitor.visit(ref);
+    Runtime &self{instance()};
 
-    visitor.visit(singletons_.none_);
-    visitor.visit(singletons_.ellipsis_);
-    visitor.visit(singletons_.not_implemented_);
-    visitor.visit(singletons_.stop_iteration_);
-    visitor.visit(singletons_.true_);
-    visitor.visit(singletons_.false_);
+    for (RefBase &ref : self.types_) visitor.visit(ref);
+
+    visitor.visit(self.singletons_.none_);
+    visitor.visit(self.singletons_.ellipsis_);
+    visitor.visit(self.singletons_.not_implemented_);
+    visitor.visit(self.singletons_.stop_iteration_);
+    visitor.visit(self.singletons_.true_);
+    visitor.visit(self.singletons_.false_);
 }
 
 void Runtime::init() {
     if (g_runtime) throw InternalError{"Runtime: double init"};
     g_runtime.reset(new Runtime{});
-    Heap::add_root_source(g_runtime.get());
 
     try {
         g_runtime->build_types();

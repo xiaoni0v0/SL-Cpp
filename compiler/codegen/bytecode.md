@@ -160,7 +160,8 @@ codegen 按实际传下去的 `want_value` 静态跟踪栈深（算 `max_stack`�
 | `LOAD_INTERNAL n` | `…`            | `… v`          | 压全局共享表第 `n` 项                            |
 
 `LOAD_INTERNAL` 取的是一张**全局共享、不属于任何单个 `Code`** 的小表，只装 **SL 层拿不到的内部对象**：
-`import` 调用形态背后的函数对象、`MAKE_FUNC` 缺省参数用的哨兵值。它没有 SL 主人，**必须注册成 GC 根**。
+`import` 调用形态背后的函数对象、`MAKE_FUNC` 缺省参数用的哨兵值。它没有 SL 主人，**挂在 `Runtime` 上
+当 GC 根**（帧栈、模块表同理）。
 字面量一律走 `LOAD_CONST`，`None`/`True`/`False`/`Ellipsis` 也不例外。两张表互不相干，`n` 不能混用。
 
 `COPY` 只能在栈顶新增副本，把已在栈上的项下沉只能靠 `INSERT`，两者缺一不可。
@@ -213,16 +214,24 @@ codegen 按实际传下去的 `want_value` 静态跟踪栈深（算 `max_stack`�
 | 指令                                       | 前                                       | 后                | 行为                                                              |
 | ------------------------------------------ | ---------------------------------------- | ----------------- | ----------------------------------------------------------------- |
 | `MAKE_TUPLE n`/`MAKE_LIST n`/`MAKE_DICT n` | `… v₁ … vₙ`（dict 是 `… k₁ v₁ … kₙ vₙ`） | `… c`             | 弹 `n`（dict 弹 `2n`）项建容器。无展开项时用这组                  |
-| `LIST_APPEND`                              | `… lst x`                                | `… lst`           | 追加到下面的 list                                                 |
-| `LIST_EXTEND`                              | `… lst x`                                | `… lst`           | 要求可迭代（否则 `TypeError`），元素依次追加                      |
-| `DICT_PUT`                                 | `… d k v`                                | `… d`             | 写入下面的 dict                                                   |
-| `DICT_MERGE`                               | `… d x`                                  | `… d`             | 要求满足映射协议（否则 `TypeError`），各项并入                    |
+| `LIST_APPEND i`                            | `… lst … x`                              | `… lst …`         | 弹栈顶，追加到 list                                               |
+| `LIST_EXTEND i`                            | `… lst … x`                              | `… lst …`         | 弹栈顶（要求可迭代，否则 `TypeError`），元素依次追加              |
+| `DICT_PUT i`                               | `… d … k v`                              | `… d …`           | 弹 `k`/`v`，写入 dict                                             |
+| `DICT_MERGE i`                             | `… d … x`                                | `… d …`           | 弹栈顶（要求映射协议，否则 `TypeError`），各项并入                |
+| `COUNT_INC i`                              | `…`                                      | `…`               | 把目标位置的 int 加 1，不弹任何东西                               |
 | `LIST_TO_TUPLE`                            | `… lst`                                  | `… tup`           | list 换成 tuple                                                   |
 | `UNPACK n`                                 | `… x`                                    | `… vₙ … v₁`       | 要求可迭代，**逆序**压入使第一个元素在栈顶；个数不对 `ValueError` |
 | `UNPACK_EX a`                              | `… x`                                    | `… vₖ … *lv … v₁` | 带 `*lv` 的解构，见下                                             |
 
-带 `*`/`**` 展开的容器字面量走 `MAKE_LIST 0`/`MAKE_DICT 0` 加逐项 append/extend/put/merge，元组最后补
-`LIST_TO_TUPLE`；收集模式的 `for` 复用同一组。
+**这五条的 `i` 是目标容器/累加器的位置**：弹掉自己那些操作数之后，从栈顶数第 `i` 项（`i=1` 即紧邻栈顶）。
+容器字面量拼装时目标就在栈顶下面，恒是 `i=1`；迭代模式的 `for` 因为迭代器压在结果槽上面，用 `i=2`。
+没有这个参数，迭代 `for` 的收集/计数就够不着夹在迭代器下面的结果槽。
+
+带 `*`/`**` 展开的容器字面量：第一个展开项**之前**的那些项照常逐个求值，用 `MAKE_LIST k`/`MAKE_DICT k`
+一次建好，其后逐项 `LIST_APPEND 1`/`LIST_EXTEND 1`/`DICT_PUT 1`/`DICT_MERGE 1` 并入；元组最后补
+`LIST_TO_TUPLE`。第一个元素就是展开项时 `k=0`。求值顺序与源码顺序一致。
+
+无展开时直接 `MAKE_TUPLE n`/`MAKE_LIST n`/`MAKE_DICT n`——个数是编译期常数，不必逐项并入。
 
 **全常量元组不用 `MAKE_TUPLE`**，直接 `LOAD_CONST`。`list`/`dict` 不管元素是不是全常量都必须每次现建；
 元素全为常量且个数 ≥3 时可选的更短形态是 `MAKE_LIST 0` + `LOAD_CONST <常量元组>` + `LIST_EXTEND`
@@ -231,9 +240,9 @@ codegen 按实际传下去的 `want_value` 静态跟踪栈深（算 `max_stack`�
 **`UNPACK_EX a` 编码**：`a` 是一条 `EXTENDED_ARG` 累积出的 16 位值，高 8 位是星号后项数，低 8 位是星号
 前项数。例：`(a, b, *rest, c) = e` 编译成 `EXTENDED_ARG 1` `UNPACK_EX 2`。每侧最多 255 项。
 
-> **未实施**：这条上限该在 `SemanticChecker` 里挡住（超限 `SyntaxError`）并写进 `SL.md`——它是真实的
-> 语言限制，不是内部实现细节，不能留到 codegen 才发现打包不进两字节。现在两处都还没做，codegen 到手的
-> AST **并不保证**在限内。
+这条上限由 `SemanticChecker::check_lvalue_items` 实施（超限 `SyntaxError`），`SL.md` 的解构赋值一节
+也写了——它是真实的语言限制，不是内部实现细节。codegen 到手的 AST 已保证在限内。不带 `*` 的解构走
+`UNPACK`，项数能靠 `EXTENDED_ARG` 扩到 32 位，不受这条限制。
 
 ### 跳转
 
@@ -289,6 +298,11 @@ codegen 按实际传下去的 `want_value` 静态跟踪栈深（算 `max_stack`�
 `Method` 把绑定的对象插到实参最前面重新分派；`FuncGroup` 逐个试。都不是就压一个 `NativeFrame` 去查
 `type(f)` 的 `__op_call__` 再重新分派——这一步必须压帧，查找会走描述器、可能回调 SL，而且链可以无限长
 （靠帧栈深度吃 `RecursionError`）。
+
+**三条调用指令是刻意的性能分层，不是冗余**：功能上 `CALL_EX` 一条就够（`CALL n` 等价于先
+`MAKE_LIST n` + `MAKE_DICT 0`），但那样每次调用都要凭空建两个容器对象；`CALL_KW` 用一个空名字元组也能
+代替 `CALL`，代价是最常见的无关键字调用平白多压一项、指令实现多一条分支。所以按出现频率分三档：
+`CALL` 零额外对象，`CALL_KW` 多一个常量表里的名字元组（不新建），`CALL_EX` 才建两个新容器。
 
 实参绑定（槽位填充、`*args`/`**kwargs` 收集、类型检查、函数族逐个试）不摊成字节码，在 `CALL` 系列的
 指令实现里；**内置函数和 SL 函数共用这一套**，所以内置函数也要声明形参与类型注解。
@@ -371,13 +385,18 @@ x[i] op= e    (want=true)  : <x> <i> COPY 2 COPY 2 GET_INDEX 1 <e> BINARY_OP op 
     JUMP loop
   end:
 
-收尾：
-  计数模式: POP_TOP  count_continue: LOAD_CONST 1 BINARY_OP Add
-  $       : LIST_APPEND
-  $ *     : LIST_EXTEND
-  $$      : UNPACK 2 INSERT 2 DICT_PUT   ; UNPACK 2 给出 v k，DICT_PUT 要 d k v
-  $$ **   : DICT_MERGE
+收尾（i = 步进模式 1 / 迭代模式 2，因为迭代模式的迭代器压在结果槽上面）：
+  计数模式: POP_TOP  count_continue: COUNT_INC i
+  $       : LIST_APPEND i
+  $ *     : LIST_EXTEND i
+  $$      : UNPACK 2 INSERT 2 DICT_PUT i   ; UNPACK 2 给出 v k，DICT_PUT 要 d k v
+  $$ **   : DICT_MERGE i
 ```
+
+**迭代模式的栈序是「结果槽在下、迭代器在上」**，没得选：`FOR_ITER` 要求迭代器在栈顶，而结果槽要活过
+整个循环。于是每轮循环体的值压在迭代器**上面**，收尾指令够不着下面的结果槽——这正是那五条要带 `i`
+的原因。计数模式的 `COUNT_INC` 不弹栈顶，是为了让 `continue` 能跳过 `POP_TOP` 直接进来（它自己的裁栈
+已经清掉本轮的值了），仍然计入。
 
 `break` 统一跳 `end:`（两种模式都不计入/不放入）。**`continue` 的目标按收集模式分**：计数模式跳
 `count_continue:`（跳过 `POP_TOP`，它自己的裁栈已经清掉了那个值），仍要计入；收集模式跳过整个收尾块，
@@ -435,4 +454,3 @@ COPY 1 STORE_NAME f    ; 命名函数才有，绑定只发生一次
 - 局部变量槽位化：前提是"这份 `Code` 里有没有 `eval` 点"的静态判定。
 - 异常表取代块栈：等块栈成为瓶颈再换，对 codegen 之外不可见。
 - `RecursionError` 的阈值未定，只需要卡帧栈深度一个指标。
-- `UNPACK_EX` 每侧 255 项的上限检查（见上）。

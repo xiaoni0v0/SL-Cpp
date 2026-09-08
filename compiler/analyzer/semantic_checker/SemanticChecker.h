@@ -27,6 +27,9 @@ class SemanticChecker : public AstConstVisitor {
         ContextGuard &operator=(const ContextGuard &) = delete;
     };
 
+    // 带 * 的解构里，星号每一侧的左值个数上限
+    static constexpr std::size_t nMaxStarredSideLvalues{255};
+
     // 报错：SyntaxError
     [[noreturn]] void error(const std::string &msg, Position pos) const;
     // 报错：InternalError

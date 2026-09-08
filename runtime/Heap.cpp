@@ -2,16 +2,17 @@
 
 #include "../cppexceptions/InternalError.h"
 #include "Object.h"
+#include "Runtime.h"
 
+#include <stack>
 #include <vector>
 
 namespace {
 
-Object *g_head{nullptr};                    // 全堆链表的头
-std::size_t g_live_count{0};                // 当前存活对象总数
-std::size_t g_live_bytes{0};                // 上一轮 collect() 结束时的存活字节数
-std::size_t g_bytes_since_collect{0};       // 距上次 collect() 又分配了多少字节
-std::vector<GcRootSource *> g_root_sources; // 所有引用根
+Object *g_head{nullptr};              // 全堆链表的头
+std::size_t g_live_count{0};          // 当前存活对象总数
+std::size_t g_live_bytes{0};          // 上一轮 collect() 结束时的存活字节数
+std::size_t g_bytes_since_collect{0}; // 距上次 collect() 又分配了多少字节
 
 // 分配压力攒够这么多字节就值得扫一轮
 constexpr std::size_t kMinBytesBetweenCollects{1 << 20};
@@ -22,20 +23,20 @@ constexpr std::size_t kMinBytesBetweenCollects{1 << 20};
  * 标记阶段，把可达对象标记
  */
 class Heap::Marker final : public RefVisitor {
-    std::vector<Object *> pending_; // 显式工作栈，不递归
+    std::stack<Object *> pending_; // 显式工作栈，不递归
 
   public:
     void visit(RefBase &ref) override {
-        Object *const target{ref.target()};
+        Object *target{ref.target()};
         if (!target || target->gc_reachable_) return;
         target->gc_reachable_ = true;
-        pending_.push_back(target);
+        pending_.push(target);
     }
 
     void drain() {
         while (!pending_.empty()) {
-            Object *const object{pending_.back()};
-            pending_.pop_back();
+            Object *object{pending_.top()};
+            pending_.pop();
             object->visit_refs(*this);
         }
     }
@@ -72,17 +73,11 @@ void Heap::unlink(Object *const obj) {
 
 void Heap::note_allocated(const Object *const obj) { g_bytes_since_collect += obj->size_bytes(); }
 
-void Heap::add_root_source(GcRootSource *const source) { g_root_sources.push_back(source); }
-
-void Heap::remove_root_source(GcRootSource *const source) { std::erase(g_root_sources, source); }
-
 void Heap::collect() {
     // 1. 标记
     Marker marker;
-    for (GcRootSource *const source : g_root_sources) {
-        source->visit_roots(marker);
-        marker.drain();
-    }
+    Runtime::visit_roots(marker);
+    marker.drain();
 
     // 2. 分离
     std::vector<Object *> garbage;

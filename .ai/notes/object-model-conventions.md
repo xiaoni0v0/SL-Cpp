@@ -71,9 +71,8 @@ adopt/borrow 两套入口。裸 `Object *`/`Type *` 一律不带所有权。
   持有一份引用，计数等于非空 `Ref` 的个数"。
 - **放掉别人对象槽位里的引用**——`RefBase::reset()`，`protected` + `friend class Heap`。经由
   `RefVisitor` 拿到的 `RefBase &` 是别人对象的私有字段，能改它的只该是 GC 的拆环阶段。
-  这条不是洁癖：`Object::visit_refs` 虽然是 `Heap` 私有的，但 `GcRootSource::visit_roots` 是公开
-  虚函数，等 `Code`、帧栈成为根源并被 VM 代码持有之后，"随手写个访问者把别人的根清了"就成了写得
-  出来的事。
+  这条不是洁癖：`Object::visit_refs` 和 `Runtime::visit_roots` 都是 `Heap` 私有的，外人喂不进
+  对象，但拿到 `RefBase &` 就能清——把清空的能力关在 `Heap` 里，这条口子才堵得住。
 
 **由此来的一条硬规矩：`Object` 子类的析构函数不得依赖任何 `Ref` 字段的目标，也不得用 `type()`。**
 GC 拆环时（`collect()` 第 4 步）会先把垃圾对象的全部 `Ref` 槽位置空，第 5 步才销毁——所以析构函数
@@ -85,9 +84,8 @@ GC 拆环时（`collect()` 第 4 步）会先把垃圾对象的全部 `Ref` 槽�
 
 **硬前提：调用 `collect()` 时，当前 C++ 调用栈上不能有任何活的 `Ref`。**
 
-根集合只包含注册进 `Heap` 的那些 `GcRootSource`（现在是 `Runtime`，以后还有帧栈、模块表、
-每份 `Code` 的常量表）。C++ 栈上的局部 `Ref` 谁也扫不到，扫描时它们指向的对象会被判成不可达、
-当场清掉，句柄立刻悬垂。
+根集合就是 `Runtime` 上挂着的那些（现在是内置类型与单例，以后还有帧栈、模块表、内部对象表）。
+C++ 栈上的局部 `Ref` 谁也扫不到，扫描时它们指向的对象会被判成不可达、当场清掉，句柄立刻悬垂。
 
 **How to apply**：
 
@@ -184,7 +182,7 @@ Release 下也要响。
 
 内置类型之间**唯一**的引用环是"每个类型都强引用元类 `type`，而 `type` 的元类是它自己"——
 `bases_` 是自下而上的 DAG，`mro_` 是借用，都不成环。`Runtime::shutdown()` 正是靠这个：放掉全部
-引用、摘掉根源、再 `Heap::collect()` 扫一轮，整个堆一次清空，之后 `Heap::live_count()` 应当是 0。
+引用（根随之变空）、再 `Heap::collect()` 扫一轮，整个堆一次清空，之后 `Heap::live_count()` 应当是 0。
 
 **这也意味着 `shutdown()` 之前必须放掉所有 `Ref`**：还攥在手里的对象同样会被扫掉，句柄随即悬垂。
 

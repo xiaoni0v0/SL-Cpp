@@ -520,6 +520,8 @@ try expr1 ⟦except (Exception1, ... ⟦as lvalue⟧) expr2 ...⟧ ⟦finally ex
          （`lv` 本身也是解构形式则递归套用本条）。
          无 `*lv` 时要求元素个数与 `lv` 个数完全一致，否则抛出 `ValueError`；
          有 `*lv` 时要求元素个数不少于其余 `lv` 的个数，否则抛出 `ValueError`；`*lv` 收集剩余元素，总是绑定一个 `list`；
+         带 `*lv` 时，`*lv` 每一侧的 `lv` 个数各自不得超过 255，否则抛出 `SyntaxError`（每一层各自计算，不含 `*lv` 自身）；
+         不带 `*lv` 的解构没有这条个数限制；
 
    7. 对索引 `x[index1, index2, ...]` 和调用 `x(arg1, arg2, ...)`
       先对 `x` 求值，再从前到后逐个求参数的值，最后求索引或调用函数；

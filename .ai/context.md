@@ -1247,8 +1247,8 @@ slot.reset()`）。三条错：它是类常量却做成每个槽位查一次的�
 做，访问者**没法**选择性地清某个槽位；换成交出引用本身，这个能力就跟着交出去了。所以
 `RefBase::reset()` 是 `protected` + `friend class Heap`，另在 `Ref<T>` 上开一个公开的
 `reset()`——"放掉自己手上的句柄"和"放掉别人对象槽位里的引用"是两种能力，不该共用一个入口。
-（`Object::visit_refs` 本来就是 `Heap` 私有的，外人喂不进对象；但 `GcRootSource::visit_roots` 是
-公开虚函数，等 `Code`、帧栈成为根源并被 VM 代码持有之后就有口子了。）
+（`Object::visit_refs` 和 `Runtime::visit_roots` 都是 `Heap` 私有的，外人喂不进对象；能清空的
+入口只剩 `RefBase::reset()` 这一个，把它关起来这条口子就堵死了。）
 
 ### 回收的五步流程里，第 3 步的"整批 +1"不是保险起见
 
@@ -1616,6 +1616,20 @@ SL.md 一直没规定 `007`/`00` 合不合法，是真实的规范空白，已�
 顺带一提，除了 `SemanticChecker`，其余代码早就是这么认的：`literal_compare_int` 开头就判
 `raw_[0] == U'-'`，`string_to_int64` 的注释写着"可以带一个前导 `-`"，折叠测试断言的就是
 `int_lit("-1")`。
+
+### GC 根只有 `Runtime` 一处，没有可注册的"根源"抽象
+
+原先有个 `GcRootSource` 接口，谁想当根就实现它、`Heap::add_root_source()` 注册。**取消掉了**：这个
+抽象从头到尾只有一个实现（`Runtime`），而剩下几样待落地的根——帧栈、模块表、字节码那张内部对象表——
+全都是"进程内唯一、生命周期跟解释器一样长"的东西，本来就该挂在 `Runtime` 上，不需要各自注册。
+`Heap::collect()` 直接调 `Runtime::visit_roots()`（`Heap` 是 `Runtime` 的 friend），少一层间接。
+
+`Runtime::shutdown()` 的清空流程不受影响：放掉自己持有的全部引用之后根自然就空了，再 `collect()`
+一轮整个堆清光，不必再"摘掉根源"。
+
+**代价是测试没法再注册临时根**（以前可以写个 `FakeModuleTable : GcRootSource` 攥着待测对象）。等帧栈
+和模块表真挂上 `Runtime` 之后，测试就该通过那些字段来造根；在此之前，涉及 GC 的测试只能验证"无主对象
+被清掉"和"根上的对象不被清"这两侧。
 
 ### 字节码 / `Code` 对象设计
 

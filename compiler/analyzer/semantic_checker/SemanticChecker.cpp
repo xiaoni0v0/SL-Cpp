@@ -3,6 +3,7 @@
 #include "../../../cppexceptions/InternalError.h"
 #include "../../../cppexceptions/SyntaxError.h"
 
+#include <optional>
 #include <unordered_set>
 
 void SemanticChecker::error(const std::string &msg, const Position pos) const {
@@ -504,20 +505,27 @@ void SemanticChecker::check_lvalue(const AstNode &node) {
 }
 
 void SemanticChecker::check_lvalue_items(const std::vector<AstNodePtr> &items, const Position pos) {
-    bool has_seen_star{false};
-    for (const auto &item : items) {
+    std::optional<std::size_t> star_index; // *target 的下标
+    for (std::size_t i{0}; i < items.size(); ++i) {
+        const AstNodePtr &item{items[i]};
         require_not_null(item, pos);
         if (const auto *star{dynamic_cast<const AstNodeStar *>(item.get())}) {
             // 解构时每一层至多一个左值可以带 * 前缀（收集剩余元素）；* 后面本身仍是一个左值，可嵌套
-            if (has_seen_star)
+            if (star_index)
                 error("at most one starred lvalue allowed in destructuring", star->pos_);
-            has_seen_star = true;
+            star_index = i;
             require_not_null(star->operand_, pos);
             check_lvalue(*star->operand_);
         } else {
             check_lvalue(*item);
         }
     }
+
+    if (!star_index) return;
+    if (*star_index > nMaxStarredSideLvalues)
+        error("too many lvalues before the starred one (at most 255)", pos);
+    if (items.size() - *star_index - 1 > nMaxStarredSideLvalues)
+        error("too many lvalues after the starred one (at most 255)", pos);
 }
 
 void SemanticChecker::check_lvalue_pure(const AstNode &node) {

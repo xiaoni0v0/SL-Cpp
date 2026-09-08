@@ -22,10 +22,11 @@ enum class BuiltinType : std::size_t {
 /**
  * 运行时本身。
  *
- * 持有全部内置类型与单例，按顺序建好。
- * 进程内唯一（做成全局单例），也是第一个引用根。
+ * 持有全部内置类型与单例，按顺序建好。进程内唯一（全局单例）。
  */
-class Runtime final : public GcRootSource {
+class Runtime final {
+    friend class Heap;
+
     std::array<Ref<Type>, static_cast<std::size_t>(BuiltinType::Count)> types_;
 
     // 六个单例
@@ -52,9 +53,10 @@ class Runtime final : public GcRootSource {
     // 下边各类型访问器共用的实现
     [[nodiscard]] static Type *builtin_type(BuiltinType id);
 
-  public:
-    void visit_roots(RefVisitor &visitor) override;
+    // 遍历全部引用根。只有 Heap::collect() 会调
+    static void visit_roots(RefVisitor &visitor);
 
+  public:
     // init() 中途抛异常时会回滚
     static void init();
     static void shutdown();
