@@ -17,7 +17,9 @@ namespace {
 /**
  * 跑一个阶段，把它漏出来的非 SLException 包成 InternalError 并标上阶段名。
  */
-template <typename Stage> decltype(auto) run_stage(const char *const name, Stage &&stage) {
+template <typename Stage>
+    requires std::invocable<Stage>
+decltype(auto) run_stage(const char *name, Stage &&stage) {
     try {
         return std::forward<Stage>(stage)();
     } catch (const SLException &) {
@@ -31,27 +33,44 @@ template <typename Stage> decltype(auto) run_stage(const char *const name, Stage
 
 } // namespace
 
-AstNodeProgramPtr
-Compiler::compile_source(std::u32string source, std::string file_path, const Hooks &hooks) {
-    // 1. 分词器（源代码 -> token 数组）
-    std::vector<Token> tokens{run_stage("lexer", [&] {
-        return Lexer{std::move(source), file_path}.tokenize();
-    })};
-    if (hooks.after_tokenize) hooks.after_tokenize(tokens);
+std::u32string Compiler::read_source(const std::string &file_path) {
+    return run_stage("source reader", [&] {
+        return utf8_to_u32(file_read_all(file_path), file_path);
+    });
+}
 
-    // 2. 解析器（token 数组 -> AST）
-    AstNodeProgramPtr ast{run_stage("parser", [&] {
-        return Parser{std::move(tokens), file_path}.parse_as_file();
-    })};
-    if (hooks.after_parse) hooks.after_parse(*ast);
+std::vector<Token> Compiler::tokenize(std::u32string source, std::string file_path) {
+    return run_stage("lexer", [&] {
+        return Lexer{std::move(source), std::move(file_path)}.tokenize();
+    });
+}
 
-    // 3. 分析器（语义检查 + 折叠，原地改 AST）
-    run_stage("analyzer", [&] { Analyzer::analyze_program(*ast, std::move(file_path)); });
-    if (hooks.after_analyze) hooks.after_analyze(*ast);
+AstNodeProgramPtr Compiler::parse(std::vector<Token> tokens, std::string file_path) {
+    return run_stage("parser", [&] {
+        return Parser{std::move(tokens), std::move(file_path)}.parse_as_file();
+    });
+}
+
+AstNodeProgramPtr Compiler::parse(std::u32string source, std::string file_path) {
+    std::vector tokens{tokenize(std::move(source), file_path)};
+
+    return parse(std::move(tokens), std::move(file_path));
+}
+
+void Compiler::analyze(AstNodeProgram &ast, std::string file_path) {
+    run_stage("analyzer", [&] { Analyzer::analyze_program(ast, std::move(file_path)); });
+}
+
+AstNodeProgramPtr Compiler::analyze(std::vector<Token> tokens, std::string file_path) {
+    AstNodeProgramPtr ast{parse(std::move(tokens), file_path)};
+    analyze(*ast, std::move(file_path));
 
     return ast;
 }
 
-AstNodeProgramPtr Compiler::compile_file(const std::string &file_path, const Hooks &hooks) {
-    return compile_source(utf8_to_u32(file_read_all(file_path), file_path), file_path, hooks);
+AstNodeProgramPtr Compiler::analyze(std::u32string source, std::string file_path) {
+    AstNodeProgramPtr ast{parse(std::move(source), file_path)};
+    analyze(*ast, std::move(file_path));
+
+    return ast;
 }

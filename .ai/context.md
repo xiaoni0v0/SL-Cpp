@@ -1042,9 +1042,16 @@ throw 这个信封，由**紧邻它、不跨 SL 帧的调用方**立刻接住，
 
 `Compiler` 把 lexer → parser → analyzer 串起来，`Executor` 只负责"解析 argv、调一次、打结果"。
 
-**中间产物用 `Hooks` 回调交出去，门面自己一行 stdout 都不写。** 直接在门面里 `std::cout` 更省事，
-但 `eval` 将来走的是同一条流水线——它绝不能往程序的输出里掺调试信息。而且"token 怎么显示"
-"AST 要不要带位置"本来就是展示层的决定，不该烙死在编译器里。回调为空就是不观察，没有额外开销。
+**一个阶段一个函数，中间产物就是返回值**：`read_source` / `tokenize` / `parse` / `analyze`，
+函数名说"跑到哪一阶段为止"，参数类型说"从哪一阶段起步"（`parse` 收源码就自己先分词，收 token 数组
+就直接解析）。想看某一步的产物就分步调，不关心中间过程就一步调到位。
+
+一度用过一组 `Hooks` 回调（`after_tokenize`/`after_parse`/…）把中间产物旁路交出去，**已经删掉**：
+那是为"打印"硬造的一层间接，调用方只能在回调里看一眼、拿不到产物本身，"我只想分词"这类需求也照顾
+不到。分阶段函数把这两件事一起解决了，还少了三个 `std::function`。
+
+门面自己一行 stdout 都不写这条仍然成立——怎么打印是展示层的事，而且 `eval` 将来走同一条流水线，
+它绝不能往程序输出里掺东西。
 
 **阶段名靠门面兜住。** 原先 `Executor` 每个阶段各写一遍 `catch (std::exception&)` → 打印
 "lexer crashed"/"parser crashed"，搬进门面后收成一个 `run_stage(name, stage)`：`SLException`

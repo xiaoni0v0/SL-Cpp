@@ -19,28 +19,19 @@ std::string path_abspath(const std::string &path) {
     return std::filesystem::absolute(path, ec).string();
 }
 
-// 开发期用的中间产物观察点
-Compiler::Hooks make_debug_hooks() {
-    const auto dump_ast{[](const AstNodeProgram &ast) {
-        std::cout << AstJsonDumper::dump(ast).dump(2) << std::endl << std::endl;
-    }};
+void dump_tokens(const std::vector<Token> &tokens) {
+    for (const Token &token : tokens) {
+        std::cout << Lexer::get_typename_by_tokentype(token.type);
+        if (!(token.type == TokenType::NEWLINE || token.type == TokenType::END_OF_FILE)) {
+            std::cout << " \"" << u32_to_utf8(token.lexeme) << "\"";
+        }
+        std::cout << std::endl;
+    }
+    std::cout << std::endl << std::endl;
+}
 
-    return {
-        .after_tokenize =
-            [](const std::vector<Token> &tokens) {
-                for (const auto &token : tokens) {
-                    std::cout << Lexer::get_typename_by_tokentype(token.type);
-                    if (!(token.type == TokenType::NEWLINE ||
-                          token.type == TokenType::END_OF_FILE)) {
-                        std::cout << " \"" << u32_to_utf8(token.lexeme) << "\"";
-                    }
-                    std::cout << std::endl;
-                }
-                std::cout << std::endl << std::endl;
-            },
-        .after_parse = dump_ast,
-        .after_analyze = dump_ast,
-    };
+void dump_ast(const AstNodeProgram &ast) {
+    std::cout << AstJsonDumper::dump(ast).dump(2) << std::endl << std::endl;
 }
 
 } // namespace
@@ -59,16 +50,16 @@ int Executor::run() const {
 
     const std::string file_path{path_abspath(argv_[1])};
 
-    // 输入文件不存在
-    if (!std::filesystem::exists(file_path)) {
-        std::cerr << "Source code file \"" << file_path << "\" does not exist." << std::endl;
-        return 1;
-    }
-
     try {
-        const AstNodeProgramPtr ast{Compiler::compile_file(file_path, make_debug_hooks())};
+        std::vector tokens{Compiler::tokenize(Compiler::read_source(file_path), file_path)};
+        dump_tokens(tokens);
+
+        const AstNodeProgramPtr ast{Compiler::parse(std::move(tokens), file_path)};
+        dump_ast(*ast);
+
+        Compiler::analyze(*ast, file_path);
+        dump_ast(*ast);
     } catch (const SLException &e) {
-        // 编译器内部崩了的情况已经在门面里被包成 InternalError，这里只剩一条出口
         std::cerr << e.what() << std::endl;
         return 1;
     } catch (const std::exception &e) {

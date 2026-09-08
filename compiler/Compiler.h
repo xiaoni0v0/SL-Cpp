@@ -3,24 +3,14 @@
 #include "lexer/token.h"
 #include "parser/ast_nodes/ast_nodes.h"
 
-#include <functional>
 #include <string>
 #include <vector>
 
 /**
- * compiler/ 的对外接口，把 lexer -> parser -> analyzer 串成一条流水线
+ * compiler/ 的对外接口。
  */
 class Compiler final {
   public:
-    /**
-     * 各阶段刚跑完时的旁路观察点，给开发期打印中间产物用；留空的就不观察。
-     */
-    struct Hooks {
-        std::function<void(const std::vector<Token> &tokens)> after_tokenize;
-        std::function<void(const AstNodeProgram &ast)> after_parse;
-        std::function<void(const AstNodeProgram &ast)> after_analyze;
-    };
-
     Compiler() = delete;
     ~Compiler() = delete;
     Compiler(const Compiler &) = delete;
@@ -28,19 +18,23 @@ class Compiler final {
     Compiler &operator=(const Compiler &) = delete;
     Compiler &operator=(Compiler &&) = delete;
 
-    /**
-     * 编译一份源码
-     * @param source    源码
-     * @param file_path 报错信息里显示的路径
-     * @param hooks     可选的阶段观察点
-     */
-    [[nodiscard]] static AstNodeProgramPtr compile_source(
-        std::u32string source, std::string file_path = "<unknown>", const Hooks &hooks = {}
-    );
+    // 读源码文件并解码。读不出来抛 FileNotFoundError，不是合法 UTF-8 抛 EncodingError
+    [[nodiscard]] static std::u32string read_source(const std::string &file_path);
 
-    /**
-     * 读一个文件并编译它。读不出来抛 FileNotFoundError，不是合法 UTF-8 抛 EncodingError
-     */
+    // 跑完分词器为止
+    [[nodiscard]] static std::vector<Token>
+    tokenize(std::u32string source, std::string file_path = "<unknown>");
+
+    // 跑完解析器为止
     [[nodiscard]] static AstNodeProgramPtr
-    compile_file(const std::string &file_path, const Hooks &hooks = {});
+    parse(std::vector<Token> tokens, std::string file_path = "<unknown>");
+    [[nodiscard]] static AstNodeProgramPtr
+    parse(std::u32string source, std::string file_path = "<unknown>");
+
+    // 跑完分析器为止
+    static void analyze(AstNodeProgram &ast, std::string file_path = "<unknown>");
+    [[nodiscard]] static AstNodeProgramPtr
+    analyze(std::vector<Token> tokens, std::string file_path = "<unknown>");
+    [[nodiscard]] static AstNodeProgramPtr
+    analyze(std::u32string source, std::string file_path = "<unknown>");
 };
