@@ -52,7 +52,7 @@
 | `runtime/objects/` | 各具体对象类型：`Int`（裹 `BigInt`）、`Decimal`（裹 `BigDec`）、`Str`（`u32string`，按码点）、`Tuple`（`vector<ObjectRef>`）、`BaseException`（整棵异常树共用，只存 `.args` 元组）、`NamedSingleton`（无负载单例）、`Bool`、`Code`（编译好的一份代码：字节码 + 常量表 + 嵌套 `Code` 表 + 名字表 + 形参形状 + 行位置表；**是 SL 对象但 SL 层完全接触不到**，做成对象是为了让 GC 的追踪能穿过它，见 [context.md](context.md)）。 |
 | `runtime/RaisedException.h` | `raise` 用的 C++ 信封（装一个 `ObjectRef`），只在一段不回调 SL、有界的 C++ 代码里 throw/catch，不是异常跨 SL 帧传播的机制——那个仍是主循环手写的显式算法，见 bytecode.md。 |
 | `runtime/HostErrorConversion.{h,cpp}` | 宿主异常 → SL 异常对象的转换函数（`SyntaxError`/`EncodingError`/`FileNotFoundError` 各一个），`InternalError` 故意没有对应函数。 |
-| `cpp_exceptions/` | 宿主（C++）层的异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`）加 `SourceLocation.h`，纯头文件。**信息以结构化字段为准，`what()` 只是构造时渲染出来的一种呈现**——转成 SL 异常对象时要的是分开的 file/row/col/message，见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。放在顶层而不是 `compiler/` 下，是因为 `utils/` 也要用它，而 `utils/` 是纯 C++ 层、不能反过来依赖 `compiler/`。 |
+| `cppexceptions/` | 宿主（C++）层的异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`）加 `SourceLocation.h`，纯头文件。**信息以结构化字段为准，`what()` 只是构造时渲染出来的一种呈现**——转成 SL 异常对象时要的是分开的 file/row/col/message，见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。放在顶层而不是 `compiler/` 下，是因为 `utils/` 也要用它，而 `utils/` 是纯 C++ 层、不能反过来依赖 `compiler/`。 |
 | `utils/` | 自由函数工具：`string_utils`（UTF-8/UTF-32 互转等）、`file_utils`（读文件）、`memory_utils.h`（`mem::heap_bytes`，各对象类型 `size_bytes()` 的公共零件；**没有兜底重载**，认不出的类型是编译错误，见 [notes/object-model-conventions.md](notes/object-model-conventions.md)）。 |
 | `compiler/codegen/` | [`bytecode.md`](../compiler/codegen/bytecode.md)：指令集/帧/`Code` 的完整设计，动这里之前先读它。`ConstPool.{h,cpp}`：常量表的去重池，`intern()` 返回槽号、值相等的常量恒占同一个槽（`a = (1,2)` / `b = (1,2)` 的 `a is b` 因此为真）。**去重判据是「结构标识」，跟 SL 的 `==`/`hash` 好些地方正好相反**——放在 codegen 而不是 runtime 正是为了不让它跟对象模型里的相等混淆，见 [context.md](context.md)。`CodeGen` 本身还没写。 |
 | `executor/` | `Executor.{h,cpp}`：命令行入口的驱动——解析 argv、调 `Compiler::compile_file()`、把中间产物和错误打到 stdout/stderr，`main.cpp` 调它。串流水线的活在 `compiler/Compiler` 里，不在这。真正的字节码虚拟机还没写，设计见 [`bytecode.md`](../compiler/codegen/bytecode.md)。 |
@@ -90,7 +90,7 @@ analyzer 不该反过来依赖对象模型，编译诊断在被 SL 代码 `try` 
 这样光看目标名就知道去哪找它的源码，嵌套模块也不会跟顶层模块重名：
 
 ```
-sl_cpp_exceptions (INTERFACE，纯头文件)
+sl_cppexceptions (INTERFACE，纯头文件)
     ← sl_utils ← sl_compiler_lexer ← sl_compiler_parser ← sl_compiler_analyzer ← sl_executor ← SL
     ← sl_runtime
 sl_numeric (不依赖任何模块) ← sl_runtime
@@ -164,7 +164,7 @@ parser 那份抄了三处，加个文件要改三个地方。
 7. **`eval` / `import`**。
 
 **目录调整**：`lexer`/`parser`/`analyzer`/`codegen` 已收进 `compiler/`，`builtins/exceptions/` 已挪成
-顶层的 `cpp_exceptions/`（`builtins/` 这个名字留给真正的 SL 内置）。还没做的两件：
+顶层的 `cppexceptions/`（`builtins/` 这个名字留给真正的 SL 内置）。还没做的两件：
 
 - **`compiler/` 的门面已经有了**（`compiler/Compiler.{h,cpp}`），但只做到"源码 → 分析完的 AST"。
   还差两件，各自等后面的步骤：产物应该是 `Ref<Code>`（等 `CodeGen`）；按
@@ -308,7 +308,7 @@ ctest 现在约 28 秒。要更大覆盖别往表里堆，用倍数参数临时�
 - **函数的隐含前提统一写"调用方保证 X"**（不是"要求 X"这种含糊说法，消除"这是函数自己检查的还是靠
   调用方保证的"这层歧义），配的校验方式看这个前提要不要在 Release 构建里也生效：只在开发期兜底的
   用 `assert(...)`（在函数开头，`NDEBUG` 下会被优化掉，所以不能拿它实现真正的校验）；`SemanticChecker`/
-  `string_utils`/`cpp_exceptions` 这类需要在 Release 也生效的真实校验，走抛异常
+  `string_utils`/`cppexceptions` 这类需要在 Release 也生效的真实校验，走抛异常
   （`SyntaxError`/`InternalError`/`EncodingError`），不能用 `assert` 顶替。
 - **避免"同一产物在多个出口分头构造"**：同一种产物如果在多处提前返回、各自构造，等于制造了多份
   测试压不到的独立状态空间，历史上好几个换行容错类的 bug 都是这个模式孵出来的。能合并"同一产物多处

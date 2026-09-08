@@ -1,180 +1,152 @@
 # 字节码与虚拟机设计
 
-`compiler/codegen/`（AST → `Code`）和 `executor/`（跑 `Code`）之间的实现契约，不是语言规范，涉及语义处以
-`SL.md` 为准。
+`compiler/codegen/`（AST → `Code`）和 `executor/`（跑 `Code`）之间的实现契约。不是语言规范，涉及语义
+处以 [SL.md](../../SL.md) 为准。取舍理由见 [context.md](../../.ai/context.md)。
 
-**这份设计的前提是「运行时先于编译器」**：对象模型/GC/基础类型先启动，编译器建在它之上，所以 codegen
-能直接造真的 SL 对象。理由和被否决的方案见 [architecture.md](../../.ai/architecture.md)
-。落地顺序也在那里 ——`compiler/codegen/` 现在没有代码，要等运行时那几层立起来。
+现状：`Code`、`ConstPool` 已实现，`CodeGen` 和 `executor/` 的虚拟机还没写。
 
-## 整体模型
+## 硬约束
 
-- 帧栈。帧分三种： **`ByteCodeFrame`** 执行一份 `Code`； **`NativeFrame`** 执行一段 C++ 逻辑（内置函数、
-  运算符分派、`import` 加载算法等）； **`EvalFrame`** 是 `eval` 专用的第三种帧，见下。三者共同实现
-  `Frame` 这个纯接口：推进一步、接收子帧正常返回的值、接收沿栈传播的异常。主循环只认这个接口。
-- 一个 `Code` 是一个 `ByteCodeFrame` 的边界：一份文件、一个函数体、一个类体各一个 `Code`。
-- 任何帧结束时把结果交给下面那帧。压帧只换栈顶， **主循环不递归**。
-
-**硬约束：C++ 调用栈深度不得随 SL 帧栈深度增长。** 任何可能回调 SL 代码的地方一律压 `NativeFrame`、
-交回主循环，禁止在 C++ 层递归跑一轮子循环。例：`a == b` 压一个 `NativeFrame`，它再压
-`type(a).__op_eq__(a, b)` 的调用帧，结果交回后据此决定返回还是继续试 `__rop_eq__`/`__op_cmp__`/身份
-兜底。同类还有：属性读写删的描述器、真值 `__bool__`、迭代协议、`C(x)` 的 `__construct__`、
-`import` 逐段加载、内置函数回调用户函数。纯 C++、不回调 SL 的实现直接原地算完，不压 `NativeFrame`
-（`1 + 2` 查到 int 的内置 `__op_add__` 直接算）。
-
-**同一条约束决定了异常传播也不能靠 C++ 原生异常跨帧展开**：SL 帧是 `frames_` 里的堆对象，不是嵌套的
-C++ 调用记录，C++ 的自动栈展开够不到别的 SL 帧。跨帧传播必须是主循环手写驱动的显式算法，见「异常与
-finally」。
-
-**局部变量走字典查找，不编译成槽位下标**：`_L` 恒为真字典，`eval` 能往任意帧现插代码。
+1. **C++ 调用栈深度不得随 SL 帧栈深度增长。** 任何可能回调 SL 代码的地方一律压 `NativeFrame` 交回
+   主循环，不在 C++ 层递归跑子循环。纯 C++、不回调 SL 的实现原地算完（`1 + 2` 直接算）。
+2. **异常跨帧传播不用 C++ 异常。** SL 帧是堆对象、之间没有嵌套的 C++ 调用记录，C++ 的栈展开够不到。
+   C++ 异常只用来把一次"推进一步"内部的错误带到主循环那层 `catch`，越过它就转成显式的传播状态。
+   运行期异常是 SL 对象（用户还能派生子类），**用一个统一的 C++ 包装类型装一个引用当信封**，不照抄
+   前端"一个概念一个 C++ 类"。
+3. **局部变量走字典查找，不编译成槽位下标**：`_L` 恒为真字典，`eval` 能往任意帧现插代码。
+4. **运行时先于编译器**：codegen 跑起来时对象模型已经在，直接造真 SL 对象放进常量表，没有
+   "描述 → 物化"这一层。
 
 ## 指令编码
 
 一条指令固定 2 字节：高字节操作码、低字节参数，无参指令塞 0。字节码即 `std::vector<std::uint16_t>`，
 计数器是它的下标。跳转目标一律绝对、以指令为单位。
 
-**`EXTENDED_ARG`**：前缀 `EXTENDED_ARG a` 把待用参数累积成 `(已累积 << 8) | a`，可连用最多 4 条，只对
-紧随其后那条真指令有效。加前缀会让后面指令下标右移、可能又逼出新前缀，codegen 先产出带标签的伪指令流，
-反复扫描到不再变化为止（前缀只增不减，必收敛）。
+**`EXTENDED_ARG`**：前缀 `EXTENDED_ARG a` 把待用参数累积成 `(已累积 << 8) | a`，最多连用 3 条，只对
+紧随其后那条真指令有效。加上指令自己那一字节，参数最宽 32 位，跟表下标的 `std::uint32_t` 对齐。
 
-## `Frame` 的三种实现
+加前缀会让后面指令下标右移、可能又逼出新前缀，codegen 先产出带标签的伪指令流，反复扫描到不再变化
+为止（前缀只增不减，必收敛）。
 
-`Frame` 不存数据字段，只是接口：推进一步、接收子帧返回值、接收沿栈传播的异常。
+## `Code`
 
-### `ByteCodeFrame`
+一份 `Code` 是一个 `ByteCodeFrame` 的边界：一份文件、一个函数体、一个类体各一个。字段见
+[`runtime/objects/Code.h`](../../runtime/objects/Code.h) 的 `Code::Parts`：
 
-| 字段             | 内容                                                                                      |
-| ---------------- | ----------------------------------------------------------------------------------------- |
-| `code_`          | 正在执行的 `Code`（不拥有）                                                               |
-| `pc_`            | 指令计数器                                                                                |
-| `stack_`         | 操作数栈，容量按 `Code` 的栈深上限一次分配                                                |
-| `blocks_`        | 块栈：异常处理器的展开信息，见「异常与 finally」                                          |
-| `locals_`        | 局部字典引用，即 `_L`。帧死亡时置为 `None`（不是清空、不是换对象），判活看它是否为 `None` |
-| `globals_frame_` | 所属全局帧。全局帧指向自己，**帧靠 `globals_frame_ == this` 自判是不是全局帧**            |
-| `global_marks_`  | global 标记集                                                                             |
-| `owner_`         | 建立这一帧的东西：函数对象 / 类构建器 / 模块对象                                          |
+| 字段                | 内容                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| `bytecode`          | 见上                                                                                   |
+| `constants_table`   | 不可变字面量值，见下                                                                   |
+| `codes_table`       | 函数体/类体的嵌套 `Code`。跟常量表分开：它不是"值"，也不去重                            |
+| `names_table`       | 标识符、属性名、`import` 的点分名字                                                    |
+| `max_stack`         | 栈深上限，一次性分配操作数栈                                                           |
+| `ref_captured`      | **名字表的位图**：第 `i` 个名字是不是引用捕获。允许短于名字表，末尾缺的算 `false`       |
+| `value_captured`    | 值捕获的名字，按声明顺序对应 `MAKE_FUNC`/`MAKE_CLASS` 弹的那份捕获值元组                |
+| `params`            | 函数体才有：四段形参（`positional`/`kw_only`/`var_args`/`var_kwargs`）各自的名字，以及哪些有默认值/注解、有没有返回注解 |
+| `lines_table`       | 指令下标 → 行列，按 pc 升序。纯为报错，非规范                                           |
+| `source_name`       | 文件名，`eval` 出来的那份写 `<eval>`                                                   |
 
-`owner_` 提供三样东西，不用再开字段： **定义帧**（引用捕获据此路由）； **`RETURN_VALUE` 的收尾**（函数
-对象 → 类型检查后交给下面那帧；类构建器 → 收属性、算 MRO/`__abstractmethods__`、造类对象；模块对象 → 记
-`__return__` 或当退出码）；返回类型注解、形参注解（`TypeVar` 检查用）。
+值捕获在函数调用时随实参写进 `_L`（跟默认值走同一套注入机制，但不参与实参匹配）；类体是新建帧后
+直接写入。
 
-**引用捕获名集合、值捕获名字表都不在帧上，在 `Code` 上**（见下），查自己的 `code_` 即可。
+**不进 `Code`**：装饰器（外层 `Code` 里的普通调用）；形参默认值、各类注解、`doc`、函数名（外层作用域
+建立时求值，挂在函数对象上，`Code` 只需知道"有没有"）；`list`/`dict` 字面量的**值**（可变，每次求值
+必须是新对象）。
 
-### `NativeFrame`
+**`Code` 是 SL 对象，但 SL 层完全接触不到**：不进内置表，没有任何属性/内置函数会返回它，连
+`type(...)` 都没有下手的地方。它是对象只为让 GC 的追踪链穿过去：模块/函数/类对象 → `Ref<Code>` →
+常量表、嵌套 `Code` 表、名字表。
 
-没有通用字段——每个原生操作各自定义子类，只装自己需要的状态（"`==` 的分派"记 `lhs`、`rhs`、试到第几
-步）。不认识 SL 名字/作用域，没有名字环境；下一步做什么、返回值存哪、异常要不要就地处理，都由子类自己
-决定。这是"字节码帧"与"原生帧"唯二的区别：前者的执行状态和名字环境通用、由 `Code` 驱动；后者是手写的 专用
-C++ 状态机。
-
-### `EvalFrame`
-
-执行状态跟 `ByteCodeFrame` 一样（`code_`/`pc_`/`stack_`/`blocks_`，`code_` 是编译出的单条表达式），但
-没有自己的名字环境——`locals_`/`globals_frame_`/`global_marks_`、引用捕获集合的查询，全部转发给
-`target_`（`eval` 所在的调用帧）。`owner_` 恒为空：执行完直接把栈顶的值交给下面那帧。
-
-这是"`Code` 边界 = 帧边界"的唯一例外：`eval` 有自己的执行状态，但名字读写、`global`、引用捕获全部落在
-`target_` 上，跟没压新帧效果一致。
-
-## `Code` 存什么
-
-| 字段           | 内容                                                                                                   |
-| -------------- | ------------------------------------------------------------------------------------------------------ |
-| 字节码         | 见上                                                                                                   |
-| 常量表         | 不可变字面量值，见下                                                                                   |
-| 嵌套 `Code` 表 | 函数体/类体的 `Code`。跟常量表分开：它不是"值"，也不去重                                               |
-| 名字表         | 标识符、属性名、`import` 的点分名字                                                                    |
-| 栈深上限       | 编译期算出，一次性分配操作数栈                                                                         |
-| 引用捕获名集合 | 函数体/类体才有，必须持久保留——运行期每次按标识符读写都要查                                            |
-| 值捕获名字表   | 函数体/类体才有，按声明顺序对应 `MAKE_FUNC`/`MAKE_CLASS` 弹的那份捕获值元组。函数调用时随实参写进 `_L` |
-|                | （跟默认值走同一套注入机制，但不参与实参匹配）；类体是新建帧后直接写入                                 |
-| 形参形状       | 函数体才有：四段形参各自的名字表、哪些有默认值/注解、`*args`/`**kwargs` 的名字。实参绑定算法吃它       |
-| 行位置表       | 指令下标 → 源码行列 + 来源标识（文件名 / `<eval>`）。纯为报错，非规范                                  |
-
-**不进 `Code`**：装饰器（建立完对象之后的独立步骤，是外层 `Code` 里的普通调用）；形参默认值、各类注解、
-`doc`、函数名（外层作用域、建立时求值，挂在函数对象上，`Code` 只需知道"有没有"）；`list`/`dict` 字面量的
-**值**（可变，每次求值必须是新对象，只能运行期构造）。
-
-**`Code` 是 SL 对象**（`SL.md` 4.3.8），但 SL 层完全接触不到它：不进内置表，也没有任何属性/内置函数
-会返回它，所以连 `type(...)` 都没有下手的地方。做成对象不是为了暴露，是为了让**引用计数与 GC 的追踪
-能穿过它**——见下面「常量表怎么被 GC 看到」。
+**常量表不是 GC 根**——每份 `Code` 本来就有主，顺着上面这条链就能扫到。
 
 ### 常量表存什么
 
-**判据是不可变，不是折叠器的 `StaticEvaler::is_literal_pure`**——后者含 `list`，而 `list` 可变，进了
-常量表就是每次求值拿到同一个对象：`a = f(); b = f(); a.append(3)` 会改到 `b`，`a is b` 还为真。 **减掉
-`list` 剩下的全部可进**：`None`/`bool`/`int`/`decimal`/`str`/`Ellipsis`/ **全常量元组**
-（`dict` 本来就不在 `is_literal_pure` 里）。
+判据是**不可变**，即折叠器的 `StaticEvaler::is_literal_const`：`None`/`bool`/`int`/`decimal`/`str`/
+`Ellipsis`/**全常量元组**。**不是 `is_literal_pure`**——后者含 `list`，而 `list` 可变，进了常量表就是
+每次求值拿到同一个对象。
 
-`tuple` 不可变（`SL.md` 4.2.8：不可变指引用关系不可变），所以 `(1, (2, 'a'))` 是一条 `LOAD_CONST`
-而非 `MAKE_TUPLE`；只要有一个元素不是常量（`(x, 1)`、`([1],)`）整个就不是常量，走 `MAKE_TUPLE`。
-`CALL_KW` 的名字元组不单独算一类，就是个常量元组。`decimal` 能进是因为构造不舍入、精确保留全部位数 （
-`SL.md` 4.2.5），不受运行期上下文影响。
-
-**存的就是真的 SL 对象**：运行时先于编译器启动，codegen 跑起来时对象模型已经在，直接造好放进去，
-`LOAD_CONST n` 就是压第 `n` 个。没有"描述 → 物化"这一层。理由见
-[architecture.md](../../.ai/architecture.md) 的「运行时先于编译器」。
+元组不可变（"不可变"指引用关系不可变），所以 `(1, (2, 'a'))` 是一条 `LOAD_CONST` 而非 `MAKE_TUPLE`；
+只要有一个元素不是常量（`(x, 1)`、`([1],)`）整个就走 `MAKE_TUPLE`。`CALL_KW` 的名字元组就是个常量
+元组，不单独算一类。`decimal` 能进是因为构造不舍入、精确保留全部位数，不受运行期上下文影响。
 
 **嵌套 `Code` 单独一张表**：`Code` 没有"结构相等"可言（两个函数体不去重），而且 `LOAD_CONST` 压的应当
-恒是"用户代码能拿到的值"，`Code` 不是。
-`MAKE_FUNC c` / `MAKE_CLASS c` 用参数字节给的是这张表的下标。这样常量表里每一项都是 SL 对象，
-`LOAD_CONST` 压的恒为 SL 对象。
+恒是"用户代码能拿到的值"。这样常量表每一项都是 SL 对象。
 
 ### 常量去重
 
-**加入常量时立刻按结构去重，值相等的常量恒是同一个槽、因而恒是同一个对象。** 这样
-`a = (1, 2)` / `b = (1, 2)` 的 `a is b` 为真；也顺带保证「顶层的 `(1,2)`」和「别处 `((1,2),3)` 里的 那个
-`(1,2)`」是同一个对象，不会出现只有顶层去重的割裂。元组自底向上建，元素先去重、父项再拿元素的 对象身份当键，一遍过。
+实现是 [`ConstPool`](ConstPool.h)。**加入时立刻按结构去重，值相等的常量恒是同一个槽、因而恒是同一个
+对象**：`a = (1, 2)` / `b = (1, 2)` 的 `a is b` 为真，顶层的 `(1,2)` 和 `((1,2),3)` 里那个也是同一个。
+元组自底向上建，元素先去重、父项再拿元素的对象身份当键。
 
-去重键是 **结构标识，不是 SL 的 `==`/`hash`**，这是最容易写错的地方：
+去重键是**结构标识，不是 SL 的 `==`/`hash`**：
 
-- **先比类型**：`1` 和 `True`、`1` 和 `1.0` 都 `==` 为真且 hash 相同，但必须是不同的槽，否则
-  `True is 1` 会变真。CPython 的 `co_consts` 去重把类型编进 key 就是为了这个；
-- **`decimal` 逐位比 `sign`/`coeff`/`exp`**：`1.5` 与 `1.50`、`0` 与 `-0` 都 `==` 为真而 `str` 分得
-  出来，不能合并。底层用 `BigDec::identical()`， **绝不能用 `BigDec::operator==`**——后者是按默认
-  上下文的数值相等，`1.5 == 1.50` 为真、`NaN == NaN` 为假，两边都跟这里要的相反；
-- **元组比元素的对象身份**，不递归比值。元素已经去重过，所以这既便宜又正好绕开上面两条坑。
+- **先比类型**：`1` 和 `True`、`1` 和 `1.0` 都 `==` 为真且 hash 相同，但必须占不同的槽，否则
+  `True is 1` 变真；
+- **`decimal` 逐位比 `sign`/`coeff`/`exp`**（`BigDec::identical()`）。**绝不能用
+  `BigDec::operator==`**——`1.5 == 1.50` 为真、`NaN == NaN` 为假，两边都跟这里要的相反；
+- **元组比元素的对象身份**，不递归比值。
 
-查找走哈希桶（每种类型给个便宜的 hash，冲突再按上面的规则定案）。别用线性扫——机器生成的 SL 一份
-`Code` 里出现上万个常量并非不可能。
+**单例（`None`/`True`/`False`/`Ellipsis`）取全局那一个对象**，不新建。槽号只决定去重，不决定对象身份。
 
-**单例（`None`/`True`/`False`/`Ellipsis`）取全局那一个对象**，不新建，所以跨 `Code` 的 `None is None`
-照样为真。槽号只决定去重，不决定对象身份。
+## `Frame`
 
-### 常量表怎么被 GC 看到
+`Frame` 不存数据字段，只是接口：推进一步、接收子帧返回值、接收沿栈传播的异常。任何帧结束时把结果交给
+下面那帧，压帧只换栈顶，**主循环不递归**。
 
-**不是靠注册成 GC 根，是靠 `Code` 本身就是 SL 对象。** 标记器只顺着 `Object::visit_own_refs` 走，
-如果 `Code` 是个普通 C++ 类型，这条链会在它这里断掉——函数对象报不出一个非 `Object` 的成员，
-于是它的常量表整个扫不到、被当垃圾清掉。
+### `ByteCodeFrame`
 
-`Code` 做成对象之后，链路是现成的：模块/函数/类对象 → `Ref<Code>` → 常量表、嵌套 `Code` 表、名字表。
-每份 `Code` 本来就有主（在别的 `Code` 的嵌套表里、或被函数对象持有、或是主脚本那份挂在模块对象上），
-**不需要、也不应该单独注册成根**——注册成根反而会让已经死掉的 `Code` 把常量多留一轮。
+| 字段             | 内容                                                                             |
+| ---------------- | -------------------------------------------------------------------------------- |
+| `code_`          | `Ref<Code>`，正在执行的 `Code`                                                   |
+| `pc_`            | 指令计数器                                                                       |
+| `stack_`         | 操作数栈，按 `max_stack` 一次分配                                                |
+| `blocks_`        | 块栈，每项记 `{处理器目标, 进块时的操作数栈深}`                                  |
+| `locals_`        | 局部字典即 `_L`。帧死亡时置为 `None`（不是清空、不是换对象），判活看它是否为 `None` |
+| `globals_frame_` | 所属全局帧。全局帧指向自己，**帧靠 `globals_frame_ == this` 自判是不是全局帧**   |
+| `global_marks_`  | global 标记集                                                                    |
+| `owner_`         | 建立这一帧的东西：函数对象 / 类构建器 / 模块对象                                 |
 
-顺带解决另外两件事：多个函数对象共享同一份 `Code`（循环里建闭包）天然由引用计数处理；
-`Code` 的字节码数组和各张表也自动进 `-Xmx` 的字节账本。
+`owner_` 提供三样，不用再开字段：**定义帧**（引用捕获据此路由）；**`RETURN_VALUE` 的收尾**（函数对象
+→ 类型检查后交给下面那帧；类构建器 → 收属性、算 MRO/`__abstractmethods__`、造类对象；模块对象 → 记
+`__return__` 或当退出码）；返回类型注解、形参注解（`TypeVar` 检查用）。
+
+引用捕获位图、值捕获名字表都在 `Code` 上，查 `code_` 即可。
+
+### `NativeFrame`
+
+执行一段 C++ 逻辑（内置函数、运算符分派、`import` 加载算法等）。没有通用字段——每个原生操作各自定义
+子类，只装自己需要的状态（"`==` 的分派"记 `lhs`、`rhs`、试到第几步）。不认识 SL 名字/作用域，没有名字
+环境；下一步做什么、返回值存哪、异常要不要就地处理都由子类决定。
+
+### `EvalFrame`
+
+执行状态跟 `ByteCodeFrame` 一样（`code_` 是编译出的单条表达式），但**没有自己的名字环境**——
+`locals_`/`globals_frame_`/`global_marks_`、引用捕获的查询全部转发给 `target_`（`eval` 所在的调用帧）。
+`owner_` 恒为空，执行完直接把栈顶交给下面那帧。
+
+这是"`Code` 边界 = 帧边界"的唯一例外：有自己的执行状态，但名字读写、`global`、引用捕获全落在 `target_`
+上，跟没压新帧效果一致。
 
 ## 栈约定
 
-**每个"编译一个表达式节点"的 codegen 函数带一个 `want_value: bool` 参数，不变量是：编译完这个节点，
-操作数栈相对编译前恰好增加 `want_value ? 1 : 0`。** `want_value=false` 时节点自己判断能不能干脆不产出
-（赋值、`and`/`or`、`if` 缺分支要补的 `None`……这些"产出"本来就是 codegen 自己加的，不加就是了）；不能
-不产出的（`CALL`、`BINARY_OP`、`LOAD_NAME` 这类，产出是指令本身固有的行为），编译完照常补 `POP_TOP`。
-判断标准跟折叠器"被丢弃的部分本来就不会被求值就能丢"是同一条：只能省 codegen 自己加的垫值步骤，不能省
-任何有副作用/可能抛异常的求值。
+**每个"编译一个表达式节点"的 codegen 函数带一个 `want_value: bool`，不变量是：编译完这个节点，操作数栈
+相对编译前恰好增加 `want_value ? 1 : 0`。**
 
-`want_value` 往子节点传不是原样转发，按节点语义各自决定：`Compound`/`Program` 的非末尾语句恒 `false`；
-`for`/`while` 的 `init`/`inc` 恒 `false`；`and`/`or` 左操作数要不要留值取决于 **整个节点自己收到的**
-`want_value`，不是简单继承（见下面 codegen 模式）。`del`/`global`/`break`/`continue` 这类值恒为 `None`
-的构造，`want_value=true` 才补 `LOAD_CONST` 取 `None`。
+`want_value=false` 时节点自己判断能不能干脆不产出（赋值、`and`/`or`、`if` 缺分支要补的 `None`——这些
+"产出"本来就是 codegen 自己加的）；不能不产出的（`CALL`、`BINARY_OP`、`LOAD_NAME` 这类，产出是指令固有
+行为）编译完补 `POP_TOP`。判断标准同折叠器：**只能省 codegen 自己加的垫值步骤，不能省任何有副作用/
+可能抛异常的求值。**
 
-codegen 必须按实际传下去的 `want_value` 静态跟踪栈深（算栈深上限、`break`/`continue` 裁栈都要用），两
-条路径算出来的深度不一样。
+往子节点传不是原样转发，按节点语义各自决定：`Compound`/`Program` 的非末尾语句恒 `false`；`for`/`while`
+的 `init`/`inc` 恒 `false`；`and`/`or` 左操作数取决于整个节点自己收到的 `want_value`。`del`/`global`/
+`break`/`continue` 这类值恒为 `None` 的构造，`want_value=true` 才补 `LOAD_CONST` 取 `None`。
+
+codegen 按实际传下去的 `want_value` 静态跟踪栈深（算 `max_stack`、`break`/`continue` 裁栈都要用）。
 
 ## 指令表
 
-参数写作 `n`/`i`/`t`：`n` 是个数或表下标，`t` 是跳转目标。「前」「后」两列是执行前后的操作数栈，最右 是栈顶，
-`…` 是不受影响的其余部分。
+`n`/`i` 是个数或表下标，`t` 是跳转目标。「前」「后」是执行前后的操作数栈，最右是栈顶，`…` 是不受影响的
+其余部分。
 
 ### 栈与常量
 
@@ -185,32 +157,27 @@ codegen 必须按实际传下去的 `want_value` 静态跟踪栈深（算栈深�
 | `COPY i`          | `… xᵢ … x₁`    | `… xᵢ … x₁ xᵢ` | 复制从栈顶数第 `i` 项（`i=1` 即栈顶）压栈        |
 | `INSERT n`        | `… xₙ … x₂ x₁` | `… x₁ xₙ … x₂` | 弹出栈顶，插回到深度 `n`（`n=2` 即交换栈顶两项） |
 | `LOAD_CONST n`    | `…`            | `… c`          | 压常量表第 `n` 项                                |
-| `LOAD_INTERNAL n` | `…`            | `… v`          | 压全局共享表第 `n` 项，见下                      |
+| `LOAD_INTERNAL n` | `…`            | `… v`          | 压全局共享表第 `n` 项                            |
 
-`LOAD_INTERNAL` 取的是一张 **全局共享、不属于任何单个 `Code`** 的小表，只装 **SL 层拿不到的内部对象**：
-`import` 调用形态背后的函数对象、`MAKE_FUNC` 缺省参数用的哨兵值（都见「调用与建立」）。字面量一律走
-`LOAD_CONST`，`None`/`True`/`False`/`Ellipsis` 也不例外——否则 `(None,)` 在常量表而 `None` 不在，太
-割裂。两张表互不相干，`n` 不能混用，所以特意不叫 `LOAD_INTERNAL_CONST`。
+`LOAD_INTERNAL` 取的是一张**全局共享、不属于任何单个 `Code`** 的小表，只装 **SL 层拿不到的内部对象**：
+`import` 调用形态背后的函数对象、`MAKE_FUNC` 缺省参数用的哨兵值。它没有 SL 主人，**必须注册成 GC 根**。
+字面量一律走 `LOAD_CONST`，`None`/`True`/`False`/`Ellipsis` 也不例外。两张表互不相干，`n` 不能混用。
 
-**`COPY`/`INSERT` 缺一不可，`INSERT` 去不掉**：`COPY` 只能在栈顶新增副本，不能把已在栈上的项挪到更深
-位置，这种下沉只能靠 `INSERT`（等价旋转，`n=2` 即交换）。三处真用到：① 赋值/复合赋值的留值——只在
-`want_value=true` 时需要，`false` 时直接省掉；② 链式比较——不管整条链要不要值，前一段的右操作数都必须
-留给下一段当左操作数，`want_value` 帮不上忙；③ `for` 的 `$$` 收集模式——`UNPACK 2` 给出的顺序跟
-`DICT_PUT` 要的差一次交换（见下）。②③ 是纯操作数重排，`COPY` 换不掉。
+`COPY` 只能在栈顶新增副本，把已在栈上的项下沉只能靠 `INSERT`，两者缺一不可。
 
 ### 名字
 
-"按作用域规则"：名字在 global 标记集里作用于 `_G`，是引用捕获就转发到 **定义帧**（定义帧局部字典已是
+"按作用域规则"：名字在 global 标记集里作用于 `_G`，是引用捕获就转发到**定义帧**（定义帧局部字典已是
 `None` 则 `NameError`），否则作用于 `_L`；读取时 `_L` → `_G` → 内置表逐级退回。
 
-| 指令                 | 前    | 后               | 行为                                                                                                |
-| -------------------- | ----- | ---------------- | --------------------------------------------------------------------------------------------------- |
-| `LOAD_NAME n`        | `…`   | `… v`            | 按作用域规则读名字表第 `n` 项，查不到 `NameError`                                                   |
-| `LOAD_NAME_STRICT n` | `…`   | `… v`            | 复合赋值读旧值专用：不在 global 标记集时**只查 `_L`**，查不到 `NameError`，保证读写落在同一帧       |
-| `STORE_NAME n`       | `… v` | `…`              | 弹栈顶，按作用域规则写                                                                              |
-| `DELETE_NAME n`      | `…`   | `…`              | 按作用域规则删，不存在 `NameError`                                                                  |
-| `DECLARE_GLOBAL n`   | `…`   | `…`              | `global identifier`：是引用捕获则 `NameError`；已在标记集则跳过；否则删 `_L` 同名项、名字加进标记集 |
-| `LOAD_GL a`          | `…`   | `… _L` 或 `… _G` | `a=0` 压 `_L`（不是视图/快照），`a=1` 压 `_G`                                                       |
+| 指令                 | 前    | 后               | 行为                                                                                          |
+| -------------------- | ----- | ---------------- | ----------------------------------------------------------------------------------------------- |
+| `LOAD_NAME n`        | `…`   | `… v`            | 按作用域规则读名字表第 `n` 项，查不到 `NameError`                                             |
+| `LOAD_NAME_STRICT n` | `…`   | `… v`            | 复合赋值读旧值专用：不在 global 标记集时**只查 `_L`**，查不到 `NameError`，保证读写落在同一帧 |
+| `STORE_NAME n`       | `… v` | `…`              | 弹栈顶，按作用域规则写                                                                        |
+| `DELETE_NAME n`      | `…`   | `…`              | 按作用域规则删，不存在 `NameError`                                                            |
+| `DECLARE_GLOBAL n`   | `…`   | `…`              | 是引用捕获则 `NameError`；已在标记集则跳过；否则删 `_L` 同名项、名字加进标记集                |
+| `LOAD_GL a`          | `…`   | `… _L` 或 `… _G` | `a=0` 压 `_L`（不是视图/快照），`a=1` 压 `_G`                                                 |
 
 ### 属性与索引
 
@@ -221,25 +188,25 @@ codegen 必须按实际传下去的 `want_value` 静态跟踪栈深（算栈深�
 | `DELETE_ATTR n` | `… obj`             | `…`   | 删属性                       |
 | `GET_INDEX n`   | `… obj a₁ … aₙ`     | `… v` | 走 `__op_get_index__`        |
 | `SET_INDEX n`   | `… obj a₁ … aₙ val` | `…`   | 走 `__op_set_index__`        |
-| `GET_INDEX_EX`  | `… obj args`        | `… v` | `args` 是下标已打包好的 list |
+| `GET_INDEX_EX`  | `… obj args`        | `… v` | `args` 是下标打包成的 list   |
 | `SET_INDEX_EX`  | `… obj args val`    | `…`   | 同上                         |
 
-`GET`/`SET` 前缀标记"走对象自己的协议、可能回调 SL 代码"（描述器、`__op_*__`），跟直接读写帧自身状态 的
-`LOAD`/`STORE`（名字/常量表）区分开。`*expr` 合法出现在索引里（`x[*a, b]`），跟调用一样：一旦有
-展开参数个数就不是编译期常数，得先拼出 `args` list 再交 `_EX` 版本。索引没有 `**` 展开（`SL.md` 只准
-`**` 出现在字典字面量和函数调用），`_EX` 因此不需要 `kwargs`，跟 `CALL_EX` 不对称是故意的。
+`GET`/`SET` 前缀标记"走对象自己的协议、可能回调 SL 代码"（描述器、`__op_*__`），跟直接读写帧自身状态的
+`LOAD`/`STORE` 区分开。索引里出现 `*expr`（`x[*a, b]`）时参数个数不再是编译期常数，先拼出 list 再交
+`_EX` 版。索引没有 `**` 展开，所以 `_EX` 不带 `kwargs`，跟 `CALL_EX` 不对称是故意的。
 
 ### 运算符
 
-| 指令           | 前      | 后    | 行为                                                                                                          |
-| -------------- | ------- | ----- | ------------------------------------------------------------------------------------------------------------- |
-| `UNARY_OP op`  | `… x`   | `… v` | `op` 选 `+` `-` `~` `not` `?` `!`                                                                             |
-| `BINARY_OP op` | `… x y` | `… v` | `op` 选全部二元运算符，含比较、`in`、`is`、`..`；正/反向方法、`__op_cmp__` 回退、`==`/`!=` 身份兜底都在实现里 |
+| 指令           | 前      | 后    | 行为                                                                    |
+| -------------- | ------- | ----- | ------------------------------------------------------------------------- |
+| `UNARY_OP op`  | `… x`   | `… v` | `op` 选 `+x` `-x` `~x` `not x` `x?` `x!`                                  |
+| `BINARY_OP op` | `… x y` | `… v` | `op` 选全部二元运算符，含比较、`in`、`is`、`..`                          |
 
-`not`/`is`（含链）/比较（含链式）本身仍各自是一次 `UNARY_OP`/`BINARY_OP`——"链"不是新语义，只是同一个
-运算符连续应用多次。`not` 是唯一不经过 MRO 分派的选项：不可重载，固定是"取真值（可能因 `__bool__` 被
-重载而回调 SL）再取反"。真正不落在这两条指令上的只有 `and`/`or`——走 `JUMP_IF_FALSE` 短路跳转（见下面
-codegen 模式）；链式比较/`is` 链靠 `COPY`/`INSERT` 把操作数喂给两次 `BINARY_OP`，同样见下。
+正/反向方法、`__op_cmp__` 回退、`==`/`!=` 身份兜底都在指令实现里。`not` 是唯一不经过 MRO 分派的：不可
+重载，固定是"取真值再取反"（`__bool__` 可能回调 SL）。
+
+比较链和 `is` 链在 AST 里各是一个节点，但**链不是新语义**，编译成同一运算符连续应用多次。不落在这两条
+指令上的只有 `and`/`or`，走 `JUMP_IF_FALSE` 短路。
 
 ### 容器
 
@@ -255,19 +222,18 @@ codegen 模式）；链式比较/`is` 链靠 `COPY`/`INSERT` 把操作数喂给�
 | `UNPACK_EX a`                              | `… x`                                    | `… vₖ … *lv … v₁` | 带 `*lv` 的解构，见下                                             |
 
 带 `*`/`**` 展开的容器字面量走 `MAKE_LIST 0`/`MAKE_DICT 0` 加逐项 append/extend/put/merge，元组最后补
-`LIST_TO_TUPLE`；收集模式的 `for` 复用同一组指令。
+`LIST_TO_TUPLE`；收集模式的 `for` 复用同一组。
 
-**全常量元组不用 `MAKE_TUPLE`**，直接 `LOAD_CONST`（见「常量表存什么形态」）。`list`/`dict` 不管元素是不是
-全常量都必须每次现建；元素全为常量且个数 ≥3 时可选的更短形态是 `MAKE_LIST 0` +
-`LOAD_CONST <常量元组>` +
-`LIST_EXTEND`（`n+1` 条压到 3 条），列表本身仍是新对象。
+**全常量元组不用 `MAKE_TUPLE`**，直接 `LOAD_CONST`。`list`/`dict` 不管元素是不是全常量都必须每次现建；
+元素全为常量且个数 ≥3 时可选的更短形态是 `MAKE_LIST 0` + `LOAD_CONST <常量元组>` + `LIST_EXTEND`
+（`n+1` 条压到 3 条），列表本身仍是新对象。
 
-**`UNPACK_EX a` 编码**：`a` 是一次 `EXTENDED_ARG` 累积出的 16 位值，高 8 位（`EXTENDED_ARG` 自己那字节）
-是星号后项数，低 8 位（`UNPACK_EX` 自己那字节）是星号前项数。例：`(a, b, *rest, c) = e` 编译成
-`EXTENDED_ARG 1` `UNPACK_EX 2`。每侧最多 255 项—— **这条上限必须在语义检查阶段挡住**（
-`SemanticChecker`
-给带 `*lv` 的解构加检查，超限 `SyntaxError`，`SL.md` 补一句），不能留到 codegen 才发现打包不进两字节； 跟
-CPython 对 star-unpacking 的处理一致，是真实语言限制不是内部实现细节。codegen 到手的 AST 已保证在 限内。
+**`UNPACK_EX a` 编码**：`a` 是一条 `EXTENDED_ARG` 累积出的 16 位值，高 8 位是星号后项数，低 8 位是星号
+前项数。例：`(a, b, *rest, c) = e` 编译成 `EXTENDED_ARG 1` `UNPACK_EX 2`。每侧最多 255 项。
+
+> **未实施**：这条上限该在 `SemanticChecker` 里挡住（超限 `SyntaxError`）并写进 `SL.md`——它是真实的
+> 语言限制，不是内部实现细节，不能留到 codegen 才发现打包不进两字节。现在两处都还没做，codegen 到手的
+> AST **并不保证**在限内。
 
 ### 跳转
 
@@ -279,31 +245,19 @@ CPython 对 star-unpacking 的处理一致，是真实语言限制不是内部�
 | `GET_ITER`        | `… x`  | `… it`                      | 换成迭代器，不满足可迭代协议 `TypeError`               |
 | `FOR_ITER t`      | `… it` | `… it v` 或 `…`（耗尽，跳） | 取到元素压栈；耗尽弹掉迭代器并跳 `t`                   |
 
-**`JUMP_IF_FALSE` 只认 bool，自己不做真值转换**：转换单独拆成 `TO_BOOL`，调用方保证操作数已经是 bool。
-`if`/`while`/`for` 的 `cond`、`and`/`or`、链式比较每一段都是"先 `TO_BOOL` 再 `JUMP_IF_FALSE`"——比较
-运算符不保证返回 bool（用户重载的 `__op_lt__` 可以返回别的类型），`SL.md` 只规定链式比较看"真值"。
-`CHECK_EXC_MATCH` 是例外：`isinstance` 是内置判定不走用户重载，结果恒为真 bool，不需要垫 `TO_BOOL`。
+**`JUMP_IF_FALSE` 只认 bool，自己不做真值转换**。`if`/`while`/`for` 的 `cond`、`and`/`or`、链式比较
+每一段都是"先 `TO_BOOL` 再 `JUMP_IF_FALSE`"——比较运算符不保证返回 bool（用户重载的 `__op_lt__` 可以
+返回别的类型）。唯一例外是 `CHECK_EXC_MATCH`，`isinstance` 结果恒为真 bool。
 
-**不需要 `JUMP_IF_TRUE`**：`__bool__` 分派只发生一次，`JUMP_IF_FALSE`/假想中的 `JUMP_IF_TRUE` 都只调
-一次，完全对称。唯一差别是往哪边加一条无条件 `JUMP`，而这已经是 `or` 的 codegen 自己在做的事。
+没有 `JUMP_IF_TRUE`：`or` 把"假才跳"倒过来再加一条无条件 `JUMP` 即可。
 
 ### 异常与 finally
 
-**C++ 异常只用来把一次"推进一步"内部的错误带出来，不允许跨过这个边界继续往外抛**：主循环每次调用
-`Frame` 的"推进一步"都包一层 `catch`——`step()` 内部嵌套多少层纯 C++ 调用（查 MRO、类型转换……）都
-正常展开，不对应任何 SL 帧；一旦越过这层 `catch`，就转成"有个 SL 异常对象在传播"的显式状态，交给下面
-手写的算法，不指望 C++ 自己继续 `catch` 到更外层（SL 帧之间没有嵌套的 C++ 调用记录）。跟前端
-`SyntaxError`/`InternalError` 是同一种用法（内部传错误，不逃出公开入口），但 **运行期不能照抄"一个 SL
-概念一个 C++ 类"**：运行期异常是 SL 对象（`SL.md` 4.2 的内置类实例，用户还能派生子类），种类穷举不完， 应该用
-**一个统一的 C++ 包装类型**装一个指向 SL 异常对象的引用当"信封"，具体是哪种异常看信封里那个对象 自己的
-`type()`。
+传播算法（主循环里的显式循环，不是 C++ 栈的自动展开）：弹出块栈最近一项，操作数栈裁到记录的深度，压入
+异常对象，跳到处理器；块栈空了就弹帧、往下一帧传播。传到 `NativeFrame` 时给它一次收尾机会（如 `import`
+失败撤掉半成品缓存），可以就地处理也可以继续往外传。
 
-`return`/`break`/`continue` 不走这条路——纯粹的 PC 跳转（`CALL_FINALLY`/`END_FINALLY`），编译期就确定
-目标和要不要经过 `finally`，不需要运行期传播。
-
-块栈一项记 `{处理器目标, 进块时的操作数栈深}`。传播时：弹出最近一项，操作数栈裁到记录的深度，压入异常
-对象，跳到处理器；块栈空了就弹帧、往下一帧传播——这是主循环里的显式循环，不是 C++ 栈的自动展开。传到
-`NativeFrame` 时给它一次收尾机会（如 `import` 失败撤掉半成品缓存），可以就地处理也可以继续往外传。
+`return`/`break`/`continue` 不走这条路——纯 PC 跳转，编译期就确定目标和要不要经过 `finally`。
 
 | 指令                               | 前               | 后              | 行为                                                                                         |
 | ---------------------------------- | ---------------- | --------------- | -------------------------------------------------------------------------------------------- |
@@ -311,7 +265,7 @@ CPython 对 star-unpacking 的处理一致，是真实语言限制不是内部�
 | `POP_BLOCK`                        | `…`              | `…`             | 弹一项块（正常路径走完 try 体）                                                              |
 | `CALL_FINALLY t`                   | `…`              | `… r`           | "返回地址" `r` 压栈并跳到 `t`；正常完成、`return`/`break`/`continue` 经过 `finally` 时走这条 |
 | `END_FINALLY`                      | `… r` 或 `… exc` | `…`             | 是返回地址就跳回去；是异常对象就继续向外传播                                                 |
-| `CHECK_EXC_MATCH`                  | `… exc E`        | `… exc b`       | 弹掉 `E`，压 `isinstance(exc, E)`                                                            |
+| `CHECK_EXC_MATCH`                  | `… exc E`        | `… exc b`       | 弹掉 `E`，压 `isinstance(exc, E)`，**`exc` 留在栈上**                                        |
 | `RAISE`                            | `… exc`          | ——（抛出）      | 不是 `BaseException` 实例则 `TypeError`                                                      |
 | `RERAISE`                          | `… exc`          | ——（抛出）      | 继续传播，不产生新位置信息                                                                   |
 
@@ -319,60 +273,45 @@ CPython 对 star-unpacking 的处理一致，是真实语言限制不是内部�
 
 ### 调用与建立
 
-| 指令           | 前                                    | 后         | 行为                                                                                                                      |
-| -------------- | ------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `CALL n`       | `… f a₁ … aₙ`                         | `… v`      | 按 SL.md 3.5 分派被调对象，见下。只有位置实参                                                                             |
-| `CALL_KW n`    | `… f a₁ … aₙ names`                   | `… v`      | 同上，`names` 是常量表里的名字元组，末尾 `len(names)` 个实参按名字传                                                      |
-| `CALL_EX`      | `… f args kwargs`                     | `… v`      | 同上，`*`/`**` 展开时用                                                                                                   |
-| `MAKE_FUNC c`  | `… captures params ret_type doc name` | `… f`      | 弹 5 项 + 常量表第 `c` 项的 `Code`，建函数对象，见下                                                                      |
-| `MAKE_CLASS c` | `… captures bases doc name`           | `… cls`    | 弹 4 项 + 常量表第 `c` 项的 `Code`，新建局部帧执行类体，见下                                                              |
-| `RETURN_VALUE` | `… v`                                 | ——（弹帧） | 弹栈顶为值，弹帧，按 `owner_` 种类收尾                                                                                    |
-| `IMPORT n`     | `…`                                   | `… m`      | 关键字形态 `import a.b.c`：名字表第 `n` 项是完整点分名，压 `NativeFrame` 跑加载算法，压入**第一段**模块对象               |
+| 指令           | 前                                    | 后         | 行为                                                                                          |
+| -------------- | ------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------- |
+| `CALL n`       | `… f a₁ … aₙ`                         | `… v`      | 分派被调对象，见下。只有位置实参                                                              |
+| `CALL_KW n`    | `… f a₁ … aₙ names`                   | `… v`      | 同上，`names` 是常量表里的名字元组，末尾 `len(names)` 个实参按名字传                          |
+| `CALL_EX`      | `… f args kwargs`                     | `… v`      | 同上，`*`/`**` 展开时用；`args` 是 list、`kwargs` 是 dict（就是拼装用的那两种容器）           |
+| `MAKE_FUNC c`  | `… captures params ret_type doc name` | `… f`      | 弹 5 项 + **嵌套 `Code` 表**第 `c` 项，建函数对象                                             |
+| `MAKE_CLASS c` | `… captures bases doc name`           | `… cls`    | 弹 4 项 + **嵌套 `Code` 表**第 `c` 项，新建局部帧执行类体                                     |
+| `RETURN_VALUE` | `… v`                                 | ——（弹帧） | 弹栈顶为值，弹帧，按 `owner_` 种类收尾                                                        |
+| `IMPORT n`     | `…`                                   | `… m`      | 关键字形态 `import a.b.c`：名字表第 `n` 项是完整点分名，压 `NativeFrame` 跑加载算法，压入**第一段**模块对象 |
 | `EVAL`         | `… args kwargs`                       | `… v`      | 绑出 `code`（失败 `DispatchError`，非 str `TypeError`），解析成恰好一条表达式（否则 `SyntaxError`），编译，压 `EvalFrame` |
 
-**`CALL` 系列的分派**：比被调对象的 `type()` **指针**（这几个类型都是 final，见 SL.md 4.3，所以指针相等
-就够，不用走 MRO）——`Function` 压 `ByteCodeFrame`；`BuiltinFunction` 纯计算就地算完、要回调 SL 就压
-`NativeFrame`；`Method` 把绑定的对象插到实参最前面重新分派；`FuncGroup` 逐个试。都不是就压一个
-`NativeFrame` 去查 `type(f)` 的 `__op_call__`，拿到结果重新分派——这一步必须压帧，因为查找会走描述器、
-可能回调 SL，而且链可以无限长（靠帧栈深度吃 `RecursionError`）。
+**`CALL` 系列的分派**：比被调对象的 `type()` **指针**（这几个类型都是 final，指针相等就够，不走 MRO）
+——`Function` 压 `ByteCodeFrame`；`BuiltinFunction` 纯计算就地算完、要回调 SL 就压 `NativeFrame`；
+`Method` 把绑定的对象插到实参最前面重新分派；`FuncGroup` 逐个试。都不是就压一个 `NativeFrame` 去查
+`type(f)` 的 `__op_call__` 再重新分派——这一步必须压帧，查找会走描述器、可能回调 SL，而且链可以无限长
+（靠帧栈深度吃 `RecursionError`）。
 
-实参绑定算法（槽位填充、`*args`/`**kwargs` 收集、类型检查、函数族逐个试）不摊成字节码，在 `CALL` 系列
-指令实现里；**内置函数和 SL 函数共用这一套**，所以内置函数也要声明形参与类型注解。`EVAL` 编译 `code` 时交给语义检查的 `in_local_scope` 取
-`target_.globals_frame_ != target_`。
+实参绑定（槽位填充、`*args`/`**kwargs` 收集、类型检查、函数族逐个试）不摊成字节码，在 `CALL` 系列的
+指令实现里；**内置函数和 SL 函数共用这一套**，所以内置函数也要声明形参与类型注解。
 
-**没有 `IMPORT_CALL`**：调用形态 `import(expr, kwarg=v, ...)` 的实参形状本来就跟普通调用一致，没必要
-另写绑定逻辑——加载算法包成一个内部函数对象，`LOAD_INTERNAL` 取它接一次普通 `CALL`/`CALL_KW`/`CALL_EX`
-即可。这个对象只出现在这一种 codegen 产出的字节码里，`import` 仍是关键字，SL 层拿不到它。
+`EVAL` 编译 `code` 时交给语义检查的 `in_local_scope` 取 `target_.globals_frame_ != target_`。
 
-**`eval` 不能走这条路**：`import` 是参数绑完才干活，能塞进普通内置函数；`eval` 得先拿到 `code` 字符串、
-现场编译出新 `Code`（可能 `SyntaxError`），编译要用的 `in_local_scope` 来自 **发起调用的那一帧**——这
-信息在参数绑定阶段不存在，`CALL` 没有"先编译一份 Code 再决定压哪种帧"这一步。更根本的是：`eval` 关键
-字化就是为了让"这份 `Code` 有没有 `eval` 点"纯静态可判定（给未来局部变量槽位化铺路，见
-`.ai/context.md`）——若也编译成 `LOAD_INTERNAL`+`CALL`，字节码层面就分不清普通调用和 `eval` 调用了。
+**没有 `IMPORT_CALL`**：`import(...)` 的实参形状跟普通调用一致，加载算法包成一个内部函数对象，
+`LOAD_INTERNAL` 取它接一次普通 `CALL`/`CALL_KW`/`CALL_EX` 即可。`eval` 不能照办，必须留成独立指令。
 
-## 关键构造的 codegen 模式
+## codegen 模式
 
-**`and`/`or`**：只用消费型的 `JUMP_IF_FALSE`。`want_value=true` 时先复制一份操作数走 `TO_BOOL` 测试，
-原件留在栈上不受影响；短路时原件就是结果，不短路就弹掉原件再求右操作数：
+**`and`/`or`**：只用消费型的 `JUMP_IF_FALSE`。`want_value=true` 时先复制一份走 `TO_BOOL` 测试，原件留在
+栈上；短路时原件就是结果，不短路就弹掉原件再求右操作数：
 
 ```
 a and b (want=true) : <a> COPY 1 TO_BOOL JUMP_IF_FALSE end POP_TOP <b(want=true)> end:
 a or b  (want=true) : <a> COPY 1 TO_BOOL JUMP_IF_FALSE rhs JUMP end   rhs: POP_TOP <b(want=true)>   end:
+a and b (want=false): <a> TO_BOOL JUMP_IF_FALSE end <b(want=false)> end:
+a or b  (want=false): <a> TO_BOOL JUMP_IF_FALSE rhs JUMP end   rhs: <b(want=false)>   end:
 ```
 
-`want_value=false` 时不需要保留 `a`，只要真值，`TO_BOOL` 直接吃掉 `a`；右操作数继承 `want_value=false`：
-
-```
-a and b (want=false) : <a> TO_BOOL JUMP_IF_FALSE end <b(want=false)> end:
-a or b  (want=false) : <a> TO_BOOL JUMP_IF_FALSE rhs JUMP end   rhs: <b(want=false)>   end:
-```
-
-`or` 只是把"假才跳"倒过来加一条无条件 `JUMP`，不需要"真才跳"的指令。
-
-**链式比较 `a < b < c < d`**（`is` 链同理，`op` 换 `is`）：中间段把右操作数复制一份垫到左操作数下面 再比较，
-`t` 不保证是 bool（用户重载的比较方法可以返回别的类型），测试前先垫 `TO_BOOL`（只转换测试用 的副本，`t`
-原件不受影响）； **所有中间段的失败分支共享同一个 `fail`**——清理动作都是同一句"交换、弹掉
-左操作数，留下比较结果"：
+**链式比较 `a < b < c < d`**（`is` 链同理）：中间段把右操作数复制一份垫到左操作数下面再比较；`t` 不保证
+是 bool，测试前垫 `TO_BOOL`（只转换副本）；**所有中间段的失败分支共享同一个 `fail`**：
 
 ```
 <a> <b>
@@ -380,139 +319,115 @@ COPY 1 INSERT 3 BINARY_OP Lt   ; 栈: b t   (t = a < b)
 COPY 1 TO_BOOL JUMP_IF_FALSE fail
 POP_TOP                         ; 真：留 b，继续
 <c>
-COPY 1 INSERT 3 BINARY_OP Lt   ; 栈: c t   (t = b < c)
+COPY 1 INSERT 3 BINARY_OP Lt   ; 栈: c t
 COPY 1 TO_BOOL JUMP_IF_FALSE fail
-POP_TOP                         ; 真：留 c，继续
+POP_TOP
 <d> BINARY_OP Lt                ; 末段：不用再留操作数
 JUMP end
 fail: INSERT 2 POP_TOP          ; [y, t] 交换成 [t, y] 再弹掉 y
 end:
 ```
 
-两个操作符（`a<b<c`）只有一段中间段，三个以上重复中间那段即可。
-
-**赋值表达式的值**：`want_value=true` 才垫一份再让指令弹光；`false`（赋值当独立语句，最常见）直接省 掉
-`COPY`/`INSERT`：
+**赋值**：`want_value=true` 才垫一份再让指令弹光：
 
 ```
 x = e         (want=true)  : <e> COPY 1 STORE_NAME x
 x = e         (want=false) : <e> STORE_NAME x
 x.a = e       (want=true)  : <x> <e> COPY 1 INSERT 3 SET_ATTR a
-x.a = e       (want=false) : <x> <e> SET_ATTR a
 x[i] = e      (want=true)  : <x> <i> <e> COPY 1 INSERT 4 SET_INDEX 1
-x[i] = e      (want=false) : <x> <i> <e> SET_INDEX 1
 (a, b) = e    (want=true)  : <e> COPY 1 UNPACK 2 STORE_NAME a STORE_NAME b
-(a, b) = e    (want=false) : <e> UNPACK 2 STORE_NAME a STORE_NAME b
 ```
 
-**复合赋值**：目标只求值一次，靠 `COPY` 复制已在栈上的那份；多下标用 `n+1` 条 `COPY n+1` 整体复制。 同样
-`want_value=false` 时省掉留值用的 `COPY`/`INSERT`：
+**复合赋值**：目标只求值一次，靠 `COPY` 复制已在栈上的那份；多下标用 `n+1` 条 `COPY n+1` 整体复制：
 
 ```
 x op= e       (want=true)  : LOAD_NAME_STRICT x <e> BINARY_OP op COPY 1 STORE_NAME x
-x op= e       (want=false) : LOAD_NAME_STRICT x <e> BINARY_OP op STORE_NAME x
 x.a op= e     (want=true)  : <x> COPY 1 GET_ATTR a <e> BINARY_OP op COPY 1 INSERT 3 SET_ATTR a
-x.a op= e     (want=false) : <x> COPY 1 GET_ATTR a <e> BINARY_OP op SET_ATTR a
 x[i] op= e    (want=true)  : <x> <i> COPY 2 COPY 2 GET_INDEX 1 <e> BINARY_OP op COPY 1 INSERT 4 SET_INDEX 1
-x[i] op= e    (want=false) : <x> <i> COPY 2 COPY 2 GET_INDEX 1 <e> BINARY_OP op SET_INDEX 1
 ```
 
-**循环**：`for`/`while` 步进/迭代两种子模式的骨架，外加收集模式共用的收尾逻辑。
-
-进循环前先压 **结果槽**（计数模式压 `0`，`$` 压空 list，`$$` 压空 dict），整个循环期间待在栈上，结束时
-就是整条表达式的值。循环体 `expr` 恒以 `want_value=true` 编译——每一轮的值都要被收尾逻辑读一次：
+**循环**：进循环前先压**结果槽**（计数模式压 `0`，`$` 压空 list，`$$` 压空 dict），整个循环期间待在栈
+上，结束时就是整条表达式的值。循环体恒以 `want_value=true` 编译——每轮的值都要被收尾逻辑读一次。
 
 ```
-计数模式收尾:
-  POP_TOP
-count_continue:
-  LOAD_CONST 1 BINARY_OP Add
-$   收尾: LIST_APPEND
-$ * 收尾: LIST_EXTEND
-$$  收尾: UNPACK 2 INSERT 2 DICT_PUT   ; UNPACK 2 给出的是 v k，DICT_PUT 要 d k v，INSERT 2 补一次交换
-$$ ** 收尾: DICT_MERGE
+步进模式 for ⟦collect⟧ (init; cond; inc) expr：
+  <init>
+  loop:
+    <cond> TO_BOOL JUMP_IF_FALSE end   ; cond 为空则省掉这行（视为 True）
+    <expr>                             ; want_value=true
+    <收尾>
+  inc:
+    <inc>                              ; want_value=false
+    JUMP loop
+  end:
+
+迭代模式 for ⟦collect⟧ (iterable ⟦as lvalue⟧) expr：
+  <iterable> GET_ITER
+  loop:
+    FOR_ITER end                       ; 取到元素压栈；耗尽弹迭代器、跳 end
+    <写入 lvalue，弹光；没有 as 就 POP_TOP>
+    <expr>                             ; want_value=true
+    <收尾>
+    JUMP loop
+  end:
+
+收尾：
+  计数模式: POP_TOP  count_continue: LOAD_CONST 1 BINARY_OP Add
+  $       : LIST_APPEND
+  $ *     : LIST_EXTEND
+  $$      : UNPACK 2 INSERT 2 DICT_PUT   ; UNPACK 2 给出 v k，DICT_PUT 要 d k v
+  $$ **   : DICT_MERGE
 ```
 
-**`continue` 的目标按收集模式分**（`break` 不区分，统一跳 `end:`——`SL.md` 明确 `break` 两种模式都不
-计入/不放入，`continue` 只有收集模式不放入、计数模式仍要计入）：计数模式跳到 `count_continue:`（跳过
-`POP_TOP`，因为 `continue` 自己的裁栈已经清空了栈上原本要弹的值，直接从加 1 开始）；`$`/`$ *`/`$$`/
-`$$ **` 跳过整个收尾块，直接到 `inc:`（步进模式）或 `loop:`（迭代模式）。
+`break` 统一跳 `end:`（两种模式都不计入/不放入）。**`continue` 的目标按收集模式分**：计数模式跳
+`count_continue:`（跳过 `POP_TOP`，它自己的裁栈已经清掉了那个值），仍要计入；收集模式跳过整个收尾块，
+直接到 `inc:`（步进）或 `loop:`（迭代）。迭代模式下 `break` 提前退出时迭代器还留在栈上，裁栈要算上它。
 
-步进模式 `for ⟦collect⟧ (init; cond; inc) expr`：`init`/`inc` 恒 `want_value=false`；`cond` 为空按
-`SL.md` 视为 `True`，省掉测试直接落入循环体；`continue`（收集模式）落到 `inc:`——`SL.md` 明确"仍会对
-`inc` 求值进而对 `cond` 求值"：
-
-```
-<init>
-loop:
-  <cond> TO_BOOL JUMP_IF_FALSE end   ; cond 为空则省掉这行
-  <expr>                             ; want_value=true
-  <收尾>
-inc:
-  <inc>
-  JUMP loop
-end:
-```
-
-迭代模式 `for ⟦collect⟧ (iterable ⟦as lvalue⟧) expr`：没有 `inc`，`continue`（收集模式）落到 `loop:`。
-`FOR_ITER` 耗尽自己弹迭代器，但 `break` 提前退出时迭代器还留在栈上——是循环体额外压出来的一层，裁栈
-时要算上：
-
-```
-<iterable> GET_ITER
-loop:
-  FOR_ITER end                  ; 取到元素压栈；耗尽弹迭代器、跳 end
-  <写入 lvalue，弹光；没有 as 就 POP_TOP>
-  <expr>                        ; want_value=true
-  <收尾>
-  JUMP loop
-end:
-```
-
-**`want_value=false` 时结果槽能不能省**：计数模式能——纯计数，`want_value=false` 时连 `LOAD_CONST 0`
-和每轮加 1 都不用发，退化成裸循环。`$`/`$ *`/`$$`/`$$ **` 不能——`UNPACK`/`DICT_PUT` 等收尾指令本身可能
-抛 `TypeError`/`ValueError`，跳过就是悄悄吞异常，违反「栈约定」那条判断标准；每轮折叠必须照常做，只有
-最后要不要把结果槽交给外层由 `want_value` 决定。
+**`want_value=false` 时结果槽能不能省**：计数模式能，退化成裸循环；`$`/`$ *`/`$$`/`$$ **` 不能——收尾
+指令本身可能抛 `TypeError`/`ValueError`，跳过就是悄悄吞异常。每轮折叠照常做，只有最后要不要把结果槽交
+给外层由 `want_value` 决定。
 
 **`break`/`continue` 不用运行期块栈**：跳到哪、裁掉几层栈 codegen 静态就知道，编译成若干 `POP_TOP` +
 `JUMP`；隔着 `finally` 时跳之前由内到外补 `CALL_FINALLY`。`return` 同理但不用裁栈（弹帧时整个操作数栈
-一起没了），返回值在 `finally` 体执行期间待在栈上不受影响。
+一起没了）。
 
-**`try`**：
+**`try`**：处理器入口栈上只有异常对象，`CHECK_EXC_MATCH` 自己会把它留下，不需要额外复制：
 
 ```
 SETUP_EXCEPT h    <expr1>   POP_BLOCK   JUMP after
-h:  COPY 1 <E1> CHECK_EXC_MATCH JUMP_IF_FALSE next1
-    (有 as 就把栈顶异常对象赋给 lvalue，否则 POP_TOP) <expr2> JUMP after
-next1: …          RERAISE
+h:     <E1> CHECK_EXC_MATCH JUMP_IF_FALSE next1
+       (有 as 就把栈顶异常对象赋给 lvalue，否则 POP_TOP) <expr2> JUMP after
+next1: <E2> CHECK_EXC_MATCH JUMP_IF_FALSE next2
+       …
+nextN: RERAISE
 after:
 ```
 
-`finally` 在外面再包一层 `SETUP_FINALLY`：正常路径走完 `POP_BLOCK` + `CALL_FINALLY`，异常路径展开时
-直接跳进同一段 `finally` 体，末尾统一 `END_FINALLY` 分派—— **只编译一份**，`finally` 体不可能跳出这段
-范围（编译期已查），不用处理跳转穿过它。
+`finally` 在外面再包一层 `SETUP_FINALLY`：正常路径走完 `POP_BLOCK` + `CALL_FINALLY`，异常路径展开时直接
+跳进同一段 `finally` 体，末尾统一 `END_FINALLY` 分派——**只编译一份**，`finally` 体不可能跳出这段范围
+（编译期已查）。
 
-**建立函数**：装饰器最先求值，先压装饰器；名字是常量放最后压：
+**建立函数**：装饰器最先求值；名字是常量放最后压：
 
 ```
 <deco1> … <decoN>
 <各值捕获> MAKE_TUPLE k
 <各形参注解/默认值> MAKE_TUPLE m
 <返回类型> <doc> LOAD_CONST <名字>
-MAKE_FUNC <Code 在常量表里的下标>
-CALL 1  (由近到远，一个装饰器一条)
-COPY 1 STORE_NAME f   (命名函数才有，绑定只发生一次)
+MAKE_FUNC <嵌套 Code 表下标>
+CALL 1                 ; 由近到远，一个装饰器一条
+COPY 1 STORE_NAME f    ; 命名函数才有，绑定只发生一次
 ```
 
 `MAKE_FUNC` 固定弹 5 项，缺的注解/默认值/名字/`doc` 用 `LOAD_INTERNAL` 压一个纯内部哨兵值（不能用
-`None`，它是合法默认值）。引用捕获不产生任何指令：`MAKE_FUNC` 在当前帧执行，直接抓一份当前帧的引用
-挂到新对象上。
+`None`，它是合法默认值）。引用捕获不产生任何指令：`MAKE_FUNC` 在当前帧执行，直接抓一份当前帧的引用挂到
+新对象上。
 
-**建立类**：形状同上，基类元组代替形参段，弹 4 项。`MAKE_CLASS` 不直接产出类对象——新建局部帧、写入
-值捕获、压栈执行类体；类体 `RETURN_VALUE` 收尾时才由 `owner_`（类构建器）完成属性收集、MRO、
+**建立类**：形状同上，基类元组代替形参段，弹 4 项。`MAKE_CLASS` 不直接产出类对象——新建局部帧、写入值
+捕获、压栈执行类体；类体 `RETURN_VALUE` 收尾时才由 `owner_`（类构建器）完成属性收集、MRO、
 `__abstractmethods__`，把类对象压回。装饰器调用在这之后。
 
-**一份 `Code` 可复用多次，但每次"建立"都必须造出全新的函数/类对象**，`is` 比的是对象身份，不能缓存。
+**一份 `Code` 可复用多次，但每次"建立"都必须造出全新的函数/类对象**——`is` 比的是对象身份。
 
 ## 明确留给以后
 
@@ -520,3 +435,4 @@ COPY 1 STORE_NAME f   (命名函数才有，绑定只发生一次)
 - 局部变量槽位化：前提是"这份 `Code` 里有没有 `eval` 点"的静态判定。
 - 异常表取代块栈：等块栈成为瓶颈再换，对 codegen 之外不可见。
 - `RecursionError` 的阈值未定，只需要卡帧栈深度一个指标。
+- `UNPACK_EX` 每侧 255 项的上限检查（见上）。

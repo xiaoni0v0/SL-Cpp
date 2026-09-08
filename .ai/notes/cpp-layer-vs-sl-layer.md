@@ -12,7 +12,7 @@
 | `compiler/codegen`、`compiler/` 门面          | 同上（`codegen` 要造真 SL 对象，本来就是 SL 层）   |
 
 注意 **分界是按模块划的，不是按目录**：`compiler/` 里 `lexer`/`parser`/`analyzer` 是纯 C++ 层，
-`codegen` 是 SL 层。宿主异常类型本身住在顶层的 `cpp_exceptions/`，因为 `utils/` 也要用（它是纯 C++ 层，
+`codegen` 是 SL 层。宿主异常类型本身住在顶层的 `cppexceptions/`，因为 `utils/` 也要用（它是纯 C++ 层，
 不能反过来依赖 `compiler/`）。
 
 ## 为什么不让底层直接抛 SL 异常
@@ -53,7 +53,7 @@ VM 自己的 bug，一律 `InternalError`，不让 SL 代码捕获。
 
 ## 宿主异常存字段，不存拼好的字符串
 
-`cpp_exceptions/` 里每个异常都把**结构化字段**留着，`what()` 只是构造时由字段渲染出来的一种呈现：
+`cppexceptions/` 里每个异常都把**结构化字段**留着，`what()` 只是构造时由字段渲染出来的一种呈现：
 
 | 异常 | 字段 |
 |---|---|
