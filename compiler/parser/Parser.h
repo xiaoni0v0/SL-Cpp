@@ -154,7 +154,9 @@ class Parser {
      * @return           是否真的消耗过至少一个 ','
      */
     template <typename F>
-        requires std::invocable<F &> && std::same_as<std::invoke_result_t<F &>, void>
+        requires requires(F f) {
+            { f() } -> std::same_as<void>;
+        }
     bool finish_comma_batch(TokenType close, F &&parse_item);
 
     // 完成解析捕获列表。消耗括号、管理括号栈

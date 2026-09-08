@@ -1214,19 +1214,21 @@ AstNodePtr Parser::parse_eval() {
 }
 
 template <typename F>
-    requires std::invocable<F &> && std::same_as<std::invoke_result_t<F &>, void>
+    requires requires(F f) {
+        { f() } -> std::same_as<void>;
+    }
 bool Parser::finish_comma_batch(const TokenType close, F &&parse_item) {
     skip_newline();
     bool has_seen_comma{false};
     if (!check(close)) {
-        parse_item(); // 委托给回调函数
+        std::forward<F>(parse_item)(); // 委托给回调函数
         skip_newline();
         while (check(TokenType::SIGN_COMMA)) {
             has_seen_comma = true;
             expect(TokenType::SIGN_COMMA); // 消耗 ','
             skip_newline();
             if (check(close)) break; // 尾逗号
-            parse_item();
+            std::forward<F>(parse_item)();
             skip_newline();
         }
     }

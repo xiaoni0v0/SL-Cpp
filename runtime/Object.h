@@ -86,7 +86,7 @@ using ObjectRef = Ref<Object>;
 
 // 所有 SL 对象都该经由它建立
 template <typename T, typename... Args> [[nodiscard]] Ref<T> make_ref(Args &&...args) {
-    T *const object{new T(std::forward<Args>(args)...)};
+    T *const object{new T{std::forward<Args>(args)...}};
     Heap::note_allocated(object);
     return Ref<T>{object};
 }
