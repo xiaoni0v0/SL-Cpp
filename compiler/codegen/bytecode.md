@@ -3,7 +3,7 @@
 `compiler/codegen/`（AST → `Code`）和 `executor/`（跑 `Code`）之间的实现契约。不是语言规范，涉及语义
 处以 [SL.md](../../SL.md) 为准。取舍理由见 [context.md](../../.ai/context.md)。
 
-现状：`Code`、`ConstPool` 已实现，`CodeGen` 和 `executor/` 的虚拟机还没写。
+现状：`Code`、`ConstPool`、`CodeGen` 已实现，`executor/` 的虚拟机还没写。虚拟机落地之前，检查 codegen 产物靠 [`disassembler.h`](disassembler.h)。
 
 ## 硬约束
 
@@ -101,6 +101,7 @@
 | `pc_`            | 指令计数器                                                                          |
 | `stack_`         | 操作数栈，按 `max_stack` 一次分配                                                   |
 | `blocks_`        | 块栈，每项记 `{处理器目标, 进块时的操作数栈深}`                                     |
+| `returns_`       | `finally` 返回栈，`CALL_FINALLY` 压、`END_FINALLY` 弹。不在操作数栈上，见下         |
 | `locals_`        | 局部字典即 `_L`。帧死亡时置为 `None`（不是清空、不是换对象），判活看它是否为 `None` |
 | `globals_frame_` | 所属全局帧。全局帧指向自己，**帧靠 `globals_frame_ == this` 自判是不是全局帧**      |
 | `global_marks_`  | global 标记集                                                                       |
@@ -161,7 +162,9 @@ codegen 按实际传下去的 `want_value` 静态跟踪栈深（算 `max_stack`�
 
 `LOAD_INTERNAL` 取的是一张**全局共享、不属于任何单个 `Code`** 的小表，只装 **SL 层拿不到的内部对象**：
 `import` 调用形态背后的函数对象、`MAKE_FUNC` 缺省参数用的哨兵值。它没有 SL 主人，**挂在 `Runtime` 上
-当 GC 根**（帧栈、模块表同理）。
+当 GC 根**（帧栈、模块表同理）。清单在
+[`runtime/x_internal_objects.inc`](../../runtime/x_internal_objects.inc)，枚举值就是这条指令的参数，
+所以那张表的顺序是字节码格式的一部分，只许往后追加。
 字面量一律走 `LOAD_CONST`，`None`/`True`/`False`/`Ellipsis` 也不例外。两张表互不相干，`n` 不能混用。
 
 `COPY` 只能在栈顶新增副本，把已在栈上的项下沉只能靠 `INSERT`，两者缺一不可。
@@ -268,17 +271,24 @@ codegen 按实际传下去的 `want_value` 静态跟踪栈深（算 `max_stack`�
 
 `return`/`break`/`continue` 不走这条路——纯 PC 跳转，编译期就确定目标和要不要经过 `finally`。
 
-| 指令                               | 前               | 后              | 行为                                                                                         |
-| ---------------------------------- | ---------------- | --------------- | -------------------------------------------------------------------------------------------- |
-| `SETUP_EXCEPT t`/`SETUP_FINALLY t` | `…`              | `…`（只压块栈） | 压一项块                                                                                     |
-| `POP_BLOCK`                        | `…`              | `…`             | 弹一项块（正常路径走完 try 体）                                                              |
-| `CALL_FINALLY t`                   | `…`              | `… r`           | "返回地址" `r` 压栈并跳到 `t`；正常完成、`return`/`break`/`continue` 经过 `finally` 时走这条 |
-| `END_FINALLY`                      | `… r` 或 `… exc` | `…`             | 是返回地址就跳回去；是异常对象就继续向外传播                                                 |
-| `CHECK_EXC_MATCH`                  | `… exc E`        | `… exc b`       | 弹掉 `E`，压 `isinstance(exc, E)`，**`exc` 留在栈上**                                        |
-| `RAISE`                            | `… exc`          | ——（抛出）      | 不是 `BaseException` 实例则 `TypeError`                                                      |
-| `RERAISE`                          | `… exc`          | ——（抛出）      | 继续传播，不产生新位置信息                                                                   |
+| 指令                               | 前        | 后               | 行为                                                                                                    |
+| ---------------------------------- | --------- | ---------------- | ------------------------------------------------------------------------------------------------------- |
+| `SETUP_EXCEPT t`/`SETUP_FINALLY t` | `…`       | `…`（只压块栈）  | 压一项块                                                                                                |
+| `POP_BLOCK`                        | `…`       | `…`              | 弹一项块（正常路径走完 try 体）                                                                         |
+| `CALL_FINALLY t`                   | `…`       | `…`              | "返回地址"压进帧的 `returns_` 并跳到 `t`；正常完成、`return`/`break`/`continue` 经过 `finally` 时走这条 |
+| `END_FINALLY`                      | `…`       | ——（不顺序往下） | `returns_` 非空就弹一项跳回去，否则把栈顶那个异常对象继续往外传播                                       |
+| `CHECK_EXC_MATCH`                  | `… exc E` | `… exc b`        | 弹掉 `E`，压 `isinstance(exc, E)`，**`exc` 留在栈上**                                                   |
+| `RAISE`                            | `… exc`   | ——（抛出）       | 不是 `BaseException` 实例则 `TypeError`                                                                 |
+| `RERAISE`                          | `… exc`   | ——（抛出）       | 继续传播，不产生新位置信息                                                                              |
 
-"返回地址"是纯内部整数值，SL 层拿不到，只在 `finally` 体执行期间待在操作数栈上。
+**进入 `finally` 体时，操作数栈顶恒是"这条路径要带出去的那个值"**：正常路径是 `try` 的值，
+`return` 是返回值，异常路径是异常对象，`break`/`continue` 没有值可带就压个 `None` 占位、回来再弹掉。
+四条路径的栈深因此一致，同一段 `finally` 体才编得出来。
+
+**返回地址走帧自己的 `returns_`，不占操作数栈**，这是上面那条能成立的前提。反过来（照 CPython 2 把
+返回地址压操作数栈）会把正常路径和 `return` 路径各顶高一格、跟异常路径对不上，那时"只编译一份"就只
+剩两条出路：给每条路径各复制一份 `finally` 体（CPython 3.11 的做法，代码膨胀），或者另开指令把返回值
+挪出操作数栈。挪一个纯内部的返回地址进帧，比这两条都便宜。"返回地址"是纯内部整数值，SL 层拿不到。
 
 ### 调用与建立
 
@@ -407,7 +417,9 @@ x[i] op= e    (want=true)  : <x> <i> COPY 2 COPY 2 GET_INDEX 1 <e> BINARY_OP op 
 给外层由 `want_value` 决定。
 
 **`break`/`continue` 不用运行期块栈**：跳到哪、裁掉几层栈 codegen 静态就知道，编译成若干 `POP_TOP` +
-`JUMP`；隔着 `finally` 时跳之前由内到外补 `CALL_FINALLY`。`return` 同理但不用裁栈（弹帧时整个操作数栈
+`JUMP`；隔着 `finally` 时跳之前由内到外补 `CALL_FINALLY`（每层先把栈裁到进 `try` 时的深度、再压一个
+`None` 占位）。`return` 同理，只是它带着返回值，裁栈时用 `INSERT` 把值沉到该在的位置再弹掉上面的临时值
+（最后弹帧时整个操作数栈
 一起没了）。
 
 **`try`**：处理器入口栈上只有异常对象，`CHECK_EXC_MATCH` 自己会把它留下，不需要额外复制：
@@ -422,11 +434,14 @@ nextN: RERAISE
 after:
 ```
 
-`finally` 在外面再包一层 `SETUP_FINALLY`：正常路径走完 `POP_BLOCK` + `CALL_FINALLY`，异常路径展开时直接
-跳进同一段 `finally` 体，末尾统一 `END_FINALLY` 分派——**只编译一份**，`finally` 体不可能跳出这段范围
+`finally` 在外面再包一层 `SETUP_FINALLY`：正常路径走完 `POP_BLOCK` + `CALL_FINALLY`（`want_value=false`
+时栈上没有值可带，先压个 `None` 占位、回来再弹掉），异常路径展开时直接跳进同一段 `finally` 体，末尾统一
+`END_FINALLY` 分派——**只编译一份**，`finally` 体不可能跳出这段范围
 （编译期已查）。
 
-**建立函数**：装饰器最先求值；名字是常量放最后压：
+**建立函数**：装饰器最先求值；名字是常量放最后压。形参段按 `positional`、`kw_only` 的声明顺序走一遍，
+每个形参**写了注解就压注解、写了默认值就压默认值**，谁对应谁由 `Code::ParamShape` 上的两个标志还原
+（`*args`/`**kwargs` 不带注解和默认值，不占位置）：
 
 ```
 <deco1> … <decoN>

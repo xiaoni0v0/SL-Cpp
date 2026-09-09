@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../runtime/objects/Code.h"
 #include "lexer/token.h"
 #include "parser/ast_nodes/ast_nodes.h"
 
@@ -37,4 +38,13 @@ class Compiler final {
     analyze(std::vector<Token> tokens, std::string file_path = "<unknown>");
     [[nodiscard]] static AstNodeProgramPtr
     analyze(std::u32string source, std::string file_path = "<unknown>");
+
+    // 跑到代码生成为止。收 AST 的那版要求它已经分析过，其余各版自己先分析。
+    // 前提：Runtime 已经起来——常量表里放的是真 SL 对象
+    [[nodiscard]] static Ref<Code>
+    compile(const AstNodeProgram &ast, std::string file_path = "<unknown>");
+    [[nodiscard]] static Ref<Code>
+    compile(std::vector<Token> tokens, std::string file_path = "<unknown>");
+    [[nodiscard]] static Ref<Code>
+    compile(std::u32string source, std::string file_path = "<unknown>");
 };

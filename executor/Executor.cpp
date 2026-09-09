@@ -1,9 +1,11 @@
 #include "Executor.h"
 
 #include "../compiler/Compiler.h"
+#include "../compiler/codegen/disassembler.h"
 #include "../compiler/lexer/Lexer.h"
 #include "../compiler/parser/ast_nodes/ast_json_dumper.h"
 #include "../cppexceptions/SLException.h"
+#include "../runtime/Runtime.h"
 #include "../utils/string_utils.h"
 
 #include <chrono>
@@ -34,6 +36,16 @@ void dump_ast(const AstNodeProgram &ast) {
     std::cout << AstJsonDumper::dump(ast).dump(2) << std::endl << std::endl;
 }
 
+void dump_code(const Code &code) { std::cout << disassemble(code) << std::endl; }
+
+// 运行时先于编译器：codegen 要把真 SL 对象放进常量表。起落成对，中途抛异常也要拆干净
+struct RuntimeGuard {
+    RuntimeGuard() { Runtime::init(); }
+    ~RuntimeGuard() { Runtime::shutdown(); }
+    RuntimeGuard(const RuntimeGuard &) = delete;
+    RuntimeGuard &operator=(const RuntimeGuard &) = delete;
+};
+
 } // namespace
 
 Executor::Executor(const int argc, const char *argv[]) : argv_{argv, argv + argc} {}
@@ -50,6 +62,8 @@ int Executor::run() const {
 
     const std::string file_path{path_abspath(argv_[1])};
 
+    const RuntimeGuard runtime;
+
     try {
         std::vector tokens{Compiler::tokenize(Compiler::read_source(file_path), file_path)};
         dump_tokens(tokens);
@@ -59,6 +73,9 @@ int Executor::run() const {
 
         Compiler::analyze(*ast, file_path);
         dump_ast(*ast);
+
+        const Ref code{Compiler::compile(*ast, file_path)};
+        dump_code(*code);
     } catch (const SLException &e) {
         std::cerr << e.what() << std::endl;
         return 1;

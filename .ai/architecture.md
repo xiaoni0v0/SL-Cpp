@@ -8,11 +8,11 @@
 
 ```
 源码 (.sl)
-  → Compiler   (compiler/)           把下面三层串成一条流水线的对外门面
+  → Compiler   (compiler/)           把下面四层串成一条流水线的对外门面
   → Lexer      (compiler/lexer/)     词法分析，产出 Token 序列
   → Parser     (compiler/parser/)    语法分析，产出 AST
   → Analyzer   (compiler/analyzer/)  语义检查 + 编译期常量折叠，原地改 AST
-  → CodeGen    (compiler/codegen/)   AST → Code（字节码），还没写
+  → CodeGen    (compiler/codegen/)   AST → Code（字节码）
   → Executor   (executor/)           跑字节码的虚拟机，还没写
 ```
 
@@ -20,11 +20,12 @@
 「运行时先于编译器」。这也是链接依赖的方向——`runtime` 在 `compiler` **下面**（codegen 要造真对象），
 而虚拟机主循环因为 `eval` 反过来依赖 `compiler`。
 
-`main.cpp` 目前只是个手工调用这条流水线、把每一步中间结果打印出来的调试入口，不是真正的解释器入口。
+`main.cpp` 目前只是个手工调用这条流水线、把每一步中间结果（token、两遍 AST、反汇编）打印出来的调试
+入口，不是真正的解释器入口。
 
 **当前完成度**：Lexer/Parser 已实现且有完整测试；Analyzer 的两个子系统（语义检查、常量折叠）已实现
 且有完整测试；`numeric/` 的 `BigInt`（`int` 的底层）和 `BigDec`+`DecContext`（`decimal` 的底层）已实现
-且有完整测试；`compiler/codegen/` 有了常量池（`ConstPool`）和设计文档 [`bytecode.md`](../compiler/codegen/bytecode.md)、`CodeGen` 本身还没写，
+且有完整测试；`compiler/codegen/` 全套已实现（`CodeGen`/`CodeBuilder`/`ConstPool`/反汇编器，设计文档 [`bytecode.md`](../compiler/codegen/bytecode.md)），有 `test/codegen/` 一整套测试，
 `executor/` 目前只是命令行驱动（串流水线的活在 `compiler/Compiler` 门面里）。`runtime/` 已经有对象模型骨架（`Object`+`Ref`、`Type`、
 四个基础类型、单例）、GC（引用计数 + 标记清扫）、bootstrap 和异常体系，帧与主循环还没开始——实现顺序见下面「实现路线」。
 **在虚拟机落地之前，SL.md 里"运行时"相关的条文（属性协议、GC、异常传播的具体机制等）大多还没有对应
@@ -48,15 +49,15 @@
 | `compiler/analyzer/semantic_checker/` | `SemanticChecker.{h,cpp}`（`AstConstVisitor` 的实现）：语义检查（作用域规则、lvalue 合法性、`*`/`**` 位置合法性、func/class 约束、AST 结构防御性校验……），只读不改 AST，违规抛 `SyntaxError`（真实语义错误）或 `InternalError`（AST 结构本身违反 Parser 的保证，代表实现自己有 bug）。单个节点自己字段的合法性不归这里，归节点构造函数（见 `compiler/parser/ast_nodes/details/`）。 |
 | `compiler/analyzer/expr_folder/` | `ExprFolder.{h,cpp}`（`AstVisitor` 的实现）：遍历 + 原地替换 AST 的调度层，拥有 `AstNodePtr` 槽位的所有权。`StaticEvaler.{h,cpp}`：纯函数式的"给一个节点判断能不能折、折成什么"，不遍历树、不拥有节点。 |
 | `numeric/` | `BigInt.{h,cpp}`：手写高精度整数，`int` 的底层实现（`小路径 int64_t` / `大路径 limbs` 双表示）。`BigDec.{h,cpp}`：十进制浮点数，`decimal` 的底层实现（`BigInt 系数 + int64_t 指数 + 独立符号位 + 特殊值 tag`）。`DecContext.{h,cpp}`：`decimal.Context` 的底层实现——舍入方式、精度、指数范围、信号的陷阱/标志位，以及陷阱触发时抛的 `DecTrapped`。`dec_math.{h,cpp}`：`ln`/`log10`/`exp`/`**` 用的整数层定点算法（`ilog`/`iexp`/`dlog`/`dexp`/`dpower` 等），只跟 BigInt 打交道，不认识上下文和信号。 |
-| `runtime/` | 运行时的地基，**在编译器下面**（`compiler/` 的 codegen 要直接造真 SL 对象）。`Object.h`：一切 SL 对象的基类 + 对象头（引用计数、类型指针、GC 链表与标记位）+ 引用句柄 `RefBase`/`Ref<T>` + 遍历器 `RefVisitor` + `make_ref`（唯一的建对象入口，各类型构造函数私有、只对它开放）。`Type.{h,cpp}`：类型对象（`name_`/`bases_`/`mro_`/`is_subtype_of`）。`Runtime.{h,cpp}`：全局单例，`init()` 两步建全部内置类型与单例并持有它们（都直接读私有字段，不经过公开访问器）、`shutdown()`，**GC 的全部引用根都挂在它上面**。`instance()` 只检查"init() 到底跑没跑完"（`g_runtime` 是否为空）——没有分阶段的状态机，见 [context.md](context.md)。`Heap.{h,cpp}`：全堆链表 + STW 标记清扫 `collect()`（根直接向 `Runtime` 要，没有可注册的"根源"这一层）+ 按**字节**计的回收触发（`should_collect()`；字节数由 `make_ref` 在对象构造完之后记账，`collect()` 时重算存活量）。**`collect()` 只能在主循环的安全点调用**，理由见笔记。`x_builtin_types.inc`：内置类型清单（X-macro，见下）。写这里的代码前先读 [notes/object-model-conventions.md](notes/object-model-conventions.md)。 |
+| `runtime/` | 运行时的地基，**在编译器下面**（`compiler/` 的 codegen 要直接造真 SL 对象）。`Object.h`：一切 SL 对象的基类 + 对象头（引用计数、类型指针、GC 链表与标记位）+ 引用句柄 `RefBase`/`Ref<T>` + 遍历器 `RefVisitor` + `make_ref`（唯一的建对象入口，各类型构造函数私有、只对它开放）。`Type.{h,cpp}`：类型对象（`name_`/`bases_`/`mro_`/`is_subtype_of`）。`Runtime.{h,cpp}`：全局单例，`init()` 三步建全部内置类型、单例与内部对象并持有它们（都直接读私有字段，不经过公开访问器）、`shutdown()`，**GC 的全部引用根都挂在它上面**。`x_internal_objects.inc`：内部对象清单（`LOAD_INTERNAL` 取的那张全局共享表，SL 层拿不到）。`instance()` 只检查"init() 到底跑没跑完"（`g_runtime` 是否为空）——没有分阶段的状态机，见 [context.md](context.md)。`Heap.{h,cpp}`：全堆链表 + STW 标记清扫 `collect()`（根直接向 `Runtime` 要，没有可注册的"根源"这一层）+ 按**字节**计的回收触发（`should_collect()`；字节数由 `make_ref` 在对象构造完之后记账，`collect()` 时重算存活量）。**`collect()` 只能在主循环的安全点调用**，理由见笔记。`x_builtin_types.inc`：内置类型清单（X-macro，见下）。写这里的代码前先读 [notes/object-model-conventions.md](notes/object-model-conventions.md)。 |
 | `runtime/objects/` | 各具体对象类型：`Int`（裹 `BigInt`）、`Decimal`（裹 `BigDec`）、`Str`（`u32string`，按码点）、`Tuple`（`vector<ObjectRef>`）、`BaseException`（整棵异常树共用，只存 `.args` 元组）、`NamedSingleton`（无负载单例）、`Bool`、`Code`（编译好的一份代码：字节码 + 常量表 + 嵌套 `Code` 表 + 名字表 + 形参形状 + 行位置表；**是 SL 对象但 SL 层完全接触不到**，做成对象是为了让 GC 的追踪能穿过它，见 [context.md](context.md)）。 |
 | `runtime/RaisedException.h` | `raise` 用的 C++ 信封（装一个 `ObjectRef`），只在一段不回调 SL、有界的 C++ 代码里 throw/catch，不是异常跨 SL 帧传播的机制——那个仍是主循环手写的显式算法，见 bytecode.md。 |
 | `runtime/HostErrorConversion.{h,cpp}` | 宿主异常 → SL 异常对象的转换函数（`SyntaxError`/`EncodingError`/`FileNotFoundError` 各一个），`InternalError` 故意没有对应函数。 |
 | `cppexceptions/` | 宿主（C++）层的异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`）加 `SourceLocation.h`，纯头文件。**信息以结构化字段为准，`what()` 只是构造时渲染出来的一种呈现**——转成 SL 异常对象时要的是分开的 file/row/col/message，见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。放在顶层而不是 `compiler/` 下，是因为 `utils/` 也要用它，而 `utils/` 是纯 C++ 层、不能反过来依赖 `compiler/`。 |
 | `utils/` | 自由函数工具：`string_utils`（UTF-8/UTF-32 互转等）、`file_utils`（读文件）、`memory_utils.h`（`mem::heap_bytes`，各对象类型 `size_bytes()` 的公共零件；**没有兜底重载**，认不出的类型是编译错误，见 [notes/object-model-conventions.md](notes/object-model-conventions.md)）。 |
-| `compiler/codegen/` | [`bytecode.md`](../compiler/codegen/bytecode.md)：指令集/帧/`Code` 的完整设计，动这里之前先读它。`ConstPool.{h,cpp}`：常量表的去重池，`intern()` 返回槽号、值相等的常量恒占同一个槽（`a = (1,2)` / `b = (1,2)` 的 `a is b` 因此为真）。**去重判据是「结构标识」，跟 SL 的 `==`/`hash` 好些地方正好相反**——放在 codegen 而不是 runtime 正是为了不让它跟对象模型里的相等混淆，见 [context.md](context.md)。`CodeGen` 本身还没写。 |
-| `executor/` | `Executor.{h,cpp}`：命令行入口的驱动——解析 argv、调 `Compiler::compile_file()`、把中间产物和错误打到 stdout/stderr，`main.cpp` 调它。串流水线的活在 `compiler/Compiler` 里，不在这。真正的字节码虚拟机还没写，设计见 [`bytecode.md`](../compiler/codegen/bytecode.md)。 |
-| `test/` | 目录结构镜像被测模块（`lexer`/`parser`/`analyzer`/`numeric`），见下。 |
+| `compiler/codegen/` | [`bytecode.md`](../compiler/codegen/bytecode.md)：指令集/帧/`Code` 的完整设计，动这里之前先读它。`x_opcodes.inc`/`x_unary_ops.inc`/`x_binary_ops.inc` 是字节码格式的唯一真源（X-macro 清单），`opcode.h` 由它们展开出 `OpCode`/`UnaryOp`/`BinaryOp` 和 `stack_effect()`。`CodeGen.{h,cpp}`（`AstConstVisitor` 的实现）：节点 → 指令，`want_value` 走成员通道。`CodeBuilder.{h,cpp}`：一份 `Code` 的组装器，管标签回填、`EXTENDED_ARG` 定点迭代、栈深静态跟踪与四张表——**不认识 AST**。`disassembler.{h,cpp}`：`Code` → 文本，虚拟机落地之前这是检查 codegen 产物的唯一手段。`ConstPool.{h,cpp}`：常量表的去重池，`intern()` 返回槽号、值相等的常量恒占同一个槽（`a = (1,2)` / `b = (1,2)` 的 `a is b` 因此为真）。**去重判据是「结构标识」，跟 SL 的 `==`/`hash` 好些地方正好相反**——放在 codegen 而不是 runtime 正是为了不让它跟对象模型里的相等混淆，见 [context.md](context.md)。 |
+| `executor/` | `Executor.{h,cpp}`：命令行入口的驱动——解析 argv、起落运行时、逐阶段调 `Compiler`、把中间产物和错误打到 stdout/stderr，`main.cpp` 调它。串流水线的活在 `compiler/Compiler` 里，不在这。真正的字节码虚拟机还没写，设计见 [`bytecode.md`](../compiler/codegen/bytecode.md)。 |
+| `test/` | 目录结构镜像被测模块（`lexer`/`parser`/`analyzer`/`codegen`/`numeric`），见下。 |
 
 ## 运行时先于编译器
 
@@ -138,8 +139,9 @@ parser 那份抄了三处，加个文件要改三个地方。
    对象构造完之后记一笔（`Heap::link()` 在构造函数里，那时问不到派生类的大小），`collect()` 顺着
    全堆遍历重算存活字节数。**还差**：`-Xmx` 上限参数、"超预算 → 安全点回收 → 仍超则抛
    `MemoryError`"这条流程，要等第 6 步主循环才有地方挂安全点，见 [context.md](context.md)。
-3. ~~**bootstrap**~~ **已完成**：`init()` 就两步——`build_types()` 建全部内置类型（含异常类树），
-   `build_singletons()` 建六个单例——都只碰 `Runtime` 自己的私有字段 `types_`，不经过任何公开访问器。
+3. ~~**bootstrap**~~ **已完成**：`init()` 就三步——`build_types()` 建全部内置类型（含异常类树），
+   `build_singletons()` 建六个单例，`build_internals()` 建 `LOAD_INTERNAL` 那张表里的内部对象——都
+   只碰 `Runtime` 自己的私有字段，不经过任何公开访问器。
    `Runtime::instance()` 只做一件事：`g_runtime` 是否为空。**没有分阶段的状态机**：早先版本给这个类
    配过一个有序的 `BootPhase`（`Uninitialized`→`Types`→`Values`→`Ready`），后来发现那是自己给
    自己挖的坑——之所以"需要"区分"类型建好但单例还没建好"，只是因为 `build_singletons()` 和
@@ -159,19 +161,20 @@ parser 那份抄了三处，加个文件要改三个地方。
    （`BaseException::args()`），要等属性协议落地才能接上 `getattr`；`SyntaxError` 要不要在 `.args` 之外
    再暴露 file/row/col（类似 CPython），是待拍板的语言设计问题，见 [context.md](context.md)。分界与
    转换约定见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。
-5. **`Code` + `CodeGen`**（进行中：`Code` 对象、`ConstPool` 已完成，`CodeGen` 未开始）：按 [`bytecode.md`](../compiler/codegen/bytecode.md) 重启。常量表存真对象，去重按
-   那份文档的「常量去重」。
+5. ~~**`Code` + `CodeGen`**~~ **已完成**：`Code` 对象、`ConstPool`、`CodeGen`、`CodeBuilder`、
+   反汇编器，按 [`bytecode.md`](../compiler/codegen/bytecode.md) 落地。常量表存真对象，去重按那份
+   文档的「常量去重」。**`LOAD_INTERNAL` 的那张全局共享表也在这一步建起来了**
+   （`runtime/x_internal_objects.inc`，挂在 `Runtime` 上当 GC 根）。
 6. **`Frame` + 主循环 + 指令实现**。
 7. **`eval` / `import`**。
 
 **目录调整**：`lexer`/`parser`/`analyzer`/`codegen` 已收进 `compiler/`，`builtins/exceptions/` 已挪成
 顶层的 `cppexceptions/`（`builtins/` 这个名字留给真正的 SL 内置）。还没做的两件：
 
-- **`compiler/` 的门面已经有了**（`compiler/Compiler.{h,cpp}`），但只做到"源码 → 分析完的 AST"。
-  还差两件，各自等后面的步骤：产物应该是 `Ref<Code>`（等 `CodeGen`）；按
-  [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)，门面该无条件把 `SyntaxError`
-  转成 SL 异常对象，让冷启动和 `eval` 走同一段代码（等帧栈和主循环——现在唯一的消费方只是往
-  stderr 打一行，转成 SL 对象再取回来是白绕）。
+- **`compiler/` 的门面已经做到 `Ref<Code>`**（`Compiler::compile` 三个重载）。还差一件，等后面的
+  步骤：按 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)，门面该无条件把
+  `SyntaxError` 转成 SL 异常对象，让冷启动和 `eval` 走同一段代码（等帧栈和主循环——现在唯一的消费方
+  只是往 stderr 打一行，转成 SL 对象再取回来是白绕）。
 - **`executor/` 里那段"串流水线的驱动"要跟虚拟机本身分开**——等主循环真写出来（第 6 步）再拆。
   运行时的落脚处已经定了：**新开 `runtime/`，不扩 `executor/`**。这不是口味问题——codegen 要造真
   对象，所以 `codegen → 对象模型`；而虚拟机主循环因为 `eval` 要 `executor → compiler`。对象模型放进
@@ -246,7 +249,7 @@ parser 那份抄了三处，加个文件要改三个地方。
 ## 测试组织
 
 `test/` 下每个测试目标目录结构镜像对应源码目录（`test/lexer/`、`test/parser/`、
-`test/analyzer/{semantic_checker,expr_folder}/`、`test/numeric/`）。`test/parser/`、`test/lexer/`、
+`test/analyzer/{semantic_checker,expr_folder}/`、`test/codegen/`、`test/numeric/`）。`test/parser/`、`test/lexer/`、
 `test/numeric/` 内部按主题分子目录，用两位数独立编号（lexer `01_comments`…`07_errors`，parser
 `01_literals`…`13_cross`，numeric `01_bigint` / `02_bigdec`），**不跟 SL.md 章节号绑定**，见
 [notes/no-section-numbers.md](notes/no-section-numbers.md)。analyzer 按子系统分子目录，文件按被测
@@ -274,9 +277,9 @@ ctest 现在约 28 秒。要更大覆盖别往表里堆，用倍数参数临时�
 （约 83 万个断言）跑过，全过。单条最贵的手写用例是 `log10_digits` 那个（约 1.6 秒，见
 [context.md](context.md) 里"覆盖率驱动补的窄路径"一节），嫌慢时它是第一个可以砍的。
 
-五个测试可执行目标：`sl_test_numeric_bigint`、`sl_test_numeric_bigdec`、
-`sl_test_lexer`、`sl_test_parser`、`sl_test_analyzer`（最后这个同时覆盖
-`semantic_checker/` 和 `expr_folder/` 两个子系统）。怎么构建/跑测试见
+六个测试可执行目标：`sl_test_numeric_bigint`、`sl_test_numeric_bigdec`、
+`sl_test_lexer`、`sl_test_parser`、`sl_test_analyzer`（这个同时覆盖
+`semantic_checker/` 和 `expr_folder/` 两个子系统）、`sl_test_codegen`。怎么构建/跑测试见
 [notes/build-and-test.md](notes/build-and-test.md)。
 
 `test/doc/` 是 `build_doc.py` 从 `SL.md` 生成的带锚点版本（`SL_linked.md`/`.html`），生成产物，

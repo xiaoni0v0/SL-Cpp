@@ -5,6 +5,7 @@
 #include "../utils/file_utils.h"
 #include "../utils/string_utils.h"
 #include "analyzer/Analyzer.h"
+#include "codegen/CodeGen.h"
 #include "lexer/Lexer.h"
 #include "parser/Parser.h"
 
@@ -73,4 +74,22 @@ AstNodeProgramPtr Compiler::analyze(std::u32string source, std::string file_path
     analyze(*ast, std::move(file_path));
 
     return ast;
+}
+
+Ref<Code> Compiler::compile(const AstNodeProgram &ast, std::string file_path) {
+    return run_stage("code generator", [&] {
+        return CodeGen::generate(ast, std::move(file_path));
+    });
+}
+
+Ref<Code> Compiler::compile(std::vector<Token> tokens, std::string file_path) {
+    const AstNodeProgramPtr ast{analyze(std::move(tokens), file_path)};
+
+    return compile(*ast, std::move(file_path));
+}
+
+Ref<Code> Compiler::compile(std::u32string source, std::string file_path) {
+    const AstNodeProgramPtr ast{analyze(std::move(source), file_path)};
+
+    return compile(*ast, std::move(file_path));
 }

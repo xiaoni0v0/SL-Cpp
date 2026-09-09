@@ -58,7 +58,19 @@ void Runtime::build_singletons() {
     singletons_.false_ = make_ref<Bool>(bool_, false);
 }
 
+void Runtime::build_internals() {
+    Type *const singleton_type{types_[index_of(BuiltinType::SingletonType)].get()};
+
+    std::size_t slot{0};
+
+#define X(id, accessor, name) internals_[slot++] = make_ref<NamedSingleton>(singleton_type, name);
+#include "x_internal_objects.inc"
+
+#undef X
+}
+
 void Runtime::tear_down() {
+    for (ObjectRef &internal : g_runtime->internals_) internal.reset();
     g_runtime->singletons_ = {};
     for (Ref<Type> &type : g_runtime->types_) type.reset();
 
@@ -74,10 +86,15 @@ Runtime &Runtime::instance() {
 
 Type *Runtime::builtin_type(const BuiltinType id) { return instance().types_[index_of(id)].get(); }
 
+Object *Runtime::internal_object(const InternalObject id) {
+    return instance().internals_[static_cast<std::size_t>(id)].target();
+}
+
 void Runtime::visit_roots(RefVisitor &visitor) {
     Runtime &self{instance()};
 
     for (RefBase &ref : self.types_) visitor.visit(ref);
+    for (RefBase &ref : self.internals_) visitor.visit(ref);
 
     visitor.visit(self.singletons_.none_);
     visitor.visit(self.singletons_.ellipsis_);
@@ -94,6 +111,7 @@ void Runtime::init() {
     try {
         g_runtime->build_types();
         g_runtime->build_singletons();
+        g_runtime->build_internals();
     } catch (...) {
         tear_down();
         throw;
@@ -110,6 +128,11 @@ bool Runtime::ready() { return g_runtime != nullptr; }
 #define X(id, accessor, name, base)                                                                \
     Type *Runtime::accessor() { return builtin_type(BuiltinType::id); }
 #include "x_builtin_types.inc"
+#undef X
+
+#define X(id, accessor, name)                                                                      \
+    Object *Runtime::accessor() { return internal_object(InternalObject::id); }
+#include "x_internal_objects.inc"
 #undef X
 
 NamedSingleton *Runtime::singleton_none() { return instance().singletons_.none_.get(); }

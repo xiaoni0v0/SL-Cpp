@@ -7,6 +7,6 @@ sl_add_module(sl_compiler Compiler.cpp Compiler.h)
 
 target_link_libraries(
     sl_compiler
-    PUBLIC sl_compiler_analyzer
+    PUBLIC sl_compiler_analyzer sl_compiler_codegen
     PRIVATE sl_cppexceptions sl_utils
 )
