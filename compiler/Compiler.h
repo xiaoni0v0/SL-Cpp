@@ -39,10 +39,10 @@ class Compiler final {
     [[nodiscard]] static AstNodeProgramPtr
     analyze(std::u32string source, std::string file_path = "<unknown>");
 
-    // 跑到代码生成为止
+    // 跑完代码生成为止
     // 前提：Runtime 已经起来
     [[nodiscard]] static Ref<Code>
-    compile(const AstNodeProgram &ast, std::string file_path = "<unknown>");
+    compile(AstNodeProgram &ast, std::string file_path = "<unknown>");
     [[nodiscard]] static Ref<Code>
     compile(std::vector<Token> tokens, std::string file_path = "<unknown>");
     [[nodiscard]] static Ref<Code>

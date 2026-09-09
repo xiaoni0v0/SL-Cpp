@@ -75,6 +75,7 @@ int Executor::run() const {
 
         const Ref code{Compiler::compile(*ast, file_path)};
         dump_code(*code);
+
     } catch (const SLException &e) {
         std::cerr << e.what() << std::endl;
         return 1;

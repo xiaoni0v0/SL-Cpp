@@ -119,8 +119,8 @@ void CodeGen::error_internal(const std::string &msg, const Position pos) const {
 // ============================================================
 
 void CodeGen::gen(const AstNode &node, const bool want_value) {
-    const std::uint32_t before{code().stack_depth()};
-    const bool was_reachable{!code().unreachable()};
+    [[maybe_unused]] const std::uint32_t before{code().stack_depth()};
+    [[maybe_unused]] const bool was_reachable{!code().unreachable()};
 
     want_value_ = want_value;
     node.accept(*this);

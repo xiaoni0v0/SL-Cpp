@@ -40,7 +40,7 @@
 
 | 目录 | 内容 |
 |---|---|
-| `compiler/` | `Compiler.{h,cpp}`：对外接口，一个阶段一个函数（`read_source`/`tokenize`/`parse`/`analyze`），函数名说"跑到哪一阶段为止"、参数类型说"从哪一阶段起步"，中间产物就是返回值。各阶段漏出来的非 `SLException` 一律包成 `InternalError` 并标上阶段名。注意 **纯 C++ 层 / SL 层的分界是按模块划的不是按目录**：里面 `lexer`/`parser`/`analyzer` 是纯 C++ 层，`codegen` 要造真 SL 对象、属于 SL 层，见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。 |
+| `compiler/` | `Compiler.{h,cpp}`：对外接口，一个阶段一个函数（`read_source`/`tokenize`/`parse`/`analyze`/`compile`），函数名说"跑到哪一阶段为止"、参数类型说"从哪一阶段起步"，中间产物就是返回值；**每个重载都把两点之间的阶段全跑完**（`compile(AstNodeProgram &)` 会先原地分析那棵树）。各阶段漏出来的非 `SLException` 一律包成 `InternalError` 并标上阶段名。注意 **纯 C++ 层 / SL 层的分界是按模块划的不是按目录**：里面 `lexer`/`parser`/`analyzer` 是纯 C++ 层，`codegen` 要造真 SL 对象、属于 SL 层，见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。 |
 | `compiler/lexer/` | `Lexer.{h,cpp}`：分词器。`token.h` 定义 `Token`；`x_token_type.inc`/`x_keyword.inc`/`x_reservedword.inc` 是 X-macro 列表（见下）。 |
 | `compiler/parser/` | `Parser.{h,cpp}`：递归下降 + Pratt 解析器，产出 `ast_nodes/` 里定义的 AST。 |
 | `compiler/parser/ast_nodes/` | AST 节点类型定义。`ast_nodes.h` 是汇总头（引入 `details/` 下所有节点头）；`x_ast_nodes.inc` 是全部节点类型的 X-macro 列表；`ast_json_dumper.h`/`.cpp` 定义 `AstJsonDumper : public AstConstVisitor`，把 AST 序列化成 JSON（调试/测试用，不是语言语义的一部分），入口是静态方法 `AstJsonDumper::dump(node, include_pos)`，内部靠每个节点一个 `visit()` + `result_` 成员当通道完成（`.ai/notes/visitor-result-passing.md` 那个模式）；`ast_visitor.h` 定义 `AstVisitor`/`AstConstVisitor`（会改树的、只读的两套）和 `SL_AST_NODE_ACCEPT` 宏，要遍历 AST 的类继承它们，靠 `accept` + `visit` 两次虚调用完成双分派——漏实现某个节点类型是编译期错误，不是运行期 assert。 |
