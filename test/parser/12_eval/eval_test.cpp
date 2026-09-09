@@ -64,9 +64,9 @@ TEST_SUITE("eval") {
     }
 
     TEST_CASE("括号强制：eval 不是函数值，没有裸 eval 这种写法") {
-        CHECK_THROWS_AS(parse_as_file(U"eval"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"f = eval"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"eval 'x'"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"eval"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"f = eval"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"eval 'x'"), SyntaxError);
     }
 
     TEST_CASE("空实参表、多个位置实参都合法（参数个数对不对是运行期的事，同 import 调用形态）") {
@@ -99,8 +99,8 @@ TEST_SUITE("eval") {
     }
 
     TEST_CASE("eval 是关键字，大小写变体和前缀/超集仍是普通标识符") {
-        CHECK_NOTHROW(parse_as_file(U"Eval = 1"));
-        CHECK_NOTHROW(parse_as_file(U"evaluate = 1"));
+        CHECK_NOTHROW(parse_program(U"Eval = 1"));
+        CHECK_NOTHROW(parse_program(U"evaluate = 1"));
     }
 
     TEST_CASE("eval_isolated 仍是普通内置函数，照常按调用解析") {

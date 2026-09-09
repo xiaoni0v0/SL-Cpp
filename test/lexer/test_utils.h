@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-inline std::vector<Token> lex(const std::u32string &source) { return Lexer{source}.tokenize(); }
+inline std::vector<Token> lex(const std::u32string &source) { return Lexer::tokenize(source); }
 
 // 仅用于 dump 展示，跟词法层的字符串转义无关。
 inline std::string escape_for_dump(const std::u32string &s) {

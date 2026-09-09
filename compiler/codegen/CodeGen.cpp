@@ -1407,7 +1407,7 @@ Code::ParamShape CodeGen::build_param_shape(const AstNodeFunc &node) {
     return shape;
 }
 
-Ref<Code> CodeGen::generate(const AstNodeProgram &root, std::string file_path) {
+Ref<Code> CodeGen::generate_program(const AstNodeProgram &root, std::string file_path) {
     if (!Runtime::ready()) throw InternalError{"CodeGen: runtime is not initialized"};
 
     CodeGen generator{std::move(file_path)};

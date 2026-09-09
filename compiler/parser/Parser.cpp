@@ -1433,26 +1433,20 @@ Parser::Parser(std::vector<Token> tokens, std::string file_path)
     // 1. 空的肯定不行
     if (tokens_.empty()) error_internal("bad token list: empty");
 
-    // 2. 最后必须是 END_OF_FILE
-    if (tokens_.back().type != TokenType::END_OF_FILE) {
+    // 2. 唯一的 END_OF_FILE 而且必须在最后
+    const auto it{std::ranges::find_if(tokens_, [](const Token &t) -> bool {
+        return t.type == TokenType::END_OF_FILE;
+    })};
+    if (it < tokens_.end() - 1)
+        error_internal("bad token list: unexpected END_OF_FILE", {it->row, it->col});
+    if (it == tokens_.end())
         error_internal(
             "bad token list: missing END_OF_FILE at the end",
             {tokens_.back().row, tokens_.back().col}
         );
-    }
-
-    // 3. 前边不能有 END_OF_FILE
-    if (const auto it{std::find_if(
-            tokens_.begin(),
-            tokens_.end() - 1,
-            [](const Token &t) -> bool { return t.type == TokenType::END_OF_FILE; }
-        )};
-        it != tokens_.end() - 1) {
-        error_internal("bad token list: unexpected END_OF_FILE", {it->row, it->col});
-    }
 }
 
-AstNodeProgramPtr Parser::parse_as_file() && {
+AstNodeProgramPtr Parser::run_program() {
     const Position start_pos{peek().row, peek().col};
 
     // 解析若干个表达式
@@ -1464,7 +1458,7 @@ AstNodeProgramPtr Parser::parse_as_file() && {
     return std::make_unique<AstNodeProgram>(start_pos, std::move(exprs));
 }
 
-AstNodePtr Parser::parse_as_single_expr() && {
+AstNodePtr Parser::run_single_expr() {
     // 解析一个表达式
     AstNodePtr expr{parse_expr()};
 
@@ -1473,4 +1467,12 @@ AstNodePtr Parser::parse_as_single_expr() && {
     expect(TokenType::END_OF_FILE); // 消耗 EOF
 
     return expr;
+}
+
+AstNodeProgramPtr Parser::parse_program(std::vector<Token> tokens, std::string file_path) {
+    return Parser{std::move(tokens), std::move(file_path)}.run_program();
+}
+
+AstNodePtr Parser::parse_single_expr(std::vector<Token> tokens, std::string file_path) {
+    return Parser{std::move(tokens), std::move(file_path)}.run_single_expr();
 }

@@ -75,19 +75,26 @@ class SemanticChecker : public AstConstVisitor {
     // 普通函数调用、import 调用形态、eval 共用
     void check_call_args(const CallArgs &args, Position pos);
 
+    explicit SemanticChecker(const AstNode &root, std::string file_path, bool in_local_scope);
+
+    // 检查主体。一个实例只跑一次
+    void run();
+
   public:
     /**
-     * 构造 SemanticChecker 对象
-     * @param root           要检查的根节点：整份 Program 或者单独一条表达式。
-     * @param file_path      文件路径，默认为 "<unknown>"
-     * @param in_local_scope 检查起点所在的帧是不是局部作用域，默认为 false（模块顶层）
+     * 检查一整份 Program。它恒是模块顶层，没有 in_local_scope 可言
+     * @param root      Program 根节点
+     * @param file_path 文件路径，默认为 "<unknown>"
      */
-    explicit SemanticChecker(
-        const AstNode &root, std::string file_path = "<unknown>", bool in_local_scope = false
-    );
+    static void check_program(const AstNodeProgram &root, std::string file_path = "<unknown>");
 
     /**
-     * 语法合法性检查
+     * 检查单独一条表达式（`eval` 的检查入口）
+     * @param expr           表达式节点
+     * @param file_path      文件路径，默认为 "<unknown>"
+     * @param in_local_scope 这条表达式的调用帧是不是局部作用域，默认为 false（模块顶层）
      */
-    void check() &&;
+    static void check_single_expr(
+        const AstNode &expr, std::string file_path = "<unknown>", bool in_local_scope = false
+    );
 };

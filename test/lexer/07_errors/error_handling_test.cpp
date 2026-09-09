@@ -16,7 +16,7 @@ TEST_SUITE("词法 SyntaxError") {
 
     TEST_CASE("消息含文件名、行、列") {
         try {
-            (void) Lexer{U"1\nlocal", "my_file.sl"}.tokenize();
+            (void) Lexer::tokenize(U"1\nlocal", "my_file.sl");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};

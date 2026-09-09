@@ -103,7 +103,7 @@ TEST_SUITE("try") {
         // "try a except () b" -> t(1)r(2)y(3) (4)a(5) (6)e(7)x(8)c(9)e(10)p(11)t(12) (13)((14))(15)
         // (16)b(17)
         try {
-            parse_as_file(U"try a except () b");
+            parse_program(U"try a except () b");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -113,8 +113,8 @@ TEST_SUITE("try") {
     }
 
     TEST_CASE("未闭合括号/缺 body 报错") {
-        CHECK_THROWS_AS(parse_as_file(U"try a except (E"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"try a except (E)"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"try a except (E"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"try a except (E)"), SyntaxError);
     }
 }
 
@@ -189,8 +189,8 @@ TEST_SUITE("try——except 的 as 绑定") {
     }
 
     TEST_CASE("as 之后缺目标、as 写在括号外都报错") {
-        CHECK_THROWS_AS(parse_as_file(U"try a except (E as) b"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"try a except (E) as e b"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"try a except (E as) b"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"try a except (E) as e b"), SyntaxError);
     }
 
     TEST_CASE("body 以 '[' 开头也不会跟目标粘在一起——as 在括号内，')' 已经把头部封死") {

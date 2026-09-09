@@ -580,4 +580,14 @@ SemanticChecker::SemanticChecker(
     ctx_.in_local_scope = in_local_scope;
 }
 
-void SemanticChecker::check() && { visit(root_); }
+void SemanticChecker::run() { visit(root_); }
+
+void SemanticChecker::check_program(const AstNodeProgram &root, std::string file_path) {
+    SemanticChecker{root, std::move(file_path), false}.run();
+}
+
+void SemanticChecker::check_single_expr(
+    const AstNode &expr, std::string file_path, const bool in_local_scope
+) {
+    SemanticChecker{expr, std::move(file_path), in_local_scope}.run();
+}

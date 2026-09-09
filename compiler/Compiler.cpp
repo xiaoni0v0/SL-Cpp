@@ -42,13 +42,13 @@ std::u32string Compiler::read_source(const std::string &file_path) {
 
 std::vector<Token> Compiler::tokenize(std::u32string source, std::string file_path) {
     return run_stage("lexer", [&] {
-        return Lexer{std::move(source), std::move(file_path)}.tokenize();
+        return Lexer::tokenize(std::move(source), std::move(file_path));
     });
 }
 
 AstNodeProgramPtr Compiler::parse(std::vector<Token> tokens, std::string file_path) {
     return run_stage("parser", [&] {
-        return Parser{std::move(tokens), std::move(file_path)}.parse_as_file();
+        return Parser::parse_program(std::move(tokens), std::move(file_path));
     });
 }
 
@@ -78,7 +78,7 @@ AstNodeProgramPtr Compiler::analyze(std::u32string source, std::string file_path
 
 Ref<Code> Compiler::compile(const AstNodeProgram &ast, std::string file_path) {
     return run_stage("code generator", [&] {
-        return CodeGen::generate(ast, std::move(file_path));
+        return CodeGen::generate_program(ast, std::move(file_path));
     });
 }
 

@@ -12,19 +12,21 @@
 #include <string>
 
 inline void check_program(const std::u32string &source) {
-    AstNodeProgramPtr program{parse_as_file(source)};
-    SemanticChecker{*program, "<test>"}.check();
+    AstNodeProgramPtr program{parse_program(source)};
+    SemanticChecker::check_program(*program, "<test>");
 }
 
 // eval 入口：恰好一条表达式，外层没有 Program / 循环。
 // in_local_scope 模拟调用帧的身份——默认 false（模块顶层），传 true 模拟从函数/类体内部调用 eval。
 inline void check_single_expr(const std::u32string &source, const bool in_local_scope = false) {
-    const AstNodePtr expr{parse_as_single_expr(source)};
-    SemanticChecker{*expr, "<test>", in_local_scope}.check();
+    const AstNodePtr expr{parse_single_expr(source)};
+    SemanticChecker::check_single_expr(*expr, "<test>", in_local_scope);
 }
 
 // 手工 AST：测 Parser 保证过的结构被破坏时的 InternalError / SyntaxError。
-inline void check_ast(AstNodeProgram &program) { SemanticChecker{program, "<test>"}.check(); }
+inline void check_ast(AstNodeProgram &program) {
+    SemanticChecker::check_program(program, "<test>");
+}
 
 inline void check_throws_with(const std::u32string &source, const std::string &message_substring) {
     try {

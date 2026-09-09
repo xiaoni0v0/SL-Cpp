@@ -414,7 +414,7 @@ Token Lexer::read_symbol() {
 Lexer::Lexer(std::u32string source, std::string file_path)
     : source_{std::move(source)}, file_path_{std::move(file_path)} {}
 
-std::vector<Token> Lexer::tokenize() && {
+std::vector<Token> Lexer::run() {
     std::vector<Token> all_tokens;
 
     while (true) {
@@ -466,6 +466,10 @@ std::vector<Token> Lexer::tokenize() && {
     }
 
     return all_tokens;
+}
+
+std::vector<Token> Lexer::tokenize(std::u32string source, std::string file_path) {
+    return Lexer{std::move(source), std::move(file_path)}.run();
 }
 
 std::string Lexer::get_typename_by_tokentype(const TokenType type) {

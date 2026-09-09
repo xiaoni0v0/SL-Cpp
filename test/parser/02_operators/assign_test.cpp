@@ -227,6 +227,6 @@ TEST_SUITE("赋值与复合赋值") {
     }
 
     TEST_CASE("没有无括号元组：a, b = x 在逗号处缺分隔符") {
-        CHECK_THROWS_AS(parse_as_file(U"a, b = x"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"a, b = x"), SyntaxError);
     }
 }

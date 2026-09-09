@@ -30,7 +30,7 @@ TEST_SUITE("in 运算符") {
     }
 
     TEST_CASE("`x not in y` 不是一个运算符：not 不是中缀，缺分隔符") {
-        CHECK_THROWS_AS(parse_as_file(U"x not in y"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"x not in y"), SyntaxError);
     }
 
     TEST_CASE("`in` 是关键字不是符号，两侧的空白省不掉") {
@@ -38,14 +38,14 @@ TEST_SUITE("in 运算符") {
         CHECK(parse_json(U"ain") == ident("ain"));
         CHECK(parse_json(U"inb") == ident("inb"));
         // 于是 `ain b` 是两个挨着的标识符、`a inb` 也是，都缺分隔符
-        CHECK_THROWS_AS(parse_as_file(U"ain b"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"a inb"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"ain b"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"a inb"), SyntaxError);
     }
 
     TEST_CASE("换行：in 之后可以（右操作数会跨行找），in 之前不行（左边已经完整）") {
         CHECK(parse_json(U"a in\nb") == in_op(ident("a"), ident("b")));
         // 第一行已完整，断开；下一行以 in 开头起不了头
-        CHECK_THROWS_AS(parse_as_file(U"a\nin b"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"a\nin b"), SyntaxError);
     }
 }
 

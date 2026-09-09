@@ -165,7 +165,7 @@ TEST_SUITE("for——步进模式") {
 
     TEST_CASE("槽之间缺分隔符报错，位置指向下一槽开头（不是上一槽结尾）") {
         try {
-            parse_as_file(U"for (i = 0 i < 10; i += 1) body");
+            parse_program(U"for (i = 0 i < 10; i += 1) body");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -178,15 +178,15 @@ TEST_SUITE("for——步进模式") {
         "换行不能替代 ';' 来标记空槽：只写两个换行分隔的槽就直接收尾必须报错，"
         "不能把第三槽悄悄当成空的接受掉"
     ) {
-        CHECK_THROWS_AS(parse_as_file(U"for (a\nb\n) body"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"for (; c\n) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (a\nb\n) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (; c\n) body"), SyntaxError);
         // 注意 for (a\n) 只有一个槽，是合法的迭代模式（迭代 a、每轮的值丢弃），不在此列
-        CHECK_NOTHROW(parse_as_file(U"for (a\n) body"));
+        CHECK_NOTHROW(parse_program(U"for (a\n) body"));
     }
 
     TEST_CASE("槽数不对报的是“头部该长什么样”，位置指向头部开头而不是收尾的 ')'") {
         try {
-            parse_as_file(U"for (a\nb\n) body");
+            parse_program(U"for (a\nb\n) body");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -244,11 +244,11 @@ TEST_SUITE("for——步进模式") {
     }
 
     TEST_CASE("只用一个显式 ';' 就想收尾（少了第二个分隔符/第三槽）必须报错") {
-        CHECK_THROWS_AS(parse_as_file(U"for (;) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (;) body"), SyntaxError);
     }
 
     TEST_CASE("for () 彻底为空：0 个槽，跟其他槽数不对的情形报同一句") {
-        CHECK_THROWS_AS(parse_as_file(U"for () body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for () body"), SyntaxError);
     }
 
     TEST_CASE(
@@ -268,7 +268,7 @@ TEST_SUITE("for——步进模式") {
                 {"body", ident("body")}
             }
         );
-        CHECK_NOTHROW(parse_as_file(U"for $ (x > 0) body"));
+        CHECK_NOTHROW(parse_program(U"for $ (x > 0) body"));
     }
 }
 
@@ -310,7 +310,7 @@ TEST_SUITE("for——步进模式头部的换行按软终止分隔") {
     }
 
     TEST_CASE("下一行以 '.' 开头：起不了头，跟块里写 `x` 换行 `.f()` 一样报错") {
-        CHECK_THROWS_AS(parse_as_file(U"for (a\n.b\n;) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (a\n.b\n;) body"), SyntaxError);
     }
 
     TEST_CASE("左侧不完整：并入下一行，换行不生效") {
@@ -385,9 +385,9 @@ TEST_SUITE("for——步进模式头部的换行按软终止分隔") {
     }
 
     TEST_CASE("换行切出第四槽：报错，不再把多出来的那行悄悄拌进上一槽") {
-        CHECK_THROWS_AS(parse_as_file(U"for (i = 0\nc\ni += 1\n-1\n) body"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"for (a\nb\nc\nd) body"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"for (a;b;c;d) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (i = 0\nc\ni += 1\n-1\n) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (a\nb\nc\nd) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (a;b;c;d) body"), SyntaxError);
     }
 
     TEST_CASE("';' 前后的换行都归这个分隔符，允许把 ';' 单独写一行") {
@@ -420,33 +420,33 @@ TEST_SUITE("for——头部的槽数只能是 3 或 1") {
 
     TEST_CASE("2 个槽：报错，消息把两种合法形状都摆出来") {
         try {
-            parse_as_file(U"for (a\nb) body");
+            parse_program(U"for (a\nb) body");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
             CHECK(msg.find("(init; cond; inc)") != std::string::npos);
             CHECK(msg.find("(iterable [as target])") != std::string::npos);
         }
-        CHECK_THROWS_AS(parse_as_file(U"for (a; b) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (a; b) body"), SyntaxError);
     }
 
     TEST_CASE("4 个槽：报错") {
-        CHECK_THROWS_AS(parse_as_file(U"for (a; b; c; d) body"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"for (a\nb\nc\nd) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (a; b; c; d) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (a\nb\nc\nd) body"), SyntaxError);
     }
 
     TEST_CASE("单槽的形状不设限：任何表达式都能当可迭代对象，能不能真迭代是运行期的事") {
-        CHECK_NOTHROW(parse_as_file(U"for (f(x)) body"));
-        CHECK_NOTHROW(parse_as_file(U"for (a + b) body"));
-        CHECK_NOTHROW(parse_as_file(U"for (a and b) body"));
-        CHECK_NOTHROW(parse_as_file(U"for (a .. b) body"));
+        CHECK_NOTHROW(parse_program(U"for (f(x)) body"));
+        CHECK_NOTHROW(parse_program(U"for (a + b) body"));
+        CHECK_NOTHROW(parse_program(U"for (a and b) body"));
+        CHECK_NOTHROW(parse_program(U"for (a .. b) body"));
         // in 只是普通成员测试，单槽里没有特殊含义
-        CHECK_NOTHROW(parse_as_file(U"for (a in b) body"));
+        CHECK_NOTHROW(parse_program(U"for (a in b) body"));
     }
 
     TEST_CASE("as 只属于迭代模式：出现在 3 槽头部里报错") {
         try {
-            parse_as_file(U"for (a; b as x; c) body");
+            parse_program(U"for (a; b as x; c) body");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -456,7 +456,7 @@ TEST_SUITE("for——头部的槽数只能是 3 或 1") {
 
     TEST_CASE("一个头部里最多一个 as：第二个 as 撞在槽边界检查上，不需要单独一条规则") {
         try {
-            parse_as_file(U"for (xs as a as b) body");
+            parse_program(U"for (xs as a as b) body");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -484,9 +484,9 @@ TEST_SUITE("for——头部的槽数只能是 3 或 1") {
     }
 
     TEST_CASE("空槽照旧要用 ';' 划出来，划出来之后槽数就够了") {
-        CHECK_THROWS_AS(parse_as_file(U"for (a\nb\n) body"), SyntaxError);
-        CHECK_NOTHROW(parse_as_file(U"for (a\nb\n;) body"));
-        CHECK_NOTHROW(parse_as_file(U"for (;;) body"));
+        CHECK_THROWS_AS(parse_program(U"for (a\nb\n) body"), SyntaxError);
+        CHECK_NOTHROW(parse_program(U"for (a\nb\n;) body"));
+        CHECK_NOTHROW(parse_program(U"for (;;) body"));
     }
 }
 
@@ -568,12 +568,12 @@ TEST_SUITE("for——迭代模式") {
     }
 
     TEST_CASE("元组目标不带外层括号会因为缺分隔符报错") {
-        CHECK_THROWS_AS(parse_as_file(U"for (pairs as a, b) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (pairs as a, b) body"), SyntaxError);
     }
 
     TEST_CASE("未闭合括号/缺 body 报错") {
-        CHECK_THROWS_AS(parse_as_file(U"for (xs as x"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"for (xs as x)"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (xs as x"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (xs as x)"), SyntaxError);
     }
 }
 
@@ -593,31 +593,31 @@ TEST_SUITE("for——迭代模式的头部同样按槽切分，`as` 不是分界
                                                       {"body", ident("body")}
                                                   }
         );
-        CHECK_NOTHROW(parse_as_file(U"for (\nxs as\n\n\nx\n) body"));
+        CHECK_NOTHROW(parse_program(U"for (\nxs as\n\n\nx\n) body"));
     }
 
     TEST_CASE("as 之前不能换行：左边已经完整，换行把它切成了两个槽") {
-        CHECK_THROWS_AS(parse_as_file(U"for (xs\nas x) body"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"for (xs\n\n\nas x) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (xs\nas x) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (xs\n\n\nas x) body"), SyntaxError);
     }
 
     TEST_CASE("iterable 里的换行也照槽的规矩切，不再当空白") {
         // `a` 换行 `+ b`：左边已完整 -> 切成两槽 -> 槽数是 2 -> 报错。
         // 想跨行写长的 iterable，把运算符留在行尾（`a +` 换行 `b`）或者自己加一层括号
-        CHECK_THROWS_AS(parse_as_file(U"for (a\n+ b as x) body"), SyntaxError);
-        CHECK_NOTHROW(parse_as_file(U"for (a +\nb as x) body"));
-        CHECK_NOTHROW(parse_as_file(U"for ((a\n+ b) as x) body"));
+        CHECK_THROWS_AS(parse_program(U"for (a\n+ b as x) body"), SyntaxError);
+        CHECK_NOTHROW(parse_program(U"for (a +\nb as x) body"));
+        CHECK_NOTHROW(parse_program(U"for ((a\n+ b) as x) body"));
     }
 
     TEST_CASE("target 那一侧同理：`a` 换行 `.b` 会把 '.b' 甩出头部，'.' 起不了头") {
-        CHECK_THROWS_AS(parse_as_file(U"for (xs as a\n.b) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (xs as a\n.b) body"), SyntaxError);
     }
 }
 
 TEST_SUITE("for——cond 槽禁止裸的普通赋值（init/inc 不受限）") {
 
     TEST_CASE("中间 cond 槽裸 = 报错") {
-        CHECK_THROWS_AS(parse_as_file(U"for (i = 0; i = 10; i += 1) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (i = 0; i = 10; i += 1) body"), SyntaxError);
     }
 
     TEST_CASE("中间 cond 槽裸复合赋值不受限") {
@@ -652,7 +652,7 @@ TEST_SUITE("for——cond 槽禁止裸的普通赋值（init/inc 不受限）") 
     }
 
     TEST_CASE("init/inc 槽裸赋值不受限（本来就是为赋值而生）") {
-        CHECK_NOTHROW(parse_as_file(U"for (i = 0; c; i = i + 1) body"));
+        CHECK_NOTHROW(parse_program(U"for (i = 0; c; i = i + 1) body"));
     }
 }
 

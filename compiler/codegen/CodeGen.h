@@ -166,9 +166,10 @@ class CodeGen final : public AstConstVisitor {
 
   public:
     /**
-     * 编译一整份 Program。
+     * 编译一整份 Program
      * @param root      分析完的 AST 根节点
      * @param file_path 文件路径，进 Code::source_name
      */
-    [[nodiscard]] static Ref<Code> generate(const AstNodeProgram &root, std::string file_path);
+    [[nodiscard]] static Ref<Code>
+    generate_program(const AstNodeProgram &root, std::string file_path = "<unknown>");
 };

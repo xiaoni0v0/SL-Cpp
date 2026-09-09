@@ -12,7 +12,7 @@
 
 // 只折这一条表达式，不走 Program 剪枝（纯字面量在 Program 里会被丢掉）。
 inline nlohmann::json fold_json(const std::u32string &source) {
-    AstNodeProgramPtr program{parse_as_file(source)};
+    AstNodeProgramPtr program{parse_program(source)};
     if (program->exprs_.size() != 1) {
         throw std::runtime_error(
             "fold_json: expected exactly 1 top-level expr, got " +
@@ -24,7 +24,7 @@ inline nlohmann::json fold_json(const std::u32string &source) {
 }
 
 inline nlohmann::json fold_program_json(const std::u32string &source) {
-    AstNodeProgramPtr program{parse_as_file(source)};
+    AstNodeProgramPtr program{parse_program(source)};
     ExprFolder::fold_program(*program);
     return nlohmann::json(AstJsonDumper::dump(*program));
 }

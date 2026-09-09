@@ -303,12 +303,13 @@ ctest 现在约 28 秒。要更大覆盖别往表里堆，用倍数参数临时�
   `AstNodeReturn::value_`、字典字面量里 `**expr` 展开项存成 `{expr, nullptr}`……）。新增字段要表达
   "这个东西可能不存在"时，默认复用这个惯例，不要为单个场景新引入 `std::variant`/`std::optional`
   包一层——除非这个字段是全 AST 唯一需要这种表达力的地方，那种情况下 `variant` 才划算。
-- **各层入口的形态按"有没有可变状态"选，不要凭手感**：带跨节点遍历状态、必须保证"同一个对象只跑
-  一次"的，做成**一次性对象 + 右值限定方法**，用 `&&` 让类型系统挡住第二次调用（`Parser` 的
-  `pos_`/`brackets_`、`SemanticChecker` 的 `ctx_`）；完全无状态、所需信息全在参数里的，做成
-  **静态函数**（`ExprFolder` 的所有 `visit` 本来就是静态的，`Analyzer` 只是把两步串起来）。
-  别给无状态的东西套一个只存了个引用的构造函数——那是实例的外壳、静态的内里，同一个类里迟早出现
-  一半入口是实例一半是静态的分裂。
+- **各层的阶段入口一律做成静态门面**：构造函数收进 private，对外只有静态方法
+  （`Lexer::tokenize`、`Parser::parse_program`、`SemanticChecker::check_program`、
+  `ExprFolder::fold_program`、`CodeGen::generate_program`）。这些类内部有多少遍历状态都不影响这条
+  ——状态是实现细节，而"构造完之后不执行"这个中间态对谁都没用。想表达"只能跑一次"不必给公开构造
+  配 `&&` 限定，构造私有之后第二次调用在类型层面就不可表达了。**例外只有"被别人持有、要反复调用"
+  的组件**（`ConstPool`、`CodeBuilder`），它们是正常实例。命名与参数取舍见
+  [notes/ast-node-passing-conventions.md](notes/ast-node-passing-conventions.md)。
 - **函数的隐含前提统一写"调用方保证 X"**（不是"要求 X"这种含糊说法，消除"这是函数自己检查的还是靠
   调用方保证的"这层歧义），配的校验方式看这个前提要不要在 Release 构建里也生效：只在开发期兜底的
   用 `assert(...)`（在函数开头，`NDEBUG` 下会被优化掉，所以不能拿它实现真正的校验）；`SemanticChecker`/

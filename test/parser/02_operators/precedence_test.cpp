@@ -479,7 +479,7 @@ TEST_SUITE("索引/调用/属性访问链") {
     TEST_CASE("a[] 不允许，索引至少要有一个参数，消息说明白具体缺什么，位置指向 ']'") {
         // "a[]" -> a(1)[(2)](3)：还没消耗 ']' 前就先发现 args 为空，位置停在 ']' 自己
         try {
-            parse_as_file(U"a[]");
+            parse_program(U"a[]");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -493,7 +493,7 @@ TEST_SUITE("索引/调用/属性访问链") {
     ) {
         // "f(1, 2" 共 6 个字符，EOF 在第 7 列
         try {
-            parse_as_file(U"f(1, 2");
+            parse_program(U"f(1, 2");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -502,7 +502,7 @@ TEST_SUITE("索引/调用/属性访问链") {
         }
         // "a[0" 共 3 个字符，EOF 在第 4 列
         try {
-            parse_as_file(U"a[0");
+            parse_program(U"a[0");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -535,10 +535,10 @@ TEST_SUITE("索引/调用/属性访问链") {
     }
 
     TEST_CASE("属性访问后面必须是标识符") {
-        CHECK_THROWS_AS(parse_as_file(U"a.1"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"a."), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"obj.for"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"obj.class"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"obj.if"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"a.1"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"a."), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"obj.for"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"obj.class"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"obj.if"), SyntaxError);
     }
 }

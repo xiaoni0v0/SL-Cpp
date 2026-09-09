@@ -17,19 +17,19 @@
 #include <utility>
 
 inline AstNodeProgramPtr
-parse_as_file(const std::u32string &source, const std::string &file_path = "<test>") {
-    return Parser{Lexer{source}.tokenize(), file_path}.parse_as_file();
+parse_program(const std::u32string &source, const std::string &file_path = "<test>") {
+    return Parser::parse_program(Lexer::tokenize(source), file_path);
 }
 
 // eval 入口：整份输入必须恰好一条表达式，条数由 Parser 自己判。
 inline AstNodePtr
-parse_as_single_expr(const std::u32string &source, const std::string &file_path = "<test>") {
-    return Parser{Lexer{source}.tokenize(), file_path}.parse_as_single_expr();
+parse_single_expr(const std::u32string &source, const std::string &file_path = "<test>") {
+    return Parser::parse_single_expr(Lexer::tokenize(source), file_path);
 }
 
 // 走文件入口再取出唯一一条顶层表达式。条数不对说明用例写错了，抛 runtime_error。
 inline AstNodePtr parse_single(const std::u32string &source) {
-    AstNodeProgramPtr program{parse_as_file(source)};
+    AstNodeProgramPtr program{parse_program(source)};
     if (program->exprs_.size() != 1) {
         throw std::runtime_error(
             "parse_single: expected exactly 1 top-level expr, got " +
@@ -44,14 +44,14 @@ inline nlohmann::json parse_json(const std::u32string &source) {
 }
 
 inline nlohmann::json parse_program_json(const std::u32string &source) {
-    return nlohmann::json(AstJsonDumper::dump(*parse_as_file(source)));
+    return nlohmann::json(AstJsonDumper::dump(*parse_program(source)));
 }
 
-inline void check_parse_as_single_expr_throws_with(
+inline void check_parse_single_expr_throws_with(
     const std::u32string &source, const std::string &message_substring
 ) {
     try {
-        parse_as_single_expr(source);
+        parse_single_expr(source);
         FAIL("expected SyntaxError containing: " << message_substring);
     } catch (const SyntaxError &e) {
         const std::string what{e.what()};
@@ -65,7 +65,7 @@ inline void check_parse_as_single_expr_throws_with(
 inline void
 check_parse_throws_with(const std::u32string &source, const std::string &message_substring) {
     try {
-        parse_as_file(source);
+        parse_program(source);
         FAIL("expected SyntaxError containing: " << message_substring);
     } catch (const SyntaxError &e) {
         const std::string what{e.what()};

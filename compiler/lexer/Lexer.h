@@ -45,19 +45,20 @@ class Lexer {
     // 读符号
     [[nodiscard]] Token read_symbol();
 
+    explicit Lexer(std::u32string source, std::string file_path);
+
+    // 分词主体。一个实例只跑一次
+    [[nodiscard]] std::vector<Token> run();
+
   public:
     /**
-     * 构造 Lexer 对象
+     * 对源代码词法分析
      * @param source    源代码
      * @param file_path 文件路径，默认为 "<unknown>"
-     */
-    explicit Lexer(std::u32string source, std::string file_path = "<unknown>");
-
-    /**
-     * 对源代码词法分析，只能调用一次（右值限定）
      * @return token 序列
      */
-    [[nodiscard]] std::vector<Token> tokenize() &&;
+    [[nodiscard]] static std::vector<Token>
+    tokenize(std::u32string source, std::string file_path = "<unknown>");
 
     /**
      * TokenType::SIGN_LPAREN -> "SIGN_LPAREN"

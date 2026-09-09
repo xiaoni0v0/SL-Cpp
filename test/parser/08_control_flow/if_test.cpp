@@ -78,12 +78,12 @@ TEST_SUITE("if——基本形式") {
     }
 
     TEST_CASE("缺少括号/未闭合括号都要报错") {
-        CHECK_THROWS_AS(parse_as_file(U"if a) b"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"if (a b"), SyntaxError);
-        CHECK_THROWS_AS(parse_as_file(U"if (a"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"if a) b"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"if (a b"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"if (a"), SyntaxError);
     }
 
-    TEST_CASE("缺少 body 报错") { CHECK_THROWS_AS(parse_as_file(U"if (a)"), SyntaxError); }
+    TEST_CASE("缺少 body 报错") { CHECK_THROWS_AS(parse_program(U"if (a)"), SyntaxError); }
 
     TEST_CASE("嵌套 if 的 else 绑到内层：if (a) if (b) 1 else 2") {
         CHECK(
@@ -109,7 +109,7 @@ TEST_SUITE("if——cond 槽禁止裸的普通赋值") {
 
     TEST_CASE("裸 = 报错，提示加括号，位置指向 '='") {
         try {
-            parse_as_file(U"if (x = 1) y");
+            parse_program(U"if (x = 1) y");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
@@ -154,8 +154,8 @@ TEST_SUITE("if——cond 槽禁止裸的普通赋值") {
     }
 
     TEST_CASE("elif 的 cond 槽同样禁止裸赋值") {
-        CHECK_THROWS_AS(parse_as_file(U"if (a) x elif (y = 1) z"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"if (a) x elif (y = 1) z"), SyntaxError);
     }
 
-    TEST_CASE("比较运算不受影响（== 不是赋值）") { CHECK_NOTHROW(parse_as_file(U"if (x == 1) y")); }
+    TEST_CASE("比较运算不受影响（== 不是赋值）") { CHECK_NOTHROW(parse_program(U"if (x == 1) y")); }
 }

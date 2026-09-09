@@ -36,14 +36,46 @@
 
 ## 类的形态
 
-同一套取舍延伸到类本身：
+**每一层的「阶段入口」一律是静态门面：构造函数收进 private，对外只有静态方法。**
 
-- **无状态的纯函数集合**（`Analyzer`、`StaticEvaler`）：全静态成员 + 删掉所有构造/拷贝/移动，
-  外部构造不出来。
-- **有遍历状态的**（`SemanticChecker`：`root_`/`file_path_`/`ctx_`）：正常实例，一次性用完就扔
-  （`check()` 加了 `&&` 限定）。
-- **`ExprFolder` 是中间态**：它没状态，但改成 `AstVisitor` 之后当 visitor 得有个实例，所以对外
-  仍是静态门面（`ExprFolder::fold(root)`），默认构造函数收成 private 只给自己的静态入口用。
+```cpp
+Lexer::tokenize(source, file_path)              -> std::vector<Token>
+Parser::parse_program(tokens, file_path)        -> AstNodeProgramPtr
+Parser::parse_single_expr(tokens, file_path)    -> AstNodePtr
+SemanticChecker::check_program(root, file_path)
+SemanticChecker::check_single_expr(expr, file_path, in_local_scope)
+ExprFolder::fold_program(root)
+CodeGen::generate_program(root, file_path)      -> Ref<Code>
+AstJsonDumper::dump(node, include_pos)          -> json
+```
+
+这些类里大多有一堆遍历状态（`Parser` 的 `pos_`/`brackets_`、`SemanticChecker` 的 `ctx_`、`CodeGen`
+的 `builders_`/`loops_`/`blocks_`），但**那是实现细节，不该漏给调用方**：构造和执行之间没有任何有用
+的中间态，没人会构造完一个 `Parser` 之后不 parse，也没人会在 parse 之前对它做什么。
+
+曾经用「公开构造 + `&&` 限定方法」来表达"只能跑一次"（`Parser{tokens, file}.parse_as_file()`）。
+那是给一个本不该暴露出去的实例打补丁——构造函数私有之后，"第二次调用"在类型层面根本不可表达，比 `&&`
+彻底，调用点也少一层噪音。内部实现方法统一叫 `run` / `run_xxx`，跟对外的入口名区分开。
+
+`Analyzer`、`StaticEvaler` 更彻底一点：它们连实例都不需要（纯函数集合），构造/拷贝/移动全 `= delete`。
+
+**例外是"被别人持有、要多次调用"的组件**：`ConstPool`（`CodeBuilder` 的成员，反复 `intern`）、
+`CodeBuilder`（`CodeGen` 的成员，反复 `emit`）。它们不是阶段入口，是正常实例。
+
+## 入口的命名
+
+同一层同时提供"整份 Program"和"单独一条表达式"两个入口时，用 `_program` / `_single_expr` 配套：
+
+| 层 | 整份 Program | 单条表达式 |
+|---|---|---|
+| `Parser` | `parse_program` | `parse_single_expr` |
+| `SemanticChecker` | `check_program` | `check_single_expr` |
+| `ExprFolder` | `fold_program` | `fold_single_expr` |
+| `Analyzer` | `analyze_program` | `analyze_single_expr` |
+| `CodeGen` | `generate_program` | （等 `eval` 落地再补） |
+
+`in_local_scope` 这类只对单条表达式有意义的参数，就只挂在 `_single_expr` 那个入口上——整份 Program
+恒是模块顶层，给它一个 `in_local_scope` 参数只会让人以为可以传 `true`。
 
 ## how to apply
 

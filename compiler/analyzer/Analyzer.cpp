@@ -7,7 +7,7 @@
 #include <utility>
 
 void Analyzer::analyze_program(AstNodeProgram &root, std::string file_path) {
-    SemanticChecker{root, std::move(file_path)}.check();
+    SemanticChecker::check_program(root, std::move(file_path));
     ExprFolder::fold_program(root);
 }
 
@@ -16,6 +16,6 @@ void Analyzer::analyze_single_expr(
 ) {
     assert(expr); // 调用方保证非空
 
-    SemanticChecker{*expr, std::move(file_path), in_local_scope}.check();
+    SemanticChecker::check_single_expr(*expr, std::move(file_path), in_local_scope);
     ExprFolder::fold_single_expr(expr);
 }

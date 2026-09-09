@@ -170,25 +170,28 @@ class Parser {
     // 完成索引 x[...]。消耗括号、管理括号栈
     [[nodiscard]] AstNodePtr finish_index(AstNodePtr obj, Position start_pos);
 
+    explicit Parser(std::vector<Token> tokens, std::string file_path);
+
+    // 两种解析主体。一个实例只跑其中一个、只跑一次
+    [[nodiscard]] AstNodeProgramPtr run_program();
+    [[nodiscard]] AstNodePtr run_single_expr();
+
   public:
     /**
-     * 构造 Parser 对象
+     * 把整个输入当作一整份 Program 解析（`eval_isolated` 现构造出来的那份文件也走这里）
      * @param tokens    由 Lexer 输出的 tokens
      * @param file_path 文件路径，默认为 "<unknown>"
-     */
-    explicit Parser(std::vector<Token> tokens, std::string file_path = "<unknown>");
-
-    /**
-     * 把整个输入当作一整份文件解析（`eval_isolated` 现构造出来的那份文件也走这里）
-     * 只能调用一次（右值限定）
      * @return Program 根节点
      */
-    [[nodiscard]] AstNodeProgramPtr parse_as_file() &&;
+    [[nodiscard]] static AstNodeProgramPtr
+    parse_program(std::vector<Token> tokens, std::string file_path = "<unknown>");
 
     /**
      * 把整个输入当作恰好一条表达式解析（`eval` 的解析入口）
-     * 只能调用一次（右值限定）
+     * @param tokens    由 Lexer 输出的 tokens
+     * @param file_path 文件路径，默认为 "<unknown>"
      * @return 这条表达式的节点
      */
-    [[nodiscard]] AstNodePtr parse_as_single_expr() &&;
+    [[nodiscard]] static AstNodePtr
+    parse_single_expr(std::vector<Token> tokens, std::string file_path = "<unknown>");
 };

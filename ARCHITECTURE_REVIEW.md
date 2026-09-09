@@ -87,7 +87,7 @@ test/codegen/             9 个文件，95 个用例
 
 ## 已知没做的
 
-- **`eval` 编译不出东西**：`CodeGen::generate` 只收 `AstNodeProgram`，而 `eval` 要编译的是"恰好一条
+- **`eval` 编译不出东西**：`CodeGen::generate_program` 只收 `AstNodeProgram`，而 `eval` 要编译的是"恰好一条
   表达式"。等虚拟机落地时补一个单表达式入口。
 - **`LOAD_INTERNAL` 的 `ImportFunc` 是个占位对象**：函数对象类型还没有，现在那个槽放的是个同名的
   `NamedSingleton`。字节码形状是对的，等 `Function` 落地换掉。
