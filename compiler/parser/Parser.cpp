@@ -339,6 +339,10 @@ void Parser::error(const std::string &msg, std::optional<Position> pos) const {
     throw SyntaxError{file_path_, pos->row, pos->col, msg};
 }
 
+void Parser::error_internal(const std::string &msg) const {
+    throw InternalError{file_path_, 1, 1, msg};
+}
+
 void Parser::error_internal(const std::string &msg, const Position pos) const {
     throw InternalError{file_path_, pos.row, pos.col, msg};
 }

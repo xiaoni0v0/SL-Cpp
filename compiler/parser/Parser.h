@@ -49,7 +49,8 @@ class Parser {
 
     [[noreturn]] void
     error(const std::string &msg, std::optional<Position> pos = std::nullopt) const;
-    [[noreturn]] void error_internal(const std::string &msg, Position pos = {1, 1}) const;
+    [[noreturn]] void error_internal(const std::string &msg) const;
+    [[noreturn]] void error_internal(const std::string &msg, Position pos) const;
 
     /**
      * 尽可能多地解析表达式，直到 EOF 或 '}'

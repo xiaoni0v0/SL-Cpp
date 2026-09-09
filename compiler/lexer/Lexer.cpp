@@ -29,10 +29,8 @@ char32_t Lexer::advance() {
 
 bool Lexer::is_eof() const { return pos_ >= source_.size(); }
 
-void Lexer::error(const std::string &msg, std::optional<int> row, std::optional<int> col) const {
-    if (!row) row = row_;
-    if (!col) col = col_;
-    throw SyntaxError{file_path_, *row, *col, msg};
+void Lexer::error(const std::string &msg, int row, int col) const {
+    throw SyntaxError{file_path_, row, col, msg};
 }
 
 void Lexer::skip_spaces() {
@@ -186,7 +184,9 @@ Token Lexer::read_number() {
     // 数字后面紧跟字母或下划线，非法
     if (is_alpha(peek()) || peek() == U'_') {
         error(
-            std::format("unexpected character '{}' after a numeric literal", u32_to_utf8(peek()))
+            std::format("unexpected character '{}' after a numeric literal", u32_to_utf8(peek())),
+            row_,
+            col_
         );
     }
 

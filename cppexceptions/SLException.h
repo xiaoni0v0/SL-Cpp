@@ -10,7 +10,7 @@ class SLException : public std::runtime_error {
 
   protected:
     // rendered 是给 what() 的完整呈现；message 是未经装饰的那句话
-    SLException(const std::string &rendered, std::string message)
+    explicit SLException(const std::string &rendered, std::string message)
         : std::runtime_error{rendered}, message_{std::move(message)} {}
 
   public:
