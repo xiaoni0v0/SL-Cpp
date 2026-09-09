@@ -111,6 +111,43 @@ END_FINALLY
         CHECK(dump.find("RETURN_VALUE") != std::string::npos);
     }
 
+    TEST_CASE("跳出 try 之前要逐层 POP_BLOCK，块栈是运行期的") {
+        // 第 6 条那个 POP_BLOCK 就是 break 在弹 SETUP_EXCEPT 压的块。
+        // 漏了它，跳到循环外之后再抛异常还会撞进这个已经失效的处理器
+        CHECK(
+            codegen_body(U"x = 1\nfor (; x; ) { try { break } except (x) { x } }") ==
+            R"(LOAD_CONST 0
+STORE_NAME 0
+LOAD_NAME 0
+TO_BOOL
+JUMP_IF_FALSE 19
+SETUP_EXCEPT 10
+POP_BLOCK
+JUMP 19
+POP_BLOCK
+JUMP 17
+LOAD_NAME 0
+CHECK_EXC_MATCH
+JUMP_IF_FALSE 16
+POP_TOP
+LOAD_NAME 0
+JUMP 17
+RERAISE
+POP_TOP
+JUMP 2
+)"
+        );
+    }
+
+    TEST_CASE("return 也要先弹掉自己这层块再进 finally 体") {
+        // 不弹的话，finally 体里抛的异常会被它自己这层接住，转圈
+        const std::string dump{codegen_dump(U"func f() { try { return 1 } finally { 2 } }")};
+        CHECK(dump.find(R"(     1  LOAD_CONST 0  ; int 1
+     2  POP_BLOCK
+     3  CALL_FINALLY 10
+     4  RETURN_VALUE)") != std::string::npos);
+    }
+
     TEST_CASE("break 穿过 finally 时补一个 None 占位，回来再弹掉") {
         const std::string dump{codegen_body(U"x = 1\nfor (; x; ) { try { break } finally { x } }")};
         CHECK(dump.find("CALL_FINALLY") != std::string::npos);

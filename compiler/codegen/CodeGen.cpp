@@ -199,20 +199,43 @@ void CodeGen::gen_jump_if_false(const AstNode &cond, const CodeBuilder::Label ta
 }
 
 void CodeGen::gen_unwind(
-    const std::size_t to_finally_depth, const std::uint32_t target_depth, const Position pos
+    const std::size_t to_block_depth, const std::uint32_t target_depth, const Position pos
 ) {
-    // 由内到外走一遍每层 finally。进 finally 体时栈顶恒是"这条路径要带出去的那个值"，
-    // break/continue 没有值可带，压个 None 占位，回来再弹掉
-    for (std::size_t i{finallys_.size()}; i > to_finally_depth; --i) {
-        const FinallyContext &block{finallys_[i - 1]};
+    // 由内到外逐层退出。块栈是运行期的，跳走之前必须一层层弹干净，否则跳到循环外之后
+    // 再抛异常，还会撞进这些已经失效的处理器
+    for (std::size_t i{blocks_.size()}; i > to_block_depth && !code().unreachable(); --i) {
+        const BlockContext &block{blocks_[i - 1]};
 
+        code().emit(OpCode::POP_BLOCK, pos);
+        if (!block.is_finally_) continue;
+
+        // 进 finally 体时栈顶恒是"这条路径要带出去的那个值"。break/continue 没有值可带，
+        // 压个 None 占位，回来再弹掉
         gen_pop_to(block.entry_depth_, pos);
         gen_none(pos);
-        code().emit_jump(OpCode::CALL_FINALLY, block.body_label_, pos);
+        code().emit_jump(OpCode::CALL_FINALLY, block.finally_label_, pos);
         code().emit(OpCode::POP_TOP, pos);
     }
 
     gen_pop_to(target_depth, pos);
+}
+
+void CodeGen::gen_unwind_with_value(const Position pos) {
+    // 返回值就是这条路径要带出去的那个值，本来就在栈顶
+    for (std::size_t i{blocks_.size()}; i > 0 && !code().unreachable(); --i) {
+        const BlockContext &block{blocks_[i - 1]};
+
+        // 自己这层块得先弹掉，否则 finally 体里抛的异常会被它自己接住
+        code().emit(OpCode::POP_BLOCK, pos);
+        if (!block.is_finally_) continue;
+
+        // 把返回值沉下去，弹掉夹在中间的临时值
+        if (const std::uint32_t extra{code().stack_depth() - block.entry_depth_ - 1}; extra > 0) {
+            code().emit(OpCode::INSERT, extra + 1, pos);
+            for (std::uint32_t k{0}; k < extra; ++k) code().emit(OpCode::POP_TOP, pos);
+        }
+        code().emit_jump(OpCode::CALL_FINALLY, block.finally_label_, pos);
+    }
 }
 
 // ============================================================
@@ -607,14 +630,14 @@ void CodeGen::push_scope() {
 
     // 新作用域是新的一份 Code，外层的循环、finally 在这里都跳不到
     saved_loops_.push_back(std::exchange(loops_, {}));
-    saved_finallys_.push_back(std::exchange(finallys_, {}));
+    saved_blocks_.push_back(std::exchange(blocks_, {}));
 }
 
 Ref<Code> CodeGen::pop_scope() {
     loops_ = std::move(saved_loops_.back());
     saved_loops_.pop_back();
-    finallys_ = std::move(saved_finallys_.back());
-    saved_finallys_.pop_back();
+    blocks_ = std::move(saved_blocks_.back());
+    saved_blocks_.pop_back();
 
     Ref<Code> result{std::move(*builders_.back()).build()};
     builders_.pop_back();
@@ -1039,9 +1062,7 @@ void CodeGen::visit(const AstNodeForCond &node) {
     // cond 为空视为 True
     if (node.cond_) gen_jump_if_false(*node.cond_, end);
 
-    loops_.push_back(
-        LoopContext{end, counting ? count_continue : inc, base, base, finallys_.size()}
-    );
+    loops_.push_back(LoopContext{end, counting ? count_continue : inc, base, base, blocks_.size()});
     // 循环体恒按 want_value=true 编译，每轮的值都要被收尾逻辑读一次
     gen(node.body_, true);
     gen_loop_collect(node.collect_, has_slot, 1, count_continue, pos);
@@ -1082,7 +1103,7 @@ void CodeGen::visit(const AstNodeForIter &node) {
         code().emit(OpCode::POP_TOP, pos);
 
     loops_.push_back(
-        LoopContext{end, counting ? count_continue : loop, after_slot, base, finallys_.size()}
+        LoopContext{end, counting ? count_continue : loop, after_slot, base, blocks_.size()}
     );
     gen(node.body_, true);
     // 每轮的值压在迭代器上面，收尾指令要跨过它才够得着结果槽
@@ -1099,7 +1120,7 @@ void CodeGen::visit(const AstNodeBreak &node) {
     if (loops_.empty()) error_internal("break outside a loop", node.pos_);
 
     const LoopContext loop{loops_.back()};
-    gen_unwind(loop.finally_depth_, loop.break_depth_, node.pos_);
+    gen_unwind(loop.block_depth_, loop.break_depth_, node.pos_);
     code().emit_jump(OpCode::JUMP, loop.break_label_, node.pos_);
 }
 
@@ -1107,7 +1128,7 @@ void CodeGen::visit(const AstNodeContinue &node) {
     if (loops_.empty()) error_internal("continue outside a loop", node.pos_);
 
     const LoopContext loop{loops_.back()};
-    gen_unwind(loop.finally_depth_, loop.continue_depth_, node.pos_);
+    gen_unwind(loop.block_depth_, loop.continue_depth_, node.pos_);
     code().emit_jump(OpCode::JUMP, loop.continue_label_, node.pos_);
 }
 
@@ -1119,19 +1140,7 @@ void CodeGen::visit(const AstNodeReturn &node) {
     else
         gen_none(pos);
 
-    // 穿过每层 finally。返回值正是这条路径要带出去的那个值，本来就在栈顶
-    for (std::size_t i{finallys_.size()}; i > 0 && !code().unreachable(); --i) {
-        const FinallyContext &block{finallys_[i - 1]};
-        const std::uint32_t extra{code().stack_depth() - block.entry_depth_ - 1};
-
-        // 把返回值沉下去，弹掉夹在中间的临时值
-        if (extra > 0) {
-            code().emit(OpCode::INSERT, extra + 1, pos);
-            for (std::uint32_t k{0}; k < extra; ++k) code().emit(OpCode::POP_TOP, pos);
-        }
-        code().emit_jump(OpCode::CALL_FINALLY, block.body_label_, pos);
-    }
-
+    gen_unwind_with_value(pos);
     code().emit(OpCode::RETURN_VALUE, pos);
 }
 
@@ -1149,7 +1158,7 @@ void CodeGen::visit(const AstNodeTry &node) {
     if (node.finally_expr_) {
         finally_body = code().new_label();
         code().emit_jump(OpCode::SETUP_FINALLY, finally_body, pos);
-        finallys_.push_back(FinallyContext{finally_body, entry});
+        blocks_.push_back(BlockContext{true, finally_body, entry});
     }
 
     if (node.except_clauses_.empty()) {
@@ -1159,7 +1168,9 @@ void CodeGen::visit(const AstNodeTry &node) {
         const CodeBuilder::Label after{code().new_label()};
 
         code().emit_jump(OpCode::SETUP_EXCEPT, handlers, pos);
+        blocks_.push_back(BlockContext{false, {}, entry});
         gen(node.try_expr_, want);
+        blocks_.pop_back();
         code().emit(OpCode::POP_BLOCK, pos);
         code().emit_jump(OpCode::JUMP, after, pos);
 
@@ -1202,7 +1213,7 @@ void CodeGen::visit(const AstNodeTry &node) {
 
     if (!node.finally_expr_) return;
 
-    finallys_.pop_back();
+    blocks_.pop_back();
     code().emit(OpCode::POP_BLOCK, pos);
 
     // 进 finally 体时栈顶恒是"这条路径要带出去的那个值"。正常路径带的是 try 的值，
@@ -1347,11 +1358,13 @@ void CodeGen::visit(const AstNodeClass &node) {
     const std::uint32_t slot{code().add_nested_code(std::move(body))};
 
     gen_decorators_before(node.decorators_);
-    gen_capture_values(node.captures_, pos);
 
-    // 基类元组顶掉函数那边的形参段
+    // 基类元组顶掉函数那边的形参段。它排在捕获之前——类的捕获是在新建类体那一帧之后才处理的，
+    // 而建帧要等基类求值完，跟函数那边捕获排最前正好相反
     for (const AstNodePtr &base : node.bases_) gen(base, true);
     code().emit(OpCode::MAKE_TUPLE, static_cast<std::uint32_t>(node.bases_.size()), pos);
+
+    gen_capture_values(node.captures_, pos);
 
     gen_optional(node.doc_, pos);
     if (node.name_)

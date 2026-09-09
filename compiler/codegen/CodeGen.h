@@ -35,13 +35,15 @@ class CodeGen final : public AstConstVisitor {
         CodeBuilder::Label continue_label_{};
         std::uint32_t break_depth_{0};    // 跳到 break_label_ 处应有的栈深
         std::uint32_t continue_depth_{0}; // 跳到 continue_label_ 处应有的栈深
-        std::size_t finally_depth_{0};    // 进这层循环时外面套着几层 finally
+        std::size_t block_depth_{0};      // 进这层循环时外面套着几层块
     };
 
-    // 一层 finally。跳出去之前要由内到外逐个走一遍
-    struct FinallyContext {
-        CodeBuilder::Label body_label_{};
-        std::uint32_t entry_depth_{0}; // 进 try 时的栈深
+    // 一层运行期块（SETUP_EXCEPT / SETUP_FINALLY 压的那一项）。
+    // 跳出去之前要由内到外逐层 POP_BLOCK，是 finally 的还要顺带走一遍 finally 体
+    struct BlockContext {
+        bool is_finally_{false};
+        CodeBuilder::Label finally_label_{}; // 只有 is_finally_ 时有意义
+        std::uint32_t entry_depth_{0};       // 进 try 时的栈深
     };
 
     // 比较链 / is 链的一段：一个运算符和它自己的位置
@@ -51,11 +53,11 @@ class CodeGen final : public AstConstVisitor {
     };
 
     std::vector<LoopContext> loops_;
-    std::vector<FinallyContext> finallys_;
+    std::vector<BlockContext> blocks_;
 
     // 嵌套作用域期间存起来的外层上下文。函数体里的 break 跳不到外层循环
     std::vector<std::vector<LoopContext>> saved_loops_;
-    std::vector<std::vector<FinallyContext>> saved_finallys_;
+    std::vector<std::vector<BlockContext>> saved_blocks_;
 
     explicit CodeGen(std::string file_path);
 
@@ -81,8 +83,11 @@ class CodeGen final : public AstConstVisitor {
     void gen_pop_to(std::uint32_t depth, Position pos);
     // 求值一个条件，假就跳走。JUMP_IF_FALSE 只认 bool，自己不做真值转换
     void gen_jump_if_false(const AstNode &cond, CodeBuilder::Label target);
-    // 离开当前位置去别处：由内到外走完该走的 finally，再把栈裁到 target_depth
-    void gen_unwind(std::size_t to_finally_depth, std::uint32_t target_depth, Position pos);
+    // 离开当前位置去别处：由内到外逐层退出运行期块，再把栈裁到 target_depth。
+    // break / continue 用这条，它们不带值
+    void gen_unwind(std::size_t to_block_depth, std::uint32_t target_depth, Position pos);
+    // return 用这条：栈顶那个返回值要一路带着穿过每层块
+    void gen_unwind_with_value(Position pos);
 
     // ---------------- 常量 ----------------
 

@@ -153,6 +153,26 @@ STORE_NAME 0
 )");
     }
 
+    TEST_CASE("类的基类排在捕获之前，跟函数那边正好相反") {
+        // 类的捕获是新建类体那一帧之后才处理的，而建帧要等基类求值完
+        CHECK(codegen_body(U"f = 1\ng = 1\nh = 1\nclass C(f, g)[x = h] { 1 }") == R"(LOAD_CONST 0
+STORE_NAME 0
+LOAD_CONST 0
+STORE_NAME 1
+LOAD_CONST 0
+STORE_NAME 2
+LOAD_NAME 0
+LOAD_NAME 1
+MAKE_TUPLE 2
+LOAD_NAME 2
+MAKE_TUPLE 1
+LOAD_INTERNAL 0
+LOAD_CONST 1
+MAKE_CLASS 0
+STORE_NAME 3
+)");
+    }
+
     TEST_CASE("类体也是一份嵌套 Code，末尾 RETURN_VALUE 交给类构建器收尾") {
         const std::string dump{codegen_dump(U"class C() { m = 1 }")};
         CHECK(dump.find("=== <main>.code[0] ===") != std::string::npos);

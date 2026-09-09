@@ -307,7 +307,7 @@ codegen 按实际传下去的 `want_value` 静态跟踪栈深（算 `max_stack`�
 | `CALL_KW n`    | `… f a₁ … aₙ names`                   | `… v`      | 同上，`names` 是常量表里的名字元组，末尾 `len(names)` 个实参按名字传                                                      |
 | `CALL_EX`      | `… f args kwargs`                     | `… v`      | 同上，`*`/`**` 展开时用；`args` 是 list、`kwargs` 是 dict（就是拼装用的那两种容器）                                       |
 | `MAKE_FUNC c`  | `… captures params ret_type doc name` | `… f`      | 弹 5 项 + **嵌套 `Code` 表**第 `c` 项，建函数对象                                                                         |
-| `MAKE_CLASS c` | `… captures bases doc name`           | `… cls`    | 弹 4 项 + **嵌套 `Code` 表**第 `c` 项，新建局部帧执行类体                                                                 |
+| `MAKE_CLASS c` | `… bases captures doc name`           | `… cls`    | 弹 4 项 + **嵌套 `Code` 表**第 `c` 项，新建局部帧执行类体。空 `bases` 视为 `(object,)`                                    |
 | `RETURN_VALUE` | `… v`                                 | ——（弹帧） | 弹栈顶为值，弹帧，按 `owner_` 种类收尾                                                                                    |
 | `IMPORT n`     | `…`                                   | `… m`      | 关键字形态 `import a.b.c`：名字表第 `n` 项是完整点分名，压 `NativeFrame` 跑加载算法，压入**第一段**模块对象               |
 | `EVAL`         | `… args kwargs`                       | `… v`      | 绑出 `code`（失败 `DispatchError`，非 str `TypeError`），解析成恰好一条表达式（否则 `SyntaxError`），编译，压 `EvalFrame` |
@@ -425,11 +425,16 @@ x[i] op= e    (want=true)  : <x> <i> COPY 2 COPY 2 GET_INDEX 1 <e> BINARY_OP op 
 指令本身可能抛 `TypeError`/`ValueError`，跳过就是悄悄吞异常。每轮折叠照常做，只有最后要不要把结果槽交
 给外层由 `want_value` 决定。
 
-**`break`/`continue` 不用运行期块栈**：跳到哪、裁掉几层栈 codegen 静态就知道，编译成若干 `POP_TOP` +
-`JUMP`；隔着 `finally` 时跳之前由内到外补 `CALL_FINALLY`（每层先把栈裁到进 `try` 时的深度、再压一个
-`None` 占位）。`return` 同理，只是它带着返回值，裁栈时用 `INSERT` 把值沉到该在的位置再弹掉上面的临时值
-（最后弹帧时整个操作数栈
-一起没了）。
+**`break`/`continue`/`return` 不用运行期块栈找目标**：跳到哪、裁掉几层栈 codegen 静态就知道，编译成
+若干 `POP_TOP` + `JUMP`。
+
+但**跨出去的每一层 `try` 都得逐层 `POP_BLOCK`**：块栈本身是运行期的，跳走时不弹干净，跳到外面之后再
+抛异常就会撞进这些已经失效的处理器。`return` 也一样要弹——它虽然马上弹帧、块栈跟着整个没掉，可
+`finally` 体是在弹帧**之前**跑的，不先弹掉自己这层，体内抛的异常会被它自己接住，转圈。
+
+隔着 `finally` 的那几层，`POP_BLOCK` 之后还要走一遍 `finally` 体：先把栈裁到进 `try` 时的深度，
+`break`/`continue` 再压一个 `None` 占位（回来弹掉），`return` 则用 `INSERT` 把返回值沉到该在的位置、
+弹掉夹在中间的临时值——进 `finally` 体时栈顶恒是"这条路径要带出去的那个值"。
 
 **`try`**：处理器入口栈上只有异常对象，`CHECK_EXC_MATCH` 自己会把它留下，不需要额外复制：
 
@@ -466,9 +471,13 @@ COPY 1 STORE_NAME f    ; 命名函数才有，绑定只发生一次
 `None`，它是合法默认值）。引用捕获不产生任何指令：`MAKE_FUNC` 在当前帧执行，直接抓一份当前帧的引用挂到
 新对象上。
 
-**建立类**：形状同上，基类元组代替形参段，弹 4 项。`MAKE_CLASS` 不直接产出类对象——新建局部帧、写入值
-捕获、压栈执行类体；类体 `RETURN_VALUE` 收尾时才由 `owner_`（类构建器）完成属性收集、MRO、
-`__abstractmethods__`，把类对象压回。装饰器调用在这之后。
+**建立类**：基类元组代替形参段，弹 4 项。**捕获段和函数那边的位置不一样**——函数是
+`captures params ret_type doc name`（捕获最先），类是 `bases captures doc name`（基类先于捕获）。
+这不是笔误：`SL.md` 规定类先对各基类求值，再新建类体那一帧，捕获是建帧之后才处理的，所以基类必须先
+求值。未写基类时压空元组，运行期视为 `(object,)`。
+
+`MAKE_CLASS` 不直接产出类对象——新建局部帧、写入值捕获、压栈执行类体；类体 `RETURN_VALUE` 收尾时才由
+`owner_`（类构建器）完成属性收集、MRO、`__abstractmethods__`，把类对象压回。装饰器调用在这之后。
 
 **一份 `Code` 可复用多次，但每次"建立"都必须造出全新的函数/类对象**——`is` 比的是对象身份。
 
