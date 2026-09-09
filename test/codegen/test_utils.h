@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // 一个用例起落一次运行时。codegen 要把真 SL 对象放进常量表，所以运行时必须先在
@@ -25,6 +26,29 @@ inline std::string codegen_instrs(const std::u32string &source) {
     const Ref<Code> code{Compiler::compile(source, "<test>")};
 
     return disassemble_instrs(*code);
+}
+
+// 同上，但去掉末尾那条隐含的 return None（LOAD_CONST + RETURN_VALUE）。
+// 每份 Program 都带这条固定尾巴，另有用例专门验它，别的用例不必逐个重复。
+// Program 以 return / raise 收尾时本来就没有这条尾巴，那时原样返回
+inline std::string codegen_body(const std::u32string &source) {
+    const std::string text{codegen_instrs(source)};
+
+    std::vector<std::string> lines;
+    for (std::size_t at{0}; at < text.size();) {
+        const std::size_t end{text.find('\n', at)};
+        lines.emplace_back(text, at, end - at);
+        at = end + 1;
+    }
+
+    if (lines.size() >= 2 && lines.back() == "RETURN_VALUE" &&
+        lines[lines.size() - 2].starts_with("LOAD_CONST "))
+        lines.resize(lines.size() - 2);
+
+    std::string result;
+    for (const std::string &line : lines) result += line + '\n';
+
+    return result;
 }
 
 // 完整反汇编：头部、四张表、指令，嵌套的 Code 跟在后面

@@ -68,7 +68,9 @@ class CodeGen final : public AstConstVisitor {
 
     void gen(const AstNode &node, bool want_value);
     void gen(const AstNodePtr &node, bool want_value);
-    // 一串表达式，值是最后一条。Program / Compound 共用
+    // 一整份 Program（文件 / 函数体 / 类体），连同末尾隐含的那条 return None
+    void gen_program(const AstNodeProgram &program);
+    // 复合表达式里的一串表达式，值是最后一条
     void gen_exprs(const std::vector<AstNodePtr> &exprs, bool want_value, Position pos);
 
     // ---------------- 小零件 ----------------

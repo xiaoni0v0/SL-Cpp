@@ -138,9 +138,18 @@
 行为）编译完补 `POP_TOP`。判断标准同折叠器：**只能省 codegen 自己加的垫值步骤，不能省任何有副作用/
 可能抛异常的求值。**
 
-往子节点传不是原样转发，按节点语义各自决定：`Compound`/`Program` 的非末尾语句恒 `false`；`for`/`while`
-的 `init`/`inc` 恒 `false`；`and`/`or` 左操作数取决于整个节点自己收到的 `want_value`。`del`/`global`/
-`break`/`continue` 这类值恒为 `None` 的构造，`want_value=true` 才补 `LOAD_CONST` 取 `None`。
+往子节点传不是原样转发，按节点语义各自决定：**`Program` 的每一条都恒 `false`**（见下）；`Compound`
+只有非末尾语句恒 `false`，末尾那条是整块的值；`for`/`while` 的 `init`/`inc` 恒 `false`；`and`/`or`
+左操作数取决于整个节点自己收到的 `want_value`。`del`/`global`/`break`/`continue` 这类值恒为 `None`
+的构造，`want_value=true` 才补 `LOAD_CONST` 取 `None`。
+
+**`Program` 和 `Compound` 的值是两套规则，别混**：复合表达式的值是块里最后一条；而 Program（整个
+文件、函数体、类体）的值**只由 `return` 决定**，一路没触发 `return` 走到末尾，值就是 `None`。所以
+Program 里每一条都不产出值，codegen 在末尾补一条 `LOAD_CONST <None>` + `RETURN_VALUE`——那正是
+`SL.md` 说的"等价于末尾隐含一条 `return None`"。已经 `return`/`raise` 收尾的不再补，那两条走不到。
+
+于是**每份 `Code` 的字节码必然以终止指令结尾**，虚拟机的 pc 不会走出末尾。这条不变量值得 assert：
+真走出去了就是 codegen 漏发了收尾指令，让主循环在那里静默返回 `None` 只会把 bug 盖住。
 
 codegen 按实际传下去的 `want_value` 静态跟踪栈深（算 `max_stack`、`break`/`continue` 裁栈都要用）。
 

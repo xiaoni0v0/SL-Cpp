@@ -138,6 +138,17 @@ void CodeGen::gen(const AstNodePtr &node, const bool want_value) {
     gen(*node, want_value);
 }
 
+void CodeGen::gen_program(const AstNodeProgram &program) {
+    // Program 的值只由 return 决定，跟复合表达式不同：这里每一条都不产出值
+    for (const AstNodePtr &expr : program.exprs_) gen(expr, false);
+
+    // 一路没触发 return 就走到这里。Program 的值是 None，等价于末尾隐含一条 return None
+    if (code().unreachable()) return;
+
+    gen_none(program.pos_);
+    code().emit(OpCode::RETURN_VALUE, program.pos_);
+}
+
 void CodeGen::gen_exprs(
     const std::vector<AstNodePtr> &exprs, const bool want_value, const Position pos
 ) {
@@ -723,7 +734,10 @@ void CodeGen::visit(const AstNodeLiteralDict &node) {
 // 多条表达式
 // ============================================================
 
-void CodeGen::visit(const AstNodeProgram &node) { gen_exprs(node.exprs_, want_value_, node.pos_); }
+void CodeGen::visit(const AstNodeProgram &node) {
+    // Program 只出现在文件 / 函数体 / 类体三处，各自走 gen_program，不会当子表达式分派到这里
+    error_internal("a program cannot appear as a sub-expression", node.pos_);
+}
 
 void CodeGen::visit(const AstNodeCompound &node) { gen_exprs(node.exprs_, want_value_, node.pos_); }
 
@@ -1273,9 +1287,7 @@ void CodeGen::visit(const AstNodeFunc &node) {
     push_scope();
     declare_captures(node.captures_);
     code().set_params(build_param_shape(node));
-    gen_exprs(node.body_->exprs_, true, node.body_->pos_);
-    // 体里已经 return 掉了就不必再补一条走不到的
-    if (!code().unreachable()) code().emit(OpCode::RETURN_VALUE, node.body_->pos_);
+    gen_program(*node.body_);
     Ref<Code> body{pop_scope()};
 
     const std::uint32_t slot{code().add_nested_code(std::move(body))};
@@ -1329,9 +1341,7 @@ void CodeGen::visit(const AstNodeClass &node) {
 
     push_scope();
     declare_captures(node.captures_);
-    gen_exprs(node.body_->exprs_, true, node.body_->pos_);
-    // 体里已经 return 掉了就不必再补一条走不到的
-    if (!code().unreachable()) code().emit(OpCode::RETURN_VALUE, node.body_->pos_);
+    gen_program(*node.body_);
     Ref<Code> body{pop_scope()};
 
     const std::uint32_t slot{code().add_nested_code(std::move(body))};
@@ -1393,8 +1403,7 @@ Ref<Code> CodeGen::generate(const AstNodeProgram &root, std::string file_path) {
 
     CodeGen generator{std::move(file_path)};
     generator.push_scope();
-    generator.gen(root, true);
-    if (!generator.code().unreachable()) generator.code().emit(OpCode::RETURN_VALUE, root.pos_);
+    generator.gen_program(root);
 
     return generator.pop_scope();
 }

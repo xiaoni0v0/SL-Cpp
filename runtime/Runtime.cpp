@@ -22,7 +22,12 @@ constexpr BuiltinTypeSpec kBuiltinTypeSpecs[]{
 #undef X
 };
 
-constexpr std::size_t index_of(const BuiltinType type) { return static_cast<std::size_t>(type); }
+// 枚举值 -> 下标
+template <typename Enum>
+    requires std::is_enum_v<Enum>
+constexpr std::size_t index_of(const Enum id) {
+    return static_cast<std::size_t>(id);
+}
 
 } // namespace
 
@@ -82,11 +87,11 @@ Runtime &Runtime::instance() {
 Type *Runtime::builtin_type(const BuiltinType id) { return instance().types_[index_of(id)].get(); }
 
 Object *Runtime::singleton(const Singleton id) {
-    return instance().singletons_[static_cast<std::size_t>(id)].target();
+    return instance().singletons_[index_of(id)].target();
 }
 
 Object *Runtime::internal_object(const InternalObject id) {
-    return instance().internals_[static_cast<std::size_t>(id)].target();
+    return instance().internals_[index_of(id)].target();
 }
 
 void Runtime::visit_roots(RefVisitor &visitor) {

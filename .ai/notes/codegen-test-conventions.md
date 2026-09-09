@@ -20,24 +20,29 @@ RETURN_VALUE
 
 末尾那个换行是 `disassemble_instrs` 自己带的，别漏。
 
-## 单独一条纯字面量语句会被折叠器剪掉
+## 被测表达式放在赋值右侧
 
-`ExprFolder` 的 Program 剪枝把纯字面量当死代码去掉，所以下面这些**到不了 codegen**：
-
-```cpp
-codegen_instrs(U"[1, 2]")   // Program 空了，只剩一条 LOAD_CONST None
-codegen_instrs(U"(1, 2)")
-codegen_instrs(U"None")
-```
-
-要让字面量活到 codegen，写成 `x = 字面量` 再取一次 `x`：
+**Program 里每一条语句都是 `want_value=false`**（Program 的值只由 `return` 决定），所以顶层随手写
+一个表达式测不到 `want_value=true` 那一路。要测它，把表达式放进赋值右侧：
 
 ```cpp
-codegen_instrs(U"x = [1, 2]\nx")
+codegen_body(U"x = 1\ny = x + x")   // x + x 在 want_value=true 下编译
+codegen_body(U"x = 1\nx + x")       // 裸表达式，走 want_value=false 那一路
 ```
 
-同理，想让某个节点在 `want_value=false` 下编译（测"没人要值时省掉哪些指令"），得在它后面再跟一条
-**非字面量**语句垫底——尾随一个 `1` 会被剪掉，尾随一个 `x` 才留得住。
+赋值本身要 `want_value=true` 时，再套一层：`y = (x = 1)`，或者用复合表达式 `y = { x = 1 }`。
+
+这个写法顺带解决另一个问题：**单独一条纯字面量语句会被折叠器的 Program 剪枝当死代码去掉**
+（`[1, 2]`、`(1, 2)`、`None` 都到不了 codegen，Program 空了只剩一条 `LOAD_CONST None`），而
+`x = [1, 2]` 里的 list 有赋值托着，剪不掉。
+
+## 末尾那条隐含的 return None 用 `codegen_body` 剥掉
+
+每份 Program 末尾都有固定的 `LOAD_CONST <None>` + `RETURN_VALUE`，逐个用例重复它纯属噪音。
+`codegen_body()` 去掉这两行，`program_value_test.cpp` 专门验它们存在。以 `return`/`raise` 收尾的
+Program 本来就没有这条尾巴，那时 `codegen_body` 原样返回。
+
+注意常量表里那个 `None` 是剥不掉的：`constants_of()` 的期望值末尾通常要带上它。
 
 ## 一个用例起落一次运行时
 

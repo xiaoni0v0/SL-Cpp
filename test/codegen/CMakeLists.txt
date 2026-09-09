@@ -3,6 +3,7 @@ sl_add_test_target(
     LIBS sl_compiler
     SOURCES
         test_utils.h
+        program_value_test.cpp
         literal_const_test.cpp
         operator_test.cpp
         container_test.cpp
