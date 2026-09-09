@@ -18,7 +18,7 @@ class SemanticChecker : public AstConstVisitor {
     } ctx_;
 
     // 构造时快照 ctx_，析构时物归原样
-    struct [[nodiscard]] ContextGuard {
+    struct ContextGuard {
         SemanticChecker &checker_;
         Context saved_;
         explicit ContextGuard(SemanticChecker &checker) : checker_{checker}, saved_{checker.ctx_} {}
@@ -42,17 +42,11 @@ class SemanticChecker : public AstConstVisitor {
 
     // vector 元素个数不能少于 min_size（Parser 保证，触发即 InternalError）
     template <typename T>
-    void
-    require_min_size(const std::vector<T> &vec, const size_t min_size, const Position pos) const {
-        if (vec.size() < min_size) error_internal("too few elements", pos);
-    }
+    void require_min_size(const std::vector<T> &vec, size_t min_size, Position pos) const;
 
     // 两个 vector 长度必须相等（Parser 保证，触发即 InternalError）
     template <typename T, typename U>
-    void
-    require_same_size(const std::vector<T> &a, const std::vector<U> &b, const Position pos) const {
-        if (a.size() != b.size()) error_internal("mismatched array sizes", pos);
-    }
+    void require_same_size(const std::vector<T> &a, const std::vector<U> &b, Position pos) const;
 
     void visit(const AstNode &node);
 

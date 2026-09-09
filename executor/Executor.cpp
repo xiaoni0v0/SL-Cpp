@@ -38,7 +38,7 @@ void dump_ast(const AstNodeProgram &ast) {
 
 void dump_code(const Code &code) { std::cout << disassemble(code) << std::endl; }
 
-// 运行时先于编译器：codegen 要把真 SL 对象放进常量表。起落成对，中途抛异常也要拆干净
+// RAII 保护 Runtime 状态正确
 struct RuntimeGuard {
     RuntimeGuard() { Runtime::init(); }
     ~RuntimeGuard() { Runtime::shutdown(); }
@@ -61,7 +61,6 @@ int Executor::run() const {
     }
 
     const std::string file_path{path_abspath(argv_[1])};
-
     const RuntimeGuard runtime;
 
     try {

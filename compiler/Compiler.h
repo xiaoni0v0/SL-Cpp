@@ -39,8 +39,8 @@ class Compiler final {
     [[nodiscard]] static AstNodeProgramPtr
     analyze(std::u32string source, std::string file_path = "<unknown>");
 
-    // 跑到代码生成为止。收 AST 的那版要求它已经分析过，其余各版自己先分析。
-    // 前提：Runtime 已经起来——常量表里放的是真 SL 对象
+    // 跑到代码生成为止
+    // 前提：Runtime 已经起来
     [[nodiscard]] static Ref<Code>
     compile(const AstNodeProgram &ast, std::string file_path = "<unknown>");
     [[nodiscard]] static Ref<Code>

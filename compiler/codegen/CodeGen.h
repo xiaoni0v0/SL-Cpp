@@ -13,12 +13,12 @@
 /**
  * AST -> Code。
  *
- * 每个"编译一个节点"的函数带一个 want_value，不变量是：编译完这个节点，操作数栈相对编译前恰好
- * 增加 want_value ? 1 : 0。want_value 走成员通道，见 notes/visitor-result-passing.md。
+ * 每个编译节点的函数带一个 want_value。
+ * 不变量是：编译完这个节点，操作数栈相对编译前恰好增加 want_value ? 1 : 0。
  *
- * 到手的 AST 已经过语义检查与常量折叠，这里不再报语法错——走到不该走的形状一律 InternalError。
+ * 不会报 SyntaxError，只报 InternalError。
  *
- * 前提：Runtime 已经起来。常量表里放的是真 SL 对象，不是"描述"。
+ * 前提：Runtime 已经运行起来。
  */
 class CodeGen final : public AstConstVisitor {
     const std::string file_path_;
@@ -26,7 +26,7 @@ class CodeGen final : public AstConstVisitor {
     // builder 栈，栈顶是正在填的那份 Code。函数体、类体各压一层
     std::vector<std::unique_ptr<CodeBuilder>> builders_;
 
-    // 成员通道：当前节点要不要产出值。进 visit 第一行就搬进局部常量
+    // 成员通道：当前节点要不要产出值
     bool want_value_{true};
 
     // 一层循环。break/continue 是纯 PC 跳转，跳到哪、裁掉几层栈编译期就知道

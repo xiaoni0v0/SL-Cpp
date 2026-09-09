@@ -22,6 +22,20 @@ void SemanticChecker::require_not_empty(const std::u32string &name, const Positi
     if (name.empty()) error_internal("unexpected empty name", pos);
 }
 
+template <typename T>
+void SemanticChecker::require_min_size(
+    const std::vector<T> &vec, const size_t min_size, const Position pos
+) const {
+    if (vec.size() < min_size) error_internal("too few elements", pos);
+}
+
+template <typename T, typename U>
+void SemanticChecker::require_same_size(
+    const std::vector<T> &a, const std::vector<U> &b, const Position pos
+) const {
+    if (a.size() != b.size()) error_internal("mismatched array sizes", pos);
+}
+
 void SemanticChecker::visit(const AstNode &node) { node.accept(*this); }
 
 void SemanticChecker::visit(const AstNodeClass &node) {

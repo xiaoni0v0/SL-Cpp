@@ -52,7 +52,6 @@ void ExprFolder::visit(AstNodeTry &node) {
     visit_and_replace(node.try_expr_);
     for (auto &clause : node.except_clauses_) {
         for (auto &exc : clause.exceptions_) visit_and_replace(exc);
-        // target_ 可空；目标本身是左值、折不动，能折的是它内部（如 a[1 + 1] 的下标）
         visit_and_replace(clause.target_);
         visit_and_replace(clause.body_);
     }
