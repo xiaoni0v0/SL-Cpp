@@ -13,10 +13,21 @@ enum class BuiltinType : std::size_t {
 #include "x_builtin_types.inc"
 
 #undef X
+
     Count,
 
     // 不是类型，只给 object 用
     NoBase,
+};
+
+// 单例的编号
+enum class Singleton : std::size_t {
+#define X(id, accessor, cpp_type, type_id, arg) id,
+#include "x_singletons.inc"
+
+#undef X
+
+    Count,
 };
 
 // 内部对象的编号。同时就是 LOAD_INTERNAL 的参数
@@ -25,6 +36,7 @@ enum class InternalObject : std::size_t {
 #include "x_internal_objects.inc"
 
 #undef X
+
     Count,
 };
 
@@ -37,18 +49,8 @@ class Runtime final {
     friend class Heap;
 
     std::array<Ref<Type>, static_cast<std::size_t>(BuiltinType::Count)> types_;
-
+    std::array<ObjectRef, static_cast<std::size_t>(Singleton::Count)> singletons_;
     std::array<ObjectRef, static_cast<std::size_t>(InternalObject::Count)> internals_;
-
-    // 六个单例
-    struct {
-        Ref<NamedSingleton> none_;
-        Ref<NamedSingleton> ellipsis_;
-        Ref<NamedSingleton> not_implemented_;
-        Ref<NamedSingleton> stop_iteration_;
-        Ref<Bool> true_;
-        Ref<Bool> false_;
-    } singletons_;
 
     Runtime() = default;
 
@@ -62,9 +64,9 @@ class Runtime final {
 
     // 取单例
     [[nodiscard]] static Runtime &instance();
-    // 下边各类型访问器共用的实现
+    // 下边三组访问器各自共用的实现
     [[nodiscard]] static Type *builtin_type(BuiltinType id);
-    // 下边各内部对象访问器共用的实现
+    [[nodiscard]] static Object *singleton(Singleton id);
     [[nodiscard]] static Object *internal_object(InternalObject id);
 
     // 遍历全部引用根。只有 Heap::collect() 会调
@@ -85,15 +87,18 @@ class Runtime final {
 
 #undef X
 
+    // 单例
+#define X(id, accessor, cpp_type, type_id, arg) [[nodiscard]] static cpp_type *accessor();
+#include "x_singletons.inc"
+
+#undef X
+
+    // 按值取那两个 bool 单例
+    [[nodiscard]] static Bool *singleton_bool(bool value);
+
     // 内部对象
 #define X(id, accessor, name) [[nodiscard]] static Object *accessor();
 #include "x_internal_objects.inc"
 
 #undef X
-
-    [[nodiscard]] static NamedSingleton *singleton_none();
-    [[nodiscard]] static NamedSingleton *singleton_ellipsis();
-    [[nodiscard]] static NamedSingleton *singleton_not_implemented();
-    [[nodiscard]] static NamedSingleton *singleton_stop_iteration();
-    [[nodiscard]] static Bool *singleton_bool(bool value);
 };

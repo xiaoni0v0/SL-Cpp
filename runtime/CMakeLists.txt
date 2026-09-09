@@ -12,6 +12,8 @@ sl_add_module(
     Type.cpp
     Type.h
     x_builtin_types.inc
+    x_singletons.inc
+    x_internal_objects.inc
     objects/Decimal.cpp
     objects/Decimal.h
     objects/BaseException.cpp

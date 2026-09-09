@@ -38,31 +38,25 @@ void Runtime::build_types() {
     }
 
     // 回填 Object 和 Type 的类型为 Type
-    Type *const meta{types_[index_of(BuiltinType::Type)].get()};
+    Type *meta{types_[index_of(BuiltinType::Type)].get()};
     types_[index_of(BuiltinType::Object)]->set_meta(meta);
     meta->set_meta(meta);
 }
 
 void Runtime::build_singletons() {
-    // 全部直接读 types_
-    Type *const none_type{types_[index_of(BuiltinType::NoneType)].get()};
-    Type *const singleton_type{types_[index_of(BuiltinType::SingletonType)].get()};
-    Type *const bool_{types_[index_of(BuiltinType::Bool)].get()};
+    std::size_t slot{0};
 
-    // None 的类型是 NoneType，True/False 的类型是 bool，另外三个是 SingletonType
-    singletons_.none_ = make_ref<NamedSingleton>(none_type, "None");
-    singletons_.ellipsis_ = make_ref<NamedSingleton>(singleton_type, "Ellipsis");
-    singletons_.not_implemented_ = make_ref<NamedSingleton>(singleton_type, "NotImplemented");
-    singletons_.stop_iteration_ = make_ref<NamedSingleton>(singleton_type, "StopIteration");
-    singletons_.true_ = make_ref<Bool>(bool_, true);
-    singletons_.false_ = make_ref<Bool>(bool_, false);
+#define X(id, accessor, cpp_type, type_id, arg)                                                    \
+    singletons_[slot++] = make_ref<cpp_type>(types_[index_of(BuiltinType::type_id)].get(), arg);
+#include "x_singletons.inc"
+
+#undef X
 }
 
 void Runtime::build_internals() {
-    Type *const singleton_type{types_[index_of(BuiltinType::SingletonType)].get()};
+    Type *singleton_type{types_[index_of(BuiltinType::SingletonType)].get()};
 
     std::size_t slot{0};
-
 #define X(id, accessor, name) internals_[slot++] = make_ref<NamedSingleton>(singleton_type, name);
 #include "x_internal_objects.inc"
 
@@ -70,8 +64,9 @@ void Runtime::build_internals() {
 }
 
 void Runtime::tear_down() {
+    // 跟建的顺序相反
     for (ObjectRef &internal : g_runtime->internals_) internal.reset();
-    g_runtime->singletons_ = {};
+    for (ObjectRef &singleton : g_runtime->singletons_) singleton.reset();
     for (Ref<Type> &type : g_runtime->types_) type.reset();
 
     Heap::collect();
@@ -86,6 +81,10 @@ Runtime &Runtime::instance() {
 
 Type *Runtime::builtin_type(const BuiltinType id) { return instance().types_[index_of(id)].get(); }
 
+Object *Runtime::singleton(const Singleton id) {
+    return instance().singletons_[static_cast<std::size_t>(id)].target();
+}
+
 Object *Runtime::internal_object(const InternalObject id) {
     return instance().internals_[static_cast<std::size_t>(id)].target();
 }
@@ -94,14 +93,8 @@ void Runtime::visit_roots(RefVisitor &visitor) {
     Runtime &self{instance()};
 
     for (RefBase &ref : self.types_) visitor.visit(ref);
+    for (RefBase &ref : self.singletons_) visitor.visit(ref);
     for (RefBase &ref : self.internals_) visitor.visit(ref);
-
-    visitor.visit(self.singletons_.none_);
-    visitor.visit(self.singletons_.ellipsis_);
-    visitor.visit(self.singletons_.not_implemented_);
-    visitor.visit(self.singletons_.stop_iteration_);
-    visitor.visit(self.singletons_.true_);
-    visitor.visit(self.singletons_.false_);
 }
 
 void Runtime::init() {
@@ -130,24 +123,16 @@ bool Runtime::ready() { return g_runtime != nullptr; }
 #include "x_builtin_types.inc"
 #undef X
 
+#define X(id, accessor, cpp_type, type_id, arg)                                                    \
+    cpp_type *Runtime::accessor() { return static_cast<cpp_type *>(singleton(Singleton::id)); }
+#include "x_singletons.inc"
+#undef X
+
+Bool *Runtime::singleton_bool(const bool value) {
+    return value ? singleton_true() : singleton_false();
+}
+
 #define X(id, accessor, name)                                                                      \
     Object *Runtime::accessor() { return internal_object(InternalObject::id); }
 #include "x_internal_objects.inc"
 #undef X
-
-NamedSingleton *Runtime::singleton_none() { return instance().singletons_.none_.get(); }
-
-NamedSingleton *Runtime::singleton_ellipsis() { return instance().singletons_.ellipsis_.get(); }
-
-NamedSingleton *Runtime::singleton_not_implemented() {
-    return instance().singletons_.not_implemented_.get();
-}
-
-NamedSingleton *Runtime::singleton_stop_iteration() {
-    return instance().singletons_.stop_iteration_.get();
-}
-
-Bool *Runtime::singleton_bool(const bool value) {
-    const Runtime &self{instance()};
-    return value ? self.singletons_.true_.get() : self.singletons_.false_.get();
-}
