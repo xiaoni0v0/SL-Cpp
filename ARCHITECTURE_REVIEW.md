@@ -1,97 +1,132 @@
-# codegen review 导览
+# codegen 架构
 
-> 这份文件是给你 review 用的临时导览，**随时可删**。里面所有该长期留存的结论都已经写进
-> `compiler/codegen/bytecode.md`、`.ai/architecture.md`、`.ai/context.md`、`.ai/notes/` 了，
-> 删掉这份不会丢任何东西。
+> 临时导览，**随时可删**。内容在 `compiler/codegen/bytecode.md`、`.ai/architecture.md`、
+> `.ai/context.md` 里都有，删掉不丢东西。
 
-## 这轮加了什么
+## 文件
 
 ```
 compiler/codegen/
-  x_opcodes.inc          53 条指令：枚举名 / 助记符 / 参数种类 / 顺序流栈效应
-  x_unary_ops.inc        UNARY_OP 的 6 个参数
-  x_binary_ops.inc       BINARY_OP 的 20 个参数（and/or 不在里面，走短路）
-  opcode.h               由上面三份展开出 OpCode / UnaryOp / BinaryOp / ArgKind
-                         + stack_effect() + stack_effect_extra_on_jump() + is_terminator()
-  CodeBuilder.{h,cpp}    一份 Code 的组装器（约 230 行）
-  CodeGen.{h,cpp}        AST → 指令（约 1400 行）
+  x_opcodes.inc          指令清单（唯一真源）：枚举名 / 助记符 / 参数种类 / 顺序流栈效应
+  x_unary_ops.inc        UNARY_OP 的参数清单
+  x_binary_ops.inc       BINARY_OP 的参数清单
+  opcode.h               由三份 inc 展开：OpCode / UnaryOp / BinaryOp / ArgKind、
+                         stack_effect() / stack_effect_extra_on_jump() / is_terminator()
+  ConstPool.{h,cpp}      常量表去重（按结构标识）
+  CodeBuilder.{h,cpp}    一份 Code 的组装器
+  CodeGen.{h,cpp}        AST → 指令
   disassembler.{h,cpp}   Code → 文本
-
-runtime/
-  x_internal_objects.inc  LOAD_INTERNAL 那张全局共享表
-  x_singletons.inc        六个单例（这轮顺手统一的）
-  Runtime.{h,cpp}         三张根表形状统一
-
-compiler/Compiler.{h,cpp} 加了 compile() 三个重载
-executor/Executor.cpp     起落 Runtime、打印反汇编
-test/codegen/             9 个文件，95 个用例
+  bytecode.md            指令语义、栈约定、各语法的编译模式
 ```
 
-## 三层怎么分的
+入口只有一个：`CodeGen::generate_program(root, file_path)`，外面再由 `Compiler::compile` 包一层。
 
-|                | 管什么                                              | 不管什么                               |
-| -------------- | --------------------------------------------------- | -------------------------------------- |
-| `CodeGen`      | 哪个节点发哪些指令                                  | 指令怎么编码、跳转目标是多少           |
-| `CodeBuilder`  | 标签回填、`EXTENDED_ARG` 定点迭代、栈深跟踪、四张表 | AST 长什么样（**完全不 include AST**） |
-| `disassembler` | `Code` → 文本                                       | 别的                                   |
+## 三层
 
-分开的实际收益：加一条语法只动 `CodeGen`，改指令编码只动 `CodeBuilder`。嵌套作用域就是 builder
-栈上多压一层。
+|                | 管什么                                               | 不管什么                      |
+| -------------- | ---------------------------------------------------- | ----------------------------- |
+| `CodeGen`      | 哪个节点发哪些指令；循环、`try`、作用域的上下文      | 指令怎么编码、跳转目标落在哪  |
+| `CodeBuilder`  | 伪指令流、标签回填、`EXTENDED_ARG`、栈深跟踪、四张表 | AST 节点（只用到 `Position`） |
+| `disassembler` | `Code` → 文本                                        | —                             |
 
-## 最值得挑刺的地方
+按变化原因切的：加语法只动 `CodeGen`，改指令编码只动 `CodeBuilder`。反汇编器单独一层，是因为虚拟机
+没落地之前，它是验证 codegen 的唯一手段。
 
-按"出错了最难查"排的：
+## `CodeBuilder`
 
-1. **`CodeGen.cpp` 的 `gen_target_prefix` / `gen_target_store` / `gen_store_one`**（赋值那一组）。
-   `under_value` 那个参数是全文件最绕的地方：顶层赋值是"先压目标前置项、再压值"，而解构的元素赋值
-   反过来（值已经由 `UNPACK` 产出在栈顶），前置项要靠 `INSERT 2` 逐个垫到它下面。
-   对照 `SL.md` 3.3 第 6 条读。
+**伪指令 + 标签**。发指令时跳转目标只写标签号，`build()` 时统一回填。
 
-2. **`gen_unwind` / `gen_unwind_with_value`**（跳出去那一组）。这轮刚修过一个 bug（见下），
-   `POP_BLOCK`、裁栈、`CALL_FINALLY`、`None` 占位四件事的顺序都有讲究。
+**`EXTENDED_ARG` 定点迭代**。参数超过一个字节要补前缀，补前缀会让后面的指令右移、可能把某个跳转
+推远到需要更多前缀。所以反复"算偏移 → 看每条跳转要几个字节"直到不变。每条指令的宽度只增不减，必收敛。
 
-3. **`visit(AstNodeTry)`**。`finally` 只编译一份，四条路径进去时栈顶必须都是"这条路径要带出去的那个
-   值"——`bytecode.md` 那一节讲了为什么必须这样。
+**静态栈深跟踪**。每发一条指令按 `stack_effect()` 记账，顺带算出 `max_stack`：
 
-4. **`visit(AstNodeForCond)` / `visit(AstNodeForIter)`**。结果槽 / 迭代器 / 本轮的值三者的栈序，
-   以及 `break` 和 `continue` 各自裁到哪个深度。迭代模式的 `continue_depth_` 比 `break_depth_` 深
-   一层（多个迭代器），这是 `FOR_ITER` 要求迭代器在栈顶逼出来的。
+- 跳转指令：跳过去那条路径的栈深 = 顺序流栈深 + `stack_effect_extra_on_jump()`（只有 `FOR_ITER`
+  和两条 `SETUP_*` 不是 0）。
+- 标签记着"该处应有的栈深"。`emit_jump` 和 `place_label` 两头核对，第一次得知就记下，对不上直接断言。
+- 终止指令（`JUMP`/`RETURN_VALUE`/`RAISE` 等）之后标为不可达，不可达的指令照发但不记账，直到下一个标签。
 
-5. **`CodeBuilder::build()` 的定点迭代**。补前缀会把跳转目标推远、可能逼出新前缀，反复扫到不变为止。
-   `widths` 只增不减所以必收敛——如果哪天改成可增可减就会死循环。
+栈不平衡是手写字节码最容易犯的错，而没有虚拟机时跑不出来，所以在这里当场抓。
 
-## 这轮修掉的三个语义理解错
+## `CodeGen`
 
-留在这里是想让你知道**我曾经在哪些地方读错过 SL.md**，同类地方值得多看两眼：
+### 核心不变量：`want_value`
 
-1. **Program 的值**：一度按复合表达式处理（值 = 最后一条），实际上 Program 的值只由 `return` 决定，
-   走到末尾就是 `None`。`func f() { 1 }` 返回 `None` 不是 `1`。
-2. **类的求值顺序**：一度把捕获压在基类之前，实际 `SL.md` 3.4.8 规定先求基类、建帧、再处理捕获。
-   于是 `MAKE_CLASS` 的栈序是 `bases captures doc name`，跟函数那边（捕获最先）不对称。
-3. **跳出 `try` 漏 `POP_BLOCK`**：`break`/`continue`/`return` 跨出 `try` 时没弹运行期块栈，跳到外面
-   之后再抛异常会撞进失效的处理器；`return` 更糟，不先弹自己这层就进 `finally` 体，体内抛异常会被
-   自己接住转圈。
-
-前两个各有专门的回归用例，第三个在 `try_test.cpp` 最后两个 `TEST_CASE`。
-
-## 怎么自己看产物
-
-```bash
-./cmake-build-debug/SL.exe 某个.sl
+```cpp
+void gen(const AstNode &node, bool want_value);
 ```
 
-会依次打 token、两遍 AST、完整反汇编（四张表 + 指令 + 嵌套 `Code`）。
+编译完一个节点，栈深恰好增加 `want_value ? 1 : 0`（除非这之后不可达）。`gen()` 在每次分派前后断言
+这一条，于是每个 `visit` 只需要对自己负责。`want_value` 经成员 `want_value_` 传给 `visit`。
 
-测试里两种形态各管一头：`codegen_instrs()` 一行一条指令（精确比对用），`codegen_dump()` 是完整版
-（查常量表/名字表/捕获标记用）。`codegen_body()` 再去掉每份 Program 末尾那条隐含的 `return None`。
+两套规则别混：
 
-## 已知没做的
+- **复合表达式**（`gen_exprs`）：值是最后一条，只有最后一条跟着外层的 `want_value`。
+- **Program**（`gen_program`，文件 / 函数体 / 类体）：值只由 `return` 决定，每一条都 `want_value=false`，
+  末尾补 `LOAD_CONST None` + `RETURN_VALUE`。每份 `Code` 必以终止指令结尾。
 
-- **`eval` 编译不出东西**：`CodeGen::generate_program` 只收 `AstNodeProgram`，而 `eval` 要编译的是"恰好一条
-  表达式"。等虚拟机落地时补一个单表达式入口。
-- **`LOAD_INTERNAL` 的 `ImportFunc` 是个占位对象**：函数对象类型还没有，现在那个槽放的是个同名的
-  `NamedSingleton`。字节码形状是对的，等 `Function` 落地换掉。
-- **窥孔优化一概没做**（`bytecode.md` 明说不做）。所以你会看到 `JUMP` 到紧邻下一条这种废指令，
-  比如 `if (c) { x }` 在没人要值时那条跳过空 else 的 `JUMP`。
-- **不可达代码照常生成**。循环体恒 `break` 时，后面的收尾指令仍然发出来（栈跟踪已停，不影响正确性）。
-- **`Compiler` 门面还没把 `SyntaxError` 转成 SL 异常对象**，等帧栈和主循环。
+### 三种上下文
+
+```
+builders_   作用域栈，栈顶是正在填的 Code。函数体、类体各压一层
+loops_      循环栈：break/continue 的标签、各自该裁到的栈深、进循环时外面有几层块
+blocks_     运行期块栈的编译期镜像：SETUP_EXCEPT / SETUP_FINALLY 各一项
+```
+
+`push_scope()` 压一个新 builder，同时把 `loops_`/`blocks_` 整个换成空的存进 `saved_*`——函数体里的
+`break` 跳不到外层循环。`pop_scope()` 反过来，并把 builder `build()` 成 `Code`，调用方再
+`add_nested_code` 进外层表。
+
+### 跳出去：`gen_unwind` / `gen_unwind_with_value`
+
+块栈是**运行期**的，静态跳转不会自动弹。所以 `break`/`continue`/`return` 离开 `try` 时由内到外逐层：
+
+1. `POP_BLOCK`；
+2. 如果这层是 `finally`：把栈裁到进 `try` 时的深度，`CALL_FINALLY` 走一遍 `finally` 体。
+
+区别只在栈顶带什么：`break`/`continue` 压 `None` 占位、回来弹掉，最后裁到循环要求的深度；`return`
+带着返回值一路穿过去（用 `INSERT` 把它垫到多余项下面再弹多余项）。
+
+### `finally` 只编译一份
+
+`CALL_FINALLY` 的返回地址存在帧自己的小栈 `ByteCodeFrame::returns_` 上，不占操作数栈。于是四条进
+`finally` 的路径（正常结束 / `return` / 异常 / `break`·`continue`）进去时栈上一律是"入口深度 + 1"，
+栈顶就是这条路径要带出去的值，`finally` 体只需一份，`END_FINALLY` 按返回地址回去。
+
+### 分组
+
+`CodeGen.h` 按注释分段，每段一组 `gen_*` 辅助：
+
+| 分组       | 负责                                                          |
+| ---------- | ------------------------------------------------------------- |
+| 小零件     | 常量、`None`、裁栈、条件跳转、两个 unwind                     |
+| 容器       | list/tuple/dict，有 `*`/`**` 展开时先建空再逐项并入           |
+| 比较链     | 比较链与 `is` 链共用，同一个运算符连续应用                    |
+| 赋值       | 目标前置操作数 / 写入 / 解构递归 / 复合赋值读旧值             |
+| 调用       | `CALL` / `CALL_KW` / `CALL_EX` 三选一                         |
+| 循环       | 结果槽（计数 / `$` / `$$`）与每轮折入                         |
+| 嵌套作用域 | 捕获登记与求值、装饰器、形参形状、没写的槽位压 `Missing` 哨兵 |
+
+赋值那组的 `under_value` 参数最绕：顶层赋值先压前置项再压值；解构元素的值已由 `UNPACK` 产出在栈顶，
+前置项得用 `INSERT` 垫到它下面。
+
+函数和类的建立顺序不对称，是 SL.md 规定的：
+
+```
+MAKE_FUNC   captures params ret_type doc name   （捕获最先）
+MAKE_CLASS  bases captures doc name             （基类先求值、建帧，再处理捕获）
+```
+
+## `disassembler`
+
+- `disassemble()`：完整版，四张表 + 指令 + 递归打嵌套 `Code`。`Executor` 用它。
+- `disassemble_instrs()`：一行一条指令，测试里精确比对用。
+
+## 测试
+
+`test/codegen/`，辅助在 `test_utils.h`：
+
+- `codegen_instrs()` / `codegen_dump()`：分别对应上面两种反汇编。
+- `codegen_body()`：再剥掉 Program 末尾隐含的 `return None`。
+- 被测表达式放赋值右侧，才是 `want_value=true`。
+- 期望值用 raw string literal（clang-format 不动它内部）。
