@@ -114,10 +114,6 @@ void CodeGen::error_internal(const std::string &msg, const Position pos) const {
     throw InternalError{file_path_, pos.row, pos.col, msg};
 }
 
-// ============================================================
-// 编译一个节点
-// ============================================================
-
 void CodeGen::gen(const AstNode &node, const bool want_value) {
     [[maybe_unused]] const std::uint32_t before{code().stack_depth()};
     [[maybe_unused]] const bool was_reachable{!code().unreachable()};
@@ -161,10 +157,6 @@ void CodeGen::gen_exprs(
     for (std::size_t i{0}; i + 1 < exprs.size(); ++i) gen(exprs[i], false);
     gen(exprs.back(), want_value);
 }
-
-// ============================================================
-// 小零件
-// ============================================================
 
 void CodeGen::gen_load_const(const ObjectRef &value, const Position pos) {
     code().emit(OpCode::LOAD_CONST, code().intern_const(value), pos);
@@ -238,10 +230,6 @@ void CodeGen::gen_unwind_with_value(const Position pos) {
     }
 }
 
-// ============================================================
-// 常量
-// ============================================================
-
 ObjectRef CodeGen::literal_object(const AstNode &node) {
     if (dynamic_cast<const AstNodeLiteralNone *>(&node))
         return ObjectRef{Runtime::singleton_none()};
@@ -281,10 +269,6 @@ ObjectRef CodeGen::literal_object(const AstNode &node) {
     // list / dict 可变，每次求值必须是新对象，不进常量表
     return {};
 }
-
-// ============================================================
-// 容器
-// ============================================================
 
 bool CodeGen::has_expansion(const std::vector<AstNodePtr> &items) {
     for (const AstNodePtr &item : items)
@@ -362,10 +346,6 @@ void CodeGen::gen_dict(
         }
     }
 }
-
-// ============================================================
-// 赋值
-// ============================================================
 
 const std::vector<AstNodePtr> *CodeGen::destructuring_items(const AstNode &target) {
     if (const auto *const tuple{dynamic_cast<const AstNodeLiteralTuple *>(&target)})
@@ -494,10 +474,6 @@ void CodeGen::gen_target_load(const AstNode &target, const std::uint32_t prefix)
         );
 }
 
-// ============================================================
-// 调用
-// ============================================================
-
 void CodeGen::gen_call_args_packed(const CallArgs &args, const Position pos) {
     gen_sequence(args.positional_args_, false, pos);
 
@@ -565,10 +541,6 @@ void CodeGen::gen_call(const CallArgs &args, const Position pos) {
     );
 }
 
-// ============================================================
-// 循环
-// ============================================================
-
 bool CodeGen::gen_loop_slot(const CollectMark collect, const bool want_value, const Position pos) {
     switch (collect.container_) {
     case CollectMark::Container::None:
@@ -620,10 +592,6 @@ void CodeGen::gen_loop_collect(
         return;
     }
 }
-
-// ============================================================
-// 嵌套作用域
-// ============================================================
 
 void CodeGen::push_scope() {
     builders_.push_back(std::make_unique<CodeBuilder>(file_path_));
@@ -682,10 +650,6 @@ void CodeGen::gen_decorators_after(const std::vector<AstNodePtr> &decorators, co
     // 由近到远逐个调用，一个装饰器一条 CALL
     for (std::size_t i{0}; i < decorators.size(); ++i) code().emit(OpCode::CALL, 1, pos);
 }
-
-// ============================================================
-// 字面量
-// ============================================================
 
 void CodeGen::visit(const AstNodeLiteralNone &node) {
     if (want_value_) gen_load_const(literal_object(node), node.pos_);
@@ -753,20 +717,12 @@ void CodeGen::visit(const AstNodeLiteralDict &node) {
     if (!want) code().emit(OpCode::POP_TOP, node.pos_);
 }
 
-// ============================================================
-// 多条表达式
-// ============================================================
-
 void CodeGen::visit(const AstNodeProgram &node) {
     // Program 只出现在文件 / 函数体 / 类体三处，各自走 gen_program，不会当子表达式分派到这里
     error_internal("a program cannot appear as a sub-expression", node.pos_);
 }
 
 void CodeGen::visit(const AstNodeCompound &node) { gen_exprs(node.exprs_, want_value_, node.pos_); }
-
-// ============================================================
-// 运算符
-// ============================================================
 
 void CodeGen::visit(const AstNodeStar &node) {
     error_internal("* is only allowed in containers, call arguments and destructuring", node.pos_);
@@ -901,10 +857,6 @@ void CodeGen::gen_chain(
     if (!want) code().emit(OpCode::POP_TOP, pos);
 }
 
-// ============================================================
-// 赋值
-// ============================================================
-
 void CodeGen::visit(const AstNodeAssign &node) {
     const bool want{want_value_};
     const Position pos{node.pos_};
@@ -938,10 +890,6 @@ void CodeGen::visit(const AstNodeCompoundAssign &node) {
 
     gen_target_store(*node.target_);
 }
-
-// ============================================================
-// 后缀表达式
-// ============================================================
 
 void CodeGen::visit(const AstNodeCall &node) {
     const bool want{want_value_};
@@ -977,10 +925,6 @@ void CodeGen::visit(const AstNodeAttr &node) {
     if (!want) code().emit(OpCode::POP_TOP, node.pos_);
 }
 
-// ============================================================
-// 名字
-// ============================================================
-
 void CodeGen::visit(const AstNodeIdentifier &node) {
     const bool want{want_value_};
 
@@ -1011,10 +955,6 @@ void CodeGen::visit(const AstNodeGlobal &node) {
     code().emit(OpCode::DECLARE_GLOBAL, code().intern_name(node.identifier_), node.pos_);
     if (want) gen_none(node.pos_);
 }
-
-// ============================================================
-// 控制流
-// ============================================================
 
 void CodeGen::visit(const AstNodeIf &node) {
     const bool want{want_value_};
@@ -1233,10 +1173,6 @@ void CodeGen::visit(const AstNodeTry &node) {
     code().place_label(after_all);
 }
 
-// ============================================================
-// 装饰器、eval、import
-// ============================================================
-
 void CodeGen::visit(const AstNodeDecorator &node) {
     const bool want{want_value_};
 
@@ -1283,10 +1219,6 @@ void CodeGen::visit(const AstNodeImportCall &node) {
     gen_call(node.args_, node.args_.pos_paren_);
     if (!want) code().emit(OpCode::POP_TOP, pos);
 }
-
-// ============================================================
-// 函数与类
-// ============================================================
 
 void CodeGen::visit(const AstNodeFunc &node) {
     const bool want{want_value_};
