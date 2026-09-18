@@ -158,15 +158,15 @@ void CodeGen::gen_exprs(
     gen(exprs.back(), want_value);
 }
 
-void CodeGen::gen_load_const(const ObjectRef &value, const Position pos) {
+void CodeGen::gen_load_const(const ObjectRef &value, const Position pos) const {
     code().emit(OpCode::LOAD_CONST, code().intern_const(value), pos);
 }
 
-void CodeGen::gen_none(const Position pos) {
+void CodeGen::gen_none(const Position pos) const {
     gen_load_const(ObjectRef{Runtime::singleton_none()}, pos);
 }
 
-void CodeGen::gen_missing(const Position pos) {
+void CodeGen::gen_missing(const Position pos) const {
     code().emit(OpCode::LOAD_INTERNAL, static_cast<std::uint32_t>(InternalObject::Missing), pos);
 }
 
@@ -177,7 +177,7 @@ void CodeGen::gen_optional(const AstNodePtr &node, const Position pos) {
         gen_missing(pos);
 }
 
-void CodeGen::gen_pop_to(const std::uint32_t depth, const Position pos) {
+void CodeGen::gen_pop_to(const std::uint32_t depth, const Position pos) const {
     if (code().unreachable()) return;
 
     assert(code().stack_depth() >= depth && "要裁到的深度比当前还深");
@@ -192,7 +192,7 @@ void CodeGen::gen_jump_if_false(const AstNode &cond, const CodeBuilder::Label ta
 
 void CodeGen::gen_unwind(
     const std::size_t to_block_depth, const std::uint32_t target_depth, const Position pos
-) {
+) const {
     // 由内到外逐层退出。块栈是运行期的，跳走之前必须一层层弹干净，否则跳到循环外之后
     // 再抛异常，还会撞进这些已经失效的处理器
     for (std::size_t i{blocks_.size()}; i > to_block_depth && !code().unreachable(); --i) {
@@ -212,7 +212,7 @@ void CodeGen::gen_unwind(
     gen_pop_to(target_depth, pos);
 }
 
-void CodeGen::gen_unwind_with_value(const Position pos) {
+void CodeGen::gen_unwind_with_value(const Position pos) const {
     // 返回值就是这条路径要带出去的那个值，本来就在栈顶
     for (std::size_t i{blocks_.size()}; i > 0 && !code().unreachable(); --i) {
         const BlockContext &block{blocks_[i - 1]};
@@ -443,7 +443,7 @@ void CodeGen::gen_store_one(const AstNode &target) {
     gen_target_store(target);
 }
 
-void CodeGen::gen_target_load(const AstNode &target, const std::uint32_t prefix) {
+void CodeGen::gen_target_load(const AstNode &target, const std::uint32_t prefix) const {
     const Position pos{target.pos_};
 
     if (const auto *const name{dynamic_cast<const AstNodeIdentifier *>(&target)}) {
@@ -539,7 +539,9 @@ void CodeGen::gen_call(const CallArgs &args, const Position pos) {
     );
 }
 
-bool CodeGen::gen_loop_slot(const CollectMark collect, const bool want_value, const Position pos) {
+bool CodeGen::gen_loop_slot(
+    const CollectMark collect, const bool want_value, const Position pos
+) const {
     switch (collect.container_) {
     case CollectMark::Container::None:
         // 计数模式的结果槽是纯 codegen 垫的，没人要值就退化成裸循环
@@ -564,7 +566,7 @@ bool CodeGen::gen_loop_slot(const CollectMark collect, const bool want_value, co
 void CodeGen::gen_loop_collect(
     const CollectMark collect, const bool has_slot, const std::uint32_t slot_depth,
     const CodeBuilder::Label count_continue, const Position pos
-) {
+) const {
     switch (collect.container_) {
     case CollectMark::Container::None:
         // 本轮的值用不上，弹掉。continue 跳到 POP_TOP 之后：它自己的裁栈已经清掉那个值了
@@ -605,13 +607,13 @@ Ref<Code> CodeGen::pop_scope() {
     blocks_ = std::move(saved_blocks_.back());
     saved_blocks_.pop_back();
 
-    Ref<Code> result{std::move(*builders_.back()).build()};
+    Ref result{std::move(*builders_.back()).build()};
     builders_.pop_back();
 
     return result;
 }
 
-void CodeGen::declare_captures(const std::vector<OneCapture> &captures) {
+void CodeGen::declare_captures(const std::vector<OneCapture> &captures) const {
     for (const OneCapture &capture : captures) {
         if (capture.capture_type_ == OneCapture::CaptureType::Reference) {
             // 引用捕获不产生任何指令，只在名字表上留个标记
@@ -644,7 +646,9 @@ void CodeGen::gen_decorators_before(const std::vector<AstNodePtr> &decorators) {
     for (const AstNodePtr &decorator : decorators) gen(decorator, true);
 }
 
-void CodeGen::gen_decorators_after(const std::vector<AstNodePtr> &decorators, const Position pos) {
+void CodeGen::gen_decorators_after(
+    const std::vector<AstNodePtr> &decorators, const Position pos
+) const {
     // 由近到远逐个调用，一个装饰器一条 CALL
     for (std::size_t i{0}; i < decorators.size(); ++i) code().emit(OpCode::CALL, 1, pos);
 }

@@ -77,17 +77,17 @@ class CodeGen final : public AstConstVisitor {
 
     // ---------------- 小零件 ----------------
 
-    void gen_load_const(const ObjectRef &value, Position pos);
-    void gen_none(Position pos);
+    void gen_load_const(const ObjectRef &value, Position pos) const;
+    void gen_none(Position pos) const;
     // 弹到只剩 depth 项
-    void gen_pop_to(std::uint32_t depth, Position pos);
+    void gen_pop_to(std::uint32_t depth, Position pos) const;
     // 求值一个条件，假就跳走。JUMP_IF_FALSE 只认 bool，自己不做真值转换
     void gen_jump_if_false(const AstNode &cond, CodeBuilder::Label target);
     // 离开当前位置去别处：由内到外逐层退出运行期块，再把栈裁到 target_depth。
     // break / continue 用这条，它们不带值
-    void gen_unwind(std::size_t to_block_depth, std::uint32_t target_depth, Position pos);
+    void gen_unwind(std::size_t to_block_depth, std::uint32_t target_depth, Position pos) const;
     // return 用这条：栈顶那个返回值要一路带着穿过每层块
-    void gen_unwind_with_value(Position pos);
+    void gen_unwind_with_value(Position pos) const;
 
     // ---------------- 常量 ----------------
 
@@ -119,7 +119,7 @@ class CodeGen final : public AstConstVisitor {
     // 值在栈顶，把它写进 target。解构的每个元素走这条
     void gen_store_one(const AstNode &target);
     // 复合赋值读旧值：target 的 prefix 项前置操作数已在栈上，复制一份出来读
-    void gen_target_load(const AstNode &target, std::uint32_t prefix);
+    void gen_target_load(const AstNode &target, std::uint32_t prefix) const;
     // 解构目标的元素清单；不是解构目标就返回空
     [[nodiscard]] static const std::vector<AstNodePtr> *destructuring_items(const AstNode &target);
 
@@ -133,12 +133,12 @@ class CodeGen final : public AstConstVisitor {
     // ---------------- 循环 ----------------
 
     // 结果槽：计数模式压 0，$ 压空 list，$$ 压空 dict。要不要压见返回值
-    [[nodiscard]] bool gen_loop_slot(CollectMark collect, bool want_value, Position pos);
+    [[nodiscard]] bool gen_loop_slot(CollectMark collect, bool want_value, Position pos) const;
     // 每轮的收尾：把循环体的值折进结果槽。slot_depth 是结果槽在栈里的深度
     void gen_loop_collect(
         CollectMark collect, bool has_slot, std::uint32_t slot_depth,
         CodeBuilder::Label count_continue, Position pos
-    );
+    ) const;
 
     // ---------------- 嵌套作用域 ----------------
 
@@ -146,14 +146,14 @@ class CodeGen final : public AstConstVisitor {
     void push_scope();
     [[nodiscard]] Ref<Code> pop_scope();
     // 捕获列表登记进新作用域：引用捕获标名字表位图，值捕获进 value_captured
-    void declare_captures(const std::vector<OneCapture> &captures);
+    void declare_captures(const std::vector<OneCapture> &captures) const;
     // 外层这一侧：逐个求出捕获值并打成元组
     void gen_capture_values(const std::vector<OneCapture> &captures, Position pos);
     // 装饰器：建立之前从前到后求值，建立之后由近到远逐个调用
     void gen_decorators_before(const std::vector<AstNodePtr> &decorators);
-    void gen_decorators_after(const std::vector<AstNodePtr> &decorators, Position pos);
+    void gen_decorators_after(const std::vector<AstNodePtr> &decorators, Position pos) const;
     // 没写的注解/默认值/doc/名字用内部哨兵顶上，不能用 None（它是合法的默认值）
-    void gen_missing(Position pos);
+    void gen_missing(Position pos) const;
     // 可空的槽位：有就求值，没有就压哨兵
     void gen_optional(const AstNodePtr &node, Position pos);
     // 形参形状。默认值与注解本身不在 Code 里，这里只记有没有
