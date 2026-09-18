@@ -271,10 +271,9 @@ ObjectRef CodeGen::literal_object(const AstNode &node) {
 }
 
 bool CodeGen::has_expansion(const std::vector<AstNodePtr> &items) {
-    for (const AstNodePtr &item : items)
-        if (dynamic_cast<const AstNodeStar *>(item.get())) return true;
-
-    return false;
+    return std::ranges::any_of(items, [](const AstNodePtr &item) -> bool {
+        return dynamic_cast<const AstNodeStar *>(item.get());
+    });
 }
 
 void CodeGen::gen_sequence(
@@ -502,11 +501,10 @@ void CodeGen::gen_call_args_packed(const CallArgs &args, const Position pos) {
 }
 
 void CodeGen::gen_call(const CallArgs &args, const Position pos) {
-    const bool has_double_star{[&] {
-        for (const OneKwArg &arg : args.keyword_args_)
-            if (arg.kind_ == OneKwArg::Kind::DoubleStar) return true;
-
-        return false;
+    const bool has_double_star{[&] -> bool {
+        return std::ranges::any_of(args.keyword_args_, [](const OneKwArg &arg) -> bool {
+            return arg.kind_ == OneKwArg::Kind::DoubleStar;
+        });
     }()};
 
     // 三条调用指令是按出现频率分的档：CALL 零额外对象，CALL_KW 多一个常量表里的名字元组，
@@ -530,7 +528,7 @@ void CodeGen::gen_call(const CallArgs &args, const Position pos) {
     names.reserve(args.keyword_args_.size());
     for (const OneKwArg &arg : args.keyword_args_) {
         gen(arg.value_, true);
-        names.push_back(make_ref<Str>(arg.keyword_));
+        names.emplace_back(make_ref<Str>(arg.keyword_));
     }
 
     gen_load_const(make_ref<Tuple>(std::move(names)), pos);
