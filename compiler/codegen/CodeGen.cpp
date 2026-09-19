@@ -55,7 +55,7 @@ BinaryOp to_binary_op(const AstNodeOpBinary::OpType op) {
         break;
     }
 
-    throw InternalError{"no BinaryOp for and/or"};
+    throw InternalError{"CodeGen: no BinaryOp for and/or"};
 }
 
 BinaryOp to_binary_op(const AstNodeCompare::OpType op) {
@@ -76,7 +76,7 @@ BinaryOp to_binary_op(const AstNodeCompare::OpType op) {
         return BinaryOp::Ne;
     }
 
-    throw InternalError{"invalid compare op"};
+    throw InternalError{"CodeGen: invalid compare op"};
 }
 
 UnaryOp to_unary_op(const AstNodeOpUnary::OpType op) {
@@ -97,7 +97,7 @@ UnaryOp to_unary_op(const AstNodeOpUnary::OpType op) {
         return UnaryOp::Not;
     }
 
-    throw InternalError{"invalid unary op"};
+    throw InternalError{"CodeGen: invalid unary op"};
 }
 
 } // namespace
@@ -111,7 +111,7 @@ CodeBuilder &CodeGen::code() const {
 }
 
 void CodeGen::error_internal(const std::string &msg, const Position pos) const {
-    throw InternalError{file_path_, pos.row, pos.col, msg};
+    throw InternalError{file_path_, pos.row, pos.col, "CodeGen: " + msg};
 }
 
 void CodeGen::gen(const AstNode &node, const bool want_value) {
@@ -560,7 +560,7 @@ bool CodeGen::gen_loop_slot(
         return true;
     }
 
-    throw InternalError{"invalid collect container"};
+    throw InternalError{"CodeGen: invalid collect container"};
 }
 
 void CodeGen::gen_loop_collect(

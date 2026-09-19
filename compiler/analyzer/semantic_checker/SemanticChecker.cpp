@@ -11,7 +11,7 @@ void SemanticChecker::error(const std::string &msg, const Position pos) const {
 }
 
 void SemanticChecker::error_internal(const std::string &msg, const Position pos) const {
-    throw InternalError{file_path_, pos.row, pos.col, msg};
+    throw InternalError{file_path_, pos.row, pos.col, "SemanticChecker: " + msg};
 }
 
 void SemanticChecker::require_not_null(const AstNodePtr &node, const Position pos) const {

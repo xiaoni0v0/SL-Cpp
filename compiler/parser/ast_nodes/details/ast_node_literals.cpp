@@ -6,7 +6,7 @@
 namespace {
 
 [[noreturn]] void error_internal(const std::string &msg, const Position pos) {
-    throw InternalError{"<file>", pos.row, pos.col, msg};
+    throw InternalError{"<file>", pos.row, pos.col, "AstNodeLiteral: " + msg};
 }
 
 // raw_ 拆出来的某一段必须是非空的纯十进制数字串，否则以 InternalError 报告。
@@ -40,8 +40,7 @@ AstNodeLiteralDecimal::AstNodeLiteralDecimal(const Position pos, std::u32string 
         strip_literal_exponent(strip_literal_sign(raw_), true, 0, pos)
     };
     const size_t dot{split.mantissa.find(U'.')};
-    if (dot == std::u32string_view::npos)
-        throw InternalError{"<file>", pos.row, pos.col, "missing a '.'"};
+    if (dot == std::u32string_view::npos) error_internal("missing a '.'", pos);
     require_literal_digits(split.mantissa.substr(0, dot), true, "the integer part", pos);
     require_literal_digits(split.mantissa.substr(dot + 1), false, "the fractional part", pos);
 }

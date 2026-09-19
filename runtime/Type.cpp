@@ -11,7 +11,9 @@ Type::Type(Type *const meta, std::string name, std::vector<Ref<Type>> bases)
     : Object{meta}, name_{std::move(name)}, bases_{std::move(bases)} {
     if (bases_.size() > 1) {
         // C3 线性化要等 SL 层能自己定义类（class 表达式）时再写
-        throw InternalError{std::format("Type '{}': multiple bases (C3 not implemented)", name_)};
+        throw InternalError{
+            std::format("Type: '{}' has multiple bases (C3 not implemented)", name_)
+        };
     }
 
     mro_.push_back(this);

@@ -19,7 +19,7 @@ DecCondition signal_of(const DecCondition condition) {
     case DecCondition::Underflow:
         return condition;
     }
-    throw std::logic_error{"invalid DecCondition"};
+    throw std::logic_error{"DecCondition: invalid value"};
 }
 
 const char *dec_condition_name(const DecCondition condition) {
@@ -39,7 +39,7 @@ const char *dec_condition_name(const DecCondition condition) {
     case DecCondition::InvalidContext:     return "InvalidContext";
     }
     // clang-format on
-    throw std::logic_error{"invalid DecCondition"};
+    throw std::logic_error{"DecCondition: invalid value"};
 }
 
 DecSignalSet::DecSignalSet(const std::initializer_list<DecCondition> conditions) {
@@ -62,22 +62,19 @@ DecTrapped::DecTrapped(const DecCondition condition)
     : std::runtime_error(dec_condition_name(condition)), condition_{condition} {}
 
 void DecContext::set_prec(const int32_t prec) {
-    if (prec < 1 || prec > kMaxPrec)
-        throw std::invalid_argument("DecContext::set_prec: prec out of range");
+    if (prec < 1 || prec > kMaxPrec) throw std::invalid_argument("DecContext: prec out of range");
     prec_ = prec;
 }
 
 void DecContext::set_rounding(const DecRounding rounding) { rounding_ = rounding; }
 
 void DecContext::set_emax(const int32_t emax) {
-    if (emax < 0 || emax > kMaxExp)
-        throw std::invalid_argument("DecContext::set_emax: Emax out of range");
+    if (emax < 0 || emax > kMaxExp) throw std::invalid_argument("DecContext: Emax out of range");
     emax_ = emax;
 }
 
 void DecContext::set_emin(const int32_t emin) {
-    if (emin > 0 || emin < -kMaxExp)
-        throw std::invalid_argument("DecContext::set_emin: Emin out of range");
+    if (emin > 0 || emin < -kMaxExp) throw std::invalid_argument("DecContext: Emin out of range");
     emin_ = emin;
 }
 

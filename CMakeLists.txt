@@ -26,7 +26,7 @@ if(
 )
     message(
         FATAL_ERROR
-        "不支持的编译器 CMAKE_CXX_COMPILER_ID=\"${CMAKE_CXX_COMPILER_ID}\"，目前只支持 GCC / Clang / clang-cl / MSVC"
+        "unsupported compiler CMAKE_CXX_COMPILER_ID=\"${CMAKE_CXX_COMPILER_ID}\", only gcc / clang / clang-cl / cl are supported"
     )
 endif()
 
@@ -37,7 +37,7 @@ if(
 )
     message(
         FATAL_ERROR
-        "不支持的编译器前端命令行风格 CMAKE_CXX_COMPILER_FRONTEND_VARIANT=\"${CMAKE_CXX_COMPILER_FRONTEND_VARIANT}\""
+        "unsupported compiler frontend CMAKE_CXX_COMPILER_FRONTEND_VARIANT=\"${CMAKE_CXX_COMPILER_FRONTEND_VARIANT}\""
     )
 endif()
 

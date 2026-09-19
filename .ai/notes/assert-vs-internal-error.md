@@ -14,7 +14,7 @@
 ## 该 throw 的典型位置
 
 - **switch 穷举完之后的兜底**。函数后面还得 `return` 一个值，这时 `assert(!"...")` 加一个假返回值就是
-  上表第一行：Release 下悄悄返回假值。写 `throw InternalError{"invalid OpCode"}`，不写假返回值，也不
+  上表第一行：Release 下悄悄返回假值。写 `throw InternalError{"OpCode: invalid value"}`，不写假返回值，也不
   写"调用方保证不会走到"再返回一个占位值。
 - **条件取决于被编译的程序**（SL 源码、字节码的内容），而不是代码本身的结构。测试盖不住所有输入，
   违反一次就是一份错误的产物。例：`CodeBuilder` 里标签处栈深不一致、操作数栈弹空、跳转指向没放置过的
@@ -45,10 +45,10 @@
 - `assert` 的说明**可以不写**：表达式自己读得懂就不写（`assert(index < names_.size())`）。要写就写
   英文、很短：`assert(cond && "use emit_jump")`。`assert(!"msg")` 只用于"走到这里本身就是错"的无条件
   分支，而且后面不该再跟一个假返回值（那就该 throw）。
-- `InternalError` 的 message 遵循 [user-facing-strings.md](user-facing-strings.md)：英文、小写开头、
-  名词短语、无句号，无歧义前提下越短越好；**不复述函数名**（`invalid OpCode`，不是
-  `opcode_name: OpCode out of range`），需要限定是谁出的问题才加子系统前缀（`GC: garbage object still
-  referenced`）。位置信息不进 message。
+- 抛出去的 message（`InternalError`、`std::logic_error` 等）一律 `Module: message`，格式与措辞见
+  [user-facing-strings.md](user-facing-strings.md)：`Module` 是类或子系统名，不是函数名
+  （`OpCode: invalid value`，不是 `opcode_name: OpCode out of range`）。**`assert` 不加前缀**——它自己会
+  打出文件和行号。位置信息不进 message。
 - 测试按 message 的**子串**匹配（`test/parser/01_literals/literal_raw_test.cpp`），改措辞前先 grep
   `test/`。
 

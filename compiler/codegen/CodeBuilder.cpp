@@ -85,7 +85,7 @@ void CodeBuilder::place_label(const Label label) {
     if (const std::optional<std::uint32_t> known{label_stacks_[label]}) {
         // 有人跳到这里，栈深以跳转方为准
         if (!unreachable_ && cur_stack_ != *known)
-            throw InternalError{"stack depth mismatch at label"};
+            throw InternalError{"CodeBuilder: stack depth mismatch at label"};
         cur_stack_ = *known;
         max_stack_ = std::max(max_stack_, cur_stack_);
         unreachable_ = false;
@@ -98,7 +98,8 @@ void CodeBuilder::place_label(const Label label) {
 }
 
 void CodeBuilder::apply_effect(const int effect) {
-    if (static_cast<int>(cur_stack_) + effect < 0) throw InternalError{"operand stack underflow"};
+    if (static_cast<int>(cur_stack_) + effect < 0)
+        throw InternalError{"CodeBuilder: operand stack underflow"};
 
     cur_stack_ = static_cast<std::uint32_t>(static_cast<int>(cur_stack_) + effect);
     max_stack_ = std::max(max_stack_, cur_stack_);
@@ -106,7 +107,7 @@ void CodeBuilder::apply_effect(const int effect) {
 
 void CodeBuilder::note_label_stack(const Label label, const std::uint32_t depth) {
     std::optional<std::uint32_t> &known{label_stacks_[label]};
-    if (known && *known != depth) throw InternalError{"stack depth mismatch at label"};
+    if (known && *known != depth) throw InternalError{"CodeBuilder: stack depth mismatch at label"};
 
     known = depth;
 }
@@ -192,7 +193,7 @@ Ref<Code> CodeBuilder::build() && {
             if (!instrs_[i].arg_is_label_) continue;
 
             const std::optional<std::uint32_t> &target{label_targets_[instrs_[i].arg_]};
-            if (!target) throw InternalError{"jump to unplaced label"};
+            if (!target) throw InternalError{"CodeBuilder: jump to unplaced label"};
 
             if (const std::uint32_t want{instr_width(offsets[*target])}; want > widths[i]) {
                 widths[i] = want;

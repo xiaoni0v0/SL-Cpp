@@ -97,7 +97,7 @@ ObjectRef ConstPool::canonicalize(const ObjectRef &value) {
 }
 
 std::uint32_t ConstPool::intern(const ObjectRef &value) {
-    if (!value) throw InternalError{"ConstPool: interning a null constant"};
+    if (!value) throw InternalError{"ConstPool: null constant"};
     if (!can_be_constant(value.target())) {
         throw InternalError{
             std::format("ConstPool: '{}' cannot go into the constant table", value->type()->name())

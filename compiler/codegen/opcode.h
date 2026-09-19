@@ -64,7 +64,7 @@ inline constexpr std::uint32_t nMaxExtendedArgs{3};
 #undef X
     }
 
-    throw InternalError{"invalid OpCode"};
+    throw InternalError{"OpCode: invalid value"};
 }
 
 [[nodiscard]] constexpr const char *unary_op_name(const UnaryOp op) {
@@ -77,7 +77,7 @@ inline constexpr std::uint32_t nMaxExtendedArgs{3};
 #undef X
     }
 
-    throw InternalError{"invalid UnaryOp"};
+    throw InternalError{"UnaryOp: invalid value"};
 }
 
 [[nodiscard]] constexpr const char *binary_op_name(const BinaryOp op) {
@@ -90,7 +90,7 @@ inline constexpr std::uint32_t nMaxExtendedArgs{3};
 #undef X
     }
 
-    throw InternalError{"invalid BinaryOp"};
+    throw InternalError{"BinaryOp: invalid value"};
 }
 
 [[nodiscard]] constexpr ArgKind opcode_arg_kind(const OpCode op) {
@@ -103,7 +103,7 @@ inline constexpr std::uint32_t nMaxExtendedArgs{3};
 #undef X
     }
 
-    throw InternalError{"invalid OpCode"};
+    throw InternalError{"OpCode: invalid value"};
 }
 
 // 顺序执行完这条指令，操作数栈的深度变化
@@ -117,7 +117,7 @@ inline constexpr std::uint32_t nMaxExtendedArgs{3};
 #undef X
     }
 
-    throw InternalError{"invalid OpCode"};
+    throw InternalError{"OpCode: invalid value"};
 }
 
 // 跳转那条路径比顺序流多出来的栈深变化，也就是"跳到目标处的栈深"减去"顺序走下去的栈深"

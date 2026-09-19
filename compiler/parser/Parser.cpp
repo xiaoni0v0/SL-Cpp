@@ -292,7 +292,7 @@ const Token &Parser::expect_open(const Bracket kind) {
         case Bracket::Brace:
             return TokenType::SIGN_LBRACE;
         }
-        throw InternalError{"invalid bracket"};
+        throw InternalError{"Parser: invalid bracket"};
     }(kind))};
 
     brackets_.push(kind);
@@ -310,7 +310,7 @@ const Token &Parser::expect_close(const Bracket kind) {
         case Bracket::Brace:
             return TokenType::SIGN_RBRACE;
         }
-        throw InternalError{"invalid bracket"};
+        throw InternalError{"Parser: invalid bracket"};
     }(kind))};
 
     if (brackets_.empty() || brackets_.top() != kind) error_internal("bracket mismatch");
@@ -339,11 +339,11 @@ void Parser::error(const std::string &msg, std::optional<Position> pos) const {
 }
 
 void Parser::error_internal(const std::string &msg) const {
-    throw InternalError{file_path_, 1, 1, msg};
+    throw InternalError{file_path_, 1, 1, "Parser: " + msg};
 }
 
 void Parser::error_internal(const std::string &msg, const Position pos) const {
-    throw InternalError{file_path_, pos.row, pos.col, msg};
+    throw InternalError{file_path_, pos.row, pos.col, "Parser: " + msg};
 }
 
 std::vector<AstNodePtr> Parser::parse_exprs() {
@@ -1435,19 +1435,15 @@ AstNodePtr Parser::finish_index(AstNodePtr obj, const Position start_pos) {
 Parser::Parser(std::vector<Token> tokens, std::string file_path)
     : tokens_{std::move(tokens)}, file_path_{std::move(file_path)} {
     // 1. 空的肯定不行
-    if (tokens_.empty()) error_internal("bad token list: empty");
+    if (tokens_.empty()) error_internal("empty token list");
 
     // 2. 唯一的 END_OF_FILE 而且必须在最后
     const auto it{std::ranges::find_if(tokens_, [](const Token &t) -> bool {
         return t.type == TokenType::END_OF_FILE;
     })};
-    if (it < tokens_.end() - 1)
-        error_internal("bad token list: unexpected END_OF_FILE", {it->row, it->col});
+    if (it < tokens_.end() - 1) error_internal("unexpected END_OF_FILE", {it->row, it->col});
     if (it == tokens_.end())
-        error_internal(
-            "bad token list: missing END_OF_FILE at the end",
-            {tokens_.back().row, tokens_.back().col}
-        );
+        error_internal("missing END_OF_FILE at the end", {tokens_.back().row, tokens_.back().col});
 }
 
 AstNodeProgramPtr Parser::run_program() {
