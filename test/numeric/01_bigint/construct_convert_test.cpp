@@ -66,7 +66,14 @@ TEST_SUITE("BigInt——构造与十进制字符串往返") {
         CHECK_THROWS_AS((void) BigInt::from_decimal_string("0x10"), std::invalid_argument);
         CHECK_THROWS_AS((void) BigInt::from_decimal_string("1\n"), std::invalid_argument);
         CHECK_THROWS_AS(
-            (void) BigInt::from_decimal_string(std::string("1\0002", 3)), std::invalid_argument
+            (void) BigInt::from_decimal_string(
+                std::string(
+                    "1\0"
+                    "2",
+                    3
+                )
+            ),
+            std::invalid_argument
         );
         // 全角 "1" 的 UTF-8 编码：每个字节都不落在 ASCII '0'-'9' 范围内
         CHECK_THROWS_AS((void) BigInt::from_decimal_string("\xef\xbc\x91"), std::invalid_argument);

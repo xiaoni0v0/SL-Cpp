@@ -62,7 +62,8 @@ endif()
 #   -Werror                  ->  /WX
 #   -g                       ->  /Zi
 #   -O0 / -O2                ->  /Od / /O2
-#   -Wshadow -Wpointer-arith -Winvalid-pch 省略。
+#   -Wshadow                 ->  clang-cl -Wshadow；cl 的 /W4 已含 C4456-C4459
+#   -Wpointer-arith -Winvalid-pch 省略。
 #   /EHsc 是 MSVC 下开启标准 C++ 异常处理语义所必需的。
 # ------------------------------------------------------------
 
@@ -78,12 +79,14 @@ function(sl_apply_target_options target)
                 /W4
                 /permissive-
                 /EHsc
-                -Wshadow
                 $<$<CONFIG:Debug>:/WX>
                 $<$<CONFIG:Debug>:/Zi>
                 $<$<CONFIG:Debug>:/Od>
                 $<$<CONFIG:Release>:/O2>
         )
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+            target_compile_options(${target} PRIVATE -Wshadow)
+        endif()
     else()
         target_compile_options(
             ${target}
