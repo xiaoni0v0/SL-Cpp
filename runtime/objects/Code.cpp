@@ -9,10 +9,7 @@
 #include <utility>
 
 Code::Code(Parts parts) : Object{Runtime::type_code()}, parts_{std::move(parts)} {
-    assert(
-        parts_.ref_captured.size() <= parts_.names_table.size() &&
-        "ref_captured 是 names 的位图，不能比 names 长"
-    );
+    assert(parts_.ref_captured.size() <= parts_.names_table.size());
 }
 
 bool Code::is_ref_captured(const std::size_t index) const {

@@ -3,7 +3,7 @@
 代码注释用中文（`CLAUDE.md` 的硬约束），**但凡是会离开源码、被人看到的字符串一律用英文**：
 
 - 异常信息（`SyntaxError`/`InternalError`/`EncodingError`/…… 的 message 与 `what()` 渲染）
-- `assert` 的那句说明
+- `assert` 的那句说明（表达式自己读得懂就省掉，见 [assert-vs-internal-error.md](assert-vs-internal-error.md)）
 - `std::cout`/`std::cerr` 打出去的任何东西（用法提示、崩溃兜底、计时）
 - 以后 SL 层异常对象的 `.args`、内置函数产生的报错
 

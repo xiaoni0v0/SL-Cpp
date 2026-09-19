@@ -1,7 +1,8 @@
 #pragma once
 
+#include "../../cppexceptions/InternalError.h"
+
 #include <cstdint>
-#include <utility>
 
 /**
  * 操作码。一条指令固定 2 字节：高字节是它，低字节是参数。
@@ -63,7 +64,7 @@ inline constexpr std::uint32_t nMaxExtendedArgs{3};
 #undef X
     }
 
-    std::unreachable();
+    throw InternalError{"invalid OpCode"};
 }
 
 [[nodiscard]] constexpr const char *unary_op_name(const UnaryOp op) {
@@ -76,7 +77,7 @@ inline constexpr std::uint32_t nMaxExtendedArgs{3};
 #undef X
     }
 
-    std::unreachable();
+    throw InternalError{"invalid UnaryOp"};
 }
 
 [[nodiscard]] constexpr const char *binary_op_name(const BinaryOp op) {
@@ -89,7 +90,7 @@ inline constexpr std::uint32_t nMaxExtendedArgs{3};
 #undef X
     }
 
-    std::unreachable();
+    throw InternalError{"invalid BinaryOp"};
 }
 
 [[nodiscard]] constexpr ArgKind opcode_arg_kind(const OpCode op) {
@@ -102,7 +103,7 @@ inline constexpr std::uint32_t nMaxExtendedArgs{3};
 #undef X
     }
 
-    std::unreachable();
+    throw InternalError{"invalid OpCode"};
 }
 
 // 顺序执行完这条指令，操作数栈的深度变化
@@ -116,7 +117,7 @@ inline constexpr std::uint32_t nMaxExtendedArgs{3};
 #undef X
     }
 
-    std::unreachable();
+    throw InternalError{"invalid OpCode"};
 }
 
 // 跳转那条路径比顺序流多出来的栈深变化，也就是"跳到目标处的栈深"减去"顺序走下去的栈深"

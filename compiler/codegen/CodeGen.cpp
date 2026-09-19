@@ -55,7 +55,7 @@ BinaryOp to_binary_op(const AstNodeOpBinary::OpType op) {
         break;
     }
 
-    return BinaryOp::Add; // 调用方保证不会走到，外面另有 InternalError 兜着
+    throw InternalError{"no BinaryOp for and/or"};
 }
 
 BinaryOp to_binary_op(const AstNodeCompare::OpType op) {
@@ -76,7 +76,7 @@ BinaryOp to_binary_op(const AstNodeCompare::OpType op) {
         return BinaryOp::Ne;
     }
 
-    std::unreachable();
+    throw InternalError{"invalid compare op"};
 }
 
 UnaryOp to_unary_op(const AstNodeOpUnary::OpType op) {
@@ -97,7 +97,7 @@ UnaryOp to_unary_op(const AstNodeOpUnary::OpType op) {
         return UnaryOp::Not;
     }
 
-    std::unreachable();
+    throw InternalError{"invalid unary op"};
 }
 
 } // namespace
@@ -105,7 +105,7 @@ UnaryOp to_unary_op(const AstNodeOpUnary::OpType op) {
 CodeGen::CodeGen(std::string file_path) : file_path_{std::move(file_path)} {}
 
 CodeBuilder &CodeGen::code() const {
-    assert(!builders_.empty() && "没有正在填的 Code");
+    assert(!builders_.empty());
 
     return *builders_.back();
 }
@@ -124,7 +124,7 @@ void CodeGen::gen(const AstNode &node, const bool want_value) {
     assert(
         (!was_reachable || code().unreachable() ||
          code().stack_depth() == before + (want_value ? 1u : 0u)) &&
-        "编译一个节点，栈深必须恰好按 want_value 变化"
+        "stack depth must change by exactly want_value"
     );
 }
 
@@ -180,7 +180,7 @@ void CodeGen::gen_optional(const AstNodePtr &node, const Position pos) {
 void CodeGen::gen_pop_to(const std::uint32_t depth, const Position pos) const {
     if (code().unreachable()) return;
 
-    assert(code().stack_depth() >= depth && "要裁到的深度比当前还深");
+    if (code().stack_depth() < depth) error_internal("cannot pop to a deeper stack", pos);
     while (code().stack_depth() > depth) code().emit(OpCode::POP_TOP, pos);
 }
 
@@ -501,7 +501,7 @@ void CodeGen::gen_call_args_packed(const CallArgs &args, const Position pos) {
 }
 
 void CodeGen::gen_call(const CallArgs &args, const Position pos) {
-    const bool has_double_star{[&] -> bool {
+    const bool has_double_star{[&]() -> bool {
         return std::ranges::any_of(args.keyword_args_, [](const OneKwArg &arg) -> bool {
             return arg.kind_ == OneKwArg::Kind::DoubleStar;
         });
@@ -560,7 +560,7 @@ bool CodeGen::gen_loop_slot(
         return true;
     }
 
-    std::unreachable();
+    throw InternalError{"invalid collect container"};
 }
 
 void CodeGen::gen_loop_collect(

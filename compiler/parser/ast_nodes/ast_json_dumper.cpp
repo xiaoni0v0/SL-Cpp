@@ -21,8 +21,9 @@ const char *collect_to_json(const CollectMark mark) {
         return mark.expand_ ? "$ *" : "$";
     case CollectMark::Container::Dict:
         return mark.expand_ ? "$$ **" : "$$";
+    default:
+        return "<unknown>";
     }
-    return "none";
 }
 
 const char *op_str(const AstNodeOpUnary::OpType op) {

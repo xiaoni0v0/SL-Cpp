@@ -15,15 +15,11 @@ void require_literal_digits(
     const std::u32string_view digits, const bool no_leading_zero, const std::string_view part,
     const Position pos
 ) {
-    if (digits.empty())
-        error_internal(std::format("literal raw text is missing digits in {}", part), pos);
+    if (digits.empty()) error_internal(std::format("missing digits in {}", part), pos);
     for (const char32_t c : digits)
-        if (!is_digit(c))
-            error_internal(
-                std::format("literal raw text contains a non-digit character in {}", part), pos
-            );
+        if (!is_digit(c)) error_internal(std::format("non-digit character in {}", part), pos);
     if (no_leading_zero && digits.size() > 1 && digits[0] == U'0')
-        error_internal(std::format("literal raw text has a leading zero in {}", part), pos);
+        error_internal(std::format("leading zero in {}", part), pos);
 }
 
 } // namespace
@@ -45,9 +41,7 @@ AstNodeLiteralDecimal::AstNodeLiteralDecimal(const Position pos, std::u32string 
     };
     const size_t dot{split.mantissa.find(U'.')};
     if (dot == std::u32string_view::npos)
-        throw InternalError{
-            "<file>", pos.row, pos.col, "decimal literal raw text is missing a '.'"
-        };
+        throw InternalError{"<file>", pos.row, pos.col, "missing a '.'"};
     require_literal_digits(split.mantissa.substr(0, dot), true, "the integer part", pos);
     require_literal_digits(split.mantissa.substr(dot + 1), false, "the fractional part", pos);
 }
@@ -68,7 +62,7 @@ LiteralExponentSplit strip_literal_exponent(
         (raw[exponent_begin] == U'+' || raw[exponent_begin] == U'-')) {
         // 不允许负指数
         if (raw[exponent_begin] == U'-' && !allow_negative_exponent)
-            error_internal("literal raw text has a negative exponent", pos);
+            error_internal("negative exponent", pos);
         ++exponent_begin;
     }
 
@@ -76,7 +70,7 @@ LiteralExponentSplit strip_literal_exponent(
     require_literal_digits(exponent, true, "the exponent", pos);
     // 指数的位数
     if (max_exponent_digits != 0 && exponent.size() > max_exponent_digits)
-        error_internal("literal raw text has an out-of-range exponent", pos);
+        error_internal("out-of-range exponent", pos);
 
     return {raw.substr(0, marker), exponent};
 }

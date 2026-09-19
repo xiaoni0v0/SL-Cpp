@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(SL_Cpp)
 
-set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
@@ -13,19 +13,20 @@ endif()
 
 # ------------------------------------------------------------
 # 前端识别
-#   - GCC:           CMAKE_CXX_COMPILER_ID = "GNU",   FRONTEND_VARIANT = ""
-#   - Clang:         CMAKE_CXX_COMPILER_ID = "Clang", FRONTEND_VARIANT = "GNU" 或 ""
-#   - clang-cl:      CMAKE_CXX_COMPILER_ID = "Clang", FRONTEND_VARIANT = "MSVC"
-#   - MSVC（不支持）: CMAKE_CXX_COMPILER_ID = "MSVC",  FRONTEND_VARIANT = ""
+#   - GCC:      CMAKE_CXX_COMPILER_ID = "GNU",   FRONTEND_VARIANT = ""
+#   - Clang:    CMAKE_CXX_COMPILER_ID = "Clang", FRONTEND_VARIANT = "GNU" 或 ""
+#   - clang-cl: CMAKE_CXX_COMPILER_ID = "Clang", FRONTEND_VARIANT = "MSVC"
+#   - MSVC:     CMAKE_CXX_COMPILER_ID = "MSVC",  FRONTEND_VARIANT = ""
 # ------------------------------------------------------------
 
 if(
     NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
     AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+    AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "MSVC"
 )
     message(
         FATAL_ERROR
-        "不支持的编译器 CMAKE_CXX_COMPILER_ID=\"${CMAKE_CXX_COMPILER_ID}\"，目前只支持 GCC / Clang / clang-cl"
+        "不支持的编译器 CMAKE_CXX_COMPILER_ID=\"${CMAKE_CXX_COMPILER_ID}\"，目前只支持 GCC / Clang / clang-cl / MSVC"
     )
 endif()
 
@@ -40,15 +41,19 @@ if(
     )
 endif()
 
-# 是否为 MSVC 命令行风格。上面已经把 cl.exe 挡掉了，所以这里为真只可能是 clang-cl
-set(SL_MSVC_LIKE_FRONTEND FALSE)
-if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+# 是否为 MSVC 命令行风格。包括 clang-cl 和 cl
+if(
+    CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"
+    OR CMAKE_CXX_COMPILER_ID STREQUAL "MSVC"
+)
     set(SL_MSVC_LIKE_FRONTEND TRUE)
     add_compile_options(/utf-8 /bigobj)
     # 所有目标（含各静态库）统一运行时库
     set(CMAKE_MSVC_RUNTIME_LIBRARY
         "$<IF:$<CONFIG:Debug>,MultiThreadedDebugDLL,MultiThreaded>"
     )
+else()
+    set(SL_MSVC_LIKE_FRONTEND FALSE)
 endif()
 
 # ------------------------------------------------------------
@@ -151,6 +156,7 @@ FetchContent_MakeAvailable(nlohmann_json cxxopts doctest)
 # 各模块。依赖方向：cppexceptions <- utils/numeric <- runtime <- compiler <- executor
 # ------------------------------------------------------------
 add_subdirectory(cppexceptions)
+add_subdirectory(common)
 add_subdirectory(utils)
 add_subdirectory(numeric)
 add_subdirectory(runtime)

@@ -10,7 +10,6 @@
 #include <format>
 #include <memory>
 #include <optional>
-#include <ranges>
 #include <utility>
 
 namespace {
@@ -293,7 +292,7 @@ const Token &Parser::expect_open(const Bracket kind) {
         case Bracket::Brace:
             return TokenType::SIGN_LBRACE;
         }
-        std::unreachable();
+        throw InternalError{"invalid bracket"};
     }(kind))};
 
     brackets_.push(kind);
@@ -311,10 +310,10 @@ const Token &Parser::expect_close(const Bracket kind) {
         case Bracket::Brace:
             return TokenType::SIGN_RBRACE;
         }
-        std::unreachable();
+        throw InternalError{"invalid bracket"};
     }(kind))};
 
-    assert(!brackets_.empty() && brackets_.top() == kind); // 是同一种
+    if (brackets_.empty() || brackets_.top() != kind) error_internal("bracket mismatch");
     brackets_.pop();
     return token;
 }
@@ -1202,9 +1201,10 @@ AstNodePtr Parser::parse_decorator() {
 
     // 通用形式：@d1 @d2 ... expr ≡ d1(d2(...(expr)))
     AstNodePtr target{parse_expr()};
-    for (auto &&[expr, pos] :
-         std::views::zip(decorators, positions_decorator) | std::views::reverse) {
-        target = std::make_unique<AstNodeDecorator>(pos, std::move(expr), std::move(target));
+    for (auto i{decorators.size()}; i-- > 0;) {
+        target = std::make_unique<AstNodeDecorator>(
+            positions_decorator[i], std::move(decorators[i]), std::move(target)
+        );
     }
     return target;
 }

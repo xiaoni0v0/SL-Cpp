@@ -54,6 +54,7 @@
 | `runtime/RaisedException.h` | `raise` 用的 C++ 信封（装一个 `ObjectRef`），只在一段不回调 SL、有界的 C++ 代码里 throw/catch，不是异常跨 SL 帧传播的机制——那个仍是主循环手写的显式算法，见 bytecode.md。 |
 | `runtime/HostErrorConversion.{h,cpp}` | 宿主异常 → SL 异常对象的转换函数（`SyntaxError`/`EncodingError`/`FileNotFoundError` 各一个），`InternalError` 故意没有对应函数。 |
 | `cppexceptions/` | 宿主（C++）层的异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`）加 `SourceLocation.h`，纯头文件。**信息以结构化字段为准，`what()` 只是构造时渲染出来的一种呈现**——转成 SL 异常对象时要的是分开的 file/row/col/message，见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。放在顶层而不是 `compiler/` 下，是因为 `utils/` 也要用它，而 `utils/` 是纯 C++ 层、不能反过来依赖 `compiler/`。 |
+| `common/` | 平台无关、但全项目都可能用到的通用基础设施，纯头文件，不依赖任何模块。放在顶层而不是 `utils/` 里，理由跟 `cppexceptions/` 一样：`numeric/` 按设计不依赖任何模块，挂在 `utils/` 下它就用不了。目前只有 `common.h`：编译器 id（`SL_COMPILER_GCC/CLANG/CLANG_CL/MSVC`）和当前编译器 `SL_COMPILER`，用法 `#if SL_COMPILER == SL_COMPILER_GCC`（id 从 1 起编，拼错宏名不会悄悄匹配上）。 |
 | `utils/` | 自由函数工具：`string_utils`（UTF-8/UTF-32 互转等）、`file_utils`（读文件）、`memory_utils.h`（`mem::heap_bytes`，各对象类型 `size_bytes()` 的公共零件；**没有兜底重载**，认不出的类型是编译错误，见 [notes/object-model-conventions.md](notes/object-model-conventions.md)）。 |
 | `compiler/codegen/` | [`bytecode.md`](../compiler/codegen/bytecode.md)：指令集/帧/`Code` 的完整设计，动这里之前先读它。`x_opcodes.inc`/`x_unary_ops.inc`/`x_binary_ops.inc` 是字节码格式的唯一真源（X-macro 清单），`opcode.h` 由它们展开出 `OpCode`/`UnaryOp`/`BinaryOp` 和 `stack_effect()`。`CodeGen.{h,cpp}`（`AstConstVisitor` 的实现）：节点 → 指令，`want_value` 走成员通道。`CodeBuilder.{h,cpp}`：一份 `Code` 的组装器，管标签回填、`EXTENDED_ARG` 定点迭代、栈深静态跟踪与四张表——**不认识 AST**。`disassembler.{h,cpp}`：`Code` → 文本，虚拟机落地之前这是检查 codegen 产物的唯一手段。`ConstPool.{h,cpp}`：常量表的去重池，`intern()` 返回槽号、值相等的常量恒占同一个槽（`a = (1,2)` / `b = (1,2)` 的 `a is b` 因此为真）。**去重判据是「结构标识」，跟 SL 的 `==`/`hash` 好些地方正好相反**——放在 codegen 而不是 runtime 正是为了不让它跟对象模型里的相等混淆，见 [context.md](context.md)。 |
 | `executor/` | `Executor.{h,cpp}`：命令行入口的驱动——解析 argv、起落运行时、逐阶段调 `Compiler`、把中间产物和错误打到 stdout/stderr，`main.cpp` 调它。串流水线的活在 `compiler/Compiler` 里，不在这。真正的字节码虚拟机还没写，设计见 [`bytecode.md`](../compiler/codegen/bytecode.md)。 |
@@ -314,7 +315,8 @@ ctest 现在约 28 秒。要更大覆盖别往表里堆，用倍数参数临时�
   调用方保证的"这层歧义），配的校验方式看这个前提要不要在 Release 构建里也生效：只在开发期兜底的
   用 `assert(...)`（在函数开头，`NDEBUG` 下会被优化掉，所以不能拿它实现真正的校验）；`SemanticChecker`/
   `string_utils`/`cppexceptions` 这类需要在 Release 也生效的真实校验，走抛异常
-  （`SyntaxError`/`InternalError`/`EncodingError`），不能用 `assert` 顶替。
+  （`SyntaxError`/`InternalError`/`EncodingError`），不能用 `assert` 顶替。具体怎么选（看"Release 下
+  被编译掉会不会静默出错"）见 [notes/assert-vs-internal-error.md](notes/assert-vs-internal-error.md)。
 - **避免"同一产物在多个出口分头构造"**：同一种产物如果在多处提前返回、各自构造，等于制造了多份
   测试压不到的独立状态空间，历史上好几个换行容错类的 bug 都是这个模式孵出来的。能合并"同一产物多处
   构造"就合并，只保留"产物本质不同"的分叉（比如字典字面量 vs 复合表达式、分组 vs 元组，这些才是

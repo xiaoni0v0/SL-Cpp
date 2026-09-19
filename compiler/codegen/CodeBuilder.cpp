@@ -78,13 +78,14 @@ CodeBuilder::Label CodeBuilder::new_label() {
 
 void CodeBuilder::place_label(const Label label) {
     assert(label < label_targets_.size());
-    assert(!label_targets_[label] && "一个标签只能放置一次");
+    assert(!label_targets_[label]);
 
     label_targets_[label] = static_cast<std::uint32_t>(instrs_.size());
 
     if (const std::optional<std::uint32_t> known{label_stacks_[label]}) {
         // 有人跳到这里，栈深以跳转方为准
-        assert((unreachable_ || cur_stack_ == *known) && "标签处两条路径的栈深不一致");
+        if (!unreachable_ && cur_stack_ != *known)
+            throw InternalError{"stack depth mismatch at label"};
         cur_stack_ = *known;
         max_stack_ = std::max(max_stack_, cur_stack_);
         unreachable_ = false;
@@ -97,7 +98,7 @@ void CodeBuilder::place_label(const Label label) {
 }
 
 void CodeBuilder::apply_effect(const int effect) {
-    assert(static_cast<int>(cur_stack_) + effect >= 0 && "操作数栈被弹空了");
+    if (static_cast<int>(cur_stack_) + effect < 0) throw InternalError{"operand stack underflow"};
 
     cur_stack_ = static_cast<std::uint32_t>(static_cast<int>(cur_stack_) + effect);
     max_stack_ = std::max(max_stack_, cur_stack_);
@@ -105,7 +106,7 @@ void CodeBuilder::apply_effect(const int effect) {
 
 void CodeBuilder::note_label_stack(const Label label, const std::uint32_t depth) {
     std::optional<std::uint32_t> &known{label_stacks_[label]};
-    assert((!known || *known == depth) && "同一个标签处两条路径的栈深不一致");
+    if (known && *known != depth) throw InternalError{"stack depth mismatch at label"};
 
     known = depth;
 }
@@ -129,11 +130,11 @@ void CodeBuilder::emit(const OpCode op, const Position pos) {
 }
 
 void CodeBuilder::emit(const OpCode op, const std::uint32_t arg, const Position pos) {
-    assert(opcode_arg_kind(op) != ArgKind::None && "无参指令别传参数");
-    assert(opcode_arg_kind(op) != ArgKind::Jump && "跳转指令走 emit_jump");
+    assert(opcode_arg_kind(op) != ArgKind::None);
+    assert(opcode_arg_kind(op) != ArgKind::Jump && "use emit_jump");
     assert(
         opcode_arg_kind(op) != ArgKind::UnaryOp && opcode_arg_kind(op) != ArgKind::BinaryOp &&
-        "运算符指令传枚举，别传裸数"
+        "use the enum overload"
     );
 
     push_instr(PseudoInstr{op, arg, false, pos});
@@ -191,7 +192,7 @@ Ref<Code> CodeBuilder::build() && {
             if (!instrs_[i].arg_is_label_) continue;
 
             const std::optional<std::uint32_t> &target{label_targets_[instrs_[i].arg_]};
-            assert(target && "跳转指向了一个没放置过的标签");
+            if (!target) throw InternalError{"jump to unplaced label"};
 
             if (const std::uint32_t want{instr_width(offsets[*target])}; want > widths[i]) {
                 widths[i] = want;

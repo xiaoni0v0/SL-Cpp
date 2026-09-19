@@ -102,10 +102,7 @@ void Heap::collect() {
 
     // 5. 销毁
     for (Object *const object : garbage) {
-        if (object->refcount() != 1)
-            throw InternalError{
-                "GC: garbage object still referenced (collect() called outside a safe point?)"
-            };
+        if (object->refcount() != 1) throw InternalError{"GC: garbage object still referenced"};
 
         object->decref();
     }

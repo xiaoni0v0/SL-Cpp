@@ -1,6 +1,6 @@
 #include "DecContext.h"
 
-#include <cassert>
+#include <stdexcept>
 
 DecCondition signal_of(const DecCondition condition) {
     switch (condition) {
@@ -19,8 +19,7 @@ DecCondition signal_of(const DecCondition condition) {
     case DecCondition::Underflow:
         return condition;
     }
-    assert(!"Unknown DecCondition");
-    return DecCondition::InvalidOperation;
+    throw std::logic_error{"invalid DecCondition"};
 }
 
 const char *dec_condition_name(const DecCondition condition) {
@@ -40,8 +39,7 @@ const char *dec_condition_name(const DecCondition condition) {
     case DecCondition::InvalidContext:     return "InvalidContext";
     }
     // clang-format on
-    assert(!"Unknown DecCondition");
-    return "?";
+    throw std::logic_error{"invalid DecCondition"};
 }
 
 DecSignalSet::DecSignalSet(const std::initializer_list<DecCondition> conditions) {
