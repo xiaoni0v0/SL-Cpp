@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <type_traits>
 
 #include <SafeInt.hpp>
 
@@ -34,43 +35,82 @@
 #endif
 
 // ============================================================
-// 原 <stdckdint.h>，返回的 bool 表示是否溢出
+// 原 <stdckdint.h>，返回的 bool 表示是否溢出。
 // ============================================================
 
 template <std::integral type_result, std::integral type1, std::integral type2>
-    requires std::is_same_v<type_result, type1> &&
-             ((!std::is_same_v<type1, bool>) && (!std::is_same_v<type2, bool>) )
-bool sl_overflow_add(type_result &result, type1 a, type2 b) {
+    requires(
+        std::is_same_v<type_result, type1> && (!std::is_same_v<type1, bool>) &&
+        (!std::is_same_v<type2, bool>)
+    )
+bool sl_overflow_add(type_result *result, type1 a, type2 b) {
 #if __has_builtin(__builtin_add_overflow)
-    return __builtin_add_overflow(a, b, &result);
+    return __builtin_add_overflow(a, b, result);
 #else
-    return !SafeAdd(a, b, result);
+    return !SafeAdd(a, b, *result);
+#endif
+}
+
+template <std::integral type1, std::integral type2>
+    requires((!std::is_same_v<type1, bool>) && (!std::is_same_v<type2, bool>) )
+bool sl_overflow_add(type1 a, type2 b) {
+#if __has_builtin(__builtin_add_overflow_p)
+    return __builtin_add_overflow_p(a, b, static_cast<type1>(0));
+#else
+    type1 tmp{};
+    return sl_overflow_add(&tmp, a, b);
 #endif
 }
 
 template <typename... Args> bool sl_overflow_add(Args &&...args) = delete;
 
 template <std::integral type_result, std::integral type1, std::integral type2>
-    requires std::is_same_v<type_result, type1> &&
-             ((!std::is_same_v<type1, bool>) && (!std::is_same_v<type2, bool>) )
-bool sl_overflow_sub(type_result &result, type1 a, type2 b) {
+    requires(
+        std::is_same_v<type_result, type1> && (!std::is_same_v<type1, bool>) &&
+        (!std::is_same_v<type2, bool>)
+    )
+bool sl_overflow_sub(type_result *result, type1 a, type2 b) {
 #if __has_builtin(__builtin_sub_overflow)
-    return __builtin_sub_overflow(a, b, &result);
+    return __builtin_sub_overflow(a, b, result);
 #else
-    return !SafeSubtract(a, b, result);
+    return !SafeSubtract(a, b, *result);
+#endif
+}
+
+template <std::integral type1, std::integral type2>
+    requires((!std::is_same_v<type1, bool>) && (!std::is_same_v<type2, bool>) )
+bool sl_overflow_sub(type1 a, type2 b) {
+#if __has_builtin(__builtin_sub_overflow_p)
+    return __builtin_sub_overflow_p(a, b, static_cast<type1>(0));
+#else
+    type1 tmp{};
+    return sl_overflow_sub(&tmp, a, b);
 #endif
 }
 
 template <typename... Args> bool sl_overflow_sub(Args &&...args) = delete;
 
 template <std::integral type_result, std::integral type1, std::integral type2>
-    requires std::is_same_v<type_result, type1> &&
-             ((!std::is_same_v<type1, bool>) && (!std::is_same_v<type2, bool>) )
-bool sl_overflow_mul(type_result &result, type1 a, type2 b) {
+    requires(
+        std::is_same_v<type_result, type1> && (!std::is_same_v<type1, bool>) &&
+        (!std::is_same_v<type2, bool>)
+    )
+bool sl_overflow_mul(type_result *result, type1 a, type2 b) {
 #if __has_builtin(__builtin_mul_overflow)
-    return __builtin_mul_overflow(a, b, &result);
+    return __builtin_mul_overflow(a, b, result);
 #else
-    return !SafeMultiply(a, b, result);
+    return !SafeMultiply(a, b, *result);
+#endif
+}
+
+template <std::integral type1, std::integral type2>
+    requires((!std::is_same_v<type1, bool>) && (!std::is_same_v<type2, bool>) )
+bool sl_overflow_mul(type1 a, type2 b) {
+#if __has_builtin(__builtin_mul_overflow_p)
+    return __builtin_mul_overflow_p(a, b, static_cast<type1>(0));
+#else
+    type1 tmp{};
+    return sl_overflow_mul(&tmp, a, b);
 #endif
 }
 
