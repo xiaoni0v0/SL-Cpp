@@ -1,5 +1,9 @@
 #pragma once
 
+#include <concepts>
+
+#include <SafeInt.hpp>
+
 // ============================================================
 // 编译器 id，用宏 SL_COMPILER
 // ============================================================
@@ -30,30 +34,44 @@
 #endif
 
 // ============================================================
-// 原 <stdckdint.h>
+// 原 <stdckdint.h>，返回的 bool 表示是否溢出
 // ============================================================
 
 template <std::integral type_result, std::integral type1, std::integral type2>
-constexpr bool sl_checked_add_impl(type_result *result, type1 a, type2 b);
-
-template <std::integral type_result, std::integral type1, std::integral type2>
-constexpr bool sl_checked_sub_impl(type_result *result, type1 a, type2 b);
-
-template <std::integral type_result, std::integral type1, std::integral type2>
-constexpr bool sl_checked_mul_impl(type_result *result, type1 a, type2 b);
-
+    requires std::is_same_v<type_result, type1> &&
+             ((!std::is_same_v<type1, bool>) && (!std::is_same_v<type2, bool>) )
+bool sl_overflow_add(type_result &result, type1 a, type2 b) {
 #if __has_builtin(__builtin_add_overflow)
-#define sl_checked_add(result, a, b) __builtin_add_overflow(a, b, result)
+    return __builtin_add_overflow(a, b, &result);
 #else
-#define sl_checked_add(result, a, b) sl_checked_add_impl(result, a, b)
+    return !SafeAdd(a, b, result);
 #endif
+}
+
+template <typename... Args> bool sl_overflow_add(Args &&...args) = delete;
+
+template <std::integral type_result, std::integral type1, std::integral type2>
+    requires std::is_same_v<type_result, type1> &&
+             ((!std::is_same_v<type1, bool>) && (!std::is_same_v<type2, bool>) )
+bool sl_overflow_sub(type_result &result, type1 a, type2 b) {
 #if __has_builtin(__builtin_sub_overflow)
-#define sl_checked_sub(result, a, b) __builtin_sub_overflow(a, b, result)
+    return __builtin_sub_overflow(a, b, &result);
 #else
-#define sl_checked_sub(result, a, b) sl_checked_sub_impl(result, a, b)
+    return !SafeSubtract(a, b, result);
 #endif
+}
+
+template <typename... Args> bool sl_overflow_sub(Args &&...args) = delete;
+
+template <std::integral type_result, std::integral type1, std::integral type2>
+    requires std::is_same_v<type_result, type1> &&
+             ((!std::is_same_v<type1, bool>) && (!std::is_same_v<type2, bool>) )
+bool sl_overflow_mul(type_result &result, type1 a, type2 b) {
 #if __has_builtin(__builtin_mul_overflow)
-#define sl_checked_mul(result, a, b) __builtin_mul_overflow(a, b, result)
+    return __builtin_mul_overflow(a, b, &result);
 #else
-#define sl_checked_mul(result, a, b) sl_checked_mul_impl(result, a, b)
+    return !SafeMultiply(a, b, result);
 #endif
+}
+
+template <typename... Args> bool sl_overflow_mul(Args &&...args) = delete;

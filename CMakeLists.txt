@@ -70,8 +70,6 @@ endif()
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
 
 function(sl_apply_target_options target)
-    target_compile_definitions(${target} PRIVATE $<$<CONFIG:Release>:NDEBUG>)
-
     if(SL_MSVC_LIKE_FRONTEND)
         target_compile_options(
             ${target}
@@ -152,13 +150,21 @@ FetchContent_Declare(
     GIT_TAG v2.5.3
     GIT_SHALLOW TRUE
 )
-FetchContent_MakeAvailable(nlohmann_json cxxopts doctest)
+FetchContent_Declare(
+    safeint
+    GIT_REPOSITORY https://github.com/dcleblanc/SafeInt.git
+    GIT_TAG 3.24
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(nlohmann_json cxxopts doctest safeint)
+add_library(SafeInt INTERFACE)
+target_include_directories(SafeInt SYSTEM INTERFACE ${safeint_SOURCE_DIR})
 
 # ------------------------------------------------------------
 # 各模块。依赖方向：cppexceptions <- utils/numeric <- runtime <- compiler <- executor
 # ------------------------------------------------------------
-add_subdirectory(cppexceptions)
 add_subdirectory(common)
+add_subdirectory(cppexceptions)
 add_subdirectory(utils)
 add_subdirectory(numeric)
 add_subdirectory(runtime)
