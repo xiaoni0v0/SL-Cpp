@@ -1377,9 +1377,12 @@ Boost 头文件在严格编译选项下容易冒警告；`int` 四则运算是�
 `pow`/`operator<<` **没有结果规模上限**——`2 ** 10**9` 会真的去算一个十亿位的数，是明确决定不管
 （"炸就炸呗，本来就是这么用的"），不是遗漏；真要限制留给以后接上 VM 时再谈。
 
-溢出检测用 C++26 `<stdckdint.h>`（`ckd_add`/`ckd_sub`/`ckd_mul`）而不是 `__builtin_*_overflow`
-或 SafeInt：后者是编译器专有名字，项目要支持的纯 `cl.exe` 前端不认；SafeInt 是抛异常的接口，跟
-这个类"折不动一律返回信号、从不抛异常"的风格不合。
+溢出检测走 `common/common.h` 的 `sl_overflow_add/sub/mul`（语义等同 C23/C++26 的
+`<stdckdint.h>`，返回 `true` 表示溢出），不直接用 `<stdckdint.h>`：MSVC 的 `cl.exe` 没有这个头，
+项目又要支持它。GCC/Clang/clang-cl 用 `__builtin_*_overflow`，`cl` 没有内建函数，用 SafeInt 的
+`SafeAdd`/`SafeSubtract`/`SafeMultiply`——**只用它返回 bool 的自由函数，不用会抛异常的 `SafeInt<T>` 类**，
+所以不违背"折不动一律返回信号、从不抛异常"这个类的风格。两条路径用同一份差分向量（边界值 + 随机，
+期望值由 Python 大整数算出，int64/uint64/int32 三种类型）验证过，各 8 万多项检查零失败。
 
 ### `numeric/BigDec`：复用 BigInt，但"规范形式"跟 BigInt 不是一回事
 

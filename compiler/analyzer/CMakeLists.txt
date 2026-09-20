@@ -10,4 +10,8 @@ sl_add_module(
     semantic_checker/SemanticChecker.h
 )
 
-target_link_libraries(sl_compiler_analyzer PUBLIC sl_compiler_parser)
+target_link_libraries(
+    sl_compiler_analyzer
+    PUBLIC sl_compiler_parser
+    PRIVATE sl_common
+)

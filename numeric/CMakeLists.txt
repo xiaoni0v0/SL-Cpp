@@ -10,3 +10,5 @@ sl_add_module(
     dec_math.cpp
     dec_math.h
 )
+
+target_link_libraries(sl_numeric PRIVATE sl_common)

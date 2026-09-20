@@ -1,12 +1,12 @@
 #include "StaticEvaler.h"
 
+#include "../../../common/common.h"
 #include "../../../utils/string_utils.h"
 
 #include <algorithm>
 #include <cassert>
 #include <charconv>
 #include <cstdint>
-#include <stdckdint.h>
 #include <string>
 
 namespace {
@@ -20,35 +20,35 @@ bool is_negative_int_literal(const AstNode &node) {
 // a + b 是否会超过 cap
 bool sum_exceeds(const size_t a, const size_t b, const size_t cap) {
     size_t sum;
-    if (ckd_add(&sum, a, b)) return true;
+    if (sl_overflow_add(&sum, a, b)) return true;
     return sum > cap;
 }
 
 // a * b 是否会超过 cap
 bool mul_exceeds(const size_t a, const size_t b, const size_t cap) {
     size_t product;
-    if (ckd_mul(&product, a, b)) return true;
+    if (sl_overflow_mul(&product, a, b)) return true;
     return product > cap;
 }
 
 // a + b（int64_t），溢出返回 nullopt
 std::optional<int64_t> checked_add(const int64_t a, const int64_t b) {
     int64_t sum;
-    if (ckd_add(&sum, a, b)) return std::nullopt;
+    if (sl_overflow_add(&sum, a, b)) return std::nullopt;
     return sum;
 }
 
 // a - b（int64_t），溢出返回 nullopt
 std::optional<int64_t> checked_sub(const int64_t a, const int64_t b) {
     int64_t diff;
-    if (ckd_sub(&diff, a, b)) return std::nullopt;
+    if (sl_overflow_sub(&diff, a, b)) return std::nullopt;
     return diff;
 }
 
 // a * b（int64_t），溢出返回 nullopt
 std::optional<int64_t> checked_mul(const int64_t a, const int64_t b) {
     int64_t product;
-    if (ckd_mul(&product, a, b)) return std::nullopt;
+    if (sl_overflow_mul(&product, a, b)) return std::nullopt;
     return product;
 }
 

@@ -37,7 +37,7 @@
 ## 不属于这两者的
 
 - 用户 SL 代码写错了：抛 `SyntaxError`（或以后的 SL 异常），不是 `InternalError`。
-- **`numeric/` 不依赖任何模块**，不能引入 `cppexceptions`。需要 Release 也生效的校验时用标准库异常：
+- **`numeric/` 只依赖最底层的 `common/`，不依赖 `cppexceptions/`**，所以不能抛 `InternalError`。需要 Release 也生效的校验时用标准库异常：
   `std::invalid_argument`（调用方传了不合法的参数）、`std::logic_error`（枚举值越界这类"不可能"）。
 
 ## 措辞

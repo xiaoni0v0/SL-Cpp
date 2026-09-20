@@ -2,10 +2,10 @@
 
 #include <algorithm>
 #include <cassert>
-#include <stdckdint.h>
 #include <stdexcept>
 #include <tuple>
 
+#include "../common/common.h"
 #include "dec_math.h"
 
 namespace {
@@ -641,8 +641,8 @@ std::optional<BigDec> BigDec::try_from_string(const std::string &s) {
         if (i == exp_begin) return std::nullopt;
         // 逐位累加时用溢出检测挡真正装不进 int64_t 的输入，不是按位数估算着拒绝
         for (size_t k{exp_begin}; k < i; ++k) {
-            if (ckd_mul(&exp, exp, int64_t{10}) ||
-                ckd_add(&exp, exp, static_cast<int64_t>(s[k] - '0')))
+            if (sl_overflow_mul(&exp, exp, int64_t{10}) ||
+                sl_overflow_add(&exp, exp, static_cast<int64_t>(s[k] - '0')))
                 return std::nullopt;
         }
         if (exp_negative) exp = -exp;

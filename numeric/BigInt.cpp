@@ -1,10 +1,11 @@
 #include "BigInt.h"
 
+#include "../common/common.h"
+
 #include <algorithm>
 #include <bit>
 #include <cassert>
 #include <cmath>
-#include <stdckdint.h>
 #include <stdexcept>
 #include <utility>
 
@@ -348,8 +349,8 @@ BigInt BigInt::from_decimal_string(const std::string &s) {
             throw std::invalid_argument("BigInt::from_decimal_string: no exponent digits");
         // 逐位累加时用溢出检测挡真正装不进 int64_t 的输入，不是按位数估算着拒绝
         for (size_t k{exp_begin}; k < i; ++k) {
-            if (ckd_mul(&exponent, exponent, int64_t{10}) ||
-                ckd_add(&exponent, exponent, static_cast<int64_t>(s[k] - '0')))
+            if (sl_overflow_mul(&exponent, exponent, int64_t{10}) ||
+                sl_overflow_add(&exponent, exponent, static_cast<int64_t>(s[k] - '0')))
                 throw std::invalid_argument("BigInt::from_decimal_string: exponent out of range");
         }
     }
@@ -518,7 +519,7 @@ BigInt BigInt::bit_not() const { return minus().sub(BigInt(1)); }
 BigInt BigInt::add(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) {
         int64_t sum;
-        if (!ckd_add(&sum, small_, rhs.small_)) {
+        if (!sl_overflow_add(&sum, small_, rhs.small_)) {
             BigInt result;
             result.is_small_ = true;
             result.small_ = sum;
@@ -542,7 +543,7 @@ BigInt BigInt::sub(const BigInt &rhs) const { return add(rhs.minus()); }
 BigInt BigInt::mul(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) {
         int64_t product;
-        if (!ckd_mul(&product, small_, rhs.small_)) {
+        if (!sl_overflow_mul(&product, small_, rhs.small_)) {
             BigInt result;
             result.is_small_ = true;
             result.small_ = product;
@@ -627,7 +628,7 @@ BigInt BigInt::shift_left(const long long k) const {
     // k <= 62 时 int64_t{1} << k 不碰符号位，可以安全地拿去做溢出检测的乘数
     if (is_small_ && k <= 62) {
         int64_t product;
-        if (!ckd_mul(&product, small_, int64_t{1} << k)) return BigInt(product);
+        if (!sl_overflow_mul(&product, small_, int64_t{1} << k)) return BigInt(product);
     }
 
     return shrink(from_magnitude(
