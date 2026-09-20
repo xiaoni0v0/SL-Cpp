@@ -97,8 +97,10 @@ function(sl_apply_target_options target)
     endif()
 endfunction()
 
-# 各模块共用的预编译头（只放标准库）
-function(sl_apply_pch target)
+# 建一个模块静态库
+function(sl_add_module target)
+    add_library(${target} STATIC ${ARGN})
+    sl_apply_target_options(${target})
     target_precompile_headers(
         ${target}
         PRIVATE
@@ -116,13 +118,6 @@ function(sl_apply_pch target)
             <utility>
             <vector>
     )
-endfunction()
-
-# 建一个模块静态库
-function(sl_add_module target)
-    add_library(${target} STATIC ${ARGN})
-    sl_apply_target_options(${target})
-    sl_apply_pch(${target})
 endfunction()
 
 # 第三方库
