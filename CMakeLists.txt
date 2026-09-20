@@ -47,7 +47,6 @@ if(
 )
     set(SL_MSVC_LIKE_FRONTEND TRUE)
     add_compile_options(/utf-8 /bigobj)
-    # 所有目标（含各静态库）统一运行时库
     set(CMAKE_MSVC_RUNTIME_LIBRARY
         "$<IF:$<CONFIG:Debug>,MultiThreadedDebugDLL,MultiThreaded>"
     )
@@ -62,7 +61,6 @@ endif()
 #   -Werror                  ->  /WX
 #   -g                       ->  /Zi
 #   -O0 / -O2                ->  /Od / /O2
-#   -Wshadow                 ->  clang-cl -Wshadow；cl 的 /W4 已含 C4456-C4459
 #   -Wpointer-arith -Winvalid-pch 省略。
 #   /EHsc 是 MSVC 下开启标准 C++ 异常处理语义所必需的。
 # ------------------------------------------------------------
@@ -82,9 +80,6 @@ function(sl_apply_target_options target)
                 $<$<CONFIG:Debug>:/Od>
                 $<$<CONFIG:Release>:/O2>
         )
-        if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-            target_compile_options(${target} PRIVATE -Wshadow)
-        endif()
     else()
         target_compile_options(
             ${target}
@@ -92,7 +87,6 @@ function(sl_apply_target_options target)
                 -Wall
                 -Wextra
                 -pedantic
-                -Wshadow
                 -Wpointer-arith
                 -Winvalid-pch
                 $<$<CONFIG:Debug>:-Werror>
@@ -110,6 +104,7 @@ function(sl_apply_pch target)
         PRIVATE
             <algorithm>
             <charconv>
+            <concepts>
             <filesystem>
             <format>
             <iostream>
