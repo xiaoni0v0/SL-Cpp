@@ -3,8 +3,6 @@
 #include <concepts>
 #include <type_traits>
 
-#include <SafeInt.hpp>
-
 // ============================================================
 // 编译器 id，用宏 SL_COMPILER
 // ============================================================
@@ -37,6 +35,12 @@
 // ============================================================
 // 原 <stdckdint.h>，返回的 bool 表示是否溢出。
 // ============================================================
+
+// 缺任何一个就包含
+#if !__has_builtin(__builtin_add_overflow) || !__has_builtin(__builtin_sub_overflow) ||            \
+    !__has_builtin(__builtin_mul_overflow)
+#include <SafeInt.hpp>
+#endif
 
 template <std::integral type_result, std::integral type1, std::integral type2>
     requires(
