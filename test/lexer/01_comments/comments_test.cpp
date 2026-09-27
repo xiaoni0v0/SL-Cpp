@@ -38,8 +38,8 @@ TEST_SUITE("注释") {
     TEST_CASE("块注释跨行后后续 token 的行号跟着走") {
         const auto tokens{lex(U"1 /* a\nb\nc */ 2")};
         REQUIRE(tokens.size() == 3);
-        CHECK(tokens[0].row == 1);
-        CHECK(tokens[1].row == 3);
+        CHECK(tokens[0].pos.row == 1);
+        CHECK(tokens[1].pos.row == 3);
     }
 
     TEST_CASE("块注释不嵌套：内层 */ 结束整段") {

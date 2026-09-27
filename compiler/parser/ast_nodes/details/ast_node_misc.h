@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../../../common/Position.h"
 #include "ast_node.h"
 
 #include <string>

@@ -1,5 +1,6 @@
 #include "ast_node_literals.h"
 
+#include "../../../../common/Position.h"
 #include "../../../../cppexceptions/InternalError.h"
 #include "../../../../utils/string_utils.h"
 #include "ast_node.h"
@@ -13,7 +14,7 @@
 namespace {
 
 [[noreturn]] void error_internal(const std::string &msg, const Position pos) {
-    throw InternalError{"<file>", pos.row, pos.col, "AstNodeLiteral: " + msg};
+    throw InternalError{"<file>", pos, "AstNodeLiteral: " + msg};
 }
 
 // raw_ 拆出来的某一段必须是非空的纯十进制数字串，否则以 InternalError 报告。

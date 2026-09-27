@@ -1,6 +1,6 @@
 #include "StaticEvaler.h"
 
-#include "../../../common/common.h"
+#include "../../../common/overflow.h"
 #include "../../../utils/string_utils.h"
 #include "../../parser/ast_nodes/ast_nodes.h"
 

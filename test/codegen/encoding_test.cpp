@@ -80,12 +80,12 @@ STORE_NAME 1
 
         const std::optional first{code->line_at(0)};
         REQUIRE(first.has_value());
-        CHECK(first->row == 1);
+        CHECK(first->pos.row == 1);
 
         // 第二条语句的指令从 pc 2 起。末尾那条隐含的 return None 用的是整份 Program 的位置
         const std::optional second{code->line_at(2)};
         REQUIRE(second.has_value());
-        CHECK(second->row == 2);
+        CHECK(second->pos.row == 2);
     }
 
     TEST_CASE("source_name 跟着传进来的文件路径走") {

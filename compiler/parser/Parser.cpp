@@ -1,5 +1,6 @@
 #include "Parser.h"
 
+#include "../../common/Position.h"
 #include "../../cppexceptions/InternalError.h"
 #include "../../cppexceptions/SyntaxError.h"
 #include "../../utils/string_utils.h"
@@ -342,16 +343,16 @@ void Parser::skip_terminator() {
 }
 
 void Parser::error(const std::string &msg, std::optional<Position> pos) const {
-    if (!pos) pos = {peek().row, peek().col};
-    throw SyntaxError{file_path_, pos->row, pos->col, msg};
+    if (!pos) pos = peek().pos;
+    throw SyntaxError{file_path_, *pos, msg};
 }
 
 void Parser::error_internal(const std::string &msg) const {
-    throw InternalError{file_path_, 1, 1, "Parser: " + msg};
+    throw InternalError{file_path_, Position{1, 1}, "Parser: " + msg};
 }
 
 void Parser::error_internal(const std::string &msg, const Position pos) const {
-    throw InternalError{file_path_, pos.row, pos.col, "Parser: " + msg};
+    throw InternalError{file_path_, pos, "Parser: " + msg};
 }
 
 std::vector<AstNodePtr> Parser::parse_exprs() {
@@ -401,7 +402,7 @@ AstNodePtr Parser::parse_expr_pratt(const int min_bp) {
         }
 
         const Token &op_token{advance()}; // 消耗运算符
-        const Position pos_op{op_token.row, op_token.col};
+        const Position pos_op{op_token.pos};
 
         // 赋值（右结合，rbp = lbp - 1 = 9）
         if (op == TokenType::SIGN_ASSIGN) {
@@ -487,7 +488,7 @@ AstNodePtr Parser::parse_chain_compare(
         const auto next_op{token_type_to_compare_op_type(peek().type)};
         if (!next_op) break;
 
-        const Position next_op_pos{peek().row, peek().col};
+        const Position next_op_pos{peek().pos};
         advance(); // 消耗 '<' 或 '<=' 或 '>' 或 '>=' 或 '==' 或 '!='
         ops.push_back(*next_op);
         positions_op.push_back(next_op_pos);
@@ -516,7 +517,7 @@ Parser::parse_chain_is(AstNodePtr left, const Position start_pos, const Position
         skip_paren_newline();
         if (!check(TokenType::KW_IS)) break;
 
-        positions_op.emplace_back(peek().row, peek().col);
+        positions_op.emplace_back(peek().pos);
         expect(TokenType::KW_IS); // 消耗 'is'
         skip_newline();
         operands.push_back(parse_expr_pratt(kOperandMinBp));
@@ -530,8 +531,7 @@ AstNodePtr Parser::parse_non_op() {
 
     // 跳过前导换行
     skip_newline();
-    const auto &[type, row, col, lexeme]{peek()};
-    const Position pos{row, col};
+    const auto &[type, pos, lexeme]{peek()};
 
     switch (type) {
     // 标识符
@@ -679,14 +679,10 @@ AstNodePtr Parser::parse_expr_as_cond() {
 
     // 复合赋值 x op= y 允许裸写
     if (const auto compound_op{assign_compound_to_binary(peek().type)}) {
-        const auto &[op, op_row, op_col, lexeme]{advance()};
+        const auto &[op, op_pos, lexeme]{advance()};
         skip_newline();
         left = std::make_unique<AstNodeCompoundAssign>(
-            start_pos,
-            std::move(left),
-            *compound_op,
-            parse_expr_pratt(infix_bp(op).second),
-            Position{op_row, op_col}
+            start_pos, std::move(left), *compound_op, parse_expr_pratt(infix_bp(op).second), op_pos
         );
     }
 
@@ -731,7 +727,7 @@ CollectMark Parser::parse_collect_mark() {
 }
 
 AstNodePtr Parser::parse_paren_or_tuple() {
-    const Position start_pos{peek().row, peek().col};
+    const Position start_pos{peek().pos};
 
     expect_open(Bracket::Paren);
 
@@ -754,7 +750,7 @@ AstNodePtr Parser::parse_paren_or_tuple() {
 }
 
 AstNodePtr Parser::parse_list() {
-    const Position start_pos{peek().row, peek().col};
+    const Position start_pos{peek().pos};
 
     expect_open(Bracket::Square);
 
@@ -768,7 +764,7 @@ AstNodePtr Parser::parse_list() {
 }
 
 AstNodePtr Parser::parse_brace() {
-    const Position start_pos{peek().row, peek().col};
+    const Position start_pos{peek().pos};
 
     expect_open(Bracket::Brace);
 
@@ -804,19 +800,19 @@ AstNodePtr Parser::parse_brace() {
 }
 
 AstNodePtr Parser::parse_del() {
-    const Position start_pos{peek().row, peek().col};
+    const Position start_pos{peek().pos};
     expect(TokenType::KW_DEL); // 消耗 'del'
     skip_newline();
     return std::make_unique<AstNodeDel>(start_pos, parse_expr());
 }
 
 AstNodePtr Parser::parse_global() {
-    const Position start_pos{peek().row, peek().col};
+    const Position start_pos{peek().pos};
     expect(TokenType::KW_GLOBAL); // 消耗 'global'
     skip_newline();
 
     if (!check(TokenType::IDENTIFIER)) error("expected an identifier after 'global'");
-    const Position target_pos{peek().row, peek().col};
+    const Position target_pos{peek().pos};
     const AstNodePtr target{parse_expr()};
 
     if (const auto *ident{dynamic_cast<const AstNodeIdentifier *>(target.get())})
@@ -825,7 +821,7 @@ AstNodePtr Parser::parse_global() {
 }
 
 AstNodePtr Parser::parse_import() {
-    const Position start_pos{peek().row, peek().col};
+    const Position start_pos{peek().pos};
     expect(TokenType::KW_IMPORT); // 消耗 'import'
 
     skip_newline();
@@ -836,7 +832,7 @@ AstNodePtr Parser::parse_import() {
 
     // 关键字形态 import a.b.c
     if (!check(TokenType::IDENTIFIER)) error("expected an identifier after 'import'");
-    const Position target_pos{peek().row, peek().col};
+    const Position target_pos{peek().pos};
     const AstNodePtr target{parse_expr()};
 
     std::vector<std::u32string> segments;
@@ -857,7 +853,7 @@ AstNodePtr Parser::parse_import() {
 }
 
 AstNodePtr Parser::parse_if() {
-    const Position start_pos{peek().row, peek().col};
+    const Position start_pos{peek().pos};
     expect(TokenType::KW_IF); // 消耗 'if'
 
     std::vector<AstNodeIf::AstNodeCondAndExpr> clauses;
@@ -895,13 +891,13 @@ AstNodePtr Parser::parse_if() {
 }
 
 AstNodePtr Parser::parse_for() {
-    const Position start_pos{peek().row, peek().col};
+    const Position start_pos{peek().pos};
     expect(TokenType::KW_FOR); // 消耗 'for'
     skip_newline();
     const CollectMark collect{parse_collect_mark()};
 
     expect_open(Bracket::ForHeader);
-    const Position start_pos_header{peek().row, peek().col};
+    const Position start_pos_header{peek().pos};
 
     // 工具：一个槽在 ';'、换行、')' 前结束；当前位置直接就是它们，说明这个槽是空的
     const auto at_slot_boundary{[&]() -> bool {
@@ -976,7 +972,7 @@ AstNodePtr Parser::parse_for() {
 }
 
 AstNodePtr Parser::parse_while() {
-    const Position start_pos{peek().row, peek().col};
+    const Position start_pos{peek().pos};
     expect(TokenType::KW_WHILE); // 消耗 'while'
     skip_newline();
     const CollectMark collect{parse_collect_mark()};
@@ -992,7 +988,7 @@ AstNodePtr Parser::parse_while() {
 }
 
 AstNodePtr Parser::parse_return() {
-    const Position start_pos{peek().row, peek().col};
+    const Position start_pos{peek().pos};
     expect(TokenType::KW_RETURN); // 消耗 'return'
     // 裸 return（值为 None）
     const bool bare{!can_start_expr(peek().type)};
@@ -1000,7 +996,7 @@ AstNodePtr Parser::parse_return() {
 }
 
 AstNodePtr Parser::parse_try() {
-    const Position start_pos{peek().row, peek().col};
+    const Position start_pos{peek().pos};
     expect(TokenType::KW_TRY); // 消耗 'try'
 
     // try 后没有 '()'，直接跟主体
@@ -1056,7 +1052,7 @@ AstNodePtr Parser::parse_try() {
 }
 
 AstNodePtr Parser::parse_raise() {
-    const Position start_pos{peek().row, peek().col};
+    const Position start_pos{peek().pos};
     expect(TokenType::KW_RAISE); // 消耗 'raise'
     skip_newline();
     return std::make_unique<AstNodeRaise>(start_pos, parse_expr());
@@ -1066,7 +1062,7 @@ AstNodePtr Parser::parse_func(
     std::vector<AstNodePtr> decorators, std::vector<Position> positions_decorator,
     const Position deco_pos
 ) {
-    const Position start_pos{decorators.empty() ? Position{peek().row, peek().col} : deco_pos};
+    const Position start_pos{decorators.empty() ? peek().pos : deco_pos};
     expect(TokenType::KW_FUNC); // 消耗 'func'
     skip_newline();
 
@@ -1105,7 +1101,7 @@ AstNodePtr Parser::parse_func(
     }
 
     // 函数体：{ ... }（块内换行重新充当语句分隔符）
-    const Position body_pos{peek().row, peek().col};
+    const Position body_pos{peek().pos};
     expect_open(Bracket::Brace);
     std::vector body{parse_exprs()};
     expect_close(Bracket::Brace);
@@ -1127,7 +1123,7 @@ AstNodePtr Parser::parse_class(
     std::vector<AstNodePtr> decorators, std::vector<Position> positions_decorator,
     const Position deco_pos
 ) {
-    const Position start_pos{decorators.empty() ? Position{peek().row, peek().col} : deco_pos};
+    const Position start_pos{decorators.empty() ? peek().pos : deco_pos};
     expect(TokenType::KW_CLASS); // 消耗 'class'
     skip_newline();
 
@@ -1166,7 +1162,7 @@ AstNodePtr Parser::parse_class(
     }
 
     // 类体：{ ... }（同函数体：块内换行重新充当语句分隔符）
-    const Position body_pos{peek().row, peek().col};
+    const Position body_pos{peek().pos};
     expect_open(Bracket::Brace);
     std::vector body{parse_exprs()};
     expect_close(Bracket::Brace);
@@ -1189,7 +1185,7 @@ AstNodePtr Parser::parse_decorator() {
     std::vector<Position> positions_decorator;
 
     while (check(TokenType::SIGN_AT)) {
-        const Position deco_pos{peek().row, peek().col};
+        const Position deco_pos{peek().pos};
         expect(TokenType::SIGN_AT); // 消耗 '@'
         skip_newline();
         // 解析装饰器表达式（Pratt 在遇到 func / class / @ 前会自然停止，因为它们都不是中缀运算符）
@@ -1218,7 +1214,7 @@ AstNodePtr Parser::parse_decorator() {
 }
 
 AstNodePtr Parser::parse_eval() {
-    const Position start_pos{peek().row, peek().col};
+    const Position start_pos{peek().pos};
     expect(TokenType::KW_EVAL); // 消耗 'eval'
     skip_newline();
 
@@ -1380,7 +1376,7 @@ AstNodePtr Parser::finish_dict(const Position start_pos, AstNodePtr first) {
 }
 
 CallArgs Parser::finish_call_args() {
-    const Position pos_paren{peek().row, peek().col};
+    const Position pos_paren{peek().pos};
     expect_open(Bracket::Paren);
 
     // 实参
@@ -1422,7 +1418,7 @@ CallArgs Parser::finish_call_args() {
 }
 
 AstNodePtr Parser::finish_index(AstNodePtr obj, const Position start_pos) {
-    const Position pos_bracket{peek().row, peek().col};
+    const Position pos_bracket{peek().pos};
     expect_open(Bracket::Square);
 
     std::vector<AstNodePtr> args;
@@ -1447,13 +1443,12 @@ Parser::Parser(std::vector<Token> tokens, std::string file_path)
     const auto it{std::ranges::find_if(tokens_, [](const Token &t) -> bool {
         return t.type == TokenType::END_OF_FILE;
     })};
-    if (it < tokens_.end() - 1) error_internal("unexpected END_OF_FILE", {it->row, it->col});
-    if (it == tokens_.end())
-        error_internal("missing END_OF_FILE at the end", {tokens_.back().row, tokens_.back().col});
+    if (it < tokens_.end() - 1) error_internal("unexpected END_OF_FILE", it->pos);
+    if (it == tokens_.end()) error_internal("missing END_OF_FILE at the end", tokens_.back().pos);
 }
 
 AstNodeProgramPtr Parser::run_program() {
-    const Position start_pos{peek().row, peek().col};
+    const Position start_pos{peek().pos};
 
     // 解析若干个表达式
     std::vector exprs{parse_exprs()};

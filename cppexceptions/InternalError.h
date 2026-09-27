@@ -1,7 +1,7 @@
 #pragma once
 
+#include "../common/Position.h"
 #include "SLException.h"
-#include "SourceLocation.h"
 
 #include <format>
 #include <optional>
@@ -21,11 +21,12 @@ class InternalError : public SLException {
     explicit InternalError(const std::string &message)
         : SLException{std::format("{}: {}", kBlurb, message), message} {}
 
-    InternalError(std::string file_path, const int row, const int col, const std::string &message)
+    InternalError(std::string file_path, const Position pos, const std::string &message)
         : SLException{
-              std::format("{}:{}:{}:\n{}: {}", file_path, row, col, kBlurb, message), message
+              std::format("{}:{}:{}:\n{}: {}", file_path, pos.row, pos.col, kBlurb, message),
+              message
           },
-          location_{SourceLocation{std::move(file_path), row, col}} {}
+          location_{SourceLocation{std::move(file_path), pos}} {}
 
     [[nodiscard]] const std::optional<SourceLocation> &location() const { return location_; }
 };

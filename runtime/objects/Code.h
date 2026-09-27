@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../common/Position.h"
 #include "../../utils/memory_utils.h"
 #include "../Object.h"
 #include "Str.h"
@@ -48,8 +49,7 @@ class Code final : public Object {
      */
     struct LineEntry {
         std::uint32_t pc{0};
-        int row{0};
-        int col{0};
+        Position pos;
     };
 
     /**

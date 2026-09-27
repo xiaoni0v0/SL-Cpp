@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../common/Position.h"
 #include "../../runtime/Object.h"
 #include "../../runtime/objects/Code.h"
 #include "../../runtime/objects/Str.h"

@@ -1,6 +1,6 @@
 #include "BigInt.h"
 
-#include "../common/common.h"
+#include "../common/overflow.h"
 
 #include <algorithm>
 #include <bit>

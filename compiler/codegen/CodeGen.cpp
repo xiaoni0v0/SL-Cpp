@@ -1,5 +1,6 @@
 #include "CodeGen.h"
 
+#include "../../common/Position.h"
 #include "../../cppexceptions/InternalError.h"
 #include "../../numeric/BigDec.h"
 #include "../../numeric/BigInt.h"
@@ -202,7 +203,7 @@ CodeBuilder &CodeGen::code() const {
 }
 
 void CodeGen::error_internal(const std::string &msg, const Position pos) const {
-    throw InternalError{file_path_, pos.row, pos.col, "CodeGen: " + msg};
+    throw InternalError{file_path_, pos, "CodeGen: " + msg};
 }
 
 void CodeGen::gen(const AstNode &node, const bool want_value) {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../../common/Position.h"
 #include "../../parser/ast_nodes/ast_nodes.h"
 #include "../../parser/ast_nodes/ast_visitor.h"
 

@@ -1,5 +1,6 @@
 #include "SemanticChecker.h"
 
+#include "../../../common/Position.h"
 #include "../../../cppexceptions/InternalError.h"
 #include "../../../cppexceptions/SyntaxError.h"
 #include "../../parser/ast_nodes/ast_nodes.h"
@@ -12,11 +13,11 @@
 #include <vector>
 
 void SemanticChecker::error(const std::string &msg, const Position pos) const {
-    throw SyntaxError{file_path_, pos.row, pos.col, msg};
+    throw SyntaxError{file_path_, pos, msg};
 }
 
 void SemanticChecker::error_internal(const std::string &msg, const Position pos) const {
-    throw InternalError{file_path_, pos.row, pos.col, "SemanticChecker: " + msg};
+    throw InternalError{file_path_, pos, "SemanticChecker: " + msg};
 }
 
 void SemanticChecker::require_not_null(const AstNodePtr &node, const Position pos) const {

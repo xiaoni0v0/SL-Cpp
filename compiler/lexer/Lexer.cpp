@@ -1,5 +1,6 @@
 #include "Lexer.h"
 
+#include "../../common/Position.h"
 #include "../../cppexceptions/SyntaxError.h"
 #include "../../utils/string_utils.h"
 #include "token.h"
@@ -14,25 +15,25 @@
 #include <vector>
 
 char32_t Lexer::peek(const std::size_t offset) const {
-    const std::size_t idx{pos_ + offset};
+    const std::size_t idx{idx_ + offset};
     return idx < source_.size() ? source_[idx] : U'\0';
 }
 
 char32_t Lexer::advance() {
-    assert(pos_ < source_.size());
+    assert(idx_ < source_.size());
 
-    const char32_t c{source_[pos_++]};
+    const char32_t c{source_[idx_++]};
     if (c == U'\n') // 该换行了
-        row_++, col_ = 1;
+        pos_.row++, pos_.col = 1;
     else // 行中间
-        col_++;
+        pos_.col++;
     return c;
 }
 
-bool Lexer::is_eof() const { return pos_ >= source_.size(); }
+bool Lexer::is_eof() const { return idx_ >= source_.size(); }
 
-void Lexer::error(const std::string &msg, const int row, const int col) const {
-    throw SyntaxError{file_path_, row, col, msg};
+void Lexer::error(const std::string &msg, const Position pos) const {
+    throw SyntaxError{file_path_, pos, msg};
 }
 
 void Lexer::skip_spaces() {
@@ -40,10 +41,10 @@ void Lexer::skip_spaces() {
 }
 
 Token Lexer::read_newline() {
-    const int start_row{row_}, start_col{col_};
+    const Position start_pos{pos_};
 
     advance(); // 消耗 '\n'
-    return {TokenType::NEWLINE, start_row, start_col, U"\n"};
+    return {TokenType::NEWLINE, start_pos, U"\n"};
 }
 
 void Lexer::read_comment_line() {
@@ -51,7 +52,7 @@ void Lexer::read_comment_line() {
 }
 
 void Lexer::read_comment_block() {
-    const int start_row{row_}, start_col{col_};
+    const Position start_pos{pos_};
     advance(), advance(); // 消耗 /*
     while (!is_eof()) {
         if (peek() == U'*' && peek(1) == U'/') {
@@ -60,7 +61,7 @@ void Lexer::read_comment_block() {
         }
         advance();
     }
-    error("unterminated block comment", start_row, start_col);
+    error("unterminated block comment", start_pos);
 }
 
 Token Lexer::read_string(const char32_t quote) {
@@ -82,55 +83,49 @@ Token Lexer::read_string(const char32_t quote) {
         {U'"', U'"'},
     };
 
-    const int start_row{row_}, start_col{col_};
+    const Position start_pos{pos_};
 
     advance(); // 消耗开头引号
     std::u32string str_literal;
     while (!is_eof() && peek() != U'\n') {
         const char32_t c{advance()};
-        if (c == quote)
-            return {TokenType::LITERAL_STR, start_row, start_col, std::move(str_literal)};
+        if (c == quote) return {TokenType::LITERAL_STR, start_pos, std::move(str_literal)};
 
         // 转义字符
         if (c == U'\\') {
-            const int esc_row{row_}, esc_col{col_ - 1}; // 反斜杠自己的位置
+            const Position esc_pos{pos_.row, pos_.col - 1}; // 反斜杠自己的位置
 
             if (is_eof() || peek() == U'\n')
-                error("unterminated escape sequence in string literal", esc_row, esc_col);
+                error("unterminated escape sequence in string literal", esc_pos);
 
             const char32_t esc{advance()};
             if (const auto it{kEscapeCharMapping.find(esc)}; it != kEscapeCharMapping.end()) {
                 str_literal += it->second;
             } else {
-                error(
-                    std::format("unknown escape sequence '\\{}'", u32_to_utf8(esc)),
-                    esc_row,
-                    esc_col
-                );
+                error(std::format("unknown escape sequence '\\{}'", u32_to_utf8(esc)), esc_pos);
             }
         } else {
             str_literal += c;
         }
     }
-    error("unterminated string literal", start_row, start_col);
+    error("unterminated string literal", start_pos);
 }
 
 Token Lexer::read_raw_string() {
-    const int start_row{row_}, start_col{col_};
+    const Position start_pos{pos_};
 
     advance(); // 消耗开头反引号
     std::u32string str_literal;
     while (!is_eof()) {
         const char32_t c{advance()};
-        if (c == U'`')
-            return {TokenType::LITERAL_STR, start_row, start_col, std::move(str_literal)};
+        if (c == U'`') return {TokenType::LITERAL_STR, start_pos, std::move(str_literal)};
         str_literal += c;
     }
-    error("unterminated raw string literal", start_row, start_col);
+    error("unterminated raw string literal", start_pos);
 }
 
 Token Lexer::read_number() {
-    const int start_row{row_}, start_col{col_};
+    const Position start_pos{pos_};
 
     // 读一串数字
     const auto read_digits{
@@ -138,9 +133,7 @@ Token Lexer::read_number() {
             std::u32string digits;
             while (!is_eof() && is_digit(peek())) digits += advance();
             if (!allow_leading_zeros && digits.size() > 1 && digits[0] == U'0') {
-                error(
-                    std::format("leading zeros in {} are not permitted", part), start_row, start_col
-                );
+                error(std::format("leading zeros in {} are not permitted", part), start_pos);
             }
             return digits;
         }
@@ -168,7 +161,7 @@ Token Lexer::read_number() {
 
         const std::u32string exponent_digits{read_digits(false, "the exponent")};
         if (exponent_digits.empty()) {
-            error("missing exponent digits in numeric literal", row_, col_);
+            error("missing exponent digits in numeric literal", pos_);
         }
         num_literal += exponent_digits;
 
@@ -176,11 +169,11 @@ Token Lexer::read_number() {
         if (!is_decimal) {
             // >= 0
             if (exponent_negative) {
-                error("a negative exponent needs a fractional part", start_row, start_col);
+                error("a negative exponent needs a fractional part", start_pos);
             }
             // <= 9999，也即位数 <= 4
             if (exponent_digits.size() > 4) {
-                error("exponent of an integer literal may not exceed 9999", start_row, start_col);
+                error("exponent of an integer literal may not exceed 9999", start_pos);
             }
         }
     }
@@ -189,15 +182,13 @@ Token Lexer::read_number() {
     if (is_alpha(peek()) || peek() == U'_') {
         error(
             std::format("unexpected character '{}' after a numeric literal", u32_to_utf8(peek())),
-            row_,
-            col_
+            pos_
         );
     }
 
     return {
         is_decimal ? TokenType::LITERAL_DECIMAL : TokenType::LITERAL_INT,
-        start_row,
-        start_col,
+        start_pos,
         std::move(num_literal)
     };
 }
@@ -219,178 +210,178 @@ Token Lexer::read_identifier_keyword_reservedword() {
 #undef X
     };
 
-    const int start_row{row_}, start_col{col_};
+    const Position start_pos{pos_};
 
     std::u32string word;
     while (!is_eof() && (is_alpha_digit(peek()) || peek() == U'_')) word += advance();
 
     // 保留字：直接报 SyntaxError
     if (kReservedWordsMapping.contains(word)) {
-        error(std::format("'{}' is a reserved word", u32_to_utf8(word)), start_row, start_col);
+        error(std::format("'{}' is a reserved word", u32_to_utf8(word)), start_pos);
     }
     if (const auto it{kKeywordsMapping.find(word)}; it != kKeywordsMapping.end()) {
-        return {it->second, start_row, start_col, std::move(word)};
+        return {it->second, start_pos, std::move(word)};
     }
 
-    return {TokenType::IDENTIFIER, start_row, start_col, std::move(word)};
+    return {TokenType::IDENTIFIER, start_pos, std::move(word)};
 }
 
 Token Lexer::read_symbol() {
     using enum TokenType;
 
-    const int start_row{row_}, start_col{col_};
+    const Position start_pos{pos_};
 
     switch (const char32_t c{advance()}) {
 
     // 对于严格单个字符符号
     case U'(':
-        return {SIGN_LPAREN, start_row, start_col, U"("};
+        return {SIGN_LPAREN, start_pos, U"("};
     case U')':
-        return {SIGN_RPAREN, start_row, start_col, U")"};
+        return {SIGN_RPAREN, start_pos, U")"};
     case U'[':
-        return {SIGN_LBRACKET, start_row, start_col, U"["};
+        return {SIGN_LBRACKET, start_pos, U"["};
     case U']':
-        return {SIGN_RBRACKET, start_row, start_col, U"]"};
+        return {SIGN_RBRACKET, start_pos, U"]"};
     case U'{':
-        return {SIGN_LBRACE, start_row, start_col, U"{"};
+        return {SIGN_LBRACE, start_pos, U"{"};
     case U'}':
-        return {SIGN_RBRACE, start_row, start_col, U"}"};
+        return {SIGN_RBRACE, start_pos, U"}"};
     case U',':
-        return {SIGN_COMMA, start_row, start_col, U","};
+        return {SIGN_COMMA, start_pos, U","};
     case U';':
-        return {SIGN_SEMICOLON, start_row, start_col, U";"};
+        return {SIGN_SEMICOLON, start_pos, U";"};
     case U':':
-        return {SIGN_COLON, start_row, start_col, U":"};
+        return {SIGN_COLON, start_pos, U":"};
     case U'@':
-        return {SIGN_AT, start_row, start_col, U"@"};
+        return {SIGN_AT, start_pos, U"@"};
     case U'~':
-        return {SIGN_TILDE, start_row, start_col, U"~"};
+        return {SIGN_TILDE, start_pos, U"~"};
     case U'?':
-        return {SIGN_QUESTION, start_row, start_col, U"?"};
+        return {SIGN_QUESTION, start_pos, U"?"};
 
     // 对于可能的多字符符号
     case U'+':
         if (peek() == U'=') {
             advance();
-            return {SIGN_PLUS_ASSIGN, start_row, start_col, U"+="};
+            return {SIGN_PLUS_ASSIGN, start_pos, U"+="};
         }
-        return {SIGN_PLUS, start_row, start_col, U"+"};
+        return {SIGN_PLUS, start_pos, U"+"};
 
     case U'-':
         if (peek() == U'=') {
             advance();
-            return {SIGN_MINUS_ASSIGN, start_row, start_col, U"-="};
+            return {SIGN_MINUS_ASSIGN, start_pos, U"-="};
         }
-        return {SIGN_MINUS, start_row, start_col, U"-"};
+        return {SIGN_MINUS, start_pos, U"-"};
 
     case U'*':
         if (peek() == U'*') {
             advance();
             if (peek() == U'=') {
                 advance();
-                return {SIGN_DOUBLESTAR_ASSIGN, start_row, start_col, U"**="};
+                return {SIGN_DOUBLESTAR_ASSIGN, start_pos, U"**="};
             }
-            return {SIGN_DOUBLESTAR, start_row, start_col, U"**"};
+            return {SIGN_DOUBLESTAR, start_pos, U"**"};
         }
         if (peek() == U'=') {
             advance();
-            return {SIGN_STAR_ASSIGN, start_row, start_col, U"*="};
+            return {SIGN_STAR_ASSIGN, start_pos, U"*="};
         }
-        return {SIGN_STAR, start_row, start_col, U"*"};
+        return {SIGN_STAR, start_pos, U"*"};
 
     case U'/':
         if (peek() == U'/') {
             advance();
             if (peek() == U'=') {
                 advance();
-                return {SIGN_DOUBLESLASH_ASSIGN, start_row, start_col, U"//="};
+                return {SIGN_DOUBLESLASH_ASSIGN, start_pos, U"//="};
             }
-            return {SIGN_DOUBLESLASH, start_row, start_col, U"//"};
+            return {SIGN_DOUBLESLASH, start_pos, U"//"};
         }
         if (peek() == U'=') {
             advance();
-            return {SIGN_SLASH_ASSIGN, start_row, start_col, U"/="};
+            return {SIGN_SLASH_ASSIGN, start_pos, U"/="};
         }
-        return {SIGN_SLASH, start_row, start_col, U"/"};
+        return {SIGN_SLASH, start_pos, U"/"};
 
     case U'%':
         if (peek() == U'=') {
             advance();
-            return {SIGN_PERCENT_ASSIGN, start_row, start_col, U"%="};
+            return {SIGN_PERCENT_ASSIGN, start_pos, U"%="};
         }
-        return {SIGN_PERCENT, start_row, start_col, U"%"};
+        return {SIGN_PERCENT, start_pos, U"%"};
 
     case U'&':
         if (peek() == U'=') {
             advance();
-            return {SIGN_AMPERSAND_ASSIGN, start_row, start_col, U"&="};
+            return {SIGN_AMPERSAND_ASSIGN, start_pos, U"&="};
         }
-        return {SIGN_AMPERSAND, start_row, start_col, U"&"};
+        return {SIGN_AMPERSAND, start_pos, U"&"};
 
     case U'|':
         if (peek() == U'=') {
             advance();
-            return {SIGN_PIPE_ASSIGN, start_row, start_col, U"|="};
+            return {SIGN_PIPE_ASSIGN, start_pos, U"|="};
         }
-        return {SIGN_PIPE, start_row, start_col, U"|"};
+        return {SIGN_PIPE, start_pos, U"|"};
 
     case U'^':
         if (peek() == U'=') {
             advance();
-            return {SIGN_CARET_ASSIGN, start_row, start_col, U"^="};
+            return {SIGN_CARET_ASSIGN, start_pos, U"^="};
         }
-        return {SIGN_CARET, start_row, start_col, U"^"};
+        return {SIGN_CARET, start_pos, U"^"};
 
     case U'<':
         if (peek() == U'<') {
             advance();
             if (peek() == U'=') {
                 advance();
-                return {SIGN_LSHIFT_ASSIGN, start_row, start_col, U"<<="};
+                return {SIGN_LSHIFT_ASSIGN, start_pos, U"<<="};
             }
-            return {SIGN_LSHIFT, start_row, start_col, U"<<"};
+            return {SIGN_LSHIFT, start_pos, U"<<"};
         }
         if (peek() == U'=') {
             advance();
-            return {SIGN_LE, start_row, start_col, U"<="};
+            return {SIGN_LE, start_pos, U"<="};
         }
-        return {SIGN_LT, start_row, start_col, U"<"};
+        return {SIGN_LT, start_pos, U"<"};
 
     case U'>':
         if (peek() == U'>') {
             advance();
             if (peek() == U'=') {
                 advance();
-                return {SIGN_RSHIFT_ASSIGN, start_row, start_col, U">>="};
+                return {SIGN_RSHIFT_ASSIGN, start_pos, U">>="};
             }
-            return {SIGN_RSHIFT, start_row, start_col, U">>"};
+            return {SIGN_RSHIFT, start_pos, U">>"};
         }
         if (peek() == U'=') {
             advance();
-            return {SIGN_GE, start_row, start_col, U">="};
+            return {SIGN_GE, start_pos, U">="};
         }
-        return {SIGN_GT, start_row, start_col, U">"};
+        return {SIGN_GT, start_pos, U">"};
 
     case U'=':
         if (peek() == U'=') {
             advance();
-            return {SIGN_EQ, start_row, start_col, U"=="};
+            return {SIGN_EQ, start_pos, U"=="};
         }
-        return {SIGN_ASSIGN, start_row, start_col, U"="};
+        return {SIGN_ASSIGN, start_pos, U"="};
 
     case U'!':
         if (peek() == U'=') {
             advance();
-            return {SIGN_NE, start_row, start_col, U"!="};
+            return {SIGN_NE, start_pos, U"!="};
         }
-        return {SIGN_EXCLAIM, start_row, start_col, U"!"};
+        return {SIGN_EXCLAIM, start_pos, U"!"};
 
     case U'$':
         if (peek() == U'$') {
             advance();
-            return {SIGN_DOUBLEDOLLAR, start_row, start_col, U"$$"};
+            return {SIGN_DOUBLEDOLLAR, start_pos, U"$$"};
         }
-        return {SIGN_DOLLAR, start_row, start_col, U"$"};
+        return {SIGN_DOLLAR, start_pos, U"$"};
 
     case U'.': {
         // 贪婪匹配：尽可能多吃连续的点，最多 3 个
@@ -402,16 +393,16 @@ Token Lexer::read_symbol() {
         }
         switch (dot_count) {
         case 3:
-            return {LITERAL_ELLIPSIS, start_row, start_col, U"..."};
+            return {LITERAL_ELLIPSIS, start_pos, U"..."};
         case 2:
-            return {SIGN_DOTDOT, start_row, start_col, U".."};
+            return {SIGN_DOTDOT, start_pos, U".."};
         default:
-            return {SIGN_DOT, start_row, start_col, U"."};
+            return {SIGN_DOT, start_pos, U"."};
         }
     }
 
     default:
-        error(std::format("unexpected character '{}'", u32_to_utf8(c)), start_row, start_col);
+        error(std::format("unexpected character '{}'", u32_to_utf8(c)), start_pos);
     }
 }
 
@@ -425,7 +416,7 @@ std::vector<Token> Lexer::run() {
         skip_spaces();
 
         if (is_eof()) {
-            all_tokens.push_back({TokenType::END_OF_FILE, row_, col_, U""});
+            all_tokens.push_back({TokenType::END_OF_FILE, pos_, U""});
             break;
         }
 

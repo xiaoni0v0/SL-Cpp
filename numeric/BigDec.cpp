@@ -1,6 +1,6 @@
 #include "BigDec.h"
 
-#include "../common/common.h"
+#include "../common/overflow.h"
 #include "BigInt.h"
 #include "DecContext.h"
 #include "dec_math.h"

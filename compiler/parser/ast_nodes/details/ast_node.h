@@ -1,16 +1,9 @@
 #pragma once
 
+#include "../../../../common/Position.h"
 #include "../ast_visitor.h"
 
-#include <compare>
 #include <memory>
-
-// 源码里的一个位置（行、列）
-struct Position {
-    int row;
-    int col;
-    std::strong_ordering operator<=>(const Position &) const = default;
-};
 
 // AST 节点的基类
 struct AstNode {

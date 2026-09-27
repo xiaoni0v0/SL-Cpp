@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../../common/Position.h"
+
 #include <string>
 
 /**
@@ -18,9 +20,8 @@ enum class TokenType {
 struct Token {
     // token 类型
     TokenType type;
-    // token 开始的字符所在的行和列
-    int row;
-    int col;
+    // token 开始的字符所在的位置
+    Position pos;
     // 该 token 的原始字符串
     // str 字面量除外，它存的是 str 的值
     std::u32string lexeme;

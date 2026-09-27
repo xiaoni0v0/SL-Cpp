@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../common/Position.h"
 #include "../lexer/token.h"
 #include "ast_nodes/ast_nodes.h"
 

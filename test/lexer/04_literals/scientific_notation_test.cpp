@@ -285,17 +285,17 @@ TEST_SUITE("科学计数法——token 文本与位置") {
     TEST_CASE("token 的行列是字面量开头的位置，不是结尾") {
         const auto tokens{lex(U"  1.5e-3")};
         REQUIRE(tokens.size() == 2);
-        CHECK(tokens[0].row == 1);
-        CHECK(tokens[0].col == 3);
+        CHECK(tokens[0].pos.row == 1);
+        CHECK(tokens[0].pos.col == 3);
     }
 
     TEST_CASE("跨行的科学计数法位置正确") {
         const auto tokens{lex(U"1e3\n  2.0e-4")};
         REQUIRE(tokens.size() == 4); // INT NEWLINE DECIMAL EOF
-        CHECK(tokens[0].row == 1);
-        CHECK(tokens[0].col == 1);
-        CHECK(tokens[2].row == 2);
-        CHECK(tokens[2].col == 3);
+        CHECK(tokens[0].pos.row == 1);
+        CHECK(tokens[0].pos.col == 1);
+        CHECK(tokens[2].pos.row == 2);
+        CHECK(tokens[2].pos.col == 3);
     }
 
     TEST_CASE("「整条字面量的形状不对」这类报错指向字面量开头") {

@@ -23,8 +23,8 @@ TEST_SUITE("原始字符串") {
         CHECK(tokens[0].lexeme == U"line1\nline2");
         const auto after{lex(U"`a\nb\nc` 1")};
         REQUIRE(after.size() == 3);
-        CHECK(after[0].row == 1);
-        CHECK(after[1].row == 3);
+        CHECK(after[0].pos.row == 1);
+        CHECK(after[1].pos.row == 3);
     }
 
     TEST_CASE("内部可直接出现单双引号") {

@@ -1,4 +1,5 @@
 add_library(sl_cppexceptions INTERFACE)
+target_link_libraries(sl_cppexceptions INTERFACE sl_common)
 
 add_custom_target(
     sl_cppexceptions_headers
@@ -7,6 +8,5 @@ add_custom_target(
         FileNotFoundError.h
         InternalError.h
         SLException.h
-        SourceLocation.h
         SyntaxError.h
 )

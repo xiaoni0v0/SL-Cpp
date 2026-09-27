@@ -1,5 +1,6 @@
 #include "CodeBuilder.h"
 
+#include "../../common/Position.h"
 #include "../../cppexceptions/InternalError.h"
 #include "../../runtime/Object.h"
 #include "../../runtime/objects/Code.h"
@@ -230,11 +231,8 @@ Ref<Code> CodeBuilder::build() && {
         };
 
         // 行位置只在变化时记一项
-        if (lines.empty() || lines.back().row != instr.pos_.row ||
-            lines.back().col != instr.pos_.col)
-            lines.push_back(
-                Code::LineEntry{.pc = offsets[i], .row = instr.pos_.row, .col = instr.pos_.col}
-            );
+        if (lines.empty() || lines.back().pos != instr.pos_)
+            lines.push_back(Code::LineEntry{.pc = offsets[i], .pos = instr.pos_});
 
         // 按宽度展开：先由高到低发前缀，最后发指令自己
         for (std::uint32_t k{widths[i] - 1}; k > 0; --k)

@@ -1,5 +1,6 @@
 #include "ast_json_dumper.h"
 
+#include "../../../common/Position.h"
 #include "../../../utils/string_utils.h"
 #include "ast_nodes.h"
 

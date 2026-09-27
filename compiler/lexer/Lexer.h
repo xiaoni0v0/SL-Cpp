@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../common/Position.h"
 #include "token.h"
 
 #include <cstddef>
@@ -8,19 +9,18 @@
 
 class Lexer {
     const std::u32string source_;
-    std::size_t pos_{0};
-    int row_{1};
-    int col_{1};
+    std::size_t idx_{0}; // 当前字符在 source_ 里的下标
+    Position pos_{1, 1}; // 当前字符所在的行列
     const std::string file_path_;
 
     // 往后看字符
     [[nodiscard]] char32_t peek(std::size_t offset = 0) const;
-    // 消耗字符。调用方保证 pos_ < source_.size()
+    // 消耗字符。调用方保证 idx_ < source_.size()
     char32_t advance();
     // 是否读完了
     [[nodiscard]] bool is_eof() const;
-    // 抛出 SyntaxError 异常，提供行列
-    [[noreturn]] void error(const std::string &msg, int row, int col) const;
+    // 抛出 SyntaxError 异常，提供位置
+    [[noreturn]] void error(const std::string &msg, Position pos) const;
 
     // 跳过空白（不含换行）
     void skip_spaces();

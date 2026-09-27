@@ -1,7 +1,7 @@
 #pragma once
 
+#include "../common/Position.h"
 #include "SLException.h"
-#include "SourceLocation.h"
 
 #include <format>
 #include <string>
@@ -12,11 +12,12 @@ class SyntaxError : public SLException {
     SourceLocation location_;
 
   public:
-    SyntaxError(std::string file_path, const int row, const int col, const std::string &message)
+    SyntaxError(std::string file_path, const Position pos, const std::string &message)
         : SLException{
-              std::format("{}:{}:{}:\nSyntaxError: {}", file_path, row, col, message), message
+              std::format("{}:{}:{}:\nSyntaxError: {}", file_path, pos.row, pos.col, message),
+              message
           },
-          location_{std::move(file_path), row, col} {}
+          location_{std::move(file_path), pos} {}
 
     [[nodiscard]] const SourceLocation &location() const { return location_; }
 };
