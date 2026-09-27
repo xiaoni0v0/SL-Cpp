@@ -115,6 +115,7 @@ function(sl_add_module target)
             <ranges>
             <stdexcept>
             <string>
+            <type_traits>
             <utility>
             <vector>
     )

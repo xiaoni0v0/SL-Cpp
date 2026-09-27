@@ -3,12 +3,12 @@
 #include "../lexer/token.h"
 #include "ast_nodes/ast_nodes.h"
 
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <stack>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 class Parser {
@@ -157,9 +157,7 @@ class Parser {
      * @return           是否真的消耗过至少一个 ','
      */
     template <typename F>
-        requires requires(const F &f) {
-            { f() } -> std::same_as<void>;
-        }
+        requires std::is_invocable_r_v<void, F>
     bool finish_comma_batch(TokenType close, const F &parse_item);
 
     // 完成解析捕获列表。消耗括号、管理括号栈

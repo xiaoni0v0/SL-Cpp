@@ -9,13 +9,13 @@
 
 #include <algorithm>
 #include <cassert>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <format>
 #include <memory>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -1226,9 +1226,7 @@ AstNodePtr Parser::parse_eval() {
 }
 
 template <typename F>
-    requires requires(const F &f) {
-        { f() } -> std::same_as<void>;
-    }
+    requires std::is_invocable_r_v<void, F>
 bool Parser::finish_comma_batch(const TokenType close, const F &parse_item) {
     skip_newline();
     bool has_seen_comma{false};
