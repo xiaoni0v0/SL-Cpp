@@ -4,7 +4,7 @@
 
 #pragma once
 
-constexpr const char *const kAddCases[]{
+constexpr const char *kAddCases[]{
     "Infinity|Infinity|Infinity|",
     "Infinity|-Infinity|NaN|InvalidOperation",
     "Infinity|NaN|NaN|",
@@ -648,7 +648,7 @@ constexpr const char *const kAddCases[]{
     "-0E-999999|7|7.000000000000000000000000000|Rounded",
 };
 
-constexpr const char *const kSubCases[]{
+constexpr const char *kSubCases[]{
     "Infinity|Infinity|NaN|InvalidOperation",
     "Infinity|-Infinity|Infinity|",
     "Infinity|NaN|NaN|",
@@ -1292,7 +1292,7 @@ constexpr const char *const kSubCases[]{
     "-0E-999999|7|-7.000000000000000000000000000|Rounded",
 };
 
-constexpr const char *const kMulCases[]{
+constexpr const char *kMulCases[]{
     "Infinity|Infinity|Infinity|",
     "Infinity|-Infinity|-Infinity|",
     "Infinity|NaN|NaN|",
@@ -1936,7 +1936,7 @@ constexpr const char *const kMulCases[]{
     "-0E-999999|7|-0E-999999|",
 };
 
-constexpr const char *const kDivCases[]{
+constexpr const char *kDivCases[]{
     "Infinity|Infinity|NaN|InvalidOperation",
     "Infinity|-Infinity|NaN|InvalidOperation",
     "Infinity|NaN|NaN|",
@@ -2580,7 +2580,7 @@ constexpr const char *const kDivCases[]{
     "-0E-999999|7|-0E-999999|",
 };
 
-constexpr const char *const kFloorDivCases[]{
+constexpr const char *kFloorDivCases[]{
     "Infinity|Infinity|NaN|InvalidOperation",
     "Infinity|-Infinity|NaN|InvalidOperation",
     "Infinity|NaN|NaN|",
@@ -3205,7 +3205,7 @@ constexpr const char *const kFloorDivCases[]{
     "-0E-999999|7|-0|",
 };
 
-constexpr const char *const kModCases[]{
+constexpr const char *kModCases[]{
     "Infinity|Infinity|NaN|InvalidOperation",
     "Infinity|-Infinity|NaN|InvalidOperation",
     "Infinity|NaN|NaN|",
@@ -3830,7 +3830,7 @@ constexpr const char *const kModCases[]{
     "-0E-999999|7|-0E-999999|",
 };
 
-constexpr const char *const kDivmodCases[]{
+constexpr const char *kDivmodCases[]{
     "Infinity|Infinity|NaN|NaN|InvalidOperation",
     "Infinity|-Infinity|NaN|NaN|InvalidOperation",
     "Infinity|NaN|NaN|NaN|",
@@ -4455,7 +4455,7 @@ constexpr const char *const kDivmodCases[]{
     "-0E-999999|7|-0|-0E-999999|",
 };
 
-constexpr const char *const kRoundCases[]{
+constexpr const char *kRoundCases[]{
     "0|1|Down|0|",
     "0|2|Down|0|",
     "0|3|Down|0|",
@@ -5834,7 +5834,7 @@ constexpr const char *const kRoundCases[]{
     "sNaN|7|ZeroFiveUp|NaN|InvalidOperation",
 };
 
-constexpr const char *const kUnaryCases[]{
+constexpr const char *kUnaryCases[]{
     "0|minus|1|Down|0|",
     "0|minus|2|Down|0|",
     "0|minus|3|Down|0|",
@@ -9293,7 +9293,7 @@ constexpr const char *const kUnaryCases[]{
     "-1.50|abs|7|ZeroFiveUp|1.50|",
 };
 
-constexpr const char *const kEdgeCases[]{
+constexpr const char *kEdgeCases[]{
     "1|1|mul|3|HalfEven|4|-4|1|",
     "1|1|div|3|HalfEven|4|-4|1|",
     "1|1|add|3|HalfEven|4|-4|2|",
@@ -16616,7 +16616,7 @@ constexpr const char *const kEdgeCases[]{
     "-1E-4|1E-5|add|2|ZeroFiveUp|2|-2|-0.001|Inexact,Rounded,Subnormal,Underflow",
 };
 
-constexpr const char *const kMixedCases[]{
+constexpr const char *kMixedCases[]{
     "-0|4E+37|add|7|HalfDown|4.000000E+37|Rounded",
     "052745003984111842041050E-37|51838E+23|mod|23|HalfDown|5.2745003984111842041050E-15|",
     "-52953857253866666991776E-35|-177E+7|mul|1|HalfUp|0.0009|Inexact,Rounded",
@@ -17014,7 +17014,7 @@ constexpr const char *const kMixedCases[]{
     "100|-Infinity|mul|8|Up|-Infinity|",
 };
 
-constexpr const char *const kTrappedArith[]{
+constexpr const char *kTrappedArith[]{
     "-629712777568476E-516232|663766568515324785746E-40|mul|17|Down|0|0|Overflow|-0E-16|Clamped,Inexact,Rounded,Subnormal,Underflow",
     "-068034487050E-34|-075279996184647494428625E-35|mul|30|Down|999999|0|DivisionByZero|0E-29|Clamped,Inexact,Rounded,Subnormal,Underflow",
     "-0E+999999|46170468326590507E-34|sub|6|Ceiling|9|-9|InvalidOperation|-0E-14|Clamped,Inexact,Rounded,Subnormal,Underflow",
@@ -17517,7 +17517,7 @@ constexpr const char *const kTrappedArith[]{
     "-99106592956270058261E+26|-845866813E-34|add|15|Floor|999999|0|Rounded||THROW:Rounded;Inexact,Rounded",
 };
 
-constexpr const char *const kTrappedFloorDivMod[]{
+constexpr const char *kTrappedFloorDivMod[]{
     "-0|-0E-999999|floordiv|2|Up|3|-999999|Overflow|NaN|InvalidOperation",
     "-0|-0E-999999|mod|2|Up|3|-999999|Overflow|NaN|InvalidOperation",
     "0E-5|0.00|floordiv|18|HalfUp|3|0|Rounded|NaN|InvalidOperation",
@@ -17808,7 +17808,7 @@ constexpr const char *const kTrappedFloorDivMod[]{
     "0.000|0|mod|8|Down|999999|-999999|Inexact|NaN|InvalidOperation",
 };
 
-constexpr const char *const kTrappedTrans[]{
+constexpr const char *kTrappedTrans[]{
     "0.9999999999999999999999999999||ln|7|HalfDown|3|0|Rounded||THROW:Rounded;Inexact,Rounded,Subnormal,Underflow",
     "1.5||exp|16|Up|0|0|Subnormal|4.481689070338065|Inexact,Rounded",
     "0.5||exp|16|Up|9|-9|Overflow|1.648721270700128|Inexact,Rounded",
@@ -17971,7 +17971,7 @@ constexpr const char *const kTrappedTrans[]{
     "NaN||sqrt|5|HalfDown|999999|-999999|Inexact|NaN|",
 };
 
-constexpr const char *const kTrappedCmp[]{
+constexpr const char *kTrappedCmp[]{
     "Infinity|Infinity|InvalidOperation|1;|eq;",
     "Infinity|-Infinity|InvalidOperation|0;|gt;",
     "Infinity|NaN|InvalidOperation|0;|THROW:InvalidOperation;InvalidOperation",
@@ -18458,7 +18458,7 @@ constexpr const char *const kTrappedCmp[]{
     "-1E+999999|-1E+999999|InvalidOperation|1;|eq;",
 };
 
-constexpr const char *const kPowCases[]{
+constexpr const char *kPowCases[]{
     "0|0|28|HalfEven|999999|-999999|NaN|InvalidOperation",
     "0|-0|28|HalfEven|999999|-999999|NaN|InvalidOperation",
     "0|1|28|HalfEven|999999|-999999|0|",
@@ -21264,7 +21264,7 @@ constexpr const char *const kPowCases[]{
     "09631245332E-7|-0.584|27|HalfUp|999999|-999999|0.0180937860954409275099752624|Inexact,Rounded",
 };
 
-constexpr const char *const kTranscendentalCases[]{
+constexpr const char *kTranscendentalCases[]{
     "0|sqrt|28|HalfEven|999999|-999999|0|",
     "0|sqrt|1|HalfEven|999999|-999999|0|",
     "0|sqrt|3|Down|999999|-999999|0|",
@@ -26339,7 +26339,7 @@ constexpr const char *const kTranscendentalCases[]{
     "1794128305895584925771048E-1|log10|39|HalfUp|999999|-999999|23.2538534981004480636165243289982099883|Inexact,Rounded",
 };
 
-constexpr const char *const kCompareCases[]{
+constexpr const char *kCompareCases[]{
     "Infinity|Infinity|eq|1||",
     "Infinity|-Infinity|gt|0||",
     "Infinity|NaN|un|0||InvalidOperation",

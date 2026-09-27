@@ -2,8 +2,10 @@
 
 #include "../../cppexceptions/SyntaxError.h"
 #include "../../utils/string_utils.h"
+#include "token.h"
 
 #include <cassert>
+#include <cstddef>
 #include <format>
 #include <string>
 #include <string_view>
@@ -11,8 +13,8 @@
 #include <utility>
 #include <vector>
 
-char32_t Lexer::peek(const size_t offset) const {
-    const size_t idx{pos_ + offset};
+char32_t Lexer::peek(const std::size_t offset) const {
+    const std::size_t idx{pos_ + offset};
     return idx < source_.size() ? source_[idx] : U'\0';
 }
 
@@ -29,7 +31,7 @@ char32_t Lexer::advance() {
 
 bool Lexer::is_eof() const { return pos_ >= source_.size(); }
 
-void Lexer::error(const std::string &msg, int row, int col) const {
+void Lexer::error(const std::string &msg, const int row, const int col) const {
     throw SyntaxError{file_path_, row, col, msg};
 }
 
@@ -66,7 +68,7 @@ Token Lexer::read_string(const char32_t quote) {
 
     // 工具：某些字符到对应转义字符的映射
     // a b f n r t v 0 \ ' "
-    static const std::unordered_map<char32_t, char32_t> ESCAPE_CHAR_MAPPING{
+    static const std::unordered_map<char32_t, char32_t> kEscapeCharMapping{
         {U'a', U'\a'},
         {U'b', U'\b'},
         {U'f', U'\f'},
@@ -86,7 +88,8 @@ Token Lexer::read_string(const char32_t quote) {
     std::u32string str_literal;
     while (!is_eof() && peek() != U'\n') {
         const char32_t c{advance()};
-        if (c == quote) return {TokenType::LITERAL_STR, start_row, start_col, str_literal};
+        if (c == quote)
+            return {TokenType::LITERAL_STR, start_row, start_col, std::move(str_literal)};
 
         // 转义字符
         if (c == U'\\') {
@@ -96,7 +99,7 @@ Token Lexer::read_string(const char32_t quote) {
                 error("unterminated escape sequence in string literal", esc_row, esc_col);
 
             const char32_t esc{advance()};
-            if (const auto it{ESCAPE_CHAR_MAPPING.find(esc)}; it != ESCAPE_CHAR_MAPPING.end()) {
+            if (const auto it{kEscapeCharMapping.find(esc)}; it != kEscapeCharMapping.end()) {
                 str_literal += it->second;
             } else {
                 error(
@@ -119,7 +122,8 @@ Token Lexer::read_raw_string() {
     std::u32string str_literal;
     while (!is_eof()) {
         const char32_t c{advance()};
-        if (c == U'`') return {TokenType::LITERAL_STR, start_row, start_col, str_literal};
+        if (c == U'`')
+            return {TokenType::LITERAL_STR, start_row, start_col, std::move(str_literal)};
         str_literal += c;
     }
     error("unterminated raw string literal", start_row, start_col);
@@ -194,13 +198,13 @@ Token Lexer::read_number() {
         is_decimal ? TokenType::LITERAL_DECIMAL : TokenType::LITERAL_INT,
         start_row,
         start_col,
-        num_literal
+        std::move(num_literal)
     };
 }
 
 Token Lexer::read_identifier_keyword_reservedword() {
     // 工具：关键字字符串到对应 TokenType 的映射
-    static const std::unordered_map<std::u32string, TokenType> KEYWORDS_MAPPING{
+    static const std::unordered_map<std::u32string, TokenType> kKeywordsMapping{
 #define X(a, b) {U"" #a, TokenType::b},
 #include "x_keyword.inc"
 
@@ -208,7 +212,7 @@ Token Lexer::read_identifier_keyword_reservedword() {
     };
 
     // 工具：保留字字符串到对应 TokenType 的映射
-    static const std::unordered_map<std::u32string, TokenType> RESERVEDWORDS_MAPPING{
+    static const std::unordered_map<std::u32string, TokenType> kReservedWordsMapping{
 #define X(a, b) {U"" #a, TokenType::b},
 #include "x_reservedword.inc"
 
@@ -221,14 +225,14 @@ Token Lexer::read_identifier_keyword_reservedword() {
     while (!is_eof() && (is_alpha_digit(peek()) || peek() == U'_')) word += advance();
 
     // 保留字：直接报 SyntaxError
-    if (RESERVEDWORDS_MAPPING.contains(word)) {
+    if (kReservedWordsMapping.contains(word)) {
         error(std::format("'{}' is a reserved word", u32_to_utf8(word)), start_row, start_col);
     }
-    if (const auto it{KEYWORDS_MAPPING.find(word)}; it != KEYWORDS_MAPPING.end()) {
-        return {it->second, start_row, start_col, word};
+    if (const auto it{kKeywordsMapping.find(word)}; it != kKeywordsMapping.end()) {
+        return {it->second, start_row, start_col, std::move(word)};
     }
 
-    return {TokenType::IDENTIFIER, start_row, start_col, word};
+    return {TokenType::IDENTIFIER, start_row, start_col, std::move(word)};
 }
 
 Token Lexer::read_symbol() {
@@ -473,128 +477,130 @@ std::vector<Token> Lexer::tokenize(std::u32string source, std::string file_path)
 }
 
 std::string Lexer::get_typename_by_tokentype(const TokenType type) {
-    static constexpr const char *const TOKEN_TYPE_MAPPING[]{
+    static constexpr const char *kTokenTypeMapping[]{
 #define X(name) #name,
 #include "x_token_type.inc"
 
 #undef X
     };
 
-    const size_t ind{static_cast<size_t>(type)};
-    if (ind >= std::size(TOKEN_TYPE_MAPPING)) return "<unknown token type>";
-    return TOKEN_TYPE_MAPPING[ind];
+    const std::size_t ind{static_cast<std::size_t>(type)};
+    if (ind >= std::size(kTokenTypeMapping)) return "<unknown token type>";
+    return kTokenTypeMapping[ind];
 }
 
 std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
+    using enum TokenType;
+
     // clang-format off
     switch (type) {
-    case TokenType::LITERAL_NONE:            return "'None'";
-    case TokenType::LITERAL_TRUE:            return "'True'";
-    case TokenType::LITERAL_FALSE:           return "'False'";
-    case TokenType::LITERAL_G:               return "'_G'";
-    case TokenType::LITERAL_L:               return "'_L'";
-    case TokenType::LITERAL_ELLIPSIS:        return "'...'";
-    case TokenType::LITERAL_INT:             return "an integer literal";
-    case TokenType::LITERAL_DECIMAL:         return "a decimal literal";
-    case TokenType::LITERAL_STR:             return "a string literal";
+    case LITERAL_NONE:            return "'None'";
+    case LITERAL_TRUE:            return "'True'";
+    case LITERAL_FALSE:           return "'False'";
+    case LITERAL_G:               return "'_G'";
+    case LITERAL_L:               return "'_L'";
+    case LITERAL_ELLIPSIS:        return "'...'";
+    case LITERAL_INT:             return "an integer literal";
+    case LITERAL_DECIMAL:         return "a decimal literal";
+    case LITERAL_STR:             return "a string literal";
 
-    case TokenType::IDENTIFIER:              return "an identifier";
+    case IDENTIFIER:              return "an identifier";
 
-    case TokenType::KW_NOT:                  return "'not'";
-    case TokenType::KW_AND:                  return "'and'";
-    case TokenType::KW_OR:                   return "'or'";
-    case TokenType::KW_IS:                   return "'is'";
-    case TokenType::KW_IN:                   return "'in'";
-    case TokenType::KW_AS:                   return "'as'";
-    case TokenType::KW_DEL:                  return "'del'";
-    case TokenType::KW_GLOBAL:               return "'global'";
-    case TokenType::KW_IF:                   return "'if'";
-    case TokenType::KW_ELIF:                 return "'elif'";
-    case TokenType::KW_ELSE:                 return "'else'";
-    case TokenType::KW_FOR:                  return "'for'";
-    case TokenType::KW_WHILE:                return "'while'";
-    case TokenType::KW_BREAK:                return "'break'";
-    case TokenType::KW_CONTINUE:             return "'continue'";
-    case TokenType::KW_FUNC:                 return "'func'";
-    case TokenType::KW_RETURN:               return "'return'";
-    case TokenType::KW_RAISE:                return "'raise'";
-    case TokenType::KW_TRY:                  return "'try'";
-    case TokenType::KW_EXCEPT:               return "'except'";
-    case TokenType::KW_FINALLY:              return "'finally'";
-    case TokenType::KW_CLASS:                return "'class'";
-    case TokenType::KW_IMPORT:               return "'import'";
-    case TokenType::KW_EVAL:                 return "'eval'";
+    case KW_NOT:                  return "'not'";
+    case KW_AND:                  return "'and'";
+    case KW_OR:                   return "'or'";
+    case KW_IS:                   return "'is'";
+    case KW_IN:                   return "'in'";
+    case KW_AS:                   return "'as'";
+    case KW_DEL:                  return "'del'";
+    case KW_GLOBAL:               return "'global'";
+    case KW_IF:                   return "'if'";
+    case KW_ELIF:                 return "'elif'";
+    case KW_ELSE:                 return "'else'";
+    case KW_FOR:                  return "'for'";
+    case KW_WHILE:                return "'while'";
+    case KW_BREAK:                return "'break'";
+    case KW_CONTINUE:             return "'continue'";
+    case KW_FUNC:                 return "'func'";
+    case KW_RETURN:               return "'return'";
+    case KW_RAISE:                return "'raise'";
+    case KW_TRY:                  return "'try'";
+    case KW_EXCEPT:               return "'except'";
+    case KW_FINALLY:              return "'finally'";
+    case KW_CLASS:                return "'class'";
+    case KW_IMPORT:               return "'import'";
+    case KW_EVAL:                 return "'eval'";
 
-    case TokenType::RW_ASSERT:               return "'assert'";
-    case TokenType::RW_WHEN:                 return "'when'";
-    case TokenType::RW_CASE:                 return "'case'";
-    case TokenType::RW_YIELD:                return "'yield'";
-    case TokenType::RW_WITH:                 return "'with'";
-    case TokenType::RW_ASYNC:                return "'async'";
-    case TokenType::RW_AWAIT:                return "'await'";
-    case TokenType::RW_DEFINE:               return "'define'";
-    case TokenType::RW_CONST:                return "'const'";
-    case TokenType::RW_STATIC:               return "'static'";
-    case TokenType::RW_LOCAL:                return "'local'";
+    case RW_ASSERT:               return "'assert'";
+    case RW_WHEN:                 return "'when'";
+    case RW_CASE:                 return "'case'";
+    case RW_YIELD:                return "'yield'";
+    case RW_WITH:                 return "'with'";
+    case RW_ASYNC:                return "'async'";
+    case RW_AWAIT:                return "'await'";
+    case RW_DEFINE:               return "'define'";
+    case RW_CONST:                return "'const'";
+    case RW_STATIC:               return "'static'";
+    case RW_LOCAL:                return "'local'";
 
-    case TokenType::SIGN_LPAREN:             return "'('";
-    case TokenType::SIGN_RPAREN:             return "')'";
-    case TokenType::SIGN_LBRACKET:           return "'['";
-    case TokenType::SIGN_RBRACKET:           return "']'";
-    case TokenType::SIGN_LBRACE:             return "'{'";
-    case TokenType::SIGN_RBRACE:             return "'}'";
+    case SIGN_LPAREN:             return "'('";
+    case SIGN_RPAREN:             return "')'";
+    case SIGN_LBRACKET:           return "'['";
+    case SIGN_RBRACKET:           return "']'";
+    case SIGN_LBRACE:             return "'{'";
+    case SIGN_RBRACE:             return "'}'";
 
-    case TokenType::SIGN_COMMA:              return "','";
-    case TokenType::SIGN_SEMICOLON:          return "';'";
-    case TokenType::SIGN_COLON:              return "':'";
-    case TokenType::SIGN_AT:                 return "'@'";
-    case TokenType::SIGN_DOLLAR:             return "'$'";
-    case TokenType::SIGN_DOUBLEDOLLAR:       return "'$$'";
+    case SIGN_COMMA:              return "','";
+    case SIGN_SEMICOLON:          return "';'";
+    case SIGN_COLON:              return "':'";
+    case SIGN_AT:                 return "'@'";
+    case SIGN_DOLLAR:             return "'$'";
+    case SIGN_DOUBLEDOLLAR:       return "'$$'";
 
-    case TokenType::SIGN_PLUS:               return "'+'";
-    case TokenType::SIGN_MINUS:              return "'-'";
-    case TokenType::SIGN_STAR:               return "'*'";
-    case TokenType::SIGN_DOUBLESTAR:         return "'**'";
-    case TokenType::SIGN_SLASH:              return "'/'";
-    case TokenType::SIGN_DOUBLESLASH:        return "'//'";
-    case TokenType::SIGN_PERCENT:            return "'%'";
+    case SIGN_PLUS:               return "'+'";
+    case SIGN_MINUS:              return "'-'";
+    case SIGN_STAR:               return "'*'";
+    case SIGN_DOUBLESTAR:         return "'**'";
+    case SIGN_SLASH:              return "'/'";
+    case SIGN_DOUBLESLASH:        return "'//'";
+    case SIGN_PERCENT:            return "'%'";
 
-    case TokenType::SIGN_AMPERSAND:          return "'&'";
-    case TokenType::SIGN_PIPE:               return "'|'";
-    case TokenType::SIGN_CARET:              return "'^'";
-    case TokenType::SIGN_TILDE:              return "'~'";
-    case TokenType::SIGN_LSHIFT:             return "'<<'";
-    case TokenType::SIGN_RSHIFT:             return "'>>'";
+    case SIGN_AMPERSAND:          return "'&'";
+    case SIGN_PIPE:               return "'|'";
+    case SIGN_CARET:              return "'^'";
+    case SIGN_TILDE:              return "'~'";
+    case SIGN_LSHIFT:             return "'<<'";
+    case SIGN_RSHIFT:             return "'>>'";
 
-    case TokenType::SIGN_EQ:                 return "'=='";
-    case TokenType::SIGN_NE:                 return "'!='";
-    case TokenType::SIGN_LT:                 return "'<'";
-    case TokenType::SIGN_LE:                 return "'<='";
-    case TokenType::SIGN_GT:                 return "'>'";
-    case TokenType::SIGN_GE:                 return "'>='";
+    case SIGN_EQ:                 return "'=='";
+    case SIGN_NE:                 return "'!='";
+    case SIGN_LT:                 return "'<'";
+    case SIGN_LE:                 return "'<='";
+    case SIGN_GT:                 return "'>'";
+    case SIGN_GE:                 return "'>='";
 
-    case TokenType::SIGN_ASSIGN:             return "'='";
+    case SIGN_ASSIGN:             return "'='";
 
-    case TokenType::SIGN_PLUS_ASSIGN:        return "'+='";
-    case TokenType::SIGN_MINUS_ASSIGN:       return "'-='";
-    case TokenType::SIGN_STAR_ASSIGN:        return "'*='";
-    case TokenType::SIGN_DOUBLESTAR_ASSIGN:  return "'**='";
-    case TokenType::SIGN_SLASH_ASSIGN:       return "'/='";
-    case TokenType::SIGN_DOUBLESLASH_ASSIGN: return "'//='";
-    case TokenType::SIGN_PERCENT_ASSIGN:     return "'%='";
-    case TokenType::SIGN_AMPERSAND_ASSIGN:   return "'&='";
-    case TokenType::SIGN_PIPE_ASSIGN:        return "'|='";
-    case TokenType::SIGN_CARET_ASSIGN:       return "'^='";
-    case TokenType::SIGN_LSHIFT_ASSIGN:      return "'<<='";
-    case TokenType::SIGN_RSHIFT_ASSIGN:      return "'>>='";
+    case SIGN_PLUS_ASSIGN:        return "'+='";
+    case SIGN_MINUS_ASSIGN:       return "'-='";
+    case SIGN_STAR_ASSIGN:        return "'*='";
+    case SIGN_DOUBLESTAR_ASSIGN:  return "'**='";
+    case SIGN_SLASH_ASSIGN:       return "'/='";
+    case SIGN_DOUBLESLASH_ASSIGN: return "'//='";
+    case SIGN_PERCENT_ASSIGN:     return "'%='";
+    case SIGN_AMPERSAND_ASSIGN:   return "'&='";
+    case SIGN_PIPE_ASSIGN:        return "'|='";
+    case SIGN_CARET_ASSIGN:       return "'^='";
+    case SIGN_LSHIFT_ASSIGN:      return "'<<='";
+    case SIGN_RSHIFT_ASSIGN:      return "'>>='";
 
-    case TokenType::SIGN_DOT:                return "'.'";
-    case TokenType::SIGN_DOTDOT:             return "'..'";
-    case TokenType::SIGN_QUESTION:           return "'?'";
-    case TokenType::SIGN_EXCLAIM:            return "'!'";
+    case SIGN_DOT:                return "'.'";
+    case SIGN_DOTDOT:             return "'..'";
+    case SIGN_QUESTION:           return "'?'";
+    case SIGN_EXCLAIM:            return "'!'";
 
-    case TokenType::NEWLINE:                 return "a newline";
-    case TokenType::END_OF_FILE:             return "EOF";
+    case NEWLINE:                 return "a newline";
+    case END_OF_FILE:             return "EOF";
     // clang-format on
     default:
         return "<unknown token type>";

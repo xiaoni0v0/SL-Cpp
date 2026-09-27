@@ -1,5 +1,6 @@
 #include "ExprFolder.h"
 
+#include "../../parser/ast_nodes/ast_nodes.h"
 #include "StaticEvaler.h"
 
 #include <utility>

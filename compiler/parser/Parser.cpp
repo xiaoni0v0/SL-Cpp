@@ -4,13 +4,20 @@
 #include "../../cppexceptions/SyntaxError.h"
 #include "../../utils/string_utils.h"
 #include "../lexer/Lexer.h"
+#include "../lexer/token.h"
+#include "ast_nodes/ast_nodes.h"
 
 #include <algorithm>
 #include <cassert>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
 #include <format>
 #include <memory>
 #include <optional>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -244,11 +251,11 @@ bool Parser::check(const TokenType type) const {
     return tokens_[pos_].type == type;
 }
 
-bool Parser::check_over_newline(const TokenType type, const size_t offset) const {
+bool Parser::check_over_newline(const TokenType type, const std::size_t offset) const {
     assert(pos_ + offset < tokens_.size());
 
-    const size_t len{tokens_.size()};
-    for (size_t i{pos_ + offset}; i < len; i++) {
+    const std::size_t len{tokens_.size()};
+    for (std::size_t i{pos_ + offset}; i < len; i++) {
         if (tokens_[i].type != TokenType::NEWLINE) {
             return tokens_[i].type == type;
         }
@@ -323,8 +330,9 @@ void Parser::skip_newline() {
 }
 
 void Parser::skip_paren_newline() {
-    if (brackets_.empty() ||
-        !(brackets_.top() == Bracket::Paren || brackets_.top() == Bracket::Square))
+    if (brackets_.empty()) return;
+    if (const Bracket innermost{brackets_.top()};
+        innermost != Bracket::Paren && innermost != Bracket::Square)
         return;
     while (check(TokenType::NEWLINE)) advance();
 }
@@ -461,7 +469,7 @@ AstNodePtr Parser::parse_chain_compare(
     AstNodePtr left, const Position start_pos, const AstNodeCompare::OpType first_op,
     const Position first_op_pos
 ) {
-    constexpr int operand_min_bp{61}; // (比较组优先级 60) + 1，防止同组递归吞并
+    constexpr int kOperandMinBp{61}; // (比较组优先级 60) + 1，防止同组递归吞并
 
     std::vector<AstNodePtr> operands;
     std::vector<AstNodeCompare::OpType> ops;
@@ -472,7 +480,7 @@ AstNodePtr Parser::parse_chain_compare(
     positions_op.push_back(first_op_pos);
 
     skip_newline();
-    operands.push_back(parse_expr_pratt(operand_min_bp));
+    operands.push_back(parse_expr_pratt(kOperandMinBp));
 
     while (true) {
         skip_paren_newline();
@@ -484,7 +492,7 @@ AstNodePtr Parser::parse_chain_compare(
         ops.push_back(*next_op);
         positions_op.push_back(next_op_pos);
         skip_newline();
-        operands.push_back(parse_expr_pratt(operand_min_bp));
+        operands.push_back(parse_expr_pratt(kOperandMinBp));
     }
 
     return std::make_unique<AstNodeCompare>(
@@ -494,7 +502,7 @@ AstNodePtr Parser::parse_chain_compare(
 
 AstNodePtr
 Parser::parse_chain_is(AstNodePtr left, const Position start_pos, const Position first_is_pos) {
-    constexpr int operand_min_bp{51}; // (is 优先级 50) + 1，防止同组递归吞并
+    constexpr int kOperandMinBp{51}; // (is 优先级 50) + 1，防止同组递归吞并
 
     std::vector<AstNodePtr> operands;
     std::vector<Position> positions_op;
@@ -502,7 +510,7 @@ Parser::parse_chain_is(AstNodePtr left, const Position start_pos, const Position
     positions_op.push_back(first_is_pos);
 
     skip_newline();
-    operands.push_back(parse_expr_pratt(operand_min_bp));
+    operands.push_back(parse_expr_pratt(kOperandMinBp));
 
     while (true) {
         skip_paren_newline();
@@ -511,7 +519,7 @@ Parser::parse_chain_is(AstNodePtr left, const Position start_pos, const Position
         positions_op.emplace_back(peek().row, peek().col);
         expect(TokenType::KW_IS); // 消耗 'is'
         skip_newline();
-        operands.push_back(parse_expr_pratt(operand_min_bp));
+        operands.push_back(parse_expr_pratt(kOperandMinBp));
     }
 
     return std::make_unique<AstNodeIs>(start_pos, std::move(operands), std::move(positions_op));
@@ -833,7 +841,7 @@ AstNodePtr Parser::parse_import() {
 
     std::vector<std::u32string> segments;
     const AstNode *cur{target.get()};
-    while (const auto *attr = dynamic_cast<const AstNodeAttr *>(cur)) { // 不断往外掏 attr，展平
+    while (const auto *attr{dynamic_cast<const AstNodeAttr *>(cur)}) { // 不断往外掏 attr，展平
         segments.push_back(attr->attr_);
         cur = attr->object_.get();
     }
@@ -1218,21 +1226,21 @@ AstNodePtr Parser::parse_eval() {
 }
 
 template <typename F>
-    requires requires(F f) {
+    requires requires(const F &f) {
         { f() } -> std::same_as<void>;
     }
-bool Parser::finish_comma_batch(const TokenType close, F &&parse_item) {
+bool Parser::finish_comma_batch(const TokenType close, const F &parse_item) {
     skip_newline();
     bool has_seen_comma{false};
     if (!check(close)) {
-        std::forward<F>(parse_item)(); // 委托给回调函数
+        parse_item(); // 委托给回调函数
         skip_newline();
         while (check(TokenType::SIGN_COMMA)) {
             has_seen_comma = true;
             expect(TokenType::SIGN_COMMA); // 消耗 ','
             skip_newline();
             if (check(close)) break; // 尾逗号
-            std::forward<F>(parse_item)();
+            parse_item();
             skip_newline();
         }
     }
@@ -1382,7 +1390,7 @@ CallArgs Parser::finish_call_args() {
     std::vector<OneKwArg> keyword_args;
 
     // 传参分：位置组（位置传参、*expr 展开）、关键字组（关键字传参、**expr 展开）两阶段
-    enum class ArgsGroup { Positional, Keyword } group{ArgsGroup::Positional};
+    enum class ArgsGroup : std::uint8_t { Positional, Keyword } group{ArgsGroup::Positional};
     finish_comma_batch(TokenType::SIGN_RPAREN, [&] {
         // 关键字传参的判定：当前是 IDENTIFIER，且跳过其后可能的换行紧跟 '='
         if (check(TokenType::IDENTIFIER) && check_over_newline(TokenType::SIGN_ASSIGN, 1)) {

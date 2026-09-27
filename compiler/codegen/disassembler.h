@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../../runtime/objects/Code.h"
-
 #include <string>
+
+class Code;
 
 /**
  * 反汇编，开发期用。

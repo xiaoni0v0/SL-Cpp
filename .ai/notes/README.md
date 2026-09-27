@@ -20,6 +20,7 @@
 - [collaboration-conventions.md](collaboration-conventions.md) — 语言/git/并发编辑/写作禁忌/汇报风格这些硬规矩
 - [user-facing-strings.md](user-facing-strings.md) — 异常信息/assert/终端输出一律英文且简短，以及简洁到什么程度
 - [assert-vs-internal-error.md](assert-vs-internal-error.md) — 什么时候 `assert`、什么时候 `throw InternalError`：看 Release 下被编译掉会不会静默出错
+- [code-style.md](code-style.md) — `.clang-format` 管不到的码风：include 分组与 IWYU、`std::` 前缀、指针不加顶层 const 与 const 阻止 move 的陷阱、不可实例化类/explicit/访问控制、`{}` 初始化与 CTAD 的陷阱、怎么自查
 - [no-section-numbers.md](no-section-numbers.md) — 代码/测试/目录名里一律不许出现 SL.md 章节号，只能写文字描述
 - [parser-member-vs-lambda.md](parser-member-vs-lambda.md) — Parser.cpp 里辅助逻辑该当类成员还是局部 lambda 的判断标尺
 - [parser-prefer-expect.md](parser-prefer-expect.md) — 消耗类型确定的 token 一律用 expect(X)，不用裸 advance()

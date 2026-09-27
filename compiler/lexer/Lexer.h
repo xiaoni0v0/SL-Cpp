@@ -2,19 +2,19 @@
 
 #include "token.h"
 
-#include <optional>
+#include <cstddef>
 #include <string>
 #include <vector>
 
 class Lexer {
     const std::u32string source_;
-    size_t pos_{0};
+    std::size_t pos_{0};
     int row_{1};
     int col_{1};
     const std::string file_path_;
 
     // 往后看字符
-    [[nodiscard]] char32_t peek(size_t offset = 0) const;
+    [[nodiscard]] char32_t peek(std::size_t offset = 0) const;
     // 消耗字符。调用方保证 pos_ < source_.size()
     char32_t advance();
     // 是否读完了

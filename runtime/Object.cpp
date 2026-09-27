@@ -4,8 +4,9 @@
 #include "Type.h"
 
 #include <cassert>
+#include <utility>
 
-RefBase::RefBase(Object *const ptr) : ptr_{ptr} {
+RefBase::RefBase(Object *ptr) : ptr_{ptr} {
     if (ptr_) ptr_->incref();
 }
 
@@ -14,8 +15,7 @@ RefBase::~RefBase() {
 }
 
 void RefBase::reset() {
-    if (ptr_) ptr_->decref();
-    ptr_ = nullptr;
+    if (auto *old{std::exchange(ptr_, nullptr)}) old->decref();
 }
 
 void Object::incref() { ++refcount_; }
@@ -31,9 +31,9 @@ void Object::visit_refs(RefVisitor &visitor) {
     visit_own_refs(visitor);
 }
 
-Object::Object(Type *const type) : type_{type} { Heap::link(this); }
+Object::Object(Type *type) : type_{type} { Heap::link(this); }
 
-void Object::set_type(Type *const type) { type_ = Ref{type}; }
+void Object::set_type(Type *type) { type_ = Ref{type}; }
 
 Object::~Object() { Heap::unlink(this); }
 

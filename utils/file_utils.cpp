@@ -4,11 +4,12 @@
 
 #include <fstream>
 #include <sstream>
+#include <string>
 
 std::string file_read_all(const std::string &file_path) {
     std::ifstream file{file_path};
     if (!file.is_open()) {
-        throw FileNotFoundError(file_path);
+        throw FileNotFoundError{file_path};
     }
 
     std::ostringstream oss;

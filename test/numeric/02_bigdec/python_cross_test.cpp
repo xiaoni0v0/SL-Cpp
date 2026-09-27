@@ -10,7 +10,7 @@ namespace {
 TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
 
     TEST_CASE("加法") {
-        for (const char *const raw : kAddCases) {
+        for (const char *raw : kAddCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -22,7 +22,7 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("减法") {
-        for (const char *const raw : kSubCases) {
+        for (const char *raw : kSubCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -34,7 +34,7 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("乘法") {
-        for (const char *const raw : kMulCases) {
+        for (const char *raw : kMulCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -46,7 +46,7 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("除法") {
-        for (const char *const raw : kDivCases) {
+        for (const char *raw : kDivCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -58,7 +58,7 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("//（期望值是按向负无穷重新推的，不是 Python 的 //）") {
-        for (const char *const raw : kFloorDivCases) {
+        for (const char *raw : kFloorDivCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -70,7 +70,7 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("%（同上）") {
-        for (const char *const raw : kModCases) {
+        for (const char *raw : kModCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -82,7 +82,7 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("divmod（期望值取 // 和 % 各自的结果，flags 取并集）") {
-        for (const char *const raw : kDivmodCases) {
+        for (const char *raw : kDivmodCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -96,7 +96,7 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("八种舍入方式 × prec 1/2/3/7") {
-        for (const char *const raw : kRoundCases) {
+        for (const char *raw : kRoundCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -108,7 +108,7 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("一元 - 和 abs × 八种舍入 × prec 1/2/3/7") {
-        for (const char *const raw : kUnaryCases) {
+        for (const char *raw : kUnaryCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -122,7 +122,7 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("指数边界：Overflow / Underflow / Subnormal / Clamped") {
-        for (const char *const raw : kEdgeCases) {
+        for (const char *raw : kEdgeCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -152,7 +152,7 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("随机操作数 × 随机 op/prec/rounding") {
-        for (const char *const raw : kMixedCases) {
+        for (const char *raw : kMixedCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -213,7 +213,7 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
         };
 
         const auto check_trap_table{[&run_trapped](const auto &table, const bool unary) {
-            for (const char *const raw : table) {
+            for (const char *raw : table) {
                 const std::string line{raw};
                 CAPTURE(line);
                 const std::vector<std::string> f{split_fields(line)};
@@ -241,7 +241,7 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     TEST_CASE("陷阱开启：== 与序比较抛不抛、抛什么") {
         // 行格式：a|b|trap|eq;eqf|rel;orf，';' 前是结果、后是 flags（抛了就是
         // "THROW:条件名;flags"）
-        for (const char *const raw : kTrappedCmp) {
+        for (const char *raw : kTrappedCmp) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -283,7 +283,7 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("幂运算 **") {
-        for (const char *const raw : kPowCases) {
+        for (const char *raw : kPowCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -297,7 +297,7 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("超越函数 sqrt/exp/ln/log10") {
-        for (const char *const raw : kTranscendentalCases) {
+        for (const char *raw : kTranscendentalCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -322,7 +322,7 @@ TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {
     }
 
     TEST_CASE("比较") {
-        for (const char *const raw : kCompareCases) {
+        for (const char *raw : kCompareCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};

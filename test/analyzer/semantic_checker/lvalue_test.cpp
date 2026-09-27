@@ -1,36 +1,36 @@
 // 赋值、for as、except as 的左值形状。
 #include "test_utils.h"
 
-#include <doctest/doctest.h>
-
 #include <string>
+
+#include <doctest/doctest.h>
 
 namespace {
 
 // 标准库没有 to_u32string，数字全是 ASCII，逐字符放大即可
-std::u32string u32_num(const size_t n) {
+std::u32string u32_num(const std::size_t n) {
     const std::string digits{std::to_string(n)};
     return {digits.begin(), digits.end()};
 }
 
 // n 个 "aN, "，用来凑够左值个数
-std::u32string repeat_lvalues(const size_t n) {
+std::u32string repeat_lvalues(const std::size_t n) {
     std::u32string result;
-    for (size_t i{0}; i < n; ++i) result += U"a" + u32_num(i) + U", ";
+    for (std::size_t i{0}; i < n; ++i) result += U"a" + u32_num(i) + U", ";
     return result;
 }
 
 // 形如 (a0, ..., *r, b0, ...) = x，星号前 before 项、星号后 after 项
-std::u32string lvalue_list_source(const size_t before, const size_t after) {
+std::u32string lvalue_list_source(const std::size_t before, const std::size_t after) {
     std::u32string result{U"(" + repeat_lvalues(before) + U"*r"};
-    for (size_t i{0}; i < after; ++i) result += U", b" + u32_num(i);
+    for (std::size_t i{0}; i < after; ++i) result += U", b" + u32_num(i);
     return result + U") = x";
 }
 
 // 形如 (a0, a1, ...) = x，不带星号
-std::u32string plain_lvalue_list_source(const size_t n) {
+std::u32string plain_lvalue_list_source(const std::size_t n) {
     std::u32string result{U"("};
-    for (size_t i{0}; i < n; ++i) {
+    for (std::size_t i{0}; i < n; ++i) {
         if (i != 0) result += U", ";
         result += U"a" + u32_num(i);
     }

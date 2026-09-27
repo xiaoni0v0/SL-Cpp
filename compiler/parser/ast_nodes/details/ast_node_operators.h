@@ -1,8 +1,8 @@
 #pragma once
 
+#include "../ast_visitor.h"
 #include "ast_node.h"
 
-#include <memory>
 #include <utility>
 #include <vector>
 
@@ -143,7 +143,7 @@ struct AstNodeAssign : AstNode {
 };
 
 // target op= expr
-// （op 为算术/位运算，由 Parser::assign_compound_to_binary 的白名单保证，不是语义层校验的）
+// （op 为算术/位运算，由 Parser.cpp 里 assign_compound_to_binary 的白名单保证，不是语义层校验的）
 struct AstNodeCompoundAssign : AstNode {
     AstNodePtr target_;
     AstNodeOpBinary::OpType op_;

@@ -48,8 +48,8 @@ TEST_SUITE("BigDec——生成的用例表铺不到的窄路径") {
     TEST_CASE("指数小到 y*log(x) 都归零：dpower 里贴着 1 的那一支") {
         // 这时得给一个"不正好等于 1"的近似值，否则上层判不出能不能定夺舍入方向，会死循环
         DecContext ctx{quiet_context()};
-        for (const char *const base : {"2", "0.5"}) {
-            for (const char *const exponent : {"1E-999999999", "-1E-999999999"}) {
+        for (const char *base : {"2", "0.5"}) {
+            for (const char *exponent : {"1E-999999999", "-1E-999999999"}) {
                 CAPTURE(base);
                 CAPTURE(exponent);
                 DecContext c{quiet_context()};
@@ -67,7 +67,7 @@ TEST_SUITE("BigDec——生成的用例表铺不到的窄路径") {
         struct Case {
             const char *base;
             const char *exponent;
-            int32_t prec;
+            std::int32_t prec;
             const char *expected;
         };
         constexpr Case cases[]{
@@ -122,7 +122,7 @@ TEST_SUITE("BigDec——生成的用例表铺不到的窄路径") {
         // 需要重试的。两者都远高于其余用例摸得到的量级（prec 最大 100，折算过去约 125），
         // 所以不管 doctest 用什么顺序跑，这两次调用都会真的触发重算。
         // 代价是 p = 409 那次约 1.6 秒（BigInt 是朴素算法）——嫌慢可以砍掉它，剥尾零那条很便宜
-        constexpr const char *const kLog10Digits{
+        constexpr const char *kLog10Digits{
             // log(10) 的前 410 位有效数字
             "23025850929940456840179914546843642076011014886287729760333279009"
             "67572609677352480235997205089598298341967784042286248633409525465"

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../runtime/Object.h"
 #include "../runtime/objects/Code.h"
 #include "lexer/token.h"
 #include "parser/ast_nodes/ast_nodes.h"
@@ -10,8 +11,7 @@
 /**
  * compiler/ 的对外接口。
  */
-class Compiler final {
-  public:
+struct Compiler final {
     Compiler() = delete;
     ~Compiler() = delete;
     Compiler(const Compiler &) = delete;

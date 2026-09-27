@@ -1,9 +1,11 @@
 #pragma once
 
 #include "ast_nodes.h"
+#include "ast_visitor.h"
+
+#include <vector>
 
 #include <nlohmann/json.hpp>
-#include <vector>
 
 using json = nlohmann::ordered_json;
 

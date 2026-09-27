@@ -3,8 +3,9 @@
 #include "../../../cppexceptions/SyntaxError.h"
 #include "../test_utils.h"
 
-#include <doctest/doctest.h>
 #include <stdexcept>
+
+#include <doctest/doctest.h>
 
 TEST_SUITE("Parser 的 SyntaxError 行为") {
 

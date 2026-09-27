@@ -1,7 +1,11 @@
 #include "ConstPool.h"
 
 #include "../../cppexceptions/InternalError.h"
+#include "../../numeric/BigDec.h"
+#include "../../numeric/BigInt.h"
+#include "../../runtime/Object.h"
 #include "../../runtime/Runtime.h"
+#include "../../runtime/Type.h"
 #include "../../runtime/objects/Decimal.h"
 #include "../../runtime/objects/Int.h"
 #include "../../runtime/objects/Str.h"
@@ -9,19 +13,24 @@
 
 #include <bit>
 #include <concepts>
+#include <cstddef>
+#include <cstdint>
 #include <format>
 #include <functional>
 #include <optional>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace {
 
 // 把若干个哈希值揉进 seed，返回揉好的那个。Boost 经典配方
 template <std::convertible_to<std::size_t>... Values>
 std::size_t hash_combine(std::size_t seed, const Values... values) {
-    static constexpr std::size_t kGolden{0x9e3779b97f4a7c15ULL};
+    // 64 位下就是原值；size_t 更窄的平台上取低位，只是个揉哈希用的常数
+    static constexpr std::size_t kGolden{static_cast<std::size_t>(0x9e3779b97f4a7c15ULL)};
 
-    ((seed ^= static_cast<std::size_t>(values) + kGolden + (seed << 6) + (seed >> 2)), ...);
+    ((seed ^= static_cast<std::size_t>(values) + kGolden + (seed << 6U) + (seed >> 2U)), ...);
 
     return seed;
 }
@@ -54,6 +63,70 @@ bool can_be_constant(const Object *value) {
            type == Runtime::type_tuple();
 }
 
+// 两个常量该不该共用一个槽。
+// 调用方保证：元组的元素已经是表里的规范对象。
+bool structural_identical(const Object *lhs, const Object *rhs) {
+    if (lhs == rhs) return true;
+
+    // 先比类型
+    if (lhs->type() != rhs->type()) return false;
+
+    // 再比值
+    if (const auto *left{dynamic_cast<const Int *>(lhs)}, *right{dynamic_cast<const Int *>(rhs)};
+        left && right) {
+        return left->value().equals(right->value());
+    }
+    if (const auto *left{dynamic_cast<const Decimal *>(lhs)},
+        *right{dynamic_cast<const Decimal *>(rhs)};
+        left && right) {
+        return left->value().identical(right->value()); // 不能用 operator==
+    }
+    if (const auto *left{dynamic_cast<const Str *>(lhs)}, *right{dynamic_cast<const Str *>(rhs)};
+        left && right) {
+        return left->value() == right->value();
+    }
+    if (const auto *left{dynamic_cast<const Tuple *>(lhs)},
+        *right{dynamic_cast<const Tuple *>(rhs)};
+        left && right) {
+        if (left->size() != right->size()) return false;
+        for (std::size_t i{0}; i < left->size(); ++i) {
+            if (left->at(i) != right->at(i)) return false;
+        }
+        return true;
+    }
+
+    return false;
+}
+
+std::size_t structural_hash(const Object *value) {
+    // 类型编进 key，跟 structural_identical() 的第一条对齐
+    const std::size_t seed{hash_pointer(value->type())};
+
+    if (const auto *number{dynamic_cast<const Int *>(value)}) {
+        return hash_combine(seed, hash_bigint(number->value()));
+    }
+    if (const auto *number{dynamic_cast<const Decimal *>(value)}) {
+        const BigDec &decimal{number->value()};
+        // kind + 符号 + 指数 + 系数，正是 BigDec::identical() 比的那四个字段
+        return hash_combine(
+            seed,
+            static_cast<std::size_t>(decimal.kind()),
+            decimal.is_negative() ? 1u : 0u,
+            static_cast<std::size_t>(decimal.exponent()),
+            hash_bigint(decimal.coefficient())
+        );
+    }
+    if (const auto *str{dynamic_cast<const Str *>(value)}) {
+        return hash_combine(seed, std::hash<std::u32string>{}(str->value()));
+    }
+    if (const auto *tuple{dynamic_cast<const Tuple *>(value)}) {
+        return hash_tuple(tuple->type(), tuple->items());
+    }
+
+    // 单例，身份就是全部信息
+    return hash_combine(seed, hash_pointer(value));
+}
+
 } // namespace
 
 std::optional<std::uint32_t>
@@ -62,7 +135,7 @@ ConstPool::find_tuple(const Type *type, const std::vector<ObjectRef> &items) con
     if (bucket == buckets_.end()) return std::nullopt;
 
     for (const std::uint32_t slot : bucket->second) {
-        if (const auto other{dynamic_cast<const Tuple *>(table_[slot].target())};
+        if (const auto *other{dynamic_cast<const Tuple *>(table_[slot].target())};
             other && other->type() == type && other->items() == items)
             return slot;
     }
@@ -71,7 +144,7 @@ ConstPool::find_tuple(const Type *type, const std::vector<ObjectRef> &items) con
 }
 
 ObjectRef ConstPool::canonicalize(const ObjectRef &value) {
-    const auto tuple{dynamic_cast<const Tuple *>(value.target())};
+    const auto *tuple{dynamic_cast<const Tuple *>(value.target())};
     if (!tuple) return value;
 
     // 先让每个元素进表
@@ -126,65 +199,4 @@ std::vector<ObjectRef> ConstPool::take_table() {
     buckets_.clear();
 
     return table;
-}
-
-bool ConstPool::structural_identical(const Object *lhs, const Object *rhs) {
-    if (lhs == rhs) return true;
-
-    // 先比类型
-    if (lhs->type() != rhs->type()) return false;
-
-    // 再比值
-    if (const auto left{dynamic_cast<const Int *>(lhs)}, right{dynamic_cast<const Int *>(rhs)};
-        left && right) {
-        return left->value().equals(right->value());
-    }
-    if (const auto left{dynamic_cast<const Decimal *>(lhs)},
-        right{dynamic_cast<const Decimal *>(rhs)};
-        left && right) {
-        return left->value().identical(right->value()); // 不能用 operator==
-    }
-    if (const auto left{dynamic_cast<const Str *>(lhs)}, right{dynamic_cast<const Str *>(rhs)};
-        left && right) {
-        return left->value() == right->value();
-    }
-    if (const auto left{dynamic_cast<const Tuple *>(lhs)}, right{dynamic_cast<const Tuple *>(rhs)};
-        left && right) {
-        if (left->size() != right->size()) return false;
-        for (std::size_t i{0}; i < left->size(); ++i) {
-            if (left->at(i) != right->at(i)) return false;
-        }
-        return true;
-    }
-
-    return false;
-}
-
-std::size_t ConstPool::structural_hash(const Object *value) {
-    // 类型编进 key，跟 structural_identical() 的第一条对齐
-    const std::size_t seed{hash_pointer(value->type())};
-
-    if (const auto number{dynamic_cast<const Int *>(value)}) {
-        return hash_combine(seed, hash_bigint(number->value()));
-    }
-    if (const auto number{dynamic_cast<const Decimal *>(value)}) {
-        const BigDec &decimal{number->value()};
-        // kind + 符号 + 指数 + 系数，正是 BigDec::identical() 比的那四个字段
-        return hash_combine(
-            seed,
-            static_cast<std::size_t>(decimal.kind()),
-            decimal.is_negative() ? 1u : 0u,
-            static_cast<std::size_t>(decimal.exponent()),
-            hash_bigint(decimal.coefficient())
-        );
-    }
-    if (const auto str{dynamic_cast<const Str *>(value)}) {
-        return hash_combine(seed, std::hash<std::u32string>{}(str->value()));
-    }
-    if (const auto tuple{dynamic_cast<const Tuple *>(value)}) {
-        return hash_tuple(tuple->type(), tuple->items());
-    }
-
-    // 单例，身份就是全部信息
-    return hash_combine(seed, hash_pointer(value));
 }

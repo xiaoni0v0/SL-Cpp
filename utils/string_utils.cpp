@@ -2,6 +2,7 @@
 
 #include "../cppexceptions/EncodingError.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -21,16 +22,16 @@ std::u32string utf8_to_u32(const std::string &utf8, const std::string &file_path
     std::u32string result;
     result.reserve(utf8.size()); // 上界，避免多次扩容
 
-    const unsigned char *const base{reinterpret_cast<const unsigned char *>(utf8.data())};
-    const unsigned char *p{base};
-    const unsigned char *end{p + utf8.size()};
+    const char *base{utf8.data()};
+    const char *p{base};
+    const char *end{p + utf8.size()};
 
     while (p < end) {
-        uint32_t cp;
-        int extra; // 续字节个数
+        std::uint32_t cp{};
+        int extra{}; // 续字节个数
 
-        const size_t pos{static_cast<size_t>(p - base)}; // 当前序列起始字节下标
-        const unsigned char b{*p++};
+        const std::size_t pos{static_cast<std::size_t>(p - base)}; // 当前序列起始字节下标
+        const auto b{static_cast<unsigned char>(*p++)};            // 按无符号读，避免 char 符号扩展
         if (b < 0x80) {
             // 0xxxxxxx
             result.push_back(b);
@@ -56,13 +57,13 @@ std::u32string utf8_to_u32(const std::string &utf8, const std::string &file_path
             throw EncodingError{file_path, pos, "utf8_to_u32: truncated sequence"};
         }
 
-        for (int i = 0; i < extra; ++i) {
-            const unsigned char c{*p++};
+        for (int i{0}; i < extra; ++i) {
+            const auto c{static_cast<unsigned char>(*p++)};
             // 必须是 10xxxxxx
             if ((c & 0xC0) != 0x80) {
                 throw EncodingError{
                     file_path,
-                    static_cast<size_t>(p - base - 1),
+                    static_cast<std::size_t>(p - base - 1),
                     "utf8_to_u32: invalid continuation byte"
                 };
             }
@@ -70,14 +71,14 @@ std::u32string utf8_to_u32(const std::string &utf8, const std::string &file_path
         }
 
         // 拒绝 overlong 编码
-        static constexpr uint32_t min_cp[4]{0, 0x80, 0x800, 0x10000};
-        if (cp < min_cp[extra]) {
+        static constexpr std::uint32_t kMinCodePoint[4]{0, 0x80, 0x800, 0x10000};
+        if (cp < kMinCodePoint[extra]) {
             throw EncodingError{file_path, pos, "utf8_to_u32: overlong encoding"};
         }
 
         // 拒绝代理区和越界码点
         if ((cp >= 0xD800 && cp <= 0xDFFF) || cp > 0x10FFFF) {
-            throw EncodingError(file_path, pos, "utf8_to_u32: invalid code point");
+            throw EncodingError{file_path, pos, "utf8_to_u32: invalid code point"};
         }
 
         result.push_back(static_cast<char32_t>(cp));
@@ -93,8 +94,8 @@ std::string u32_to_utf8(const std::u32string &utf32, const std::string &file_pat
     std::string result;
     result.reserve(utf32.size() * 4); // 上界，避免多次扩容
 
-    for (size_t i = 0; i < utf32.size(); ++i) {
-        const uint32_t cp{utf32[i]};
+    for (std::size_t i{0}; i < utf32.size(); ++i) {
+        const std::uint32_t cp{utf32[i]};
 
         if ((cp >= 0xD800 && cp <= 0xDFFF) || cp > 0x10FFFF) {
             throw EncodingError{file_path, i, "u32_to_utf8: invalid code point"};

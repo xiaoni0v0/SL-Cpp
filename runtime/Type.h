@@ -2,6 +2,7 @@
 
 #include "Object.h"
 
+#include <cstddef>
 #include <string>
 #include <vector>
 

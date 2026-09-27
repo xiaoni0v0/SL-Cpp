@@ -4,8 +4,10 @@
 #include "../../utils/memory_utils.h"
 #include "../Object.h"
 
+#include <cstddef>
+
 class Int final : public Object {
-    BigInt value_;
+    const BigInt value_;
 
     SL_MAKE_REF_ONLY;
     // 主构造

@@ -4,6 +4,8 @@
 #include "ast_nodes/ast_nodes.h"
 
 #include <concepts>
+#include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <stack>
 #include <string>
@@ -11,11 +13,11 @@
 
 class Parser {
     const std::vector<Token> tokens_;
-    size_t pos_{0}; // 当前 token 的索引
+    std::size_t pos_{0}; // 当前 token 的索引
     const std::string file_path_;
 
     // 一层未闭合的括号
-    enum class Bracket {
+    enum class Bracket : std::uint8_t {
         Paren,     // ( )
         Square,    // [ ]
         Brace,     // { }
@@ -30,8 +32,8 @@ class Parser {
     const Token &advance();
     // 检查下一个 token 类型是否为 type
     [[nodiscard]] bool check(TokenType type) const;
-    // 检查从 start（缺省为当前位置 pos_）开始，跳过 NEWLINE 之后的第一个 token 是否为 type
-    [[nodiscard]] bool check_over_newline(TokenType type, size_t offset = 0) const;
+    // 检查从 pos_ + offset 开始，跳过 NEWLINE 之后的第一个 token 是否为 type
+    [[nodiscard]] bool check_over_newline(TokenType type, std::size_t offset = 0) const;
     // 检查当前位置是不是一条表达式合法的终止符（换行、';'、EOF、'}'），不是则抛语法错误
     void check_terminator() const;
     // 消耗对应类型 token，否则抛出异常
@@ -155,10 +157,10 @@ class Parser {
      * @return           是否真的消耗过至少一个 ','
      */
     template <typename F>
-        requires requires(F f) {
+        requires requires(const F &f) {
             { f() } -> std::same_as<void>;
         }
-    bool finish_comma_batch(TokenType close, F &&parse_item);
+    bool finish_comma_batch(TokenType close, const F &parse_item);
 
     // 完成解析捕获列表。消耗括号、管理括号栈
     [[nodiscard]] std::vector<OneCapture> finish_captures();

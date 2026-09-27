@@ -6,82 +6,101 @@
 #include <bit>
 #include <cassert>
 #include <cmath>
+#include <compare>
+#include <cstddef>
+#include <cstdint>
 #include <stdexcept>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace {
+
+// 每个 limb 的位数
+constexpr unsigned kLimbBits{32};
+// 2^32：sub_magnitude 借位时补回的进位基数
+constexpr std::int64_t kLimbBase{static_cast<std::int64_t>(std::uint64_t{1} << kLimbBits)};
+
+// int64_t 原生的 a / b、a % b 是否安全：INT64_MIN / -1 的结果 2^63 装不下（UB）。
+// 除数为 0 另行处理，调用方保证 b != 0
+bool native_divmod_is_safe(const std::int64_t a, const std::int64_t b) {
+    return a != INT64_MIN || b != -1;
+}
 
 // 以下均只处理"大小"（不管符号），调用方保证参数已 normalize：不带多余高位 0，值为 0 则是空
 // vector。返回值同样满足这条
 
 std::strong_ordering
-compare_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
+compare_magnitude(const std::vector<std::uint32_t> &a, const std::vector<std::uint32_t> &b) {
     if (a.size() != b.size()) return a.size() <=> b.size();
-    for (size_t i{a.size()}; i-- > 0;) {
+    for (std::size_t i{a.size()}; i-- > 0;) {
         if (a[i] != b[i]) return a[i] <=> b[i];
     }
     return std::strong_ordering::equal;
 }
 
-std::vector<uint32_t>
-add_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
-    const std::vector<uint32_t> &longer{a.size() >= b.size() ? a : b};
-    const std::vector<uint32_t> &shorter{a.size() >= b.size() ? b : a};
+std::vector<std::uint32_t>
+add_magnitude(const std::vector<std::uint32_t> &a, const std::vector<std::uint32_t> &b) {
+    const std::vector<std::uint32_t> &longer{a.size() >= b.size() ? a : b};
+    const std::vector<std::uint32_t> &shorter{a.size() >= b.size() ? b : a};
 
-    std::vector<uint32_t> result;
+    std::vector<std::uint32_t> result;
     result.reserve(longer.size() + 1);
-    uint64_t carry{0};
-    for (size_t i{0}; i < longer.size(); ++i) {
-        const uint64_t sum{carry + longer[i] + (i < shorter.size() ? shorter[i] : 0)};
-        result.push_back(static_cast<uint32_t>(sum));
-        carry = sum >> 32;
+    std::uint64_t carry{0};
+    for (std::size_t i{0}; i < longer.size(); ++i) {
+        const std::uint64_t sum{carry + longer[i] + (i < shorter.size() ? shorter[i] : 0)};
+        result.push_back(static_cast<std::uint32_t>(sum));
+        carry = sum >> kLimbBits;
     }
-    if (carry) result.push_back(static_cast<uint32_t>(carry));
+    if (carry) result.push_back(static_cast<std::uint32_t>(carry));
     while (!result.empty() && result.back() == 0) result.pop_back();
     return result;
 }
 
 // 调用方保证 a >= b
-std::vector<uint32_t>
-sub_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
+std::vector<std::uint32_t>
+sub_magnitude(const std::vector<std::uint32_t> &a, const std::vector<std::uint32_t> &b) {
     assert(compare_magnitude(a, b) >= 0);
 
-    std::vector<uint32_t> result;
+    std::vector<std::uint32_t> result;
     result.reserve(a.size());
-    int64_t borrow{0};
-    for (size_t i{0}; i < a.size(); ++i) {
-        int64_t diff{
-            static_cast<int64_t>(a[i]) - borrow - (i < b.size() ? static_cast<int64_t>(b[i]) : 0)
+    std::int64_t borrow{0};
+    for (std::size_t i{0}; i < a.size(); ++i) {
+        std::int64_t diff{
+            static_cast<std::int64_t>(a[i]) - borrow -
+            (i < b.size() ? static_cast<std::int64_t>(b[i]) : 0)
         };
         if (diff < 0) {
-            diff += (static_cast<int64_t>(1) << 32);
+            diff += kLimbBase;
             borrow = 1;
         } else {
             borrow = 0;
         }
-        result.push_back(static_cast<uint32_t>(diff));
+        result.push_back(static_cast<std::uint32_t>(diff));
     }
     while (!result.empty() && result.back() == 0) result.pop_back();
     return result;
 }
 
-std::vector<uint32_t>
-mul_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
+std::vector<std::uint32_t>
+mul_magnitude(const std::vector<std::uint32_t> &a, const std::vector<std::uint32_t> &b) {
     if (a.empty() || b.empty()) return {};
 
-    std::vector<uint32_t> result(a.size() + b.size(), 0);
-    for (size_t i{0}; i < a.size(); ++i) {
-        uint64_t carry{0};
-        for (size_t j{0}; j < b.size(); ++j) {
-            const uint64_t cur{static_cast<uint64_t>(a[i]) * b[j] + result[i + j] + carry};
-            result[i + j] = static_cast<uint32_t>(cur);
-            carry = cur >> 32;
+    std::vector<std::uint32_t> result(a.size() + b.size(), 0);
+    for (std::size_t i{0}; i < a.size(); ++i) {
+        std::uint64_t carry{0};
+        for (std::size_t j{0}; j < b.size(); ++j) {
+            const std::uint64_t cur{
+                static_cast<std::uint64_t>(a[i]) * b[j] + result[i + j] + carry
+            };
+            result[i + j] = static_cast<std::uint32_t>(cur);
+            carry = cur >> kLimbBits;
         }
-        size_t k{i + b.size()};
+        std::size_t k{i + b.size()};
         while (carry) {
-            const uint64_t cur{static_cast<uint64_t>(result[k]) + carry};
-            result[k] = static_cast<uint32_t>(cur);
-            carry = cur >> 32;
+            const std::uint64_t cur{static_cast<std::uint64_t>(result[k]) + carry};
+            result[k] = static_cast<std::uint32_t>(cur);
+            carry = cur >> kLimbBits;
             ++k;
         }
     }
@@ -90,17 +109,19 @@ mul_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
 }
 
 // 左移 bits 位（bits 可以很大，用于 * 2^bits）
-std::vector<uint32_t> shift_left_magnitude(const std::vector<uint32_t> &a, const uint64_t bits) {
+std::vector<std::uint32_t>
+shift_left_magnitude(const std::vector<std::uint32_t> &a, const std::uint64_t bits) {
     if (a.empty() || bits == 0) return a;
 
-    const size_t limb_shift{static_cast<size_t>(bits / 32)};
-    const unsigned bit_shift{static_cast<unsigned>(bits % 32)};
+    const std::size_t limb_shift{static_cast<std::size_t>(bits / kLimbBits)};
+    const unsigned bit_shift{static_cast<unsigned>(bits % kLimbBits)};
 
-    std::vector<uint32_t> result(a.size() + limb_shift + 1, 0);
-    for (size_t i{0}; i < a.size(); ++i) {
-        const uint64_t shifted{static_cast<uint64_t>(a[i]) << bit_shift};
-        result[i + limb_shift] |= static_cast<uint32_t>(shifted);
-        if (bit_shift != 0) result[i + limb_shift + 1] |= static_cast<uint32_t>(shifted >> 32);
+    std::vector<std::uint32_t> result(a.size() + limb_shift + 1, 0);
+    for (std::size_t i{0}; i < a.size(); ++i) {
+        const std::uint64_t shifted{static_cast<std::uint64_t>(a[i]) << bit_shift};
+        result[i + limb_shift] |= static_cast<std::uint32_t>(shifted);
+        if (bit_shift != 0)
+            result[i + limb_shift + 1] |= static_cast<std::uint32_t>(shifted >> kLimbBits);
     }
     while (!result.empty() && result.back() == 0) result.pop_back();
     return result;
@@ -108,32 +129,32 @@ std::vector<uint32_t> shift_left_magnitude(const std::vector<uint32_t> &a, const
 
 // 右移 bits 位（向零截断）。返回截断后的大小 + 被移出的位是否有 1
 // （负数右移由调用方按这个标志决定要不要把截断商多减 1）
-std::pair<std::vector<uint32_t>, bool>
-shift_right_magnitude(const std::vector<uint32_t> &a, const uint64_t bits) {
+std::pair<std::vector<std::uint32_t>, bool>
+shift_right_magnitude(const std::vector<std::uint32_t> &a, const std::uint64_t bits) {
     if (bits == 0) return {a, false};
 
-    const size_t limb_shift{static_cast<size_t>(bits / 32)};
-    const unsigned bit_shift{static_cast<unsigned>(bits % 32)};
+    const std::size_t limb_shift{static_cast<std::size_t>(bits / kLimbBits)};
+    const unsigned bit_shift{static_cast<unsigned>(bits % kLimbBits)};
 
     // 被移出的位是否有非 0：按整 limb 判断，跟 to_double 的 sticky 位同理
     bool dropped_nonzero{false};
-    for (size_t i{0}; i < limb_shift && i < a.size() && !dropped_nonzero; ++i)
+    for (std::size_t i{0}; i < limb_shift && i < a.size() && !dropped_nonzero; ++i)
         if (a[i] != 0) dropped_nonzero = true;
     if (!dropped_nonzero && bit_shift != 0 && limb_shift < a.size()) {
-        const uint32_t mask{(uint32_t{1} << bit_shift) - 1};
+        const std::uint32_t mask{(std::uint32_t{1} << bit_shift) - 1};
         if ((a[limb_shift] & mask) != 0) dropped_nonzero = true;
     }
 
     if (limb_shift >= a.size()) return {{}, dropped_nonzero};
 
-    std::vector<uint32_t> result(a.size() - limb_shift, 0);
-    for (size_t i{0}; i < result.size(); ++i) {
-        const uint64_t low{a[i + limb_shift]};
-        const uint64_t high{i + limb_shift + 1 < a.size() ? a[i + limb_shift + 1] : 0};
-        const uint64_t combined{
-            bit_shift == 0 ? low : (low >> bit_shift) | (high << (32 - bit_shift))
+    std::vector<std::uint32_t> result(a.size() - limb_shift, 0);
+    for (std::size_t i{0}; i < result.size(); ++i) {
+        const std::uint64_t low{a[i + limb_shift]};
+        const std::uint64_t high{i + limb_shift + 1 < a.size() ? a[i + limb_shift + 1] : 0};
+        const std::uint64_t combined{
+            bit_shift == 0 ? low : (low >> bit_shift) | (high << (kLimbBits - bit_shift))
         };
-        result[i] = static_cast<uint32_t>(combined);
+        result[i] = static_cast<std::uint32_t>(combined);
     }
     while (!result.empty() && result.back() == 0) result.pop_back();
     return {std::move(result), dropped_nonzero};
@@ -141,22 +162,22 @@ shift_right_magnitude(const std::vector<uint32_t> &a, const uint64_t bits) {
 
 // 二进制逐位长除法：从高位到低位边移边比较边减。慢但正确性显然，不用处理猜商修正。
 // 返回 (商, 余数)，调用方保证 b 不为 0
-std::pair<std::vector<uint32_t>, std::vector<uint32_t>>
-div_mod_magnitude(const std::vector<uint32_t> &a, const std::vector<uint32_t> &b) {
+std::pair<std::vector<std::uint32_t>, std::vector<std::uint32_t>>
+div_mod_magnitude(const std::vector<std::uint32_t> &a, const std::vector<std::uint32_t> &b) {
     assert(!b.empty()); // 参数已 normalize，非空即非零
 
     if (a.empty()) return {{}, {}};
 
-    std::vector<uint32_t> quotient(a.size(), 0);
-    std::vector<uint32_t> remainder;
+    std::vector<std::uint32_t> quotient(a.size(), 0);
+    std::vector<std::uint32_t> remainder;
 
-    const size_t total_bits{a.size() * 32};
-    for (size_t bit_from_top{0}; bit_from_top < total_bits; ++bit_from_top) {
-        const size_t bit_index{total_bits - 1 - bit_from_top};
+    const std::size_t total_bits{a.size() * kLimbBits};
+    for (std::size_t bit_from_top{0}; bit_from_top < total_bits; ++bit_from_top) {
+        const std::size_t bit_index{total_bits - 1 - bit_from_top};
         remainder = shift_left_magnitude(remainder, 1);
 
-        const size_t limb_i{bit_index / 32};
-        const size_t bit_in_limb{bit_index % 32};
+        const std::size_t limb_i{bit_index / kLimbBits};
+        const std::size_t bit_in_limb{bit_index % kLimbBits};
         if ((a[limb_i] >> bit_in_limb) & 1u) {
             if (remainder.empty())
                 remainder.push_back(1);
@@ -182,7 +203,7 @@ void BigInt::normalize() {
     if (limbs_.empty()) negative_ = false;
 }
 
-BigInt BigInt::from_magnitude(std::vector<uint32_t> limbs, const bool negative) {
+BigInt BigInt::from_magnitude(std::vector<std::uint32_t> limbs, const bool negative) {
     BigInt result;
     result.is_small_ = false;
     result.limbs_ = std::move(limbs);
@@ -196,14 +217,15 @@ BigInt BigInt::promoted() const {
 
     const bool negative{small_ < 0};
     // 分两步取 magnitude，避免 small_ == INT64_MIN 时 -small_ 溢出
-    const uint64_t magnitude{
-        negative ? static_cast<uint64_t>(-(small_ + 1)) + 1 : static_cast<uint64_t>(small_)
+    const std::uint64_t magnitude{
+        negative ? static_cast<std::uint64_t>(-(small_ + 1)) + 1
+                 : static_cast<std::uint64_t>(small_)
     };
-    std::vector<uint32_t> limbs;
-    uint64_t remaining{magnitude};
+    std::vector<std::uint32_t> limbs;
+    std::uint64_t remaining{magnitude};
     while (remaining != 0) {
-        limbs.push_back(static_cast<uint32_t>(remaining & 0xFFFFFFFFu));
-        remaining >>= 32;
+        limbs.push_back(static_cast<std::uint32_t>(remaining & 0xFFFFFFFFu));
+        remaining >>= kLimbBits;
     }
     return from_magnitude(std::move(limbs), negative);
 }
@@ -214,22 +236,25 @@ BigInt BigInt::shrink(BigInt big) {
     // 2 个 limb 已覆盖 int64_t 全部范围，更多 limb 的值必然装不下
     if (big.limbs_.size() > 2) return big;
 
-    uint64_t magnitude{0};
-    for (size_t i{big.limbs_.size()}; i-- > 0;) magnitude = (magnitude << 32) | big.limbs_[i];
+    std::uint64_t magnitude{0};
+    for (std::size_t i{big.limbs_.size()}; i-- > 0;)
+        magnitude = (magnitude << kLimbBits) | big.limbs_[i];
 
     if (!big.negative_) {
-        if (magnitude > static_cast<uint64_t>(INT64_MAX)) return big;
+        if (magnitude > static_cast<std::uint64_t>(INT64_MAX)) return big;
         BigInt result;
         result.is_small_ = true;
-        result.small_ = static_cast<int64_t>(magnitude);
+        result.small_ = static_cast<std::int64_t>(magnitude);
         return result;
     }
 
-    constexpr uint64_t kMinMagnitude{static_cast<uint64_t>(INT64_MAX) + 1}; // |INT64_MIN| == 2^63
+    constexpr std::uint64_t kMinMagnitude{
+        static_cast<std::uint64_t>(INT64_MAX) + 1
+    }; // |INT64_MIN| == 2^63
     if (magnitude > kMinMagnitude) return big;
     BigInt result;
     result.is_small_ = true;
-    result.small_ = magnitude == kMinMagnitude ? INT64_MIN : -static_cast<int64_t>(magnitude);
+    result.small_ = magnitude == kMinMagnitude ? INT64_MIN : -static_cast<std::int64_t>(magnitude);
     return result;
 }
 
@@ -240,52 +265,54 @@ void BigInt::check_invariant() const {
     assert(!shrink(*this).is_small_);             // 大路径的量级不该是能收缩回小路径的
 }
 
-std::vector<uint32_t> BigInt::to_twos_complement(const size_t limb_count) const {
+std::vector<std::uint32_t> BigInt::to_twos_complement(const std::size_t limb_count) const {
     assert(!is_small_);
     assert(limb_count > limbs_.size()); // 至少留一个 limb 的安全余量，见头文件
 
-    std::vector<uint32_t> result(limb_count, 0);
+    std::vector<std::uint32_t> result(limb_count, 0);
     if (!negative_) {
-        for (size_t i{0}; i < limbs_.size() && i < limb_count; ++i) result[i] = limbs_[i];
+        for (std::size_t i{0}; i < limbs_.size() && i < limb_count; ++i) result[i] = limbs_[i];
         return result; // 非负数：高位补 0
     }
 
     // 负数：结果 = ~magnitude + 1（在 limb_count * 32 位宽度内计算）
-    uint64_t carry{1}; // "+1" 的初始进位
-    for (size_t i{0}; i < limb_count; ++i) {
-        const uint32_t magnitude_limb{i < limbs_.size() ? limbs_[i] : 0u};
-        const uint64_t sum{static_cast<uint32_t>(~magnitude_limb) + carry};
-        result[i] = static_cast<uint32_t>(sum);
-        carry = sum >> 32;
+    std::uint64_t carry{1}; // "+1" 的初始进位
+    for (std::size_t i{0}; i < limb_count; ++i) {
+        const std::uint32_t magnitude_limb{i < limbs_.size() ? limbs_[i] : 0u};
+        // 显式取 32 位补码再零扩展；不写这个转换 MSVC 会报 C4319
+        const std::uint64_t sum{static_cast<std::uint32_t>(~magnitude_limb) + carry};
+        result[i] = static_cast<std::uint32_t>(sum);
+        carry = sum >> kLimbBits;
     }
     return result;
 }
 
-BigInt BigInt::from_twos_complement(std::vector<uint32_t> limbs) {
+BigInt BigInt::from_twos_complement(std::vector<std::uint32_t> limbs) {
     if (limbs.empty()) return BigInt{};
 
-    const bool is_negative{((limbs.back() >> 31) & 1u) != 0}; // 最高位是符号位
+    const bool is_negative{((limbs.back() >> (kLimbBits - 1)) & 1u) != 0}; // 最高位是符号位
     if (!is_negative) return from_magnitude(std::move(limbs), false);
 
     // 负数：magnitude = ~limbs + 1
-    uint64_t carry{1};
+    std::uint64_t carry{1};
     for (auto &limb : limbs) {
-        const uint64_t sum{static_cast<uint32_t>(~limb) + carry};
-        limb = static_cast<uint32_t>(sum);
-        carry = sum >> 32;
+        const std::uint64_t sum{static_cast<std::uint32_t>(~limb) + carry};
+        limb = static_cast<std::uint32_t>(sum);
+        carry = sum >> kLimbBits;
     }
     return from_magnitude(std::move(limbs), true);
 }
 
-BigInt BigInt::bitwise_big(const BigInt &rhs, uint32_t (*const op)(uint32_t, uint32_t)) const {
+BigInt
+BigInt::bitwise_big(const BigInt &rhs, std::uint32_t (*op)(std::uint32_t, std::uint32_t)) const {
     const BigInt a{promoted()};
     const BigInt b{rhs.promoted()};
     // 宽度取两边 limb 数的较大者 + 1，那个 +1 就是 to_twos_complement 要的安全 limb
-    const size_t n{std::max(a.limbs_.size(), b.limbs_.size()) + 1};
-    const std::vector<uint32_t> a_bits{a.to_twos_complement(n)};
-    const std::vector<uint32_t> b_bits{b.to_twos_complement(n)};
-    std::vector<uint32_t> result(n);
-    for (size_t i{0}; i < n; ++i) result[i] = op(a_bits[i], b_bits[i]);
+    const std::size_t n{std::max(a.limbs_.size(), b.limbs_.size()) + 1};
+    const std::vector<std::uint32_t> a_bits{a.to_twos_complement(n)};
+    const std::vector<std::uint32_t> b_bits{b.to_twos_complement(n)};
+    std::vector<std::uint32_t> result(n);
+    for (std::size_t i{0}; i < n; ++i) result[i] = op(a_bits[i], b_bits[i]);
     return shrink(from_twos_complement(std::move(result)));
 }
 
@@ -315,58 +342,58 @@ std::pair<BigInt, BigInt> BigInt::divmod_floor_big(const BigInt &divisor) const 
     return {std::move(quotient), std::move(remainder)};
 }
 
-BigInt::BigInt(const long long value) : small_{value} {}
+BigInt::BigInt(const std::int64_t value) : small_{value} {}
 
 BigInt BigInt::from_decimal_string(const std::string &s) {
     const auto is_digit{[](const char c) { return c >= '0' && c <= '9'; }};
 
     if (s.empty()) throw std::invalid_argument("BigInt::from_decimal_string: empty string");
 
-    size_t i{0};
+    std::size_t i{0};
     bool neg{false};
     if (s[0] == '+' || s[0] == '-') {
         neg = s[0] == '-';
         i = 1;
     }
 
-    const size_t digits_begin{i};
+    const std::size_t digits_begin{i};
     while (i < s.size() && is_digit(s[i])) ++i;
-    const size_t digits_end{i};
+    const std::size_t digits_end{i};
     if (digits_begin == digits_end)
         throw std::invalid_argument("BigInt::from_decimal_string: no digits");
 
     // 指数只能非负（只看写法不看值：`100e-1` 数值是整数也不收）
-    int64_t exponent{0};
+    std::int64_t exponent{0};
     if (i < s.size() && (s[i] == 'e' || s[i] == 'E')) {
         ++i;
         if (i < s.size() && s[i] == '-')
             throw std::invalid_argument("BigInt::from_decimal_string: negative exponent");
         if (i < s.size() && s[i] == '+') ++i;
 
-        const size_t exp_begin{i};
+        const std::size_t exp_begin{i};
         while (i < s.size() && is_digit(s[i])) ++i;
         if (exp_begin == i)
             throw std::invalid_argument("BigInt::from_decimal_string: no exponent digits");
         // 逐位累加时用溢出检测挡真正装不进 int64_t 的输入，不是按位数估算着拒绝
-        for (size_t k{exp_begin}; k < i; ++k) {
-            if (sl_overflow_mul(&exponent, exponent, int64_t{10}) ||
-                sl_overflow_add(&exponent, exponent, static_cast<int64_t>(s[k] - '0')))
+        for (std::size_t k{exp_begin}; k < i; ++k) {
+            if (sl_overflow_mul(&exponent, exponent, std::int64_t{10}) ||
+                sl_overflow_add(&exponent, exponent, static_cast<std::int64_t>(s[k] - '0')))
                 throw std::invalid_argument("BigInt::from_decimal_string: exponent out of range");
         }
     }
     if (i != s.size())
         throw std::invalid_argument("BigInt::from_decimal_string: invalid character");
 
-    std::vector<uint32_t> limbs;
-    for (size_t k{digits_begin}; k < digits_end; ++k) {
+    std::vector<std::uint32_t> limbs;
+    for (std::size_t k{digits_begin}; k < digits_end; ++k) {
         // limbs = limbs * 10 + digit
-        uint64_t carry{static_cast<uint64_t>(s[k] - '0')};
+        std::uint64_t carry{static_cast<std::uint64_t>(s[k] - '0')};
         for (auto &limb : limbs) {
-            const uint64_t cur{static_cast<uint64_t>(limb) * 10 + carry};
-            limb = static_cast<uint32_t>(cur);
-            carry = cur >> 32;
+            const std::uint64_t cur{static_cast<std::uint64_t>(limb) * 10 + carry};
+            limb = static_cast<std::uint32_t>(cur);
+            carry = cur >> kLimbBits;
         }
-        if (carry) limbs.push_back(static_cast<uint32_t>(carry));
+        if (carry) limbs.push_back(static_cast<std::uint32_t>(carry));
     }
     BigInt mantissa{shrink(from_magnitude(std::move(limbs), neg))};
     // 尾数为 0 时恒为 0，别真去算 10^exponent（代价只跟指数走，指数不设上限）
@@ -381,24 +408,24 @@ std::string BigInt::to_decimal_string() const {
 
     // 每次除以 10^9 剥一段，低位在前
     std::vector magnitude{limbs_};
-    std::vector<uint32_t> chunks;
+    std::vector<std::uint32_t> chunks;
 
     while (!magnitude.empty()) {
-        uint64_t remainder{0};
-        for (size_t i{magnitude.size()}; i-- > 0;) {
-            constexpr uint64_t kChunkBase{1000000000ull};
-            const uint64_t cur{(remainder << 32) | magnitude[i]};
-            magnitude[i] = static_cast<uint32_t>(cur / kChunkBase);
+        std::uint64_t remainder{0};
+        for (std::size_t i{magnitude.size()}; i-- > 0;) {
+            constexpr std::uint64_t kChunkBase{1000000000ull};
+            const std::uint64_t cur{(remainder << kLimbBits) | magnitude[i]};
+            magnitude[i] = static_cast<std::uint32_t>(cur / kChunkBase);
             remainder = cur % kChunkBase;
         }
         while (!magnitude.empty() && magnitude.back() == 0) magnitude.pop_back();
-        chunks.push_back(static_cast<uint32_t>(remainder));
+        chunks.push_back(static_cast<std::uint32_t>(remainder));
     }
 
     std::string result;
     if (negative_) result.push_back('-');
     result += std::to_string(chunks.back()); // 最高位 chunk 不补零
-    for (size_t i{chunks.size() - 1}; i-- > 0;) {
+    for (std::size_t i{chunks.size() - 1}; i-- > 0;) {
         const std::string chunk_str{std::to_string(chunks[i])};
         result += std::string(9 - chunk_str.size(), '0'); // 其余 chunk 一律补足 9 位
         result += chunk_str;
@@ -410,36 +437,37 @@ double BigInt::to_double() const {
     if (is_small_) return static_cast<double>(small_);
     check_invariant(); // 同 to_decimal_string，规范化的 0 不该走到这里
 
-    const size_t bits{
-        (limbs_.size() - 1) * 32 + static_cast<size_t>(std::bit_width(limbs_.back()))
+    const std::size_t bits{
+        (limbs_.size() - 1) * kLimbBits + static_cast<std::size_t>(std::bit_width(limbs_.back()))
     };
 
-    uint64_t mantissa{0};
+    std::uint64_t mantissa{0};
     int exponent{0};
     if (bits <= 64) {
         // 64 位内直接精确取值，转 double 只经历这一次舍入
-        for (size_t i{limbs_.size()}; i-- > 0;) mantissa = (mantissa << 32) | limbs_[i];
+        for (std::size_t i{limbs_.size()}; i-- > 0;) mantissa = (mantissa << kLimbBits) | limbs_[i];
     } else {
         // 只取最高 64 位；被舍弃的低位只要有一个非 0，就把 sticky 位或进最低位，
         // 让 uint64_t -> double 这一次舍入等价于直接对整个大数就近取偶
-        const size_t drop_bits{bits - 64};
-        for (size_t i{0}; i < 64; ++i) {
-            const size_t bit_index{bits - 1 - i};
-            mantissa = (mantissa << 1) | ((limbs_[bit_index / 32] >> (bit_index % 32)) & 1u);
+        const std::size_t drop_bits{bits - 64};
+        for (std::size_t i{0}; i < 64; ++i) {
+            const std::size_t bit_index{bits - 1 - i};
+            mantissa = (mantissa << 1u) |
+                       ((limbs_[bit_index / kLimbBits] >> (bit_index % kLimbBits)) & 1u);
         }
         bool sticky{false};
-        const size_t full_limbs{drop_bits / 32}; // 按整 limb 判断非 0，不逐 bit 扫
-        for (size_t limb_i{0}; limb_i < full_limbs && !sticky; ++limb_i)
+        const std::size_t full_limbs{drop_bits / kLimbBits}; // 按整 limb 判断非 0，不逐 bit 扫
+        for (std::size_t limb_i{0}; limb_i < full_limbs && !sticky; ++limb_i)
             if (limbs_[limb_i] != 0) sticky = true;
         if (!sticky) {
-            if (const size_t remaining_bits{drop_bits % 32}; remaining_bits != 0) {
-                const uint32_t mask{(uint32_t{1} << remaining_bits) - 1};
+            if (const std::size_t remaining_bits{drop_bits % kLimbBits}; remaining_bits != 0) {
+                const std::uint32_t mask{(std::uint32_t{1} << remaining_bits) - 1};
                 if ((limbs_[full_limbs] & mask) != 0) sticky = true;
             }
         }
         if (sticky) mantissa |= 1u;
         // 这么大的指数不管怎样 ldexp 都会溢出成 infinity，提前截断避免造出天文数字
-        constexpr size_t kExponentClamp{100000};
+        constexpr std::size_t kExponentClamp{100000};
         exponent = static_cast<int>(drop_bits < kExponentClamp ? drop_bits : kExponentClamp);
     }
 
@@ -452,13 +480,14 @@ int BigInt::sign() const {
     return is_negative() ? -1 : 1;
 }
 
-size_t BigInt::num_decimal_digits() const {
+std::size_t BigInt::num_decimal_digits() const {
     if (is_small_) {
         // 小路径逐次除 10 就够快，不必绕道字符串
-        uint64_t magnitude{
-            small_ < 0 ? static_cast<uint64_t>(-(small_ + 1)) + 1 : static_cast<uint64_t>(small_)
+        std::uint64_t magnitude{
+            small_ < 0 ? static_cast<std::uint64_t>(-(small_ + 1)) + 1
+                       : static_cast<std::uint64_t>(small_)
         };
-        size_t digits{1};
+        std::size_t digits{1};
         while (magnitude >= 10) {
             magnitude /= 10;
             ++digits;
@@ -469,15 +498,17 @@ size_t BigInt::num_decimal_digits() const {
     return to_decimal_string().size() - (negative_ ? 1 : 0);
 }
 
-size_t BigInt::bit_length() const {
+std::size_t BigInt::bit_length() const {
     if (is_small_) {
-        const uint64_t magnitude{
-            small_ < 0 ? static_cast<uint64_t>(-(small_ + 1)) + 1 : static_cast<uint64_t>(small_)
+        const std::uint64_t magnitude{
+            small_ < 0 ? static_cast<std::uint64_t>(-(small_ + 1)) + 1
+                       : static_cast<std::uint64_t>(small_)
         };
-        return static_cast<size_t>(std::bit_width(magnitude));
+        return static_cast<std::size_t>(std::bit_width(magnitude));
     }
     check_invariant(); // 大路径下 limbs_ 不该是空的，否则下面 back() 是 UB
-    return (limbs_.size() - 1) * 32 + static_cast<size_t>(std::bit_width(limbs_.back()));
+    return (limbs_.size() - 1) * kLimbBits +
+           static_cast<std::size_t>(std::bit_width(limbs_.back()));
 }
 
 BigInt BigInt::minus() const {
@@ -518,7 +549,7 @@ BigInt BigInt::bit_not() const { return minus().sub(BigInt(1)); }
 
 BigInt BigInt::add(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) {
-        int64_t sum;
+        std::int64_t sum{};
         if (!sl_overflow_add(&sum, small_, rhs.small_)) {
             BigInt result;
             result.is_small_ = true;
@@ -542,7 +573,7 @@ BigInt BigInt::sub(const BigInt &rhs) const { return add(rhs.minus()); }
 
 BigInt BigInt::mul(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) {
-        int64_t product;
+        std::int64_t product{};
         if (!sl_overflow_mul(&product, small_, rhs.small_)) {
             BigInt result;
             result.is_small_ = true;
@@ -561,9 +592,9 @@ BigInt BigInt::floor_div(const BigInt &divisor) const {
 
     // 小路径快路径：原生截断除法 + 向负无穷修正。INT64_MIN / -1 会溢出（结果应是 2^63），
     // 这一种组合退回大路径
-    if (is_small_ && divisor.is_small_ && !(small_ == INT64_MIN && divisor.small_ == -1)) {
-        int64_t q{small_ / divisor.small_};
-        const int64_t r{small_ % divisor.small_};
+    if (is_small_ && divisor.is_small_ && native_divmod_is_safe(small_, divisor.small_)) {
+        std::int64_t q{small_ / divisor.small_};
+        const std::int64_t r{small_ % divisor.small_};
         if (r != 0 && ((r < 0) != (divisor.small_ < 0))) --q;
         BigInt result;
         result.is_small_ = true;
@@ -577,8 +608,8 @@ BigInt BigInt::floor_div(const BigInt &divisor) const {
 BigInt BigInt::mod(const BigInt &divisor) const {
     if (divisor.is_zero()) throw std::domain_error("BigInt: division by zero");
 
-    if (is_small_ && divisor.is_small_ && !(small_ == INT64_MIN && divisor.small_ == -1)) {
-        int64_t r{small_ % divisor.small_};
+    if (is_small_ && divisor.is_small_ && native_divmod_is_safe(small_, divisor.small_)) {
+        std::int64_t r{small_ % divisor.small_};
         if (r != 0 && ((r < 0) != (divisor.small_ < 0))) r += divisor.small_;
         BigInt result;
         result.is_small_ = true;
@@ -608,35 +639,35 @@ BigInt BigInt::pow(const BigInt &exponent) const {
 BigInt BigInt::bit_and(const BigInt &rhs) const {
     // 两个都在 int64_t 范围内时，补码位运算不会让量级变大，原生结果必然也在范围内
     if (is_small_ && rhs.is_small_) return BigInt(small_ & rhs.small_);
-    return bitwise_big(rhs, [](const uint32_t x, const uint32_t y) { return x & y; });
+    return bitwise_big(rhs, [](const std::uint32_t x, const std::uint32_t y) { return x & y; });
 }
 
 BigInt BigInt::bit_or(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) return BigInt(small_ | rhs.small_);
-    return bitwise_big(rhs, [](const uint32_t x, const uint32_t y) { return x | y; });
+    return bitwise_big(rhs, [](const std::uint32_t x, const std::uint32_t y) { return x | y; });
 }
 
 BigInt BigInt::bit_xor(const BigInt &rhs) const {
     if (is_small_ && rhs.is_small_) return BigInt(small_ ^ rhs.small_);
-    return bitwise_big(rhs, [](const uint32_t x, const uint32_t y) { return x ^ y; });
+    return bitwise_big(rhs, [](const std::uint32_t x, const std::uint32_t y) { return x ^ y; });
 }
 
-BigInt BigInt::shift_left(const long long k) const {
+BigInt BigInt::shift_left(const std::int64_t k) const {
     if (k < 0) throw std::domain_error("BigInt::shift_left: negative shift count");
     if (k == 0 || is_zero()) return *this;
 
     // k <= 62 时 int64_t{1} << k 不碰符号位，可以安全地拿去做溢出检测的乘数
     if (is_small_ && k <= 62) {
-        int64_t product;
-        if (!sl_overflow_mul(&product, small_, int64_t{1} << k)) return BigInt(product);
+        std::int64_t product{};
+        if (!sl_overflow_mul(&product, small_, std::int64_t{1} << k)) return BigInt(product);
     }
 
     return shrink(from_magnitude(
-        shift_left_magnitude(promoted().limbs_, static_cast<uint64_t>(k)), is_negative()
+        shift_left_magnitude(promoted().limbs_, static_cast<std::uint64_t>(k)), is_negative()
     ));
 }
 
-BigInt BigInt::shift_right(const long long k) const {
+BigInt BigInt::shift_right(const std::int64_t k) const {
     if (k < 0) throw std::domain_error("BigInt::shift_right: negative shift count");
     if (k == 0 || is_zero()) return *this;
 
@@ -649,7 +680,7 @@ BigInt BigInt::shift_right(const long long k) const {
 
     // 大路径直接对大小右移（向零截断），负数在被移出的位里真有非 0 时把商再多减 1。
     // shift_right_magnitude 按整 limb 判断，多大的 k 都是 O(limb 数)，不需要再单独短路
-    auto [truncated, dropped_nonzero]{shift_right_magnitude(limbs_, static_cast<uint64_t>(k))};
+    auto [truncated, dropped_nonzero]{shift_right_magnitude(limbs_, static_cast<std::uint64_t>(k))};
     if (!negative_ || !dropped_nonzero)
         return shrink(from_magnitude(std::move(truncated), negative_));
     return shrink(from_magnitude(std::move(truncated), false)).add(BigInt(1)).minus();

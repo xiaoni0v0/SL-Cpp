@@ -1,10 +1,13 @@
 #pragma once
 
 #include "../../parser/ast_nodes/ast_nodes.h"
+#include "../../parser/ast_nodes/ast_visitor.h"
 
+#include <cstddef>
 #include <string>
+#include <vector>
 
-class SemanticChecker : public AstConstVisitor {
+class SemanticChecker final : public AstConstVisitor {
     const AstNode &root_;
     const std::string file_path_;
 
@@ -18,17 +21,21 @@ class SemanticChecker : public AstConstVisitor {
     } ctx_;
 
     // 构造时快照 ctx_，析构时物归原样
-    struct ContextGuard {
+    class ContextGuard final {
         SemanticChecker &checker_;
         Context saved_;
+
+      public:
         explicit ContextGuard(SemanticChecker &checker) : checker_{checker}, saved_{checker.ctx_} {}
         ~ContextGuard() { checker_.ctx_ = saved_; }
         ContextGuard(const ContextGuard &) = delete;
+        ContextGuard(ContextGuard &&) = delete;
         ContextGuard &operator=(const ContextGuard &) = delete;
+        ContextGuard &operator=(ContextGuard &&) = delete;
     };
 
     // 带 * 的解构里，星号每一侧的左值个数上限
-    static constexpr std::size_t nMaxStarredSideLvalues{255};
+    static constexpr std::size_t kMaxStarredSideLvalues{255};
 
     // 报错：SyntaxError
     [[noreturn]] void error(const std::string &msg, Position pos) const;
@@ -42,7 +49,7 @@ class SemanticChecker : public AstConstVisitor {
 
     // vector 元素个数不能少于 min_size（Parser 保证，触发即 InternalError）
     template <typename T>
-    void require_min_size(const std::vector<T> &vec, size_t min_size, Position pos) const;
+    void require_min_size(const std::vector<T> &vec, std::size_t min_size, Position pos) const;
 
     // 两个 vector 长度必须相等（Parser 保证，触发即 InternalError）
     template <typename T, typename U>

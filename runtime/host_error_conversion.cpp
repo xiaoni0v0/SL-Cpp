@@ -3,7 +3,9 @@
 #include "../cppexceptions/EncodingError.h"
 #include "../cppexceptions/FileNotFoundError.h"
 #include "../cppexceptions/SyntaxError.h"
+#include "Object.h"
 #include "Runtime.h"
+#include "Type.h"
 #include "objects/BaseException.h"
 #include "objects/Str.h"
 
@@ -11,7 +13,7 @@
 #include <vector>
 
 namespace {
-ObjectRef single_arg_exception(Type *const type, const std::string &message) {
+ObjectRef single_arg_exception(Type *type, const std::string &message) {
     return ObjectRef{
         make_ref<BaseException>(type, std::vector{ObjectRef{Str::from_utf8(message)}})
     };

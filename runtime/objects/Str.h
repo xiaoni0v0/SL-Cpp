@@ -3,10 +3,11 @@
 #include "../../utils/memory_utils.h"
 #include "../Object.h"
 
+#include <cstddef>
 #include <string>
 
 class Str final : public Object {
-    std::u32string value_; // 底层是 u32string
+    const std::u32string value_; // 底层是 u32string
 
     SL_MAKE_REF_ONLY;
     // 主构造

@@ -21,9 +21,7 @@ class InternalError : public SLException {
     explicit InternalError(const std::string &message)
         : SLException{std::format("{}: {}", kBlurb, message), message} {}
 
-    explicit InternalError(
-        std::string file_path, const int row, const int col, const std::string &message
-    )
+    InternalError(std::string file_path, const int row, const int col, const std::string &message)
         : SLException{
               std::format("{}:{}:{}:\n{}: {}", file_path, row, col, kBlurb, message), message
           },

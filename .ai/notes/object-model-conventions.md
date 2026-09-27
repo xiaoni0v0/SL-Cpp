@@ -105,8 +105,8 @@ Release 下也要响。
 
 ## 四、bootstrap 内部只碰私有字段，不经过公开访问器；没有分阶段的状态机
 
-`Runtime::init()` 就两步：`build_types()` 建全部内置类型（含异常类树），`build_singletons()` 建
-六个单例。`Runtime::instance()` 只检查一件事——`g_runtime` 是否为空，即"`init()` 到底跑没跑完"。
+`Runtime::init()` 就三步：`build_types()` 建全部内置类型（含异常类树），`build_singletons()` 建
+六个单例，`build_internals()` 建内部对象表。`Runtime::instance()` 只检查一件事——`g_runtime` 是否为空，即"`init()` 到底跑没跑完"。
 
 早先版本给这个类配过一个有序的 `BootPhase`（`Uninitialized`→`Types`→`Values`→`Ready`），"某个东西
 现在能不能用"表达成"当前相位 >= 某相位"，每个访问器声明自己要求的最低相位。**后来发现这是自己给
@@ -131,7 +131,7 @@ Release 下也要响。
   那个），给"就是要一个普通 int/str"的常见场合用，**主构造函数仍然是收 `Type*` 的那个**。
   唯一的例外是 `Code`：SL 层连 `code` 这个类都拿不到（`SL.md` 4.3.8），子类化不可能发生，
   收 `Type*` 只会暗示一种必须永不使用的灵活性，所以它就一个不带 `Type*` 的构造函数。
-- 新的初始化步骤（内置函数表、内置模块表……）插进 `init()` 现有两步之后即可，不需要为它们
+- 新的初始化步骤（内置函数表、内置模块表……）插进 `init()` 现有三步之后即可，不需要为它们
   预先开一个新的状态量——除非真的出现了"外部代码需要区分两个中间状态"的场景，那时候再加，
   不要现在就为假设中的需求设计。
 - 需要"运行时已经完全就位"的入口（编译器门面、虚拟机主循环）断言 `Runtime::ready()`
@@ -188,7 +188,7 @@ Release 下也要响。
 
 ## 五、异常：一个 C++ 类覆盖整棵树，`.args` 是唯一字段
 
-`Exception`（`runtime/objects/Exception.h`）覆盖 `BaseException` 及其全部子类，只存 `.args`
+`BaseException`（`runtime/objects/BaseException.h`）覆盖 `BaseException` 及其全部子类，只存 `.args`
 元组——跟第一条"一个 C++ 类可以覆盖多个 SL 类"是同一个模式（`NamedSingleton` 覆盖 `None`/`Ellipsis` 等
 是先例）。跟 CPython 对齐：`BaseException.args` 本来就是结构体槽位，不是 `__dict__`。
 
@@ -197,13 +197,13 @@ Release 下也要响。
 - 新增异常子类只改 `x_builtin_types.inc` 加一行，**不新增 C++ 类**——除非它需要 `.args` 之外的
   专属字段，而这现在还没出现过（`SyntaxError` 要不要额外挂 file/row/col 是待拍板的语言设计问题，
   见 `.ai/context.md`，没拍板之前不要在 `BaseException` 里预先开这个口子）。
-- 构造 `Exception` 必须给一个 `BaseException` 的子类当 `type`，构造函数里有 `assert` 兜底，
+- 构造 `BaseException` 必须给一个 SL 里 `BaseException` 的子类当 `type`，构造函数里有 `assert` 兜底，
   别指望它在 Release 下也拦——调用方保证。
 - `RaisedException`（`runtime/RaisedException.h`）是 `raise` 用的 C++ 信封，**只能在一段不回调 SL、
   有界的 C++ 代码里 throw/catch**，不是异常跨 SL 帧传播的机制——那条路是主循环手写的显式算法
   （bytecode.md）。写内置操作的 C++ 实现，需要"产出一个异常"时才用它；写任何涉及 SL 帧的代码
   都不该用它。
-- `HostErrorConversion.{h,cpp}` 是宿主异常 → SL 异常对象转换的落地实现，`InternalError` 没有对应
+- `host_error_conversion.{h,cpp}` 是宿主异常 → SL 异常对象转换的落地实现，`InternalError` 没有对应
   函数、以后也不会有，见 [cpp-layer-vs-sl-layer.md](cpp-layer-vs-sl-layer.md)。
 
 ## 六、`size_bytes()` 与 `mem::heap_bytes`：新类型怎么接进内存账本

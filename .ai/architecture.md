@@ -52,7 +52,7 @@
 | `runtime/` | 运行时的地基，**在编译器下面**（`compiler/` 的 codegen 要直接造真 SL 对象）。`Object.h`：一切 SL 对象的基类 + 对象头（引用计数、类型指针、GC 链表与标记位）+ 引用句柄 `RefBase`/`Ref<T>` + 遍历器 `RefVisitor` + `make_ref`（唯一的建对象入口，各类型构造函数私有、只对它开放）。`Type.{h,cpp}`：类型对象（`name_`/`bases_`/`mro_`/`is_subtype_of`）。`Runtime.{h,cpp}`：全局单例，`init()` 三步建全部内置类型、单例与内部对象并持有它们（都直接读私有字段，不经过公开访问器）、`shutdown()`，**GC 的全部引用根都挂在它上面**。`x_internal_objects.inc`：内部对象清单（`LOAD_INTERNAL` 取的那张全局共享表，SL 层拿不到）。`instance()` 只检查"init() 到底跑没跑完"（`g_runtime` 是否为空）——没有分阶段的状态机，见 [context.md](context.md)。`Heap.{h,cpp}`：全堆链表 + STW 标记清扫 `collect()`（根直接向 `Runtime` 要，没有可注册的"根源"这一层）+ 按**字节**计的回收触发（`should_collect()`；字节数由 `make_ref` 在对象构造完之后记账，`collect()` 时重算存活量）。**`collect()` 只能在主循环的安全点调用**，理由见笔记。**三张根表（内置类型 `types_`、单例 `singletons_`、内部对象 `internals_`）形状一致**：各有一份 X-macro 清单（`x_builtin_types.inc`/`x_singletons.inc`/`x_internal_objects.inc`）驱动枚举、定长数组、访问器和建立循环，加一项只改清单——`visit_roots()` 是三个 for 循环，漏不掉。写这里的代码前先读 [notes/object-model-conventions.md](notes/object-model-conventions.md)。 |
 | `runtime/objects/` | 各具体对象类型：`Int`（裹 `BigInt`）、`Decimal`（裹 `BigDec`）、`Str`（`u32string`，按码点）、`Tuple`（`vector<ObjectRef>`）、`BaseException`（整棵异常树共用，只存 `.args` 元组）、`NamedSingleton`（无负载单例）、`Bool`、`Code`（编译好的一份代码：字节码 + 常量表 + 嵌套 `Code` 表 + 名字表 + 形参形状 + 行位置表；**是 SL 对象但 SL 层完全接触不到**，做成对象是为了让 GC 的追踪能穿过它，见 [context.md](context.md)）。 |
 | `runtime/RaisedException.h` | `raise` 用的 C++ 信封（装一个 `ObjectRef`），只在一段不回调 SL、有界的 C++ 代码里 throw/catch，不是异常跨 SL 帧传播的机制——那个仍是主循环手写的显式算法，见 bytecode.md。 |
-| `runtime/HostErrorConversion.{h,cpp}` | 宿主异常 → SL 异常对象的转换函数（`SyntaxError`/`EncodingError`/`FileNotFoundError` 各一个），`InternalError` 故意没有对应函数。 |
+| `runtime/host_error_conversion.{h,cpp}` | 宿主异常 → SL 异常对象的转换函数（`SyntaxError`/`EncodingError`/`FileNotFoundError` 各一个），`InternalError` 故意没有对应函数。 |
 | `cppexceptions/` | 宿主（C++）层的异常类型（`SyntaxError`/`InternalError`/`EncodingError`/`FileNotFoundError`，都继承 `SLException`）加 `SourceLocation.h`，纯头文件。**信息以结构化字段为准，`what()` 只是构造时渲染出来的一种呈现**——转成 SL 异常对象时要的是分开的 file/row/col/message，见 [notes/cpp-layer-vs-sl-layer.md](notes/cpp-layer-vs-sl-layer.md)。跟 SL.md 文档化的、暴露给 SL 用户代码的异常类同名但不是同一个东西，是两层，见 [context.md](context.md) 的架构边界一节。放在顶层而不是 `compiler/` 下，是因为 `utils/` 也要用它，而 `utils/` 是纯 C++ 层、不能反过来依赖 `compiler/`。 |
 | `common/` | 平台无关、但全项目都可能用到的通用基础设施，**是全项目最底层，不依赖任何项目内的模块**（只依赖第三方 SafeInt）。放在顶层而不是 `utils/` 里，理由跟 `cppexceptions/` 一样：`numeric/` 不依赖 `utils/`，挂在那下面它就用不了。`common.h` 里目前有两样：**编译器 id**（`SL_COMPILER_GCC/CLANG/CLANG_CL/MSVC`，当前编译器是 `SL_COMPILER`，用法 `#if SL_COMPILER == SL_COMPILER_GCC`，id 从 1 起编，拼错宏名不会悄悄匹配上）；**`sl_overflow_add/sub/mul`**（相当于 C23/C++26 的 `<stdckdint.h>`，返回 `true` 表示溢出；GCC/Clang/clang-cl 走 `__builtin_*_overflow`，cl 没有内建函数就走 SafeInt 的 `SafeAdd`/`SafeSubtract`/`SafeMultiply`，这三个是返回 bool 的自由函数，不抛异常）。**结果指针的类型必须跟第一个操作数同型**，bool 不接受，其余组合是被删除的重载、编译期报错。模板函数声明实现没法分开，所以 `common.cpp` 目前是空的，留给以后加非模板函数。 |
 | `utils/` | 自由函数工具：`string_utils`（UTF-8/UTF-32 互转等）、`file_utils`（读文件）、`memory_utils.h`（`mem::heap_bytes`，各对象类型 `size_bytes()` 的公共零件；**没有兜底重载**，认不出的类型是编译错误，见 [notes/object-model-conventions.md](notes/object-model-conventions.md)）。 |
@@ -156,9 +156,9 @@ parser 那份抄了三处，加个文件要改三个地方。
    `init()` 中途失败会把已建的部分拆干净再抛，不留半初始化的运行时。
 4. ~~**异常体系**~~ **已完成**：`SL.md` 4.2.23 补了 `BaseException(*args)` 的构造与 `.args` 属性
    （参照 CPython——`args` 是结构体槽位不是 `__dict__`，没有 `__cause__`/`__context__`，因为 `raise`
-   没有 `from` 子句）；`runtime/objects/Exception.h` 是它的 C++ 落地，`BaseException` 及其全部子类
+   没有 `from` 子句）；`runtime/objects/BaseException.h` 是它的 C++ 落地，`BaseException` 及其全部子类
    共用同一个类；`runtime/RaisedException.h` 是 `raise` 用的 C++ 信封；
-   `runtime/HostErrorConversion.{h,cpp}` 把 `SyntaxError`/`EncodingError`/`FileNotFoundError` 转成
+   `runtime/host_error_conversion.{h,cpp}` 把 `SyntaxError`/`EncodingError`/`FileNotFoundError` 转成
    SL 异常对象（`InternalError` 没有、也不会有对应函数）。**没做的**：`.args` 目前只能从 C++ 直接取
    （`BaseException::args()`），要等属性协议落地才能接上 `getattr`；`SyntaxError` 要不要在 `.args` 之外
    再暴露 file/row/col（类似 CPython），是待拍板的语言设计问题，见 [context.md](context.md)。分界与

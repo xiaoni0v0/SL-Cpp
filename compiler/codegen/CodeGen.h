@@ -1,9 +1,13 @@
 #pragma once
 
+#include "../../runtime/Object.h"
 #include "../../runtime/objects/Code.h"
 #include "../parser/ast_nodes/ast_nodes.h"
+#include "../parser/ast_nodes/ast_visitor.h"
 #include "CodeBuilder.h"
+#include "opcode.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -89,15 +93,8 @@ class CodeGen final : public AstConstVisitor {
     // return 用这条：栈顶那个返回值要一路带着穿过每层块
     void gen_unwind_with_value(Position pos) const;
 
-    // ---------------- 常量 ----------------
-
-    // 字面量节点对应的 SL 对象。不是能进常量表的字面量就返回空
-    [[nodiscard]] static ObjectRef literal_object(const AstNode &node);
-
     // ---------------- 容器 ----------------
 
-    // items 里有没有 * / ** 展开项
-    [[nodiscard]] static bool has_expansion(const std::vector<AstNodePtr> &items);
     // 逐项求值建 list / tuple。有展开项就先建再逐项并入，否则一条 MAKE_* 建好
     void gen_sequence(const std::vector<AstNodePtr> &items, bool as_tuple, Position pos);
     void gen_dict(const std::vector<std::pair<AstNodePtr, AstNodePtr>> &items, Position pos);
@@ -120,8 +117,6 @@ class CodeGen final : public AstConstVisitor {
     void gen_store_one(const AstNode &target);
     // 复合赋值读旧值：target 的 prefix 项前置操作数已在栈上，复制一份出来读
     void gen_target_load(const AstNode &target, std::uint32_t prefix) const;
-    // 解构目标的元素清单；不是解构目标就返回空
-    [[nodiscard]] static const std::vector<AstNodePtr> *destructuring_items(const AstNode &target);
 
     // ---------------- 调用 ----------------
 
@@ -156,8 +151,6 @@ class CodeGen final : public AstConstVisitor {
     void gen_missing(Position pos) const;
     // 可空的槽位：有就求值，没有就压哨兵
     void gen_optional(const AstNodePtr &node, Position pos);
-    // 形参形状。默认值与注解本身不在 Code 里，这里只记有没有
-    [[nodiscard]] static Code::ParamShape build_param_shape(const AstNodeFunc &node);
 
 #define X(nt) void visit(const nt &node) override;
 #include "../parser/ast_nodes/x_ast_nodes.inc"

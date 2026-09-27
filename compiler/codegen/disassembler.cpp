@@ -1,6 +1,8 @@
 #include "disassembler.h"
 
+#include "../../runtime/Object.h"
 #include "../../runtime/objects/Bool.h"
+#include "../../runtime/objects/Code.h"
 #include "../../runtime/objects/Decimal.h"
 #include "../../runtime/objects/Int.h"
 #include "../../runtime/objects/NamedSingleton.h"
@@ -9,16 +11,17 @@
 #include "../../utils/string_utils.h"
 #include "opcode.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <format>
+#include <string>
 #include <vector>
 
 namespace {
 
 // 一条逻辑指令：前缀累积完之后的样子
 struct DecodedInstr {
-    std::uint32_t pc{0};           // 起始位置，指向第一条 EXTENDED_ARG 前缀
-    std::uint32_t prefix_count{0}; // 前面跟了几条 EXTENDED_ARG
+    std::uint32_t pc_{0}; // 起始位置，指向第一条 EXTENDED_ARG 前缀
     OpCode op_{};
     std::uint32_t arg_{0}; // 累积完的完整参数
 };
@@ -27,7 +30,6 @@ std::vector<DecodedInstr> decode(const std::vector<std::uint16_t> &bytecode) {
     std::vector<DecodedInstr> result;
     std::uint32_t accumulated{0};
     std::uint32_t start{0};
-    std::uint32_t prefixes{0};
 
     for (std::uint32_t pc{0}; pc < bytecode.size(); ++pc) {
         const auto op{static_cast<OpCode>(bytecode[pc] >> 8u)};
@@ -35,13 +37,11 @@ std::vector<DecodedInstr> decode(const std::vector<std::uint16_t> &bytecode) {
 
         if (op == OpCode::EXTENDED_ARG) {
             accumulated = (accumulated << 8u) | low;
-            ++prefixes;
             continue;
         }
 
-        result.push_back(DecodedInstr{start, prefixes, op, (accumulated << 8u) | low});
+        result.push_back(DecodedInstr{.pc_ = start, .op_ = op, .arg_ = (accumulated << 8u) | low});
         accumulated = 0;
-        prefixes = 0;
         start = pc + 1;
     }
 
@@ -77,21 +77,21 @@ std::string escape_str(const std::u32string &value) {
 }
 
 // 常量表一项长什么样。带类型前缀，因为去重按结构标识，1 / True / 1.0 是三个不同的槽
-std::string const_repr(const Object *const value) {
+std::string const_repr(const Object *value) {
     if (!value) return "<null>";
 
-    if (const auto *const number{dynamic_cast<const Int *>(value)})
+    if (const auto *number{dynamic_cast<const Int *>(value)})
         return std::format("int {}", number->value().to_decimal_string());
-    if (const auto *const number{dynamic_cast<const Decimal *>(value)})
+    if (const auto *number{dynamic_cast<const Decimal *>(value)})
         return std::format("decimal {}", number->value().to_string());
-    if (const auto *const flag{dynamic_cast<const Bool *>(value)})
+    if (const auto *flag{dynamic_cast<const Bool *>(value)})
         return std::format("bool {}", flag->value() ? "True" : "False");
-    if (const auto *const text{dynamic_cast<const Str *>(value)})
+    if (const auto *text{dynamic_cast<const Str *>(value)})
         return std::format("str '{}'", escape_str(text->value()));
-    if (const auto *const singleton{dynamic_cast<const NamedSingleton *>(value)})
+    if (const auto *singleton{dynamic_cast<const NamedSingleton *>(value)})
         return singleton->name();
 
-    if (const auto *const tuple{dynamic_cast<const Tuple *>(value)}) {
+    if (const auto *tuple{dynamic_cast<const Tuple *>(value)}) {
         std::string result{"tuple ("};
         for (std::size_t i{0}; i < tuple->size(); ++i) {
             if (i > 0) result += ", ";
@@ -143,7 +143,7 @@ std::string arg_comment(const Code &code, const DecodedInstr &instr) {
 
 // 一条指令的 "助记符 参数" 部分，无参指令只有助记符
 std::string instr_text(const DecodedInstr &instr) {
-    const char *const name{opcode_name(instr.op_)};
+    const char *name{opcode_name(instr.op_)};
 
     switch (opcode_arg_kind(instr.op_)) {
     case ArgKind::None:
@@ -158,22 +158,9 @@ std::string instr_text(const DecodedInstr &instr) {
     }
 }
 
-void dump_one(std::string &out, const Code &code, const std::string &title);
-
-// 嵌套的 Code 逐个跟在后面，标题带上从根算起的路径
-void dump_nested(std::string &out, const Code &code, const std::string &title) {
-    for (std::size_t i{0}; i < code.codes_table().size(); ++i) {
-        const Code &nested{*code.codes_table()[i]};
-        const std::string nested_title{std::format("{}.code[{}]", title, i)};
-
-        out += '\n';
-        dump_one(out, nested, nested_title);
-        dump_nested(out, nested, nested_title);
-    }
-}
-
-void dump_one(std::string &out, const Code &code, const std::string &title) {
-    out += std::format("=== {} ===  max_stack={}\n", title, code.max_stack());
+// 一份 Code 自己的完整文本，不含嵌套的
+std::string dump_one(const Code &code, const std::string &title) {
+    std::string out{std::format("=== {} ===  max_stack={}\n", title, code.max_stack())};
 
     if (!code.constants_table().empty()) {
         out += "constants:\n";
@@ -200,21 +187,35 @@ void dump_one(std::string &out, const Code &code, const std::string &title) {
         const std::string comment{arg_comment(code, instr)};
         out += std::format(
             "{:>6}  {}{}\n",
-            instr.pc,
+            instr.pc_,
             instr_text(instr),
             comment.empty() ? "" : std::format("  ; {}", comment)
         );
     }
+
+    return out;
+}
+
+// 嵌套的 Code 逐个跟在后面，标题带上从根算起的路径
+std::string dump_nested(const Code &code, const std::string &title) {
+    std::string out;
+
+    for (std::size_t i{0}; i < code.codes_table().size(); ++i) {
+        const Code &nested{*code.codes_table()[i]};
+        const std::string nested_title{std::format("{}.code[{}]", title, i)};
+
+        out += '\n';
+        out += dump_one(nested, nested_title);
+        out += dump_nested(nested, nested_title);
+    }
+
+    return out;
 }
 
 } // namespace
 
 std::string disassemble(const Code &code) {
-    std::string out;
-    dump_one(out, code, "<main>");
-    dump_nested(out, code, "<main>");
-
-    return out;
+    return dump_one(code, "<main>") + dump_nested(code, "<main>");
 }
 
 std::string disassemble_instrs(const Code &code) {

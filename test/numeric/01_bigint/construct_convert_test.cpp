@@ -3,9 +3,10 @@
 
 #include <cmath>
 #include <cstdlib>
-#include <doctest/doctest.h>
 #include <limits>
 #include <stdexcept>
+
+#include <doctest/doctest.h>
 
 TEST_SUITE("BigInt——构造与十进制字符串往返") {
 
@@ -145,9 +146,9 @@ TEST_SUITE("BigInt——构造与十进制字符串往返") {
 
     TEST_CASE("超长十进制字符串往返（500 位、2000 位），顺带过一遍加减法不会破坏这么长的数") {
         for (const int len : {500, 2000}) {
-            std::string s(static_cast<size_t>(len), '0');
+            std::string s(static_cast<std::size_t>(len), '0');
             s[0] = '9';
-            for (size_t i{1}; i < s.size(); ++i) s[i] = static_cast<char>('0' + (i % 10));
+            for (std::size_t i{1}; i < s.size(); ++i) s[i] = static_cast<char>('0' + (i % 10));
             const BigInt x{d(s)};
             CHECK(x.to_decimal_string() == s);
             CHECK((x + BigInt(1) - BigInt(1)) == x);
@@ -296,7 +297,7 @@ TEST_SUITE("BigInt——to_double") {
         "大范围扫描 10^k（k 从 15 到 295，步长 7）跟 std::strtod 对拍，覆盖更多舍入边界量级"
     ) {
         for (int k{15}; k <= 300; k += 7) {
-            const std::string s{"1" + std::string(static_cast<size_t>(k), '0')};
+            const std::string s{"1" + std::string(static_cast<std::size_t>(k), '0')};
             const BigInt x{d(s)};
             CAPTURE(s);
             CHECK(x.to_double() == std::strtod(s.c_str(), nullptr));
@@ -311,12 +312,12 @@ TEST_SUITE("BigInt——to_double") {
         // m 是 53 位整数（顶满一个 double 尾数），X = (2m+1) * 2^(k-1) 恰好是 m*2^k 和
         // (m+1)*2^k 正中间那个整数——m、m+1 这两个尾数在这个量级上正是相邻的两个可表示 double，
         // 所以 X 是一个精确的、数学意义上的舍入平局，不依赖对 to_double 内部实现的任何假设
-        const auto build_tie{[](uint64_t m, int k) {
+        const auto build_tie{[](std::uint64_t m, int k) {
             return (BigInt(static_cast<long long>(m)) * BigInt(2) + BigInt(1)) << (k - 1);
         }};
         for (const auto &[m, k] : {
-                 std::pair<uint64_t, int>{uint64_t{1} << 52, 100},       // 偶尾数
-                 std::pair<uint64_t, int>{(uint64_t{1} << 52) + 1, 100}, // 奇尾数
+                 std::pair<std::uint64_t, int>{std::uint64_t{1} << 52, 100},       // 偶尾数
+                 std::pair<std::uint64_t, int>{(std::uint64_t{1} << 52) + 1, 100}, // 奇尾数
              }) {
             const BigInt tie{build_tie(m, k)};
             const double down{std::ldexp(static_cast<double>(m), k)};

@@ -49,10 +49,10 @@ enum class ArgKind : std::uint8_t {
 };
 
 // 一条指令自带的参数字节能装下的最大值。再大要靠 EXTENDED_ARG 前缀
-inline constexpr std::uint32_t nMaxInlineArg{0xFF};
+inline constexpr std::uint32_t kMaxInlineArg{0xFF};
 
 // EXTENDED_ARG 前缀最多连用几条。加上指令自己那一字节，参数最宽 32 位
-inline constexpr std::uint32_t nMaxExtendedArgs{3};
+inline constexpr std::uint32_t kMaxExtendedArgs{3};
 
 [[nodiscard]] constexpr const char *opcode_name(const OpCode op) {
     switch (op) {
@@ -106,8 +106,8 @@ inline constexpr std::uint32_t nMaxExtendedArgs{3};
     throw InternalError{"OpCode: invalid value"};
 }
 
-// 顺序执行完这条指令，操作数栈的深度变化
-[[nodiscard]] constexpr int stack_effect(const OpCode op, const std::uint32_t arg) {
+// 顺序执行完这条指令，操作数栈的深度变化。arg 最宽 32 位，所以用 64 位有符号数装，不会溢出
+[[nodiscard]] constexpr std::int64_t stack_effect(const OpCode op, const std::uint32_t arg) {
     switch (op) {
 #define X(id, mnemonic, argkind, effect)                                                           \
     case OpCode::id:                                                                               \

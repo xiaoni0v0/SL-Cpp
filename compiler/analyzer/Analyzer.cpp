@@ -1,9 +1,11 @@
 #include "Analyzer.h"
 
+#include "../parser/ast_nodes/ast_nodes.h"
 #include "expr_folder/ExprFolder.h"
 #include "semantic_checker/SemanticChecker.h"
 
 #include <cassert>
+#include <string>
 #include <utility>
 
 void Analyzer::analyze_program(AstNodeProgram &root, std::string file_path) {

@@ -1,5 +1,7 @@
 #include "DecContext.h"
 
+#include <cstdint>
+#include <initializer_list>
 #include <stdexcept>
 
 DecCondition signal_of(const DecCondition condition) {
@@ -47,33 +49,33 @@ DecSignalSet::DecSignalSet(const std::initializer_list<DecCondition> conditions)
 }
 
 void DecSignalSet::add(const DecCondition condition) {
-    bits_ |= uint32_t{1} << static_cast<unsigned>(signal_of(condition));
+    bits_ |= std::uint32_t{1} << static_cast<unsigned>(signal_of(condition));
 }
 
 void DecSignalSet::remove(const DecCondition condition) {
-    bits_ &= ~(uint32_t{1} << static_cast<unsigned>(signal_of(condition)));
+    bits_ &= ~(std::uint32_t{1} << static_cast<unsigned>(signal_of(condition)));
 }
 
 bool DecSignalSet::has(const DecCondition condition) const {
-    return (bits_ & (uint32_t{1} << static_cast<unsigned>(signal_of(condition)))) != 0;
+    return (bits_ & (std::uint32_t{1} << static_cast<unsigned>(signal_of(condition)))) != 0;
 }
 
 DecTrapped::DecTrapped(const DecCondition condition)
     : std::runtime_error(dec_condition_name(condition)), condition_{condition} {}
 
-void DecContext::set_prec(const int32_t prec) {
+void DecContext::set_prec(const std::int32_t prec) {
     if (prec < 1 || prec > kMaxPrec) throw std::invalid_argument("DecContext: prec out of range");
     prec_ = prec;
 }
 
 void DecContext::set_rounding(const DecRounding rounding) { rounding_ = rounding; }
 
-void DecContext::set_emax(const int32_t emax) {
+void DecContext::set_emax(const std::int32_t emax) {
     if (emax < 0 || emax > kMaxExp) throw std::invalid_argument("DecContext: Emax out of range");
     emax_ = emax;
 }
 
-void DecContext::set_emin(const int32_t emin) {
+void DecContext::set_emin(const std::int32_t emin) {
     if (emin > 0 || emin < -kMaxExp) throw std::invalid_argument("DecContext: Emin out of range");
     emin_ = emin;
 }

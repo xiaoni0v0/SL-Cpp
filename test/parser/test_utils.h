@@ -10,11 +10,12 @@
 #include "../../compiler/parser/ast_nodes/ast_json_dumper.h"
 #include "../../cppexceptions/SyntaxError.h"
 
-#include <doctest/doctest.h>
-#include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
 #include <utility>
+
+#include <doctest/doctest.h>
+#include <nlohmann/json.hpp>
 
 inline AstNodeProgramPtr
 parse_program(const std::u32string &source, const std::string &file_path = "<test>") {

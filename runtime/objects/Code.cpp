@@ -1,11 +1,15 @@
 #include "Code.h"
 
 #include "../../utils/memory_utils.h"
+#include "../Object.h"
 #include "../Runtime.h"
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
 #include <iterator>
+#include <optional>
 #include <utility>
 
 Code::Code(Parts parts) : Object{Runtime::type_code()}, parts_{std::move(parts)} {

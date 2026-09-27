@@ -106,16 +106,24 @@ TEST_SUITE("BigDec——构造与字符串往返") {
     }
 
     TEST_CASE("非法字符串返回 nullopt") {
-        constexpr const char *const bad[]{
+        constexpr const char *bad[]{
             "",      "-",     "+",     ".",      "-.",    "e5",     "E5",      ".e5",
             "1.2.3", "1e",    "1e+",   "1e+ ",   "--1",   "1-",     "0x10",    "1 ",
             " 1",    "1_000", "abc",   "Inf5",   "NaN1",  "sNaN12", "Infinit", "Infinityy",
             "1,5",   "１",    "1.5d3", "nan(1)", "1E1.5",
         };
-        for (const char *const s : bad) {
+        for (const char *s : bad) {
             CAPTURE(s);
             CHECK_FALSE(BigDec::try_from_string(s).has_value());
         }
+    }
+
+    TEST_CASE("指数在 int64_t 边缘时，再减小数位数不能溢出（UB）") {
+        // 指数 -INT64_MAX，小数点后 2 位：exp - 2 会有符号溢出。范围上也远超 kMaxExponent，所以是
+        // nullopt
+        CHECK_FALSE(BigDec::try_from_string("1.55E-9223372036854775807").has_value());
+        CHECK_FALSE(BigDec::try_from_string("1.5E-9223372036854775807").has_value());
+        CHECK_FALSE(BigDec::try_from_string("1.5E9223372036854775807").has_value());
     }
 
     TEST_CASE("Python 收但我们不收的三类写法") {

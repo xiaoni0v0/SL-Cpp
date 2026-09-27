@@ -5,12 +5,15 @@
 
 namespace {
 // 构造一个长度为 n 的字符串字面量源码（比如 U"'aaa...a'"）
-std::u32string str_literal_source(const size_t n) { return U"'" + std::u32string(n, U'a') + U"'"; }
+std::u32string str_literal_source(const std::size_t n) {
+    return U"'" + std::u32string(n, U'a') + U"'";
+}
 
 // 构造一个含 n 个整数元素的 tuple/list 字面量源码，比如 n=3 -> U"(0, 0, 0)" 或 U"[0, 0, 0]"
-std::u32string container_literal_source(const size_t n, const char32_t open, const char32_t close) {
+std::u32string
+container_literal_source(const std::size_t n, const char32_t open, const char32_t close) {
     std::u32string result(1, open);
-    for (size_t i{0}; i < n; ++i) {
+    for (std::size_t i{0}; i < n; ++i) {
         if (i != 0) result += U", ";
         result += U"0";
     }
@@ -96,6 +99,13 @@ TEST_SUITE("StaticEvaler 容器运算——基本拼接/重复") {
                 {"right", int_lit("-1")}
             }
         );
+    }
+
+    TEST_CASE("负数重复次数连空容器也不折（次数只接受非负 int，空容器不豁免）") {
+        CHECK(fold_json(U"'' * -1")["type"] == "OpBinary");
+        CHECK(fold_json(U"-1 * ''")["type"] == "OpBinary");
+        CHECK(fold_json(U"() * -1")["type"] == "OpBinary");
+        CHECK(fold_json(U"[] * -1")["type"] == "OpBinary");
     }
 
     TEST_CASE("类型不匹配的 + 不折（tuple 和 list 不能互相拼接）") {
@@ -201,7 +211,7 @@ TEST_SUITE("StaticEvaler 容器运算——tuple/list 的 * 重复（元素能�
         CHECK(j["items"][2] == bool_lit(true));
         CHECK(j["items"][3] == none_lit());
         CHECK(j["items"][4] == nlohmann::json{{"type", "LiteralEllipsis"}});
-        for (size_t i{0}; i < 5; ++i) CHECK(j["items"][i] == j["items"][i + 5]);
+        for (std::size_t i{0}; i < 5; ++i) CHECK(j["items"][i] == j["items"][i + 5]);
     }
 
     TEST_CASE("嵌套 tuple-in-tuple 折：内层元组也进常量表，各份是同一个对象") {
@@ -297,7 +307,7 @@ TEST_SUITE("StaticEvaler 容器运算——tuple/list 的 * 重复（元素能�
     }
 }
 
-TEST_SUITE("StaticEvaler 容器运算——大小上限（nMaxStrLength=4096, nMaxContainerItems=256）") {
+TEST_SUITE("StaticEvaler 容器运算——大小上限（kMaxStrLength=4096, kMaxContainerItems=256）") {
 
     TEST_CASE("str + 恰好等于上限折，超一个字符不折") {
         CHECK(
@@ -324,7 +334,7 @@ TEST_SUITE("StaticEvaler 容器运算——大小上限（nMaxStrLength=4096, nM
     TEST_CASE("空串重复任意次都折成空串，且不受上限影响、不按次数空转") {
         CHECK(fold_json(U"'' * 0") == str_lit(""));
         CHECK(fold_json(U"'' * 1") == str_lit(""));
-        CHECK(fold_json(U"'' * 4097") == str_lit("")); // 超过 nMaxStrLength，非空串这里就不折了
+        CHECK(fold_json(U"'' * 4097") == str_lit("")); // 超过 kMaxStrLength，非空串这里就不折了
         CHECK(fold_json(U"'' * 9223372036854775807") == str_lit(""));
         CHECK(fold_json(U"9223372036854775807 * ''") == str_lit("")); // 次数在左也一样
     }

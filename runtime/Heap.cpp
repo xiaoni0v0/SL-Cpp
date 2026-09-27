@@ -4,6 +4,7 @@
 #include "Object.h"
 #include "Runtime.h"
 
+#include <cstddef>
 #include <stack>
 #include <vector>
 
@@ -15,7 +16,7 @@ std::size_t g_live_bytes{0};          // 上一轮 collect() 结束时的存活�
 std::size_t g_bytes_since_collect{0}; // 距上次 collect() 又分配了多少字节
 
 // 分配压力攒够这么多字节就值得扫一轮
-constexpr std::size_t kMinBytesBetweenCollects{1 << 20};
+constexpr std::size_t kMinBytesBetweenCollects{std::size_t{1} << 20};
 
 } // namespace
 
@@ -45,12 +46,11 @@ class Heap::Marker final : public RefVisitor {
 /**
  * 拆环阶段，把垃圾对象的每条出边就地放掉
  */
-class Heap::RefDropper final : public RefVisitor {
-  public:
+struct Heap::RefDropper final : RefVisitor {
     void visit(RefBase &ref) override { ref.reset(); }
 };
 
-void Heap::link(Object *const obj) {
+void Heap::link(Object *obj) {
     // 顶掉原来的 head
     obj->gc_next_ = g_head;
     if (g_head) g_head->gc_prev_ = obj;
@@ -59,7 +59,7 @@ void Heap::link(Object *const obj) {
     ++g_live_count;
 }
 
-void Heap::unlink(Object *const obj) {
+void Heap::unlink(Object *obj) {
     if (obj->gc_prev_)
         obj->gc_prev_->gc_next_ = obj->gc_next_;
     else
@@ -71,7 +71,7 @@ void Heap::unlink(Object *const obj) {
     --g_live_count;
 }
 
-void Heap::note_allocated(const Object *const obj) { g_bytes_since_collect += obj->size_bytes(); }
+void Heap::note_allocated(const Object *obj) { g_bytes_since_collect += obj->size_bytes(); }
 
 void Heap::collect() {
     // 1. 标记
@@ -94,14 +94,14 @@ void Heap::collect() {
     }
 
     // 3. 保命，每个垃圾对象先 +1
-    for (Object *const object : garbage) object->incref();
+    for (Object *object : garbage) object->incref();
 
     // 4. 拆环：释放垃圾对象的每条出边
     RefDropper dropper;
-    for (Object *const object : garbage) object->visit_refs(dropper);
+    for (Object *object : garbage) object->visit_refs(dropper);
 
     // 5. 销毁
-    for (Object *const object : garbage) {
+    for (Object *object : garbage) {
         if (object->refcount() != 1) throw InternalError{"GC: garbage object still referenced"};
 
         object->decref();

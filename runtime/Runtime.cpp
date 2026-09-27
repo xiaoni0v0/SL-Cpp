@@ -1,8 +1,15 @@
 #include "Runtime.h"
 
 #include "../cppexceptions/InternalError.h"
+#include "Heap.h"
+#include "Object.h"
+#include "Type.h"
+#include "objects/Bool.h"
+#include "objects/NamedSingleton.h"
 
+#include <cstddef>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 namespace {

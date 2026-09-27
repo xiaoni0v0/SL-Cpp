@@ -1,29 +1,35 @@
 #include "dec_math.h"
 
+#include "BigInt.h"
+
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
 #include <string>
+#include <utility>
 
 namespace dec_math {
 
 namespace {
 
 // ceil(a / b)。调用方保证 a >= 0、b > 0
-int64_t ceil_div(const int64_t a, const int64_t b) { return (a + b - 1) / b; }
+std::int64_t ceil_div(const std::int64_t a, const std::int64_t b) { return (a + b - 1) / b; }
 
 // 泰勒展开的项数：(2^L)^T > M 就够了
-int64_t taylor_terms(const BigInt &m) {
-    return ceil_div(10 * static_cast<int64_t>(m.num_decimal_digits()), 3 * kTaylorL);
+std::int64_t taylor_terms(const BigInt &m) {
+    return ceil_div(10 * static_cast<std::int64_t>(m.num_decimal_digits()), 3 * kTaylorL);
 }
 
 } // namespace
 
-BigInt pow10(const int64_t k) {
+BigInt pow10(const std::int64_t k) {
     assert(k >= 0);
     return BigInt(10).pow(BigInt(k));
 }
 
-std::optional<int64_t> to_int64(const BigInt &x) {
+std::optional<std::int64_t> to_int64(const BigInt &x) {
     // 直接跟 int64_t 两端比较
     if (x < BigInt{INT64_MIN} || x > BigInt{INT64_MAX}) return std::nullopt;
     // 能过这关的值必在小路径，to_decimal_string 就是一次 std::to_string
@@ -38,7 +44,7 @@ BigInt div_nearest(const BigInt &a, const BigInt &b) {
     return r * BigInt(2) + BigInt(q.is_odd() ? 1 : 0) > b ? q + BigInt(1) : q;
 }
 
-BigInt rshift_nearest(const BigInt &x, const int64_t shift) {
+BigInt rshift_nearest(const BigInt &x, const std::int64_t shift) {
     assert(shift >= 0);
     const BigInt b{BigInt(1) << shift};
     const BigInt q{x >> shift};            // 向负无穷取整
@@ -65,7 +71,7 @@ BigInt ilog(const BigInt &x, const BigInt &m) {
     // 反复用 log1p(y) = 2*log1p(y/(1+sqrt(1+y))) 把 y 压到 2^-L 以内再上泰勒级数。
     // 全程定点：实数 z 用 z*M 的整数近似表示，y 存的是 2^R*y*M 的近似（R 是已缩减次数）
     BigInt y{x - m};
-    int64_t r{0};
+    std::int64_t r{0};
     while (true) {
         const BigInt magnitude{y.abs()};
         const bool too_big{
@@ -77,27 +83,28 @@ BigInt ilog(const BigInt &x, const BigInt &m) {
     }
 
     // 泰勒级数 log1p(y) ~ y - y^2/2 + y^3/3 - ...，按秦九韶的形式从最高次往回算
-    const int64_t t{taylor_terms(m)};
+    const std::int64_t t{taylor_terms(m)};
     const BigInt y_shift{rshift_nearest(y, r)};
     BigInt w{div_nearest(m, BigInt(t))};
-    for (int64_t k{t - 1}; k > 0; --k) w = div_nearest(m, BigInt(k)) - div_nearest(y_shift * w, m);
+    for (std::int64_t k{t - 1}; k > 0; --k)
+        w = div_nearest(m, BigInt(k)) - div_nearest(y_shift * w, m);
     return div_nearest(w * y, m);
 }
 
-BigInt log10_digits(const int64_t p) {
+BigInt log10_digits(const std::int64_t p) {
     assert(p >= 0);
     // 先存一段够用的 log(10)，不够了再往后算（这些位是截断的、恒正确，缓存只增不减）
     static std::string digits{"23025850929940456840179914546843642076011014886"};
 
-    if (static_cast<size_t>(p) >= digits.size()) {
+    if (static_cast<std::size_t>(p) >= digits.size()) {
         // 一次多算 3 位，直到多出来的那几位不全为 0（全 0 说明还没定下来）。
         // ilog 位数只比 m 略少，不可能短到连 tail 位都不够——用 assert 钉住
-        int64_t extra{3};
+        std::int64_t extra{3};
         std::string computed;
         while (true) {
             const BigInt m{pow10(p + extra + 2)};
             computed = div_nearest(ilog(m * BigInt(10), m), BigInt(100)).to_decimal_string();
-            const size_t tail{static_cast<size_t>(extra)};
+            const std::size_t tail{static_cast<std::size_t>(extra)};
             assert(computed.size() > tail);
             if (computed.size() > tail &&
                 computed.substr(computed.size() - tail) != std::string(tail, '0'))
@@ -105,28 +112,28 @@ BigInt log10_digits(const int64_t p) {
             extra += 3;
         }
         // 末尾的 0 连同紧挨着的那一位一起丢掉，剩下的都是可靠的
-        size_t end{computed.size()};
+        std::size_t end{computed.size()};
         while (end > 0 && computed[end - 1] == '0') --end;
         assert(end > 1);
         digits = computed.substr(0, end - 1);
     }
     // 上面的扩容保证 digits 至少覆盖到 p 位
-    assert(digits.size() > static_cast<size_t>(p));
-    return BigInt::from_decimal_string(digits.substr(0, static_cast<size_t>(p) + 1));
+    assert(digits.size() > static_cast<std::size_t>(p));
+    return BigInt::from_decimal_string(digits.substr(0, static_cast<std::size_t>(p) + 1));
 }
 
-BigInt dlog(BigInt c, const int64_t e, int64_t p) {
+BigInt dlog(BigInt c, const std::int64_t e, std::int64_t p) {
     assert(!c.is_negative() && !c.is_zero());
     p += 2; // 多算两位，最后除以 100 补偿回去
 
     // 把 c*10^e 写成 d*10^f：f >= 0 时 1 <= d <= 10，f <= 0 时 0.1 <= d <= 1。
     // 于是 10^p*log(c*10^e) = 10^p*log(d) + f*10^p*log(10)
-    const int64_t l{static_cast<int64_t>(c.num_decimal_digits())};
-    const int64_t f{e + l - (e + l >= 1 ? 1 : 0)};
+    const std::int64_t l{static_cast<std::int64_t>(c.num_decimal_digits())};
+    const std::int64_t f{e + l - (e + l >= 1 ? 1 : 0)};
 
     BigInt log_d{0};
     if (p > 0) {
-        const int64_t k{e + p - f};
+        const std::int64_t k{e + p - f};
         if (k >= 0)
             c = c * pow10(k);
         else
@@ -137,7 +144,7 @@ BigInt dlog(BigInt c, const int64_t e, int64_t p) {
 
     BigInt f_log_ten{0};
     if (f != 0) {
-        const int64_t extra{static_cast<int64_t>(BigInt(f).num_decimal_digits()) - 1};
+        const std::int64_t extra{static_cast<std::int64_t>(BigInt(f).num_decimal_digits()) - 1};
         if (p + extra >= 0) // 误差 < |f|/10^extra + 0.5 < 11
             f_log_ten = div_nearest(BigInt(f) * log10_digits(p + extra), pow10(extra));
     }
@@ -145,18 +152,18 @@ BigInt dlog(BigInt c, const int64_t e, int64_t p) {
     return div_nearest(f_log_ten + log_d, BigInt(100));
 }
 
-BigInt dlog10(BigInt c, const int64_t e, int64_t p) {
+BigInt dlog10(BigInt c, const std::int64_t e, std::int64_t p) {
     assert(!c.is_negative() && !c.is_zero());
     p += 2;
 
-    const int64_t l{static_cast<int64_t>(c.num_decimal_digits())};
-    const int64_t f{e + l - (e + l >= 1 ? 1 : 0)};
+    const std::int64_t l{static_cast<std::int64_t>(c.num_decimal_digits())};
+    const std::int64_t f{e + l - (e + l >= 1 ? 1 : 0)};
 
     BigInt log_d{0};
     BigInt log_tenpower;
     if (p > 0) {
         const BigInt m{pow10(p)};
-        const int64_t k{e + p - f};
+        const std::int64_t k{e + p - f};
         if (k >= 0)
             c = c * pow10(k);
         else
@@ -175,29 +182,31 @@ BigInt iexp(const BigInt &x, const BigInt &m) {
 
     // 先把 z = x/M 除以 2^R 压到 2^-L 以内，用泰勒级数算 expm1，
     // 再用 expm1(2z) = expm1(z)*(expm1(z)+2) 逐步倍回去
-    const int64_t r{static_cast<int64_t>((x << kTaylorL).floor_div(m).bit_length())};
-    const int64_t t{taylor_terms(m)};
+    const std::int64_t r{static_cast<std::int64_t>((x << kTaylorL).floor_div(m).bit_length())};
+    const std::int64_t t{taylor_terms(m)};
 
     BigInt y{div_nearest(x, BigInt(t))};
     BigInt m_shift{m << r};
-    for (int64_t i{t - 1}; i > 0; --i) y = div_nearest(x * (m_shift + y), m_shift * BigInt(i));
-    for (int64_t k{r - 1}; k >= 0; --k) {
+    for (std::int64_t i{t - 1}; i > 0; --i) y = div_nearest(x * (m_shift + y), m_shift * BigInt(i));
+    for (std::int64_t k{r - 1}; k >= 0; --k) {
         m_shift = m << (k + 2);
         y = div_nearest(y * (y + m_shift), m_shift);
     }
     return m + y;
 }
 
-std::pair<BigInt, int64_t> dexp(const BigInt &c, const int64_t e, int64_t p) {
+std::pair<BigInt, std::int64_t> dexp(const BigInt &c, const std::int64_t e, std::int64_t p) {
     p += 2; // 拿 M = 10^(p+2) 去调 iexp，也就是多算三位
 
     // log(10) 要多算 c*10^e 的调整后指数那么多位；位数跟 Python 一样把负号也算进去（照抄以免分叉）
-    const int64_t c_len{static_cast<int64_t>(c.num_decimal_digits()) + (c.is_negative() ? 1 : 0)};
-    const int64_t extra{std::max<int64_t>(0, e + c_len - 1)};
-    const int64_t q{p + extra};
+    const std::int64_t c_len{
+        static_cast<std::int64_t>(c.num_decimal_digits()) + (c.is_negative() ? 1 : 0)
+    };
+    const std::int64_t extra{std::max<std::int64_t>(0, e + c_len - 1)};
+    const std::int64_t q{p + extra};
 
     // 算 c*10^e / log(10)，向下取整；商是 10 的幂次，余数留给 iexp
-    const int64_t shift{e + q};
+    const std::int64_t shift{e + q};
     const BigInt c_shift{shift >= 0 ? c * pow10(shift) : c.floor_div(pow10(-shift))};
     const BigInt log_ten{log10_digits(q)};
     const BigInt quot{c_shift.floor_div(log_ten)};
@@ -207,16 +216,18 @@ std::pair<BigInt, int64_t> dexp(const BigInt &c, const int64_t e, int64_t p) {
     return {div_nearest(iexp(rem, pow10(p)), BigInt(1000)), to_int64(quot).value() - p + 3};
 }
 
-std::pair<BigInt, int64_t>
-dpower(const BigInt &xc, const int64_t xe, const BigInt &yc, const int64_t ye, const int64_t p) {
+std::pair<BigInt, std::int64_t> dpower(
+    const BigInt &xc, const std::int64_t xe, const BigInt &yc, const std::int64_t ye,
+    const std::int64_t p
+) {
     // b 满足 10^(b-1) <= |y| <= 10^b
-    const int64_t b{static_cast<int64_t>(yc.num_decimal_digits()) + ye};
+    const std::int64_t b{static_cast<std::int64_t>(yc.num_decimal_digits()) + ye};
 
     // log(x) = lxc * 10^(-p-b-1)，小数点后算到 p+b+1 位
     const BigInt lxc{dlog(xc, xe, p + b + 1)};
 
     // y*log(x) = yc*lxc*10^(-p-b-1+ye) = pc * 10^(-p-1)
-    const int64_t shift{ye - b};
+    const std::int64_t shift{ye - b};
     // shift 恒为 -digits(yc) <= -1，>= 0 这支走不到，留着只跟 Python 写法保持一致
     assert(shift < 0);
     const BigInt pc{shift >= 0 ? lxc * yc * pow10(shift) : div_nearest(lxc * yc, pow10(-shift))};
@@ -224,7 +235,7 @@ dpower(const BigInt &xc, const int64_t xe, const BigInt &yc, const int64_t ye, c
     if (pc.is_zero()) {
         // 结果贴着 1：给一个不正好等于 1 的近似值，否则上层"末几位不是 5000…"永远判不出方向
         const bool greater_than_one{
-            (static_cast<int64_t>(xc.num_decimal_digits()) + xe >= 1) == !yc.is_negative()
+            (static_cast<std::int64_t>(xc.num_decimal_digits()) + xe >= 1) == !yc.is_negative()
         };
         if (greater_than_one) return {pow10(p - 1) + BigInt(1), 1 - p};
         return {pow10(p) - BigInt(1), -p};
@@ -234,23 +245,23 @@ dpower(const BigInt &xc, const int64_t xe, const BigInt &yc, const int64_t ye, c
     return {div_nearest(coeff, BigInt(10)), exp + 1};
 }
 
-int64_t log10_lb(const BigInt &c) {
+std::int64_t log10_lb(const BigInt &c) {
     assert(!c.is_negative() && !c.is_zero());
     // 位数给出上界，再按最高位数字往回扣一点
-    static constexpr int64_t kCorrection[]{0, 100, 70, 53, 40, 31, 23, 16, 10, 5};
+    static constexpr std::int64_t kCorrection[]{0, 100, 70, 53, 40, 31, 23, 16, 10, 5};
     const std::string digits{c.to_decimal_string()};
-    return 100 * static_cast<int64_t>(digits.size()) - kCorrection[digits[0] - '0'];
+    return 100 * static_cast<std::int64_t>(digits.size()) - kCorrection[digits[0] - '0'];
 }
 
-std::optional<BigInt> decimal_lshift_exact(const BigInt &n, const int64_t e) {
+std::optional<BigInt> decimal_lshift_exact(const BigInt &n, const std::int64_t e) {
     if (n.is_zero()) return BigInt(0);
     if (e >= 0) return n * pow10(e);
 
     // n 末尾有几个 0，就最多能被 10 整除几次
     const std::string digits{n.abs().to_decimal_string()};
-    size_t trailing{0};
+    std::size_t trailing{0};
     while (trailing < digits.size() && digits[digits.size() - 1 - trailing] == '0') ++trailing;
-    if (static_cast<int64_t>(trailing) < -e) return std::nullopt;
+    if (static_cast<std::int64_t>(trailing) < -e) return std::nullopt;
     return n.floor_div(pow10(-e)); // 整除得尽，向负无穷取整跟精确除法一致
 }
 

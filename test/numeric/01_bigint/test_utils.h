@@ -4,10 +4,10 @@
 
 #include "../../../numeric/BigInt.h"
 
-#include <doctest/doctest.h>
-
 #include <string>
 #include <vector>
+
+#include <doctest/doctest.h>
 
 inline BigInt d(const std::string &s) { return BigInt::from_decimal_string(s); }
 

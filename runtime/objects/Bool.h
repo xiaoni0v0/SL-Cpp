@@ -2,8 +2,10 @@
 
 #include "../Object.h"
 
+#include <cstddef>
+
 class Bool final : public Object {
-    bool value_;
+    const bool value_;
 
     SL_MAKE_REF_ONLY;
     Bool(Type *type, bool value);

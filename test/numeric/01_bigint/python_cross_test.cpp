@@ -2,6 +2,7 @@
 #include "test_utils.h"
 
 #include <cstdlib>
+
 #include <doctest/doctest.h>
 
 namespace {
@@ -11,21 +12,21 @@ namespace {
 TEST_SUITE("BigInt——跟 Python int 的交叉验证") {
 
     TEST_CASE("加减乘") {
-        for (const char *const raw : kAddCases) {
+        for (const char *raw : kAddCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 3);
             CHECK((d(f[0]) + d(f[1])).to_decimal_string() == f[2]);
         }
-        for (const char *const raw : kSubCases) {
+        for (const char *raw : kSubCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 3);
             CHECK((d(f[0]) - d(f[1])).to_decimal_string() == f[2]);
         }
-        for (const char *const raw : kMulCases) {
+        for (const char *raw : kMulCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -35,14 +36,14 @@ TEST_SUITE("BigInt——跟 Python int 的交叉验证") {
     }
 
     TEST_CASE("floor_div / mod（Python 的 // 和 % 恰好也是向负无穷取整，语义天然一致）") {
-        for (const char *const raw : kFloorDivCases) {
+        for (const char *raw : kFloorDivCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 3);
             CHECK(d(f[0]).floor_div(d(f[1])).to_decimal_string() == f[2]);
         }
-        for (const char *const raw : kModCases) {
+        for (const char *raw : kModCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -52,21 +53,21 @@ TEST_SUITE("BigInt——跟 Python int 的交叉验证") {
     }
 
     TEST_CASE("位运算（Python 的 &/|/^ 同样按无穷位补码语义）") {
-        for (const char *const raw : kAndCases) {
+        for (const char *raw : kAndCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 3);
             CHECK((d(f[0]) & d(f[1])).to_decimal_string() == f[2]);
         }
-        for (const char *const raw : kOrCases) {
+        for (const char *raw : kOrCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 3);
             CHECK((d(f[0]) | d(f[1])).to_decimal_string() == f[2]);
         }
-        for (const char *const raw : kXorCases) {
+        for (const char *raw : kXorCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -76,14 +77,14 @@ TEST_SUITE("BigInt——跟 Python int 的交叉验证") {
     }
 
     TEST_CASE("移位（a << k 恒等于 a*2^k，a >> k 恒等于 a//2^k，Python 同样按此定义）") {
-        for (const char *const raw : kShiftLeftCases) {
+        for (const char *raw : kShiftLeftCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 3);
             CHECK((d(f[0]) << std::stoll(f[1])).to_decimal_string() == f[2]);
         }
-        for (const char *const raw : kShiftRightCases) {
+        for (const char *raw : kShiftRightCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -93,7 +94,7 @@ TEST_SUITE("BigInt——跟 Python int 的交叉验证") {
     }
 
     TEST_CASE("pow") {
-        for (const char *const raw : kPowCases) {
+        for (const char *raw : kPowCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -103,7 +104,7 @@ TEST_SUITE("BigInt——跟 Python int 的交叉验证") {
     }
 
     TEST_CASE("比较") {
-        for (const char *const raw : kCompareCases) {
+        for (const char *raw : kCompareCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -117,7 +118,7 @@ TEST_SUITE("BigInt——跟 Python int 的交叉验证") {
     }
 
     TEST_CASE("科学计数法解析（期望值是 Python 的 int(尾数) * 10**指数）") {
-        for (const char *const raw : kSciNotationCases) {
+        for (const char *raw : kSciNotationCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
@@ -127,27 +128,27 @@ TEST_SUITE("BigInt——跟 Python int 的交叉验证") {
     }
 
     TEST_CASE("bit_length") {
-        for (const char *const raw : kBitLengthCases) {
+        for (const char *raw : kBitLengthCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 2);
-            CHECK(d(f[0]).bit_length() == static_cast<size_t>(std::stoull(f[1])));
+            CHECK(d(f[0]).bit_length() == static_cast<std::size_t>(std::stoull(f[1])));
         }
     }
 
     TEST_CASE("num_decimal_digits（期望值是 Python 的 len(str(abs(a)))）") {
-        for (const char *const raw : kDecimalDigitsCases) {
+        for (const char *raw : kDecimalDigitsCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 2);
-            CHECK(d(f[0]).num_decimal_digits() == static_cast<size_t>(std::stoull(f[1])));
+            CHECK(d(f[0]).num_decimal_digits() == static_cast<std::size_t>(std::stoull(f[1])));
         }
     }
 
     TEST_CASE("to_double（期望值是 Python float(a) 的精确十六进制表示，strtod 认得同一种记法）") {
-        for (const char *const raw : kToDoubleCases) {
+        for (const char *raw : kToDoubleCases) {
             const std::string line{raw};
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};

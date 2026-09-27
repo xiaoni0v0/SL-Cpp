@@ -1,6 +1,8 @@
 #pragma once
 
+#include "../../runtime/Object.h"
 #include "../../runtime/objects/Code.h"
+#include "../../runtime/objects/Str.h"
 #include "../parser/ast_nodes/ast_nodes.h"
 #include "ConstPool.h"
 #include "opcode.h"
@@ -19,7 +21,7 @@
  * （前缀只增不减，必收敛）。
  *
  * 顺带静态跟踪操作数栈深，算出 max_stack。跳转处两条路径的栈深必须一致，对不上是 codegen 的 bug，
- * 用断言当场抓——这是手写字节码最容易错的地方。
+ * 抛 InternalError 当场抓——这是手写字节码最容易错的地方。
  */
 class CodeBuilder final {
   public:
@@ -29,10 +31,10 @@ class CodeBuilder final {
   private:
     // 一条还没定下参数的指令
     struct PseudoInstr {
-        OpCode op_;
+        OpCode op_{};
         std::uint32_t arg_{0};     // 立即数；跳转指令这里存的是标签号
         bool arg_is_label_{false}; // arg_ 该当标签号读还是当立即数读
-        Position pos_;
+        Position pos_{};
     };
 
     std::vector<PseudoInstr> instrs_;
@@ -60,11 +62,11 @@ class CodeBuilder final {
     bool unreachable_{false};
 
     // 记一笔栈深变化
-    void apply_effect(int effect);
+    void apply_effect(std::int64_t effect);
     // 断言标签处的栈深是 depth，或者第一次得知就记下来
     void note_label_stack(Label label, std::uint32_t depth);
     // 发一条伪指令，只管指令流和栈跟踪，不管参数怎么来的
-    void push_instr(PseudoInstr instr);
+    void push_instr(const PseudoInstr &instr);
 
   public:
     explicit CodeBuilder(std::string source_name);

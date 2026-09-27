@@ -2,9 +2,7 @@
 
 #include "../../parser/ast_nodes/ast_nodes.h"
 
-#include <compare>
-#include <cstdint>
-#include <optional>
+#include <cstddef>
 
 /**
  * 编译期静态求值器
@@ -39,8 +37,8 @@
  *
  * 规模上限：
  * - int 如果能用 int64_t 装下则折，科学计数法写法如果够小则字面展开；
- * - str 的 + 拼接、* 重复，结果长度不超过 nMaxStrLength 时折叠；
- * - tuple/list 的 + 拼接、* 重复，结果元素个数不超过 nMaxContainerItems 时折叠；
+ * - str 的 + 拼接、* 重复，结果长度不超过 kMaxStrLength 时折叠；
+ * - tuple/list 的 + 拼接、* 重复，结果元素个数不超过 kMaxContainerItems 时折叠；
  *
  * 运行期必然报错的一律不折，把错误原样留给运行期。
  *
@@ -102,58 +100,12 @@ class StaticEvaler final {
     // and/or。按短路语义只看左操作数
     [[nodiscard]] static AstNodePtr fold_and_or(AstNodeOpBinary &node);
 
-    // —————————— 判断 ——————————
-
-    // 真值。调用方保证 is_literal_pure(literal)。
-    [[nodiscard]] static std::optional<bool> truthy(const AstNode &literal);
-
-    /**
-     * node 是不是一个纯字面量：
-     *   None/bool/int/decimal/str/Ellipsis 天然是；
-     *   tuple/list 要求每个元素递归满足；
-     *   dict、_G/_L 恒不是。
-     */
-    [[nodiscard]] static bool is_literal_pure(const AstNode &node);
-
-    /**
-     * node 会不会被 codegen 放进常量表，也就是重复出现时恒是同一个对象。
-     * 比 is_literal_pure 少 list。
-     */
-    [[nodiscard]] static bool is_literal_const(const AstNode &node);
-
-    // —————————— 数值分类与取值 ——————————
-
-    // 是不是 int。只有位运算该用它
-    [[nodiscard]] static bool is_int(const AstNode &node);
-    // 是不是 bool 或 int。四则运算、比较会把 bool 折算成 int 再算，用这个
-    [[nodiscard]] static bool is_int_family(const AstNode &node);
-    // 是不是 bool 或 int 或 decimal
-    [[nodiscard]] static bool is_numeric(const AstNode &node);
-
-    // node -> int64_t。调用方保证 is_int_family(node)。
-    // 科学计数法写法在这里按值展开成普通数字串再解析；
-    // int64_t 装不下（含指数超过 nMaxIntScientificExponent）时一律返回 nullopt
-    [[nodiscard]] static std::optional<int64_t> node_to_int64(const AstNode &node);
-
     // —————————— 折叠上限 ——————————
 
     // tuple/list：+ 拼接、* 重复的结果元素个数上限
-    static constexpr size_t nMaxContainerItems{256};
+    static constexpr std::size_t kMaxContainerItems{256};
     // str：+ 拼接、* 重复，结果字符数上限
-    static constexpr size_t nMaxStrLength{4096};
-    // int 科学计数法展开的指数上限
-    static constexpr size_t nMaxIntScientificExponent{19};
-
-    // —————————— 构造折叠结果 ——————————
-
-    [[nodiscard]] static AstNodePtr make_bool(Position pos, bool value);
-    [[nodiscard]] static AstNodePtr make_int(Position pos, int64_t value);
-    // 字面量之间的值相等。调用方保证 is_literal_pure(a) 且 is_literal_pure(b)
-    [[nodiscard]] static std::optional<bool> literal_equal(const AstNode &a, const AstNode &b);
-    // 字面量之间的值比较。调用方保证 is_literal_pure(a) 且 is_literal_pure(b)
-    [[nodiscard]] static std::partial_ordering literal_compare(const AstNode &a, const AstNode &b);
-    // 深拷贝一个字面量节点。调用方保证 is_literal_const(node)
-    [[nodiscard]] static AstNodePtr clone_const_literal(const AstNode &node);
+    static constexpr std::size_t kMaxStrLength{4096};
 
   public:
     StaticEvaler() = delete;

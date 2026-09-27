@@ -6,9 +6,10 @@
 #include "../../compiler/analyzer/expr_folder/ExprFolder.h"
 #include "../parser/test_utils.h"
 
-#include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
+
+#include <nlohmann/json.hpp>
 
 // 只折这一条表达式，不走 Program 剪枝（纯字面量在 Program 里会被丢掉）。
 inline nlohmann::json fold_json(const std::u32string &source) {

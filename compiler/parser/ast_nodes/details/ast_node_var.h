@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../ast_visitor.h"
 #include "ast_node.h"
 
 #include <string>

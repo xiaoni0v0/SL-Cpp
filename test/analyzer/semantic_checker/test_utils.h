@@ -7,9 +7,9 @@
 #include "../../../cppexceptions/SyntaxError.h"
 #include "../../parser/test_utils.h"
 
-#include <doctest/doctest.h>
-
 #include <string>
+
+#include <doctest/doctest.h>
 
 inline void check_program(const std::u32string &source) {
     AstNodeProgramPtr program{parse_program(source)};

@@ -32,3 +32,22 @@ clang-cl**（CLion 里也选 clang-cl）之后这个错不再出现。
 
 **how to apply**：见到这个错，先确认两边用的是不是同一个编译器，而不是去删 `.pch`——更不要删整个
 `cmake-build-debug`。删掉只是绕过症状，下次从另一边编译又会犯，而且重建构建目录很慢。
+
+## 用 ASan + UBSan 跑全部测试（验证有没有 UB）
+
+`run_test.py` 用的 Debug 构建不带 sanitizer。要真跑 UB 检测，在**临时目录**里另建一个构建（别动 `cmake-build-debug`）：
+
+- **ASan 不支持调试版 CRT（`-MDd`），而项目 Debug 强制用它**：把项目源码拷一份到临时目录，只在拷贝的
+  `CMakeLists.txt` 里把 `MultiThreadedDebugDLL`/`MultiThreaded` 都改成 `MultiThreadedDLL`，再用
+  `-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL`。
+- 编译参数 `-fsanitize=address,undefined -fno-sanitize-recover=undefined`（UB 一触发就终止，测试直接失败）；
+  `CMAKE_CXX_FLAGS_DEBUG` 里去掉 `/RTC1`。
+- **CMake 是直接调 `lld-link` 的，不经过 clang-cl 驱动，所以 sanitizer 运行库不会自动链进来**：要给
+  `CMAKE_EXE_LINKER_FLAGS` 手动加 `-libpath:<LLVM>/lib/clang/22/lib/windows` 和
+  `clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib
+  clang_rt.ubsan_standalone-x86_64.lib clang_rt.ubsan_standalone_cxx-x86_64.lib`（路径有空格用 8.3 短路径）。
+- 跑测试前把 `<LLVM>/lib/clang/22/lib/windows` 放进 `PATH`（要 `clang_rt.asan_dynamic-x86_64.dll`），
+  `ASAN_OPTIONS=detect_leaks=0`（Windows 没有 LeakSanitizer）。
+- 在 Git Bash 里传 `/Zi` 这类 MSVC 风格参数会被当成路径改写，一律写成 `-Zi`。
+- 全部测试约 2 分钟（BigDec 的差分测试占大头），比普通构建慢 4 倍左右。
+

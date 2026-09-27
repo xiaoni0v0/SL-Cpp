@@ -49,11 +49,12 @@ template <NoOwnedHeap T> constexpr std::size_t heap_bytes(const T &) { return 0;
 // 重载 string
 template <typename C, typename Tr, typename A>
 constexpr std::size_t heap_bytes(const std::basic_string<C, Tr, A> &value) {
-    const auto *const begin{reinterpret_cast<const std::byte *>(&value)};
-    const auto *const end{begin + sizeof(std::basic_string<C, Tr, A>)};
-    const auto *const at{reinterpret_cast<const std::byte *>(value.data())};
+    const void *begin{&value};
+    const void *end{&value + 1};
+    const void *data{value.data()};
 
-    if (constexpr std::less<> before; !before(at, begin) && before(at, end)) return 0;
+    const std::less before{};
+    if (!before(data, begin) && before(data, end)) return 0;
     return (value.capacity() + 1) * sizeof(C); // + 1 for '\0'
 }
 

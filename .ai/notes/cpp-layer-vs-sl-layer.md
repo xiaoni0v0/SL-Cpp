@@ -70,7 +70,7 @@ VM 自己的 bug，一律 `InternalError`，不让 SL 代码捕获。
 `SourceLocation`（`EncodingError` 就只有字节偏移，`FileNotFoundError` 连位置都没有）。渲染在构造函数
 里做一次给 `what()`，格式改动是纯呈现层的事，不影响转换方。
 
-## 转换的具体实现在 `runtime/HostErrorConversion.{h,cpp}`
+## 转换的具体实现在 `runtime/host_error_conversion.{h,cpp}`
 
 这条约定不是只停在文档层面：`SyntaxError`/`EncodingError`/`FileNotFoundError` 各有一个
 `exception_from(...)` 函数，把宿主异常的字段翻成对应 SL 类的 `BaseException` 对象（`.args` 塞

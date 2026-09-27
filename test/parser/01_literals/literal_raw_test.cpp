@@ -219,7 +219,7 @@ TEST_SUITE("字面量 raw_ 校验——科学计数法后缀的畸形输入") {
     }
 
     TEST_CASE("指数位数 1..8 逐个扫：int 侧 4 位以内合法、5 位起报错，decimal 侧一路合法") {
-        for (size_t digits{1}; digits <= 8; ++digits) {
+        for (std::size_t digits{1}; digits <= 8; ++digits) {
             // 全 9：4 位时恰好是上限 9999，5 位时是最接近上限的越界值
             const std::u32string exponent(digits, U'9');
             CAPTURE(digits);

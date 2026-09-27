@@ -85,8 +85,8 @@ TEST_SUITE("BigDec——// 和 % 的向负无穷取整语义") {
 
     TEST_CASE("非零余数的符号恒同除数") {
         DecContext ctx{quiet_context()};
-        for (const char *const a : {"7", "-7", "7.5", "-7.5", "0.1", "-0.1", "1E+10"}) {
-            for (const char *const b : {"3", "-3", "0.7", "-0.7", "2.5", "-2.5"}) {
+        for (const char *a : {"7", "-7", "7.5", "-7.5", "0.1", "-0.1", "1E+10"}) {
+            for (const char *b : {"3", "-3", "0.7", "-0.7", "2.5", "-2.5"}) {
                 const BigDec remainder{d(a).mod(d(b), ctx)};
                 CAPTURE(a);
                 CAPTURE(b);
@@ -121,13 +121,13 @@ TEST_SUITE("BigDec——// 和 % 的向负无穷取整语义") {
     // 精确算术下成立；有舍入时右边乘法再舍一次，不保证逐位相等。值池温和，乘积顶不到 prec。
     TEST_CASE("恒等式 x % y == x - (x // y) * y（温和值池下逐位成立，非普遍恒等式）") {
         DecContext ctx{quiet_context()};
-        constexpr const char *const pool[]{
+        constexpr const char *pool[]{
             "0",   "-0",   "1",    "-1",    "7",    "-7",    "3",          "-3",
             "2.5", "-2.5", "0.1",  "-0.1",  "100",  "-100",  "1.50",       "-1.50",
             "6",   "-6",   "1E+5", "-1E+5", "1E-5", "-1E-5", "12345.6789", "0.7",
         };
-        for (const char *const a : pool) {
-            for (const char *const b : pool) {
+        for (const char *a : pool) {
+            for (const char *b : pool) {
                 if (d(b).is_zero()) continue;
                 CAPTURE(a);
                 CAPTURE(b);
@@ -159,7 +159,7 @@ TEST_SUITE("BigDec——// 和 % 的向负无穷取整语义") {
     }
 
     TEST_CASE("divmod 跟单独算 // 和 % 一致") {
-        constexpr const char *const pool[]{
+        constexpr const char *pool[]{
             "0",
             "-0",
             "1",
@@ -179,8 +179,8 @@ TEST_SUITE("BigDec——// 和 % 的向负无穷取整语义") {
             "1.50",
             "-12345.6789"
         };
-        for (const char *const a : pool) {
-            for (const char *const b : pool) {
+        for (const char *a : pool) {
+            for (const char *b : pool) {
                 CAPTURE(a);
                 CAPTURE(b);
                 DecContext c1{quiet_context()};
@@ -209,7 +209,7 @@ TEST_SUITE("BigDec——// 和 % 的向负无穷取整语义") {
 
     TEST_CASE("跟 BigInt 的 floor_div/mod 交叉验证（整数值的 decimal）") {
         DecContext ctx{quiet_context()};
-        constexpr const char *const pool[]{
+        constexpr const char *pool[]{
             "0",
             "1",
             "-1",
@@ -228,8 +228,8 @@ TEST_SUITE("BigDec——// 和 % 的向负无穷取整语义") {
             "3",
             "-3",
         };
-        for (const char *const a : pool) {
-            for (const char *const b : pool) {
+        for (const char *a : pool) {
+            for (const char *b : pool) {
                 if (BigInt::from_decimal_string(b).is_zero()) continue;
                 CAPTURE(a);
                 CAPTURE(b);

@@ -17,21 +17,26 @@ class Type;
 class RefBase {
     friend class Heap;
 
-  protected:
     Object *ptr_{nullptr};
 
+  protected:
     RefBase() = default;
     // +1
     explicit RefBase(Object *ptr);
     // -1
     ~RefBase();
+    // 移动
+    RefBase(RefBase &&other) noexcept : ptr_{std::exchange(other.ptr_, nullptr)} {}
 
+    // 交换
+    void swap(RefBase &other) noexcept { std::swap(ptr_, other.ptr_); }
     // 放掉这条引用并置空
     void reset();
 
   public:
     RefBase(const RefBase &) = delete;
     RefBase &operator=(const RefBase &) = delete;
+    RefBase &operator=(RefBase &&) = delete;
 
     // 指向的对象，可能为空。借用，不改引用计数
     [[nodiscard]] Object *target() const { return ptr_; }
@@ -45,48 +50,53 @@ class RefBase {
  * 会改对象的引用计数，构造 Ref 恒 +1、析构 Ref 恒 -1。
  */
 template <typename T> class Ref final : public RefBase {
-    template <typename U> friend class Ref;
-
   public:
     Ref() = default;
     explicit(false) Ref(std::nullptr_t) {}
     explicit Ref(T *ptr) : RefBase{ptr} {}
 
-    Ref(const Ref &other) : RefBase{other.ptr_} {}
-    Ref(Ref &&other) noexcept { ptr_ = std::exchange(other.ptr_, nullptr); }
+    Ref(const Ref &other) : RefBase{other.target()} {}
+    Ref(Ref &&other) noexcept : RefBase{std::move(other)} {}
 
+    // 允许 Ref<派生类> 隐式转成 Ref<基类>
     template <typename U>
         requires std::convertible_to<U *, T *>
-    explicit(false) Ref(const Ref<U> &other) : RefBase{other.ptr_} {}
+    explicit(false) Ref(const Ref<U> &other) : RefBase{other.target()} {}
     template <typename U>
         requires std::convertible_to<U *, T *>
-    explicit(false) Ref(Ref<U> &&other) noexcept {
-        ptr_ = std::exchange(other.ptr_, nullptr);
-    }
+    explicit(false) Ref(Ref<U> &&other) noexcept : RefBase{std::move(other)} {}
 
-    Ref &operator=(Ref other) noexcept {
-        std::swap(ptr_, other.ptr_);
+    Ref &operator=(const Ref &other) {
+        Ref copy{other};
+        swap(copy);
         return *this;
     }
+    Ref &operator=(Ref &&other) noexcept {
+        Ref moved{std::move(other)};
+        swap(moved);
+        return *this;
+    }
+
+    ~Ref() = default;
 
     // 放掉自己这条引用并置空，等价于 `*this = nullptr`
     void reset() { RefBase::reset(); }
 
-    [[nodiscard]] T *get() const { return static_cast<T *>(ptr_); }
+    [[nodiscard]] T *get() const { return static_cast<T *>(target()); }
     T *operator->() const { return get(); }
     T &operator*() const { return *get(); }
-    explicit operator bool() const { return ptr_; }
+    explicit operator bool() const { return target() != nullptr; }
 
     // 指针相等，对应 SL 的 is
-    [[nodiscard]] bool operator==(const Ref &other) const { return ptr_ == other.ptr_; }
-    [[nodiscard]] bool operator==(const T *other) const { return ptr_ == other; }
+    [[nodiscard]] bool operator==(const Ref &other) const { return target() == other.target(); }
+    [[nodiscard]] bool operator==(const T *other) const { return target() == other; }
 };
 
 using ObjectRef = Ref<Object>;
 
 // 所有 SL 对象都该经由它建立
 template <typename T, typename... Args> [[nodiscard]] Ref<T> make_ref(Args &&...args) {
-    T *const object{new T{std::forward<Args>(args)...}};
+    T *object{new T{std::forward<Args>(args)...}};
     Heap::note_allocated(object);
     return Ref<T>{object};
 }
@@ -101,11 +111,12 @@ template <typename T, typename... Args> [[nodiscard]] Ref<T> make_ref(Args &&...
  * 拿到的是引用本身而不是它指向的对象，所以"看一眼"和"放掉"两种用法共用同一份字段清单
  * （见 Object::visit_own_refs），标记扫到的边和拆环放掉的边不可能对不上。
  */
-class RefVisitor {
-  public:
+struct RefVisitor {
     RefVisitor() = default;
     RefVisitor(const RefVisitor &) = delete;
+    RefVisitor(RefVisitor &&) = delete;
     RefVisitor &operator=(const RefVisitor &) = delete;
+    RefVisitor &operator=(RefVisitor &&) = delete;
     virtual ~RefVisitor() = default;
 
     // 对一条引用调用一次

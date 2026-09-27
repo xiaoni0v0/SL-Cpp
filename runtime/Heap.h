@@ -3,20 +3,20 @@
 #include <cstddef>
 
 class Object;
-class RefVisitor;
+struct RefVisitor;
 template <typename T> class Ref;
 
 /**
  * 堆，串起全部存活对象，并在需要时做一轮 STW 标记清扫。
  * 同时也是唯一引用根。
  */
-class Heap {
+class Heap final {
     friend class Object;
     template <typename T, typename... Args> friend Ref<T> make_ref(Args &&...args);
 
     // 标记阶段和拆环阶段的两个访问者
     class Marker;
-    class RefDropper;
+    struct RefDropper;
 
     // 进出全堆链表。在 Object 的构造/析构里调，那时问不到派生类的大小
     static void link(Object *obj);
@@ -27,6 +27,11 @@ class Heap {
 
   public:
     Heap() = delete;
+    Heap(const Heap &) = delete;
+    Heap(Heap &&) = delete;
+    Heap &operator=(const Heap &) = delete;
+    Heap &operator=(Heap &&) = delete;
+    ~Heap() = delete;
 
     // 跑一轮标记清扫。
     // 硬前提：当前 C++ 调用栈上不能有任何活的 Ref。

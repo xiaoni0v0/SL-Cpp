@@ -30,3 +30,17 @@ BreakAfterOpenBracketBracedList: true
 BreakBeforeCloseBracketBracedList: true
 
 LineEnding: LF
+
+# 头文件分四组，组内连续排、组间空一行：
+#   1. 这个 .cpp 自己对应的头（clang-format 按文件名自动识别，优先级 0）
+#   2. 项目里的其他头
+#   3. C / C++ 标准头
+#   4. 第三方库的头
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^"'
+    Priority: 2
+  - Regex: '^<[a-z0-9_]+(\.h)?>$'
+    Priority: 3
+  - Regex: "^<"
+    Priority: 4

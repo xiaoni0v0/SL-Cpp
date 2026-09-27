@@ -277,7 +277,7 @@ TEST_SUITE("StaticEvaler 数值算术——int64_t 边界") {
         CHECK(fold_json(U"5e0 + 0") == int_lit("5"));
     }
 
-    // 折叠器内部的指数展开上限（nMaxIntScientificExponent，约 19）纯粹是提前退出的效率阈值：
+    // 折叠器内部的指数展开上限（kMaxIntScientificExponent，约 19）纯粹是提前退出的效率阈值：
     // 超过它必然装不下 int64_t（int64_t 至多 19 位十进制数字）。尾数全 0 的例外不受这条上限约束。
     TEST_CASE("科学计数法指数在展开上限内、且展开结果没超出 int64_t，才折") {
         // 尾数 1 位 + 指数 18 个 0 == 19 位数字，恰好没超 INT64_MAX

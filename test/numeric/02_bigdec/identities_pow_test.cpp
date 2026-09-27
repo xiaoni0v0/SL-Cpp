@@ -190,9 +190,9 @@ TEST_SUITE("BigDec——幂运算与超越函数") {
         };
         const auto check{[](const char *base,
                             const char *exponent,
-                            const int32_t prec,
-                            const int32_t emax,
-                            const int32_t emin,
+                            const std::int32_t prec,
+                            const std::int32_t emax,
+                            const std::int32_t emin,
                             const std::vector<Outcome> &outcomes) {
             for (const Outcome &o : outcomes) {
                 CAPTURE(base);
@@ -386,7 +386,7 @@ TEST_SUITE("BigDec——幂运算与超越函数") {
 
     TEST_CASE("NaN 传播与 sNaN") {
         DecContext ctx{quiet_context()};
-        for (const char *const op : {"sqrt", "exp", "ln", "log10"}) {
+        for (const char *op : {"sqrt", "exp", "ln", "log10"}) {
             CAPTURE(op);
             const BigDec nan{d("-NaN")};
             const BigDec result{
@@ -435,14 +435,14 @@ TEST_SUITE("BigDec——幂运算与超越函数") {
 
     TEST_CASE("精确的恒等式：完全平方、10 的整数次幂、整数次幂") {
         DecContext ctx{quiet_context()};
-        for (int64_t i{0}; i < 40; ++i) {
+        for (std::int64_t i{0}; i < 40; ++i) {
             const BigDec n{BigDec::from_bigint(BigInt(i))};
             CAPTURE(i);
             const BigDec square{n.mul(n, ctx)};
             CHECK(square.sqrt(ctx).equals(n, ctx)); // 完全平方开方精确
             CHECK(n.pow(d("2"), ctx).equals(square, ctx));
         }
-        for (int64_t k{-30}; k <= 30; ++k) {
+        for (std::int64_t k{-30}; k <= 30; ++k) {
             CAPTURE(k);
             const BigDec power{d("10").pow(BigDec::from_bigint(BigInt(k)), ctx)};
             CHECK(power.log10(ctx).equals(BigDec::from_bigint(BigInt(k)), ctx));
@@ -454,17 +454,17 @@ TEST_SUITE("BigDec——operator 就是配一个默认上下文调同名具名�
 
     TEST_CASE("结果跟显式传默认上下文逐个一致") {
         // 挑不会触发默认那三个陷阱的值：默认上下文下 operator 出事是抛，不是静默给 NaN
-        constexpr const char *const pool[]{
+        constexpr const char *pool[]{
             "0", "-0", "1", "-1", "2.5", "-2.5", "0.1", "1.50", "100", "-7", "1E+10", "1E-10"
         };
-        for (const char *const a_s : pool) {
+        for (const char *a_s : pool) {
             const BigDec a{d(a_s)};
             CAPTURE(a_s);
             DecContext c1;
             CHECK((+a).identical(a.plus(c1)));
             DecContext c2;
             CHECK((-a).identical(a.minus(c2)));
-            for (const char *const b_s : pool) {
+            for (const char *b_s : pool) {
                 const BigDec b{d(b_s)};
                 CAPTURE(b_s);
                 DecContext c3;

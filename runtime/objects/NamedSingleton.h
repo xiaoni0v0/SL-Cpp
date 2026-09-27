@@ -3,13 +3,14 @@
 #include "../../utils/memory_utils.h"
 #include "../Object.h"
 
+#include <cstddef>
 #include <string>
 
 /**
  * 无负载、只靠一个显示名区分的单例：None、Ellipsis、NotImplemented、StopIteration
  */
 class NamedSingleton final : public Object {
-    std::string name_;
+    const std::string name_;
 
     SL_MAKE_REF_ONLY;
     NamedSingleton(Type *type, std::string name);

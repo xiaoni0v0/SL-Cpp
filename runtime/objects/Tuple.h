@@ -3,6 +3,7 @@
 #include "../../utils/memory_utils.h"
 #include "../Object.h"
 
+#include <cstddef>
 #include <vector>
 
 class Tuple final : public Object {

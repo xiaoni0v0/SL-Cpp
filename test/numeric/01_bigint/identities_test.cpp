@@ -2,6 +2,7 @@
 #include "test_utils.h"
 
 #include <cstdlib>
+
 #include <doctest/doctest.h>
 
 // 边界值两两、三三组合，用恒等式本身当期望值。
@@ -270,8 +271,10 @@ TEST_SUITE("BigInt——bit_length 与 to_double 的窄路径") {
         CHECK(d("-18446744073709551616").bit_length() == 65);
         for (int shift{60}; shift < 200; ++shift) {
             CAPTURE(shift);
-            CHECK((BigInt(1) << shift).bit_length() == static_cast<size_t>(shift) + 1);
-            CHECK(((BigInt(1) << shift) - BigInt(1)).bit_length() == static_cast<size_t>(shift));
+            CHECK((BigInt(1) << shift).bit_length() == static_cast<std::size_t>(shift) + 1);
+            CHECK(
+                ((BigInt(1) << shift) - BigInt(1)).bit_length() == static_cast<std::size_t>(shift)
+            );
         }
     }
 

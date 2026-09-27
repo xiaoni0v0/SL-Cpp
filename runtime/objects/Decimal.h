@@ -4,8 +4,10 @@
 #include "../../utils/memory_utils.h"
 #include "../Object.h"
 
+#include <cstddef>
+
 class Decimal final : public Object {
-    BigDec value_;
+    const BigDec value_;
 
     SL_MAKE_REF_ONLY;
     // 主构造

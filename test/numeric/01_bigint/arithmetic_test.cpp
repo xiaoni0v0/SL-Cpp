@@ -1,8 +1,9 @@
 // 加减乘、向负无穷整除取模、幂。
 #include "test_utils.h"
 
-#include <doctest/doctest.h>
 #include <stdexcept>
+
+#include <doctest/doctest.h>
 
 TEST_SUITE("BigInt——加减乘（含跨 limb 进位/借位）") {
 

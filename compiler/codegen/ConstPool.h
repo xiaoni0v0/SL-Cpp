@@ -11,13 +11,13 @@
 /**
  * 常量表的去重池。
  *
- * 去重的判据是“结构标识”，见 structural_identical()。
+ * 去重的判据是“结构标识”，见 ConstPool.cpp 里的 structural_identical()。
  */
-class ConstPool {
+class ConstPool final {
     // 常量表
     std::vector<ObjectRef> table_;
 
-    // 结构哈希 -> 候选槽号。同一个桶里再逐个按 structural_identical() 确定
+    // 结构哈希 -> 候选槽号。同一个桶里再逐个按结构标识确定
     std::unordered_map<std::size_t, std::vector<std::uint32_t>> buckets_;
 
     // 表里有没有一个元素恰好是 items 的元组。
@@ -33,16 +33,6 @@ class ConstPool {
     // 把 value 放进常量表，返回它的槽号；已经有结构上相同的常量就复用那个槽。
     [[nodiscard]] std::uint32_t intern(const ObjectRef &value);
 
-    [[nodiscard]] const std::vector<ObjectRef> &table() const { return table_; }
-    [[nodiscard]] std::uint32_t size() const { return static_cast<std::uint32_t>(table_.size()); }
-
     // 把整张表搬走，池子随之清空
     [[nodiscard]] std::vector<ObjectRef> take_table();
-
-    // 两个常量该不该共用一个槽。
-    // 调用方保证：元组的元素已经是表里的规范对象。
-    [[nodiscard]] static bool structural_identical(const Object *lhs, const Object *rhs);
-
-    // structural_identical 配套的哈希。
-    [[nodiscard]] static std::size_t structural_hash(const Object *value);
 };

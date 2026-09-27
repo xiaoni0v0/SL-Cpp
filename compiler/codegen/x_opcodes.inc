@@ -2,7 +2,8 @@
 // X(枚举名, 助记符, 参数种类, 顺序流的栈效应)
 //
 // 栈效应表达式里的 arg 是这条指令的参数值，算的是**顺序流继续执行时**的净变化。跳转那条
-// 路径的差额记在 opcode.h 的 stack_effect_extra_on_jump()。
+// 路径的差额记在 opcode.h 的 stack_effect_extra_on_jump()。表达式一律按 std::int64_t 算：
+// arg 最宽 32 位，乘 2 也不会溢出。
 //
 // 于是 CALL_FINALLY / END_FINALLY 这里都是 0：返回地址走的是帧自己的那个小栈，不占操作数栈。
 // SETUP_* 同理，压的是块栈。
@@ -33,8 +34,8 @@ X(LOAD_GL, "LOAD_GL", Raw, +1)
 X(GET_ATTR, "GET_ATTR", Name, 0)
 X(SET_ATTR, "SET_ATTR", Name, -2)
 X(DELETE_ATTR, "DELETE_ATTR", Name, -1)
-X(GET_INDEX, "GET_INDEX", Count, -static_cast<int>(arg))
-X(SET_INDEX, "SET_INDEX", Count, -static_cast<int>(arg) - 2)
+X(GET_INDEX, "GET_INDEX", Count, -static_cast<std::int64_t>(arg))
+X(SET_INDEX, "SET_INDEX", Count, -static_cast<std::int64_t>(arg) - 2)
 X(GET_INDEX_EX, "GET_INDEX_EX", None, -1)
 X(SET_INDEX_EX, "SET_INDEX_EX", None, -3)
 
@@ -47,17 +48,17 @@ X(BINARY_OP, "BINARY_OP", BinaryOp, -1)
 // ------------------------------------------------------------
 // 容器
 // ------------------------------------------------------------
-X(MAKE_TUPLE, "MAKE_TUPLE", Count, 1 - static_cast<int>(arg))
-X(MAKE_LIST, "MAKE_LIST", Count, 1 - static_cast<int>(arg))
-X(MAKE_DICT, "MAKE_DICT", Count, 1 - 2 * static_cast<int>(arg))
+X(MAKE_TUPLE, "MAKE_TUPLE", Count, 1 - static_cast<std::int64_t>(arg))
+X(MAKE_LIST, "MAKE_LIST", Count, 1 - static_cast<std::int64_t>(arg))
+X(MAKE_DICT, "MAKE_DICT", Count, 1 - 2 * static_cast<std::int64_t>(arg))
 X(LIST_APPEND, "LIST_APPEND", Depth, -1)
 X(LIST_EXTEND, "LIST_EXTEND", Depth, -1)
 X(DICT_PUT, "DICT_PUT", Depth, -2)
 X(DICT_MERGE, "DICT_MERGE", Depth, -1)
 X(COUNT_INC, "COUNT_INC", Depth, 0)
 X(LIST_TO_TUPLE, "LIST_TO_TUPLE", None, 0)
-X(UNPACK, "UNPACK", Count, static_cast<int>(arg) - 1)
-X(UNPACK_EX, "UNPACK_EX", Raw, static_cast<int>((arg & 0xFFu) + (arg >> 8u)))
+X(UNPACK, "UNPACK", Count, static_cast<std::int64_t>(arg) - 1)
+X(UNPACK_EX, "UNPACK_EX", Raw, static_cast<std::int64_t>((arg & 0xFFu) + (arg >> 8u)))
 
 // ------------------------------------------------------------
 // 跳转
@@ -83,8 +84,8 @@ X(RERAISE, "RERAISE", None, -1)
 // ------------------------------------------------------------
 // 调用与建立
 // ------------------------------------------------------------
-X(CALL, "CALL", Count, -static_cast<int>(arg))
-X(CALL_KW, "CALL_KW", Count, -static_cast<int>(arg) - 1)
+X(CALL, "CALL", Count, -static_cast<std::int64_t>(arg))
+X(CALL_KW, "CALL_KW", Count, -static_cast<std::int64_t>(arg) - 1)
 X(CALL_EX, "CALL_EX", None, -2)
 X(MAKE_FUNC, "MAKE_FUNC", NestedCode, -4)
 X(MAKE_CLASS, "MAKE_CLASS", NestedCode, -3)

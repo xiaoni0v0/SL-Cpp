@@ -1,11 +1,14 @@
 #include "Str.h"
 
 #include "../../utils/string_utils.h"
+#include "../Object.h"
 #include "../Runtime.h"
+#include "../Type.h"
 
+#include <string>
 #include <utility>
 
-Str::Str(Type *const type, std::u32string value) : Object{type}, value_{std::move(value)} {}
+Str::Str(Type *type, std::u32string value) : Object{type}, value_{std::move(value)} {}
 
 Str::Str(std::u32string value) : Str{Runtime::type_str(), std::move(value)} {}
 

@@ -3,6 +3,7 @@
 #include "../Object.h"
 #include "Tuple.h"
 
+#include <cstddef>
 #include <vector>
 
 // SL 异常对象。整棵异常树共用这一个 C++ 类，只是 `type()` 不同

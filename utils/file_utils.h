@@ -2,4 +2,4 @@
 
 #include <string>
 
-std::string file_read_all(const std::string &file_path);
+[[nodiscard]] std::string file_read_all(const std::string &file_path);

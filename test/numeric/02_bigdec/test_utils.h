@@ -7,12 +7,12 @@
 #include "../../../numeric/DecContext.h"
 #include "../../../numeric/dec_math.h"
 
-#include <doctest/doctest.h>
-
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+#include <doctest/doctest.h>
 
 inline BigDec d(const std::string &s) {
     std::optional<BigDec> parsed{BigDec::try_from_string(s)};
@@ -22,8 +22,8 @@ inline BigDec d(const std::string &s) {
 
 // 陷阱全关的上下文：交叉验证表只比"结果 + 触发了哪些信号"，不能被抛出来的陷阱打断
 inline DecContext quiet_context(
-    const int32_t prec = 28, const DecRounding rounding = DecRounding::HalfEven,
-    const int32_t emax = 999999, const int32_t emin = -999999
+    const std::int32_t prec = 28, const DecRounding rounding = DecRounding::HalfEven,
+    const std::int32_t emax = 999999, const std::int32_t emin = -999999
 ) {
     DecContext ctx;
     ctx.set_prec(prec);

@@ -1,11 +1,13 @@
 #pragma once
 
 #include "Heap.h"
+#include "Object.h"
 #include "Type.h"
 #include "objects/Bool.h"
 #include "objects/NamedSingleton.h"
 
 #include <array>
+#include <cstddef>
 
 // 内置类型的编号
 enum class BuiltinType : std::size_t {
@@ -73,6 +75,12 @@ class Runtime final {
     static void visit_roots(RefVisitor &visitor);
 
   public:
+    Runtime(const Runtime &) = delete;
+    Runtime(Runtime &&) = delete;
+    Runtime &operator=(const Runtime &) = delete;
+    Runtime &operator=(Runtime &&) = delete;
+    ~Runtime() = default;
+
     // init() 中途抛异常时会回滚
     static void init();
     static void shutdown();

@@ -1,6 +1,10 @@
 #include "ast_json_dumper.h"
 
 #include "../../../utils/string_utils.h"
+#include "ast_nodes.h"
+
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -13,7 +17,7 @@ json positions_to_json(const std::vector<Position> &positions) {
 }
 
 // 收集模式记号原样序列化成它在源码里的写法
-const char *collect_to_json(const CollectMark mark) {
+const char *collect_str(const CollectMark mark) {
     switch (mark.container_) {
     case CollectMark::Container::None:
         return "none";
@@ -223,7 +227,7 @@ void AstJsonDumper::visit(const AstNodeForCond &node) {
         result_ = json{
             {"type", "ForCond"},
             {"pos", pos_to_json(node.pos_)},
-            {"collect", collect_to_json(node.collect_)},
+            {"collect", collect_str(node.collect_)},
             {"init", dump_or_null(node.init_)},
             {"cond", dump_or_null(node.cond_)},
             {"inc", dump_or_null(node.inc_)},
@@ -233,7 +237,7 @@ void AstJsonDumper::visit(const AstNodeForCond &node) {
     }
     result_ = json{
         {"type", "ForCond"},
-        {"collect", collect_to_json(node.collect_)},
+        {"collect", collect_str(node.collect_)},
         {"init", dump_or_null(node.init_)},
         {"cond", dump_or_null(node.cond_)},
         {"inc", dump_or_null(node.inc_)},
@@ -246,7 +250,7 @@ void AstJsonDumper::visit(const AstNodeForIter &node) {
         result_ = json{
             {"type", "ForIter"},
             {"pos", pos_to_json(node.pos_)},
-            {"collect", collect_to_json(node.collect_)},
+            {"collect", collect_str(node.collect_)},
             {"iterable", dump_node(*node.iterable_)},
             {"target", dump_or_null(node.target_)},
             {"body", dump_node(*node.body_)}
@@ -255,7 +259,7 @@ void AstJsonDumper::visit(const AstNodeForIter &node) {
     }
     result_ = json{
         {"type", "ForIter"},
-        {"collect", collect_to_json(node.collect_)},
+        {"collect", collect_str(node.collect_)},
         {"iterable", dump_node(*node.iterable_)},
         {"target", dump_or_null(node.target_)},
         {"body", dump_node(*node.body_)}
@@ -354,16 +358,16 @@ void AstJsonDumper::visit(const AstNodeEval &node) {
         result_ = json{
             {"type", "Eval"},
             {"pos", pos_to_json(node.pos_)},
-            {"positional_args", args_json["positional_args"]},
-            {"keyword_args", args_json["keyword_args"]},
-            {"pos_paren", args_json["pos_paren"]}
+            {"positional_args", std::move(args_json["positional_args"])},
+            {"keyword_args", std::move(args_json["keyword_args"])},
+            {"pos_paren", std::move(args_json["pos_paren"])}
         };
         return;
     }
     result_ = json{
         {"type", "Eval"},
-        {"positional_args", args_json["positional_args"]},
-        {"keyword_args", args_json["keyword_args"]}
+        {"positional_args", std::move(args_json["positional_args"])},
+        {"keyword_args", std::move(args_json["keyword_args"])}
     };
 }
 
@@ -416,16 +420,16 @@ void AstJsonDumper::visit(const AstNodeImportCall &node) {
         result_ = json{
             {"type", "ImportCall"},
             {"pos", pos_to_json(node.pos_)},
-            {"positional_args", args_json["positional_args"]},
-            {"keyword_args", args_json["keyword_args"]},
-            {"pos_paren", args_json["pos_paren"]}
+            {"positional_args", std::move(args_json["positional_args"])},
+            {"keyword_args", std::move(args_json["keyword_args"])},
+            {"pos_paren", std::move(args_json["pos_paren"])}
         };
         return;
     }
     result_ = json{
         {"type", "ImportCall"},
-        {"positional_args", args_json["positional_args"]},
-        {"keyword_args", args_json["keyword_args"]}
+        {"positional_args", std::move(args_json["positional_args"])},
+        {"keyword_args", std::move(args_json["keyword_args"])}
     };
 }
 
@@ -447,7 +451,7 @@ void AstJsonDumper::visit(const AstNodeLiteralBool &node) {
 }
 
 void AstJsonDumper::visit(const AstNodeLiteralGL &node) {
-    const auto *const value = node.value_ == AstNodeLiteralGL::GLType::G ? "_G" : "_L";
+    const auto *value{node.value_ == AstNodeLiteralGL::GLType::G ? "_G" : "_L"};
 
     if (include_pos_) {
         result_ = json{{"type", "LiteralGL"}, {"pos", pos_to_json(node.pos_)}, {"value", value}};
@@ -693,17 +697,17 @@ void AstJsonDumper::visit(const AstNodeCall &node) {
             {"type", "Call"},
             {"pos", pos_to_json(node.pos_)},
             {"object", dump_node(*node.object_)},
-            {"positional_args", args_json["positional_args"]},
-            {"keyword_args", args_json["keyword_args"]},
-            {"pos_paren", args_json["pos_paren"]}
+            {"positional_args", std::move(args_json["positional_args"])},
+            {"keyword_args", std::move(args_json["keyword_args"])},
+            {"pos_paren", std::move(args_json["pos_paren"])}
         };
         return;
     }
     result_ = json{
         {"type", "Call"},
         {"object", dump_node(*node.object_)},
-        {"positional_args", args_json["positional_args"]},
-        {"keyword_args", args_json["keyword_args"]}
+        {"positional_args", std::move(args_json["positional_args"])},
+        {"keyword_args", std::move(args_json["keyword_args"])}
     };
 }
 

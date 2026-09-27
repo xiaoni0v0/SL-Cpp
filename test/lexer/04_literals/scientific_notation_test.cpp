@@ -3,9 +3,9 @@
 #include "../../../cppexceptions/SyntaxError.h"
 #include "../test_utils.h"
 
-#include <doctest/doctest.h>
-
 #include <string>
+
+#include <doctest/doctest.h>
 
 namespace {
 
@@ -105,7 +105,7 @@ TEST_SUITE("科学计数法——int 侧指数的两条限制，decimal 侧都�
     }
 
     TEST_CASE("指数位数 1..8 逐个扫：int 侧 4 位以内合法、5 位起报错，decimal 侧一路合法") {
-        for (size_t digits{1}; digits <= 8; ++digits) {
+        for (std::size_t digits{1}; digits <= 8; ++digits) {
             // 全 9：4 位时恰好是上限 9999，5 位时是最接近上限的越界值
             const std::u32string exponent(digits, U'9');
             CAPTURE(digits);
@@ -177,7 +177,7 @@ TEST_SUITE("科学计数法——前导零：三个部位各自的规矩") {
 TEST_SUITE("科学计数法——畸形写法") {
 
     TEST_CASE("指数部分缺数字") {
-        for (const char32_t *const raw :
+        for (const char32_t *raw :
              {U"1e", U"1E", U"1e+", U"1e-", U"1E-", U"1.5e", U"1.5e+", U"1.5e-"}) {
             const std::u32string source{raw};
             CAPTURE(u32_to_utf8(source));
@@ -263,7 +263,7 @@ TEST_SUITE("科学计数法——与点号 / range / Ellipsis 的交界") {
 TEST_SUITE("科学计数法——token 文本与位置") {
 
     TEST_CASE("token 文本跟源码逐字一致：不归一大小写、不补/删正号、不展开成数值") {
-        for (const char32_t *const raw :
+        for (const char32_t *raw :
              {U"1e9",
               U"1E9",
               U"1e+9",
@@ -334,8 +334,8 @@ TEST_SUITE("科学计数法——组合扫描与代码片段") {
             {U"12.34", true},
         };
         for (const auto &[mantissa, is_decimal] : mantissas) {
-            for (const char32_t *const exponent_marker : {U"e", U"E"}) {
-                for (const char32_t *const sign : {U"", U"+", U"-"}) {
+            for (const char32_t *exponent_marker : {U"e", U"E"}) {
+                for (const char32_t *sign : {U"", U"+", U"-"}) {
                     const std::u32string source{
                         std::u32string{mantissa} + exponent_marker + sign + U"7"
                     };

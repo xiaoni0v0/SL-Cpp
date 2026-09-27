@@ -2,9 +2,14 @@
 
 #include "../../../cppexceptions/InternalError.h"
 #include "../../../cppexceptions/SyntaxError.h"
+#include "../../parser/ast_nodes/ast_nodes.h"
 
+#include <cstddef>
 #include <optional>
+#include <string>
 #include <unordered_set>
+#include <utility>
+#include <vector>
 
 void SemanticChecker::error(const std::string &msg, const Position pos) const {
     throw SyntaxError{file_path_, pos.row, pos.col, msg};
@@ -24,7 +29,7 @@ void SemanticChecker::require_not_empty(const std::u32string &name, const Positi
 
 template <typename T>
 void SemanticChecker::require_min_size(
-    const std::vector<T> &vec, const size_t min_size, const Position pos
+    const std::vector<T> &vec, const std::size_t min_size, const Position pos
 ) const {
     if (vec.size() < min_size) error_internal("too few elements", pos);
 }
@@ -113,7 +118,7 @@ void SemanticChecker::visit(const AstNodeForIter &node) {
     check_not_null(node.iterable_, pos);
     if (node.target_) check_lvalue(*node.target_);
     ctx_.loop_depth++;
-    require_not_null(node.body_, node.pos_), visit(*node.body_);
+    check_not_null(node.body_, pos);
 }
 
 void SemanticChecker::visit(const AstNodeBreak &node) {
@@ -224,10 +229,11 @@ void SemanticChecker::visit(const AstNodeFunc &node) {
     bool has_seen_default{false};
     for (const auto &param : node.params_.positional_) {
         require_not_empty(param.identifier_, pos), ensure_unique(param.identifier_);
-        if (param.default_value_)
+        if (param.default_value_) {
             has_seen_default = true;
-        else // 如果当前这个没有默认值，且前边的某个有默认值
-            if (has_seen_default) error("non-default parameter after default parameter", pos);
+        } else if (has_seen_default) { // 当前这个没有默认值，但前边的某个有
+            error("non-default parameter after default parameter", pos);
+        }
         check_nullable(param.type_annotation_);
         check_nullable(param.default_value_);
     }
@@ -536,9 +542,9 @@ void SemanticChecker::check_lvalue_items(const std::vector<AstNodePtr> &items, c
     }
 
     if (!star_index) return;
-    if (*star_index > nMaxStarredSideLvalues)
+    if (*star_index > kMaxStarredSideLvalues)
         error("too many lvalues before the starred one (at most 255)", pos);
-    if (items.size() - *star_index - 1 > nMaxStarredSideLvalues)
+    if (items.size() - *star_index - 1 > kMaxStarredSideLvalues)
         error("too many lvalues after the starred one (at most 255)", pos);
 }
 

@@ -7,8 +7,7 @@
 /**
  * 语义分析层的门面：按顺序跑 SemanticChecker（只报错、不改树）和 ExprFolder（只改树、不报错）。
  */
-class Analyzer final {
-  public:
+struct Analyzer final {
     Analyzer() = delete;
     ~Analyzer() = delete;
     Analyzer(const Analyzer &) = delete;

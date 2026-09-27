@@ -19,6 +19,11 @@ struct AstNode {
 
     explicit AstNode(const Position pos) : pos_{pos} {}
 
+    // 多态基类，AST 是 unique_ptr 独占树、节点从不被拷贝或移动，删掉以防切片
+    AstNode(const AstNode &) = delete;
+    AstNode(AstNode &&) = delete;
+    AstNode &operator=(const AstNode &) = delete;
+    AstNode &operator=(AstNode &&) = delete;
     virtual ~AstNode() = default;
 
     // 双分派的前半程

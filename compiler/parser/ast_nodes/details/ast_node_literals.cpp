@@ -2,6 +2,13 @@
 
 #include "../../../../cppexceptions/InternalError.h"
 #include "../../../../utils/string_utils.h"
+#include "ast_node.h"
+
+#include <cstddef>
+#include <format>
+#include <string>
+#include <string_view>
+#include <utility>
 
 namespace {
 
@@ -39,7 +46,7 @@ AstNodeLiteralDecimal::AstNodeLiteralDecimal(const Position pos, std::u32string 
     const LiteralExponentSplit split{
         strip_literal_exponent(strip_literal_sign(raw_), true, 0, pos)
     };
-    const size_t dot{split.mantissa.find(U'.')};
+    const std::size_t dot{split.mantissa.find(U'.')};
     if (dot == std::u32string_view::npos) error_internal("missing a '.'", pos);
     require_literal_digits(split.mantissa.substr(0, dot), true, "the integer part", pos);
     require_literal_digits(split.mantissa.substr(dot + 1), false, "the fractional part", pos);
@@ -51,12 +58,12 @@ std::u32string_view strip_literal_sign(const std::u32string_view raw) {
 
 LiteralExponentSplit strip_literal_exponent(
     const std::u32string_view raw, const bool allow_negative_exponent,
-    const size_t max_exponent_digits, const Position pos
+    const std::size_t max_exponent_digits, const Position pos
 ) {
-    const size_t marker{raw.find_first_of(U"eE")};             // 找 e/E
+    const std::size_t marker{raw.find_first_of(U"eE")};        // 找 e/E
     if (marker == std::u32string_view::npos) return {raw, {}}; // 没有 e/E
 
-    size_t exponent_begin{marker + 1};
+    std::size_t exponent_begin{marker + 1};
     if (exponent_begin < raw.size() &&
         (raw[exponent_begin] == U'+' || raw[exponent_begin] == U'-')) {
         // 不允许负指数

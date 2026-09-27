@@ -7,7 +7,7 @@ class Executor {
     const std::vector<std::string> argv_;
 
   public:
-    explicit Executor(int argc, const char *argv[]);
+    explicit Executor(int argc, const char *const *argv);
 
     [[nodiscard]] int run() const;
 };

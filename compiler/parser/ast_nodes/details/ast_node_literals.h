@@ -1,9 +1,12 @@
 #pragma once
 
+#include "../ast_visitor.h"
 #include "ast_node.h"
 
-#include <memory>
+#include <cstddef>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 // None
@@ -115,5 +118,6 @@ struct LiteralExponentSplit {
  * @param max_exponent_digits     指数位数上限，0 表示不限
  */
 [[nodiscard]] LiteralExponentSplit strip_literal_exponent(
-    std::u32string_view raw, bool allow_negative_exponent, size_t max_exponent_digits, Position pos
+    std::u32string_view raw, bool allow_negative_exponent, std::size_t max_exponent_digits,
+    Position pos
 );

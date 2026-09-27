@@ -1,13 +1,14 @@
 #pragma once
 
+#include "BigInt.h"
+#include "DecContext.h"
+
 #include <compare>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
-
-#include "BigInt.h"
-#include "DecContext.h"
 
 // 十进制浮点数，SL 的 decimal 的底层实现：值为 (-1)^符号 × 系数 × 10^指数，系数任意精度。
 // 算术遵循 IBM 通用十进制算术规范（Python decimal），不一致处逐处注明——目前只有 //、%
@@ -15,37 +16,37 @@
 // 运算一律以具名方法为准，operator 只是同名方法配一个默认上下文的转发
 class BigDec {
   public:
-    enum class Kind : uint8_t { Finite, Infinity, NaN, SignalingNaN };
+    enum class Kind : std::uint8_t { Finite, Infinity, NaN, SignalingNaN };
 
     // 构造出来的有限数，指数须落在 ±kMaxExponent 内（中间结果可暂时超出）。上界取 Emax 上限
     // + prec 上限，保证任何合法上下文下 fix 出的结果（指数最低到 Etiny）都能被 try_from_string 读回
-    static constexpr int64_t kMaxExponent{
-        static_cast<int64_t>(DecContext::kMaxExp) + DecContext::kMaxPrec
+    static constexpr std::int64_t kMaxExponent{
+        static_cast<std::int64_t>(DecContext::kMaxExp) + DecContext::kMaxPrec
     };
 
   private:
     Kind kind_{Kind::Finite};
     // 符号独立于 coeff_（恒非负）存：否则表示不出负零。特殊值也带符号（-Infinity、-NaN）
     bool sign_{false};
-    BigInt coeff_;   // 系数，恒非负；特殊值时恒为 0，不参与运算
-    int64_t exp_{0}; // 十进制指数；特殊值时恒为 0，不参与运算
+    BigInt coeff_;        // 系数，恒非负；特殊值时恒为 0，不参与运算
+    std::int64_t exp_{0}; // 十进制指数；特殊值时恒为 0，不参与运算
 
     void check_invariant() const;
 
     // 造一个有限数，不检查指数范围（中间结果可越界，由 fix 收尾）。调用方保证 coeff 非负
-    [[nodiscard]] static BigDec make_finite(bool sign, BigInt coeff, int64_t exp);
+    [[nodiscard]] static BigDec make_finite(bool sign, BigInt coeff, std::int64_t exp);
 
     // 每个算术结果的最后一步（IBM 的 "fix"）：压到 prec 位有效数字、指数进 [Etiny, Emax]，
     // 并按规范规定的先后顺序触发 Overflow/Underflow/Subnormal/Inexact/Rounded/Clamped
     [[nodiscard]] BigDec fix(DecContext &ctx) const;
 
     // 补零重表示成指数恰为 exp 的形式，恒精确。调用方保证是有限数、exp <= 自己的指数
-    [[nodiscard]] BigDec pad_to_exponent(int64_t exp) const;
+    [[nodiscard]] BigDec pad_to_exponent(std::int64_t exp) const;
 
     // ln()/log10() 的结果的调整后指数的下界，用来定第一轮该算到小数点后多少位。
     // 调用方保证是有限的正数、且数值不等于 1
-    [[nodiscard]] int64_t ln_exp_bound() const;
-    [[nodiscard]] int64_t log10_exp_bound() const;
+    [[nodiscard]] std::int64_t ln_exp_bound() const;
+    [[nodiscard]] std::int64_t log10_exp_bound() const;
 
     // 整数的精确值。调用方保证是有限整数且量级不大（pow() 的两个调用点已先把量级夹住）
     [[nodiscard]] BigInt integer_value() const;
@@ -54,12 +55,12 @@ class BigDec {
 
     // 试着精确算出 self ** other 并压进 p 位以内，办不到返回 nullopt。
     // 调用方保证两边有限、self 为正且 ≠1、other ≠0，且外层已用 Emax/Etiny 做过溢出/下溢粗筛
-    [[nodiscard]] std::optional<BigDec> power_exact(const BigDec &other, int64_t p) const;
+    [[nodiscard]] std::optional<BigDec> power_exact(const BigDec &other, std::int64_t p) const;
 
     // IBM 规范那对向零截断的 divide-integer / remainder，是 //、% 的原料。返回 (商的绝对值, 余数)：
     // 余数符号同被除数、指数取两者中较小的。nullopt 表示商位数超过 prec（DivisionImpossible）
     [[nodiscard]] std::optional<std::pair<BigInt, BigDec>>
-    trunc_divmod(const BigDec &rhs, int64_t prec) const;
+    trunc_divmod(const BigDec &rhs, std::int64_t prec) const;
 
   public:
     BigDec() = default; // +0，指数 0
@@ -69,7 +70,7 @@ class BigDec {
     // 精确转换，指数取 0
     [[nodiscard]] static BigDec from_bigint(const BigInt &value);
     // 三元组构造。coeff 为负、或 |exp| > kMaxExponent 抛 std::invalid_argument
-    [[nodiscard]] static BigDec from_parts(bool sign, BigInt coeff, int64_t exp);
+    [[nodiscard]] static BigDec from_parts(bool sign, BigInt coeff, std::int64_t exp);
     [[nodiscard]] static BigDec infinity(bool sign = false);
     [[nodiscard]] static BigDec quiet_nan(bool sign = false);
     [[nodiscard]] static BigDec signaling_nan(bool sign = false);
@@ -103,11 +104,11 @@ class BigDec {
     [[nodiscard]] const BigInt &coefficient() const { return coeff_; }
     // 系数占用的堆字节数；BigDec 自身没有别的堆分配
     [[nodiscard]] std::size_t heap_bytes() const { return coeff_.heap_bytes(); }
-    [[nodiscard]] int64_t exponent() const { return exp_; }
+    [[nodiscard]] std::int64_t exponent() const { return exp_; }
     // 系数的十进制位数，系数为 0 时算 1 位
-    [[nodiscard]] size_t digit_count() const;
+    [[nodiscard]] std::size_t digit_count() const;
     // 调整后的指数 exp + 位数 - 1（科学计数法 d.dddE±n 里的 n）。调用方保证是有限数
-    [[nodiscard]] int64_t adjusted() const;
+    [[nodiscard]] std::int64_t adjusted() const;
 
     // 表示层面完全相同。跟 SL 的 == 不是一回事：1.5 vs 1.50、NaN vs NaN 这里正好都相反
     [[nodiscard]] bool identical(const BigDec &rhs) const;

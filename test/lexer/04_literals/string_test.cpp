@@ -2,8 +2,9 @@
 #include "../../../cppexceptions/SyntaxError.h"
 #include "../test_utils.h"
 
-#include <doctest/doctest.h>
 #include <string>
+
+#include <doctest/doctest.h>
 
 TEST_SUITE("普通字符串") {
 

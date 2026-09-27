@@ -1,11 +1,12 @@
 #pragma once
 
 #include "../../parser/ast_nodes/ast_nodes.h"
+#include "../../parser/ast_nodes/ast_visitor.h"
 
 /**
  * 遍历 AST，折叠/精简表达式：常量折叠、死分支/死循环消除、复合表达式与 Program 的死语句剪枝
  */
-class ExprFolder : public AstVisitor {
+class ExprFolder final : public AstVisitor {
     explicit ExprFolder() = default;
 
     /**

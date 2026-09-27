@@ -1,8 +1,9 @@
 // 位运算（无穷位补码）、小/大路径切换、移位。
 #include "test_utils.h"
 
-#include <doctest/doctest.h>
 #include <stdexcept>
+
+#include <doctest/doctest.h>
 
 TEST_SUITE("BigInt——位运算：按无穷位补码语义，与 Python 一致") {
 

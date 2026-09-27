@@ -2,16 +2,24 @@
 
 #include "../cppexceptions/InternalError.h"
 #include "../cppexceptions/SLException.h"
+#include "../runtime/Object.h"
+#include "../runtime/objects/Code.h"
 #include "../utils/file_utils.h"
 #include "../utils/string_utils.h"
 #include "analyzer/Analyzer.h"
 #include "codegen/CodeGen.h"
 #include "lexer/Lexer.h"
+#include "lexer/token.h"
 #include "parser/Parser.h"
+#include "parser/ast_nodes/ast_nodes.h"
 
+#include <concepts>
 #include <exception>
 #include <format>
+#include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -20,7 +28,7 @@ namespace {
  */
 template <typename Stage>
     requires std::invocable<Stage>
-decltype(auto) run_stage(const char *name, Stage &&stage) {
+decltype(auto) run_stage(const std::string_view name, Stage &&stage) {
     try {
         return std::forward<Stage>(stage)();
     } catch (const SLException &) {

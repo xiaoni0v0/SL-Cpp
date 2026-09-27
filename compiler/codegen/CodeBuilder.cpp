@@ -1,32 +1,52 @@
 #include "CodeBuilder.h"
 
+#include "../../cppexceptions/InternalError.h"
+#include "../../runtime/Object.h"
+#include "../../runtime/objects/Code.h"
+#include "../../runtime/objects/Str.h"
+#include "../parser/ast_nodes/ast_nodes.h"
+#include "opcode.h"
+
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace {
 
 // 参数值 value 要占几条真指令（含它自己那条），差额就是 EXTENDED_ARG 前缀数
 std::uint32_t instr_width(const std::uint32_t value) {
-    if (value <= 0xFFu) return 1;
+    if (value <= kMaxInlineArg) return 1;
     if (value <= 0xFFFFu) return 2;
     if (value <= 0xFFFFFFu) return 3;
 
-    return 1 + nMaxExtendedArgs;
+    return 1 + kMaxExtendedArgs;
+}
+
+// 每条伪指令的起始 pc，末项是总长度
+std::vector<std::uint32_t> compute_offsets(const std::vector<std::uint32_t> &widths) {
+    std::vector<std::uint32_t> offsets(widths.size() + 1, 0);
+    for (std::size_t i{0}; i < widths.size(); ++i) offsets[i + 1] = offsets[i] + widths[i];
+
+    return offsets;
+}
+
+// 栈深 depth 加上有符号增量 delta。结果为负是操作数栈弹空，超出 uint32 的范围同样不可能是正常代码
+std::uint32_t shift_depth(const std::uint32_t depth, const std::int64_t delta) {
+    const std::int64_t result{static_cast<std::int64_t>(depth) + delta};
+    if (result < 0) throw InternalError{"CodeBuilder: operand stack underflow"};
+    if (std::cmp_greater(result, UINT32_MAX))
+        throw InternalError{"CodeBuilder: operand stack overflow"};
+
+    return static_cast<std::uint32_t>(result);
 }
 
 std::uint16_t encode_instr(const OpCode op, const std::uint32_t low_byte) {
     return static_cast<std::uint16_t>((static_cast<std::uint32_t>(op) << 8u) | (low_byte & 0xFFu));
-}
-
-// 按 width 展开一条指令：先由高到低发前缀，最后发指令自己
-void write_instr(
-    std::vector<std::uint16_t> &out, const OpCode op, const std::uint32_t arg,
-    const std::uint32_t width
-) {
-    for (std::uint32_t i{width - 1}; i > 0; --i)
-        out.push_back(encode_instr(OpCode::EXTENDED_ARG, arg >> (8u * i)));
-    out.push_back(encode_instr(op, arg));
 }
 
 } // namespace
@@ -97,11 +117,8 @@ void CodeBuilder::place_label(const Label label) {
     // 既没人跳过来、顺序流也走不到：这段确实不可达，保持 unreachable_
 }
 
-void CodeBuilder::apply_effect(const int effect) {
-    if (static_cast<int>(cur_stack_) + effect < 0)
-        throw InternalError{"CodeBuilder: operand stack underflow"};
-
-    cur_stack_ = static_cast<std::uint32_t>(static_cast<int>(cur_stack_) + effect);
+void CodeBuilder::apply_effect(const std::int64_t effect) {
+    cur_stack_ = shift_depth(cur_stack_, effect);
     max_stack_ = std::max(max_stack_, cur_stack_);
 }
 
@@ -109,25 +126,28 @@ void CodeBuilder::note_label_stack(const Label label, const std::uint32_t depth)
     std::optional<std::uint32_t> &known{label_stacks_[label]};
     if (known && *known != depth) throw InternalError{"CodeBuilder: stack depth mismatch at label"};
 
+    // 标签已经放过却没记下栈深，说明放它的时候顺序流走不到：往回跳到这里，
+    // 中间那段就被当成不可达跳过了栈跟踪
+    if (!known && label_targets_[label])
+        throw InternalError{"CodeBuilder: backward jump to untracked label"};
+
     known = depth;
 }
 
-void CodeBuilder::push_instr(PseudoInstr instr) {
-    const OpCode op{instr.op_};
-    const std::uint32_t arg{instr.arg_};
-    instrs_.push_back(std::move(instr));
+void CodeBuilder::push_instr(const PseudoInstr &instr) {
+    instrs_.push_back(instr);
 
     // 不可达的代码不参与栈跟踪
     if (unreachable_) return;
 
-    apply_effect(stack_effect(op, arg));
-    if (is_terminator(op)) unreachable_ = true;
+    apply_effect(stack_effect(instr.op_, instr.arg_));
+    if (is_terminator(instr.op_)) unreachable_ = true;
 }
 
 void CodeBuilder::emit(const OpCode op, const Position pos) {
     assert(opcode_arg_kind(op) == ArgKind::None);
 
-    push_instr(PseudoInstr{op, 0, false, pos});
+    push_instr(PseudoInstr{.op_ = op, .pos_ = pos});
 }
 
 void CodeBuilder::emit(const OpCode op, const std::uint32_t arg, const Position pos) {
@@ -138,19 +158,19 @@ void CodeBuilder::emit(const OpCode op, const std::uint32_t arg, const Position 
         "use the enum overload"
     );
 
-    push_instr(PseudoInstr{op, arg, false, pos});
+    push_instr(PseudoInstr{.op_ = op, .arg_ = arg, .pos_ = pos});
 }
 
 void CodeBuilder::emit(const OpCode op, const UnaryOp arg, const Position pos) {
     assert(opcode_arg_kind(op) == ArgKind::UnaryOp);
 
-    push_instr(PseudoInstr{op, static_cast<std::uint32_t>(arg), false, pos});
+    push_instr(PseudoInstr{.op_ = op, .arg_ = static_cast<std::uint32_t>(arg), .pos_ = pos});
 }
 
 void CodeBuilder::emit(const OpCode op, const BinaryOp arg, const Position pos) {
     assert(opcode_arg_kind(op) == ArgKind::BinaryOp);
 
-    push_instr(PseudoInstr{op, static_cast<std::uint32_t>(arg), false, pos});
+    push_instr(PseudoInstr{.op_ = op, .arg_ = static_cast<std::uint32_t>(arg), .pos_ = pos});
 }
 
 void CodeBuilder::emit_jump(const OpCode op, const Label target, const Position pos) {
@@ -158,19 +178,19 @@ void CodeBuilder::emit_jump(const OpCode op, const Label target, const Position 
     assert(target < label_targets_.size());
 
     const bool tracked{!unreachable_};
-    instrs_.push_back(PseudoInstr{op, target, true, pos});
+    instrs_.push_back(PseudoInstr{.op_ = op, .arg_ = target, .arg_is_label_ = true, .pos_ = pos});
     if (!tracked) return;
 
     // 跳转指令的顺序效应不依赖参数
     apply_effect(stack_effect(op, 0));
-    note_label_stack(
-        target,
-        static_cast<std::uint32_t>(static_cast<int>(cur_stack_) + stack_effect_extra_on_jump(op))
-    );
+    note_label_stack(target, shift_depth(cur_stack_, stack_effect_extra_on_jump(op)));
     if (is_terminator(op)) unreachable_ = true;
 }
 
 Ref<Code> CodeBuilder::build() && {
+    // 顺序流不能走出末尾，否则虚拟机的 pc 会越界。gen_program 保证末尾有 return
+    if (!unreachable_) throw InternalError{"CodeBuilder: control falls off the end"};
+
     const std::size_t count{instrs_.size()};
 
     // 每条伪指令展开成几条真指令。非跳转的参数是定值，一次算定
@@ -178,16 +198,11 @@ Ref<Code> CodeBuilder::build() && {
     for (std::size_t i{0}; i < count; ++i)
         if (!instrs_[i].arg_is_label_) widths[i] = instr_width(instrs_[i].arg_);
 
-    // 每条伪指令的起始 pc，末项是总长度
-    std::vector<std::uint32_t> offsets(count + 1, 0);
-    const auto recompute_offsets{[&] {
-        for (std::size_t i{0}; i < count; ++i) offsets[i + 1] = offsets[i] + widths[i];
-    }};
+    std::vector<std::uint32_t> offsets{compute_offsets(widths)};
 
     // 跳转目标由前面所有指令的宽度决定，而补前缀又会把目标推远。前缀只增不减，必收敛
     for (bool changed{true}; changed;) {
         changed = false;
-        recompute_offsets();
 
         for (std::size_t i{0}; i < count; ++i) {
             if (!instrs_[i].arg_is_label_) continue;
@@ -200,8 +215,9 @@ Ref<Code> CodeBuilder::build() && {
                 changed = true;
             }
         }
+
+        if (changed) offsets = compute_offsets(widths);
     }
-    recompute_offsets();
 
     std::vector<std::uint16_t> bytecode;
     bytecode.reserve(offsets[count]);
@@ -216,9 +232,14 @@ Ref<Code> CodeBuilder::build() && {
         // 行位置只在变化时记一项
         if (lines.empty() || lines.back().row != instr.pos_.row ||
             lines.back().col != instr.pos_.col)
-            lines.push_back(Code::LineEntry{offsets[i], instr.pos_.row, instr.pos_.col});
+            lines.push_back(
+                Code::LineEntry{.pc = offsets[i], .row = instr.pos_.row, .col = instr.pos_.col}
+            );
 
-        write_instr(bytecode, instr.op_, arg, widths[i]);
+        // 按宽度展开：先由高到低发前缀，最后发指令自己
+        for (std::uint32_t k{widths[i] - 1}; k > 0; --k)
+            bytecode.push_back(encode_instr(OpCode::EXTENDED_ARG, arg >> (8u * k)));
+        bytecode.push_back(encode_instr(instr.op_, arg));
     }
 
     return make_ref<Code>(Code::Parts{

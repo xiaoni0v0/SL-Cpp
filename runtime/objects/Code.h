@@ -4,6 +4,7 @@
 #include "../Object.h"
 #include "Str.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -17,7 +18,7 @@ class Code final : public Object {
     /**
      * 单个形参的形状。
      *
-     * 默认值与类型注解本身不在 Code 里（它们挂在函数对象上），
+     * 默认值与类型注解本身不在 Code 里（它们挂在函数对象上），这里只记有没有。
      */
     struct OneParamShape {
         Ref<Str> name;
