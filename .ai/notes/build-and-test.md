@@ -33,10 +33,10 @@ clang-cl**（CLion 里也选 clang-cl）之后这个错不再出现。
 **how to apply**：见到这个错，先确认两边用的是不是同一个编译器，而不是去删 `.pch`——更不要删整个
 `cmake-build-debug`。删掉只是绕过症状，下次从另一边编译又会犯，而且重建构建目录很慢。
 
-## Release / Native 两档发布构建
+## Release 发布构建，以及 SL_NATIVE 开关
 
-`run_test.py` 只跑 Debug。要构建发布版，配置时把 `-DCMAKE_BUILD_TYPE=Debug` 换成 `Release` 或
-`Native`（其余参数不变，`-DCMAKE_MAKE_PROGRAM=ninja` 那一套照抄）：
+`run_test.py` 只跑 Debug。要构建发布版，配置时把 `-DCMAKE_BUILD_TYPE=Debug` 换成 `Release`
+（其余参数不变，`-DCMAKE_MAKE_PROGRAM=ninja` 那一套照抄）：
 
 ```
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM=ninja -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -G Ninja -S . -B cmake-build-release
@@ -45,14 +45,25 @@ cmake --build cmake-build-release --target all -j 22
 
 - **Release**：只以运行速度为目标（不管编译时间/产物体积），但不加任何会改变浮点运算结果的参数
   （没有 `-ffast-math` 一类），也不用目标 CPU 专属指令集，编译产物能直接拿到别的机器上跑。
-- **Native**：在 Release 基础上再加 `-march=native`/`-mtune=native`（GCC/Clang/clang-cl；真正的
-  cl.exe 没有这个能力，见下），只保证在编译用的这台机器上能跑，不能挪到别的机器。`Native` 是自定义
-  档，不是 CMake 内置的四档之一，没有内置默认参数——改 `CMakeLists.txt` 时新加的 Native 专属参数
-  （包括 `NDEBUG`）都要在 `sl_apply_target_options` 里手动写全，不能指望 CMake 自动带。
-- **cl.exe（不是 clang-cl）下 Native 跟 Release 效果相同**：真正的 MSVC 编译器没有 `-march=native`
-  这类"探测本机 CPU"的参数，`/arch:AVX2` 那一套是固定枚举、不是自动探测，所以没有伪造一个假 Native。
-- 四种编译器身份（GCC、Clang、clang-cl、真 cl.exe）的 Release 和 Native 都已经跑过真实构建 +
-  全部测试验证过，行为跟 Debug 一致（差分测试的数值结果不受影响）。
+- **`-DSL_NATIVE=ON`**：在 Release 基础上再加 `-march=native`/`-mtune=native`（GCC/Clang/clang-cl；
+  真正的 cl.exe 没有这个能力，未知选项直接忽略，警告 D9002，没有"探测本机 CPU"这回事，`/arch:AVX2`
+  那一套是固定枚举不是自动探测，所以没伪造一个假的），只保证在编译用的这台机器上能跑、可能比普通
+  Release 更快，编译产物不能挪到别的机器上：
+
+  ```
+  cmake -DCMAKE_BUILD_TYPE=Release -DSL_NATIVE=ON -DCMAKE_MAKE_PROGRAM=ninja -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -G Ninja -S . -B cmake-build-native
+  ```
+
+  **没做成单独一档 CMAKE_BUILD_TYPE**（比如叫 "Native"）：CLion 的 CMake Profile 设置里"Build
+  type"是个只认 `Debug`/`Release`/`RelWithDebInfo`/`MinSizeRel` 的下拉框，自定义名字输不进去（哪怕
+  命令行 `-DCMAKE_BUILD_TYPE=Native` 本身完全合法）。做成 `option()` 开关就没有这个限制：CLion 里在
+  对应 Profile 的 "CMake options" 文本框里加 `-DSL_NATIVE=ON`，或者首次配置完之后在同一页面的 Cache
+  变量列表里勾选 `SL_NATIVE`，都不经过那个下拉框。
+  - Release 因为是 CMake 内置档，`NDEBUG`/LTO 这些都是自带的；`SL_NATIVE` 只是在同一个 Release 档
+    上追加 `-march=native`/`-mtune=native` 两个参数，不引入新的 CMAKE_BUILD_TYPE 取值，所以不用
+    像自定义档那样把每个参数手动补全。
+- 四种编译器身份（GCC、Clang、clang-cl、真 cl.exe）的 Release、`SL_NATIVE=ON` 都跑过真实构建 + 全部
+  测试验证过，行为跟 Debug 一致（差分测试的数值结果不受影响）。
 
 ## 用 ASan + UBSan 跑全部测试（验证有没有 UB）
 

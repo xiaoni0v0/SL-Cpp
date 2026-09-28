@@ -64,11 +64,12 @@ endif()
 #   -Wpointer-arith -Winvalid-pch 省略。
 #   /EHsc 是 MSVC 下开启标准 C++ 异常处理语义所必需的。
 #
-# Native 在 Release 基础上加 -march=native 这类探测本机 CPU 才能定的参数。
+# SL_NATIVE=ON：在 Release 基础上再加探测本机 CPU 才能定的参数。cl 没有。
 # ------------------------------------------------------------
 
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_NATIVE ON)
+
+option(SL_NATIVE "在 Release 基础上加本机 CPU 专属优化" OFF)
 
 function(sl_apply_target_options target)
     if(SL_MSVC_LIKE_FRONTEND)
@@ -81,17 +82,17 @@ function(sl_apply_target_options target)
                 $<$<CONFIG:Debug>:/WX>
                 $<$<CONFIG:Debug>:/Zi>
                 $<$<CONFIG:Debug>:/Od>
-                $<$<CONFIG:Release,Native>:/O2>
-                $<$<CONFIG:Release,Native>:/DNDEBUG>
+                $<$<CONFIG:Release>:/O2>
         )
-        if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        if(SL_NATIVE AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
             target_compile_options(
                 ${target}
                 PRIVATE
-                    $<$<CONFIG:Native>:-march=native>
-                    $<$<CONFIG:Native>:-mtune=native>
+                    $<$<CONFIG:Release>:-march=native>
+                    $<$<CONFIG:Release>:-mtune=native>
             )
         endif()
+
     else()
         target_compile_options(
             ${target}
@@ -104,12 +105,17 @@ function(sl_apply_target_options target)
                 $<$<CONFIG:Debug>:-Werror>
                 $<$<CONFIG:Debug>:-g>
                 $<$<CONFIG:Debug>:-O0>
-                $<$<CONFIG:Release,Native>:-O3>
-                $<$<CONFIG:Release,Native>:-funroll-loops>
-                $<$<CONFIG:Release,Native>:-DNDEBUG>
-                $<$<CONFIG:Native>:-march=native>
-                $<$<CONFIG:Native>:-mtune=native>
+                $<$<CONFIG:Release>:-O3>
+                $<$<CONFIG:Release>:-funroll-loops>
         )
+        if(SL_NATIVE)
+            target_compile_options(
+                ${target}
+                PRIVATE
+                    $<$<CONFIG:Release>:-march=native>
+                    $<$<CONFIG:Release>:-mtune=native>
+            )
+        endif()
     endif()
 endfunction()
 
@@ -189,8 +195,8 @@ if(MINGW)
     target_link_options(
         SL
         PRIVATE
-            $<$<CONFIG:Release,Native>:-static-libgcc>
-            $<$<CONFIG:Release,Native>:-static-libstdc++>
+            $<$<CONFIG:Release>:-static-libgcc>
+            $<$<CONFIG:Release>:-static-libstdc++>
     )
 endif()
 
