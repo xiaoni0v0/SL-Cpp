@@ -141,6 +141,7 @@ target_precompile_headers(
         <ranges>
         <stdexcept>
         <string>
+        <string_view>
         <type_traits>
         <utility>
         <vector>
