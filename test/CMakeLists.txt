@@ -1,3 +1,8 @@
+add_library(sl_test_pch_stub OBJECT ../common/pch_stub.cpp) # 一个空 cpp
+sl_apply_target_options(sl_test_pch_stub)
+target_link_libraries(sl_test_pch_stub PRIVATE doctest::doctest)
+target_precompile_headers(sl_test_pch_stub PRIVATE <doctest/doctest.h>)
+
 # 建一个测试目标：链上被测模块，套测试专用的编译参数，注册进 ctest。
 function(sl_add_test_target target)
     cmake_parse_arguments(ARG "" "" "LIBS;SOURCES" ${ARGN})
@@ -5,7 +10,7 @@ function(sl_add_test_target target)
     add_executable(${target} ${ARG_SOURCES})
     sl_apply_target_options(${target})
     target_link_libraries(${target} PRIVATE ${ARG_LIBS} doctest::doctest)
-    target_precompile_headers(${target} PRIVATE <doctest/doctest.h>)
+    target_precompile_headers(${target} REUSE_FROM sl_test_pch_stub)
 
     target_sources(${target} PRIVATE ../main_test.cpp)
     set_source_files_properties(
