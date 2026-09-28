@@ -12,7 +12,6 @@ sl_add_module(
     x_opcodes.inc
     x_unary_ops.inc
     x_binary_ops.inc
-    bytecode.md
 )
 
 target_link_libraries(
