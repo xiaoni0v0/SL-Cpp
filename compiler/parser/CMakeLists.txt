@@ -26,5 +26,6 @@ sl_add_module(
 target_link_libraries(
     sl_compiler_parser
     PUBLIC sl_compiler_lexer nlohmann_json::nlohmann_json
+    PRIVATE sl_common
 )
 target_precompile_headers(sl_compiler_parser PRIVATE <nlohmann/json.hpp>)

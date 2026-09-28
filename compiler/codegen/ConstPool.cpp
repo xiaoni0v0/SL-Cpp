@@ -1,5 +1,6 @@
 #include "ConstPool.h"
 
+#include "../../common/index_of.h"
 #include "../../cppexceptions/InternalError.h"
 #include "../../numeric/BigDec.h"
 #include "../../numeric/BigInt.h"
@@ -110,7 +111,7 @@ std::size_t structural_hash(const Object *value) {
         // kind + 符号 + 指数 + 系数，正是 BigDec::identical() 比的那四个字段
         return hash_combine(
             seed,
-            static_cast<std::size_t>(decimal.kind()),
+            index_of(decimal.kind()),
             decimal.is_negative() ? 1u : 0u,
             static_cast<std::size_t>(decimal.exponent()),
             hash_bigint(decimal.coefficient())

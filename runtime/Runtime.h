@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../common/index_of.h"
 #include "Heap.h"
 #include "Object.h"
 #include "Type.h"
@@ -50,9 +51,9 @@ enum class InternalObject : std::size_t {
 class Runtime final {
     friend class Heap;
 
-    std::array<Ref<Type>, static_cast<std::size_t>(BuiltinType::Count)> types_;
-    std::array<ObjectRef, static_cast<std::size_t>(Singleton::Count)> singletons_;
-    std::array<ObjectRef, static_cast<std::size_t>(InternalObject::Count)> internals_;
+    std::array<Ref<Type>, index_of(BuiltinType::Count)> types_;
+    std::array<ObjectRef, index_of(Singleton::Count)> singletons_;
+    std::array<ObjectRef, index_of(InternalObject::Count)> internals_;
 
     Runtime() = default;
 

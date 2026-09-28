@@ -1,5 +1,6 @@
 #include "Runtime.h"
 
+#include "../common/index_of.h"
 #include "../cppexceptions/InternalError.h"
 #include "Heap.h"
 #include "Object.h"
@@ -9,7 +10,6 @@
 
 #include <cstddef>
 #include <memory>
-#include <type_traits>
 #include <vector>
 
 namespace {
@@ -28,13 +28,6 @@ constexpr BuiltinTypeSpec kBuiltinTypeSpecs[]{
 
 #undef X
 };
-
-// 枚举值 -> 下标
-template <typename Enum>
-    requires std::is_enum_v<Enum>
-constexpr std::size_t index_of(const Enum id) {
-    return static_cast<std::size_t>(id);
-}
 
 } // namespace
 

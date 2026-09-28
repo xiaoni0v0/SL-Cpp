@@ -1,6 +1,7 @@
 #include "Lexer.h"
 
 #include "../../common/Position.h"
+#include "../../common/index_of.h"
 #include "../../cppexceptions/SyntaxError.h"
 #include "../../utils/string_utils.h"
 #include "token.h"
@@ -475,7 +476,7 @@ std::string Lexer::get_typename_by_tokentype(const TokenType type) {
 #undef X
     };
 
-    const std::size_t ind{static_cast<std::size_t>(type)};
+    const std::size_t ind{index_of(type)};
     if (ind >= std::size(kTokenTypeMapping)) return "<unknown token type>";
     return kTokenTypeMapping[ind];
 }

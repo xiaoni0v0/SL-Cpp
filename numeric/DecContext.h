@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../common/index_of.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -42,7 +44,7 @@ enum class DecCondition : std::uint8_t {
 
 // 前 kDecSignalCount 项是信号本身，后面的都折算到 InvalidOperation
 inline constexpr std::size_t kDecSignalCount{8};
-static_assert(static_cast<std::size_t>(DecCondition::ConversionSyntax) == kDecSignalCount);
+static_assert(index_of(DecCondition::ConversionSyntax) == kDecSignalCount);
 
 // 把条件折算成 traps/flags 认识的信号
 [[nodiscard]] DecCondition signal_of(DecCondition condition);

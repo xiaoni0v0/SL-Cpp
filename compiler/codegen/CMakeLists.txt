@@ -17,5 +17,5 @@ sl_add_module(
 target_link_libraries(
     sl_compiler_codegen
     PUBLIC sl_runtime sl_compiler_parser
-    PRIVATE sl_cppexceptions
+    PRIVATE sl_cppexceptions sl_common
 )
