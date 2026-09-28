@@ -77,9 +77,9 @@ function(sl_apply_target_options target)
             ${target}
             PRIVATE
                 /W4
+                /WX
                 /permissive-
                 /EHsc
-                $<$<CONFIG:Debug>:/WX>
                 $<$<CONFIG:Debug>:/Zi>
                 $<$<CONFIG:Debug>:/Od>
                 $<$<CONFIG:Release>:/O2>
@@ -99,10 +99,10 @@ function(sl_apply_target_options target)
             PRIVATE
                 -Wall
                 -Wextra
+                -Werror
                 -pedantic
                 -Wpointer-arith
                 -Winvalid-pch
-                $<$<CONFIG:Debug>:-Werror>
                 $<$<CONFIG:Debug>:-g>
                 $<$<CONFIG:Debug>:-O0>
                 $<$<CONFIG:Release>:-O3>
