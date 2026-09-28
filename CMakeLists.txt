@@ -125,28 +125,32 @@ function(sl_apply_target_options target)
     endif()
 endfunction()
 
+add_library(sl_pch_stub OBJECT common/pch_stub.cpp) # 一个空 cpp
+sl_apply_target_options(sl_pch_stub)
+target_precompile_headers(
+    sl_pch_stub
+    PRIVATE
+        <algorithm>
+        <charconv>
+        <concepts>
+        <filesystem>
+        <format>
+        <iostream>
+        <memory>
+        <optional>
+        <ranges>
+        <stdexcept>
+        <string>
+        <type_traits>
+        <utility>
+        <vector>
+)
+
 # 建一个模块静态库
 function(sl_add_module target)
     add_library(${target} STATIC ${ARGN})
     sl_apply_target_options(${target})
-    target_precompile_headers(
-        ${target}
-        PRIVATE
-            <algorithm>
-            <charconv>
-            <concepts>
-            <filesystem>
-            <format>
-            <iostream>
-            <memory>
-            <optional>
-            <ranges>
-            <stdexcept>
-            <string>
-            <type_traits>
-            <utility>
-            <vector>
-    )
+    target_precompile_headers(${target} REUSE_FROM sl_pch_stub)
 endfunction()
 
 # 第三方库
