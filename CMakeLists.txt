@@ -1,14 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
-project(SL_Cpp)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
 # 允许通过 MSVC_RUNTIME_LIBRARY 属性控制 MSVC 运行时库的链接方式（静态 /MT 还是动态 /MD）
 if(POLICY CMP0091)
     cmake_policy(SET CMP0091 NEW)
 endif()
+
+project(SL_Cpp LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # ------------------------------------------------------------
 # 前端识别
@@ -54,6 +55,12 @@ else()
     set(SL_MSVC_LIKE_FRONTEND FALSE)
 endif()
 
+# 构建类型
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release")
+endif()
+
 # ------------------------------------------------------------
 # 编译参数统一封装
 # 对照关系：
@@ -77,9 +84,9 @@ function(sl_apply_target_options target)
             ${target}
             PRIVATE
                 /W4
-                /WX
                 /permissive-
                 /EHsc
+                $<$<CONFIG:Debug>:/WX>
                 $<$<CONFIG:Debug>:/Zi>
                 $<$<CONFIG:Debug>:/Od>
                 $<$<CONFIG:Release>:/O2>
@@ -88,8 +95,8 @@ function(sl_apply_target_options target)
             target_compile_options(
                 ${target}
                 PRIVATE
-                    $<$<CONFIG:Release>:-march=native>
-                    $<$<CONFIG:Release>:-mtune=native>
+                    $<$<CONFIG:Release>:/clang:-march=native>
+                    $<$<CONFIG:Release>:/clang:-mtune=native>
             )
         endif()
 
@@ -99,14 +106,13 @@ function(sl_apply_target_options target)
             PRIVATE
                 -Wall
                 -Wextra
-                -Werror
                 -pedantic
                 -Wpointer-arith
                 -Winvalid-pch
+                $<$<CONFIG:Debug>:-Werror>
                 $<$<CONFIG:Debug>:-g>
                 $<$<CONFIG:Debug>:-O0>
                 $<$<CONFIG:Release>:-O3>
-                $<$<CONFIG:Release>:-funroll-loops>
         )
         if(SL_NATIVE)
             target_compile_options(
