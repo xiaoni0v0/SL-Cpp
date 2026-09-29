@@ -393,6 +393,53 @@ void CodeGen::gen_dict(
     }
 }
 
+void CodeGen::gen_chain(
+    const std::vector<AstNodePtr> &operands, const std::vector<ChainStep> &steps, const bool want
+) {
+    gen(operands[0], true);
+    gen(operands[1], true);
+
+    const Position pos{operands.front()->pos_};
+
+    // 两个操作数就没有链可言
+    if (steps.size() == 1) {
+        code().emit(OpCode::BINARY_OP, steps[0].op_, steps[0].pos_);
+        if (!want) code().emit(OpCode::POP_TOP, pos);
+
+        return;
+    }
+
+    const CodeBuilder::Label fail{code().new_label()};
+    const CodeBuilder::Label end{code().new_label()};
+
+    // 中间段：右操作数复制一份垫到左操作数下面，留给下一段当左操作数。
+    // 比较结果不保证是 bool（用户重载的 __op_lt__ 可以返回别的），测试前垫一条 TO_BOOL
+    for (std::size_t i{0}; i + 1 < steps.size(); ++i) {
+        code().emit(OpCode::COPY, 1, steps[i].pos_);
+        code().emit(OpCode::INSERT, 3, steps[i].pos_);
+        code().emit(OpCode::BINARY_OP, steps[i].op_, steps[i].pos_);
+
+        code().emit(OpCode::COPY, 1, steps[i].pos_);
+        code().emit(OpCode::TO_BOOL, steps[i].pos_);
+        code().emit_jump(OpCode::JUMP_IF_FALSE, fail, steps[i].pos_);
+        code().emit(OpCode::POP_TOP, steps[i].pos_);
+
+        gen(operands[i + 2], true);
+    }
+
+    // 末段不用再留操作数
+    code().emit(OpCode::BINARY_OP, steps.back().op_, steps.back().pos_);
+    code().emit_jump(OpCode::JUMP, end, pos);
+
+    // 所有中间段的失败分支共享这里：栈上是 [左操作数, 结果]，换个个儿把左操作数弹掉
+    code().place_label(fail);
+    code().emit(OpCode::INSERT, 2, pos);
+    code().emit(OpCode::POP_TOP, pos);
+
+    code().place_label(end);
+    if (!want) code().emit(OpCode::POP_TOP, pos);
+}
+
 std::uint32_t CodeGen::gen_target_prefix(const AstNode &target, const bool under_value) {
     // under_value 时待写入的值已经在栈顶，每压一项就把它沉到值下面
     const auto push{[&](const AstNodePtr &node) {
@@ -519,33 +566,6 @@ void CodeGen::gen_target_load(const AstNode &target, const std::uint32_t prefix)
         );
 }
 
-void CodeGen::gen_call_args_packed(const CallArgs &args, const Position pos) {
-    gen_sequence(args.positional_args_, false, pos);
-
-    if (args.keyword_args_.empty()) {
-        code().emit(OpCode::MAKE_DICT, 0, pos);
-
-        return;
-    }
-
-    // 关键字组：identifier = expr 走 DICT_PUT，**expr 走 DICT_MERGE
-    code().emit(OpCode::MAKE_DICT, 0, pos);
-    for (const OneKwArg &arg : args.keyword_args_) {
-        if (arg.kind_ == OneKwArg::Kind::DoubleStar) {
-            // 这一档的 value_ 存的是整个 AstNodeDoubleStar，要展开的是它的操作数
-            const auto *spread{dynamic_cast<const AstNodeDoubleStar *>(arg.value_.get())};
-            if (!spread) error_internal("malformed ** argument", pos);
-
-            gen(spread->operand_, true);
-            code().emit(OpCode::DICT_MERGE, 1, pos);
-        } else {
-            gen_load_const(make_ref<Str>(arg.keyword_), pos);
-            gen(arg.value_, true);
-            code().emit(OpCode::DICT_PUT, 1, pos);
-        }
-    }
-}
-
 void CodeGen::gen_call(const CallArgs &args, const Position pos) {
     const bool has_double_star{
         std::ranges::any_of(args.keyword_args_, [](const OneKwArg &arg) -> bool {
@@ -583,6 +603,33 @@ void CodeGen::gen_call(const CallArgs &args, const Position pos) {
         static_cast<std::uint32_t>(args.positional_args_.size() + args.keyword_args_.size()),
         pos
     );
+}
+
+void CodeGen::gen_call_args_packed(const CallArgs &args, const Position pos) {
+    gen_sequence(args.positional_args_, false, pos);
+
+    if (args.keyword_args_.empty()) {
+        code().emit(OpCode::MAKE_DICT, 0, pos);
+
+        return;
+    }
+
+    // 关键字组：identifier = expr 走 DICT_PUT，**expr 走 DICT_MERGE
+    code().emit(OpCode::MAKE_DICT, 0, pos);
+    for (const OneKwArg &arg : args.keyword_args_) {
+        if (arg.kind_ == OneKwArg::Kind::DoubleStar) {
+            // 这一档的 value_ 存的是整个 AstNodeDoubleStar，要展开的是它的操作数
+            const auto *spread{dynamic_cast<const AstNodeDoubleStar *>(arg.value_.get())};
+            if (!spread) error_internal("malformed ** argument", pos);
+
+            gen(spread->operand_, true);
+            code().emit(OpCode::DICT_MERGE, 1, pos);
+        } else {
+            gen_load_const(make_ref<Str>(arg.keyword_), pos);
+            gen(arg.value_, true);
+            code().emit(OpCode::DICT_PUT, 1, pos);
+        }
+    }
 }
 
 bool CodeGen::gen_loop_slot(
@@ -701,312 +748,44 @@ void CodeGen::gen_decorators_after(
     for (std::size_t i{0}; i < decorators.size(); ++i) code().emit(OpCode::CALL, 1, pos);
 }
 
-void CodeGen::visit(const AstNodeLiteralNone &node) {
-    if (want_value_) gen_load_const(literal_object(node), node.pos_);
-}
-
-void CodeGen::visit(const AstNodeLiteralEllipsis &node) {
-    if (want_value_) gen_load_const(literal_object(node), node.pos_);
-}
-
-void CodeGen::visit(const AstNodeLiteralBool &node) {
-    if (want_value_) gen_load_const(literal_object(node), node.pos_);
-}
-
-void CodeGen::visit(const AstNodeLiteralInt &node) {
-    if (want_value_) gen_load_const(literal_object(node), node.pos_);
-}
-
-void CodeGen::visit(const AstNodeLiteralDecimal &node) {
-    if (!want_value_) return;
-
-    const ObjectRef value{literal_object(node)};
-    if (!value) error_internal("malformed decimal literal", node.pos_);
-
-    gen_load_const(value, node.pos_);
-}
-
-void CodeGen::visit(const AstNodeLiteralStr &node) {
-    if (want_value_) gen_load_const(literal_object(node), node.pos_);
-}
-
-void CodeGen::visit(const AstNodeLiteralGL &node) {
-    // 压的是 _L / _G 那个字典本身，不是视图也不是快照
-    if (want_value_)
-        code().emit(
-            OpCode::LOAD_GL, node.value_ == AstNodeLiteralGL::GLType::G ? 1u : 0u, node.pos_
-        );
-}
-
-void CodeGen::visit(const AstNodeLiteralTuple &node) {
-    const bool want{want_value_};
-
-    // 元组不可变，元素全是常量时整个进常量表，一条 LOAD_CONST 就够
-    if (const ObjectRef value{literal_object(node)}) {
-        if (want) gen_load_const(value, node.pos_);
-
-        return;
-    }
-
-    gen_sequence(node.items_, true, node.pos_);
-    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
-}
-
-void CodeGen::visit(const AstNodeLiteralList &node) {
-    const bool want{want_value_};
-
-    // list 可变，每次求值都得是新对象，元素全是常量也不例外
-    gen_sequence(node.items_, false, node.pos_);
-    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
-}
-
-void CodeGen::visit(const AstNodeLiteralDict &node) {
-    const bool want{want_value_};
-
-    gen_dict(node.items_, node.pos_);
-    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
-}
-
-void CodeGen::visit(const AstNodeProgram &node) {
-    // Program 只出现在文件 / 函数体 / 类体三处，各自走 gen_program，不会当子表达式分派到这里
-    error_internal("a program cannot appear as a sub-expression", node.pos_);
-}
-
-void CodeGen::visit(const AstNodeCompound &node) { gen_exprs(node.exprs_, want_value_, node.pos_); }
-
-void CodeGen::visit(const AstNodeStar &node) {
-    error_internal("* is only allowed in containers, call arguments and destructuring", node.pos_);
-}
-
-void CodeGen::visit(const AstNodeDoubleStar &node) {
-    error_internal("** is only allowed in dict literals and call arguments", node.pos_);
-}
-
-void CodeGen::visit(const AstNodeOpUnary &node) {
-    const bool want{want_value_};
-
-    gen(node.operand_, true);
-    code().emit(OpCode::UNARY_OP, to_unary_op(node.op_), node.pos_op_);
-    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
-}
-
-void CodeGen::visit(const AstNodeOpBinary &node) {
-    const bool want{want_value_};
-    const Position pos{node.pos_op_};
-
-    const bool is_and{node.op_ == AstNodeOpBinary::OpType::And};
-    const bool is_or{node.op_ == AstNodeOpBinary::OpType::Or};
-
-    if (!is_and && !is_or) {
-        gen(node.left_, true);
-        gen(node.right_, true);
-        code().emit(OpCode::BINARY_OP, to_binary_op(node.op_), pos);
-        if (!want) code().emit(OpCode::POP_TOP, node.pos_);
-
-        return;
-    }
-
-    // and / or 不落在 BINARY_OP 上，只用消费型的 JUMP_IF_FALSE 短路。
-    // want 时先复制一份去做真值测试，原件留在栈上当短路的结果
-    const CodeBuilder::Label end{code().new_label()};
-
-    gen(node.left_, true);
-    if (want) code().emit(OpCode::COPY, 1, pos);
-    code().emit(OpCode::TO_BOOL, pos);
-
-    if (is_and) {
-        code().emit_jump(OpCode::JUMP_IF_FALSE, end, pos);
-        if (want) code().emit(OpCode::POP_TOP, pos);
-        gen(node.right_, want);
-    } else {
-        // 没有 JUMP_IF_TRUE：把"假才跳"倒过来，再加一条无条件跳
-        const CodeBuilder::Label rhs{code().new_label()};
-
-        code().emit_jump(OpCode::JUMP_IF_FALSE, rhs, pos);
-        code().emit_jump(OpCode::JUMP, end, pos);
-        code().place_label(rhs);
-        if (want) code().emit(OpCode::POP_TOP, pos);
-        gen(node.right_, want);
-    }
-
-    code().place_label(end);
-}
-
-void CodeGen::visit(const AstNodeCompare &node) {
-    const bool want{want_value_};
-
-    if (node.ops_.empty() || node.operands_.size() != node.ops_.size() + 1 ||
-        node.positions_op_.size() != node.ops_.size())
-        error_internal("malformed comparison chain", node.pos_);
-
-    std::vector<ChainStep> steps;
-    steps.reserve(node.ops_.size());
-    for (std::size_t i{0}; i < node.ops_.size(); ++i)
-        steps.push_back(
-            ChainStep{.op_ = to_binary_op(node.ops_[i]), .pos_ = node.positions_op_[i]}
-        );
-
-    gen_chain(node.operands_, steps, want);
-}
-
-void CodeGen::visit(const AstNodeIs &node) {
-    const bool want{want_value_};
-
-    if (node.positions_op_.empty() || node.positions_op_.size() + 1 != node.operands_.size())
-        error_internal("malformed is chain", node.pos_);
-
-    std::vector<ChainStep> steps;
-    steps.reserve(node.positions_op_.size());
-    for (const Position pos : node.positions_op_)
-        steps.push_back(ChainStep{.op_ = BinaryOp::Is, .pos_ = pos});
-
-    gen_chain(node.operands_, steps, want);
-}
-
-void CodeGen::gen_chain(
-    const std::vector<AstNodePtr> &operands, const std::vector<ChainStep> &steps, const bool want
-) {
-    gen(operands[0], true);
-    gen(operands[1], true);
-
-    const Position pos{operands.front()->pos_};
-
-    // 两个操作数就没有链可言
-    if (steps.size() == 1) {
-        code().emit(OpCode::BINARY_OP, steps[0].op_, steps[0].pos_);
-        if (!want) code().emit(OpCode::POP_TOP, pos);
-
-        return;
-    }
-
-    const CodeBuilder::Label fail{code().new_label()};
-    const CodeBuilder::Label end{code().new_label()};
-
-    // 中间段：右操作数复制一份垫到左操作数下面，留给下一段当左操作数。
-    // 比较结果不保证是 bool（用户重载的 __op_lt__ 可以返回别的），测试前垫一条 TO_BOOL
-    for (std::size_t i{0}; i + 1 < steps.size(); ++i) {
-        code().emit(OpCode::COPY, 1, steps[i].pos_);
-        code().emit(OpCode::INSERT, 3, steps[i].pos_);
-        code().emit(OpCode::BINARY_OP, steps[i].op_, steps[i].pos_);
-
-        code().emit(OpCode::COPY, 1, steps[i].pos_);
-        code().emit(OpCode::TO_BOOL, steps[i].pos_);
-        code().emit_jump(OpCode::JUMP_IF_FALSE, fail, steps[i].pos_);
-        code().emit(OpCode::POP_TOP, steps[i].pos_);
-
-        gen(operands[i + 2], true);
-    }
-
-    // 末段不用再留操作数
-    code().emit(OpCode::BINARY_OP, steps.back().op_, steps.back().pos_);
-    code().emit_jump(OpCode::JUMP, end, pos);
-
-    // 所有中间段的失败分支共享这里：栈上是 [左操作数, 结果]，换个个儿把左操作数弹掉
-    code().place_label(fail);
-    code().emit(OpCode::INSERT, 2, pos);
-    code().emit(OpCode::POP_TOP, pos);
-
-    code().place_label(end);
-    if (!want) code().emit(OpCode::POP_TOP, pos);
-}
-
-void CodeGen::visit(const AstNodeAssign &node) {
+void CodeGen::visit(const AstNodeClass &node) {
     const bool want{want_value_};
     const Position pos{node.pos_};
 
-    const std::uint32_t prefix{gen_target_prefix(*node.target_, false)};
-    gen(node.value_, true);
+    if (!node.body_) error_internal("class without a body", pos);
 
-    // want 时垫一份出来，让写入指令把原件弹光
-    if (want) {
-        code().emit(OpCode::COPY, 1, pos);
-        if (prefix > 0) code().emit(OpCode::INSERT, prefix + 2, pos);
+    push_scope();
+    declare_captures(node.captures_);
+    gen_program(*node.body_);
+    Ref<Code> body{pop_scope()};
+
+    const std::uint32_t slot{code().add_nested_code(std::move(body))};
+
+    gen_decorators_before(node.decorators_);
+
+    // 基类元组顶掉函数那边的形参段。它排在捕获之前——类的捕获是在新建类体那一帧之后才处理的，
+    // 而建帧要等基类求值完，跟函数那边捕获排最前正好相反
+    for (const AstNodePtr &base : node.bases_) gen(base, true);
+    code().emit(OpCode::MAKE_TUPLE, static_cast<std::uint32_t>(node.bases_.size()), pos);
+
+    gen_capture_values(node.captures_, pos);
+
+    gen_optional(node.doc_, pos);
+    if (node.name_)
+        gen_load_const(make_ref<Str>(*node.name_), pos);
+    else
+        gen_missing(pos);
+
+    // 不直接产出类对象：新建局部帧执行类体，类体返回时才由类构建器收属性、算 MRO
+    code().emit(OpCode::MAKE_CLASS, slot, pos);
+    gen_decorators_after(node.decorators_, pos);
+
+    if (node.name_) {
+        if (want) code().emit(OpCode::COPY, 1, pos);
+        code().emit(OpCode::STORE_NAME, code().intern_name(*node.name_), pos);
+    } else if (!want) {
+        code().emit(OpCode::POP_TOP, pos);
     }
-
-    gen_target_store(*node.target_);
-}
-
-void CodeGen::visit(const AstNodeCompoundAssign &node) {
-    const bool want{want_value_};
-    const Position pos{node.pos_op_};
-
-    // 目标只求值一次，读旧值靠复制已经在栈上的那份
-    const std::uint32_t prefix{gen_target_prefix(*node.target_, false)};
-    gen_target_load(*node.target_, prefix);
-    gen(node.value_, true);
-    code().emit(OpCode::BINARY_OP, to_binary_op(node.op_), pos);
-
-    if (want) {
-        code().emit(OpCode::COPY, 1, pos);
-        if (prefix > 0) code().emit(OpCode::INSERT, prefix + 2, pos);
-    }
-
-    gen_target_store(*node.target_);
-}
-
-void CodeGen::visit(const AstNodeCall &node) {
-    const bool want{want_value_};
-
-    gen(node.object_, true);
-    gen_call(node.args_, node.args_.pos_paren_);
-    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
-}
-
-void CodeGen::visit(const AstNodeIndex &node) {
-    const bool want{want_value_};
-    const Position pos{node.pos_bracket_};
-
-    gen(node.object_, true);
-
-    // 下标里出现 *expr 时个数不再是编译期常数，先拼成一个 list
-    if (has_expansion(node.args_)) {
-        gen_sequence(node.args_, false, pos);
-        code().emit(OpCode::GET_INDEX_EX, pos);
-    } else {
-        for (const AstNodePtr &arg : node.args_) gen(arg, true);
-        code().emit(OpCode::GET_INDEX, static_cast<std::uint32_t>(node.args_.size()), pos);
-    }
-
-    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
-}
-
-void CodeGen::visit(const AstNodeAttr &node) {
-    const bool want{want_value_};
-
-    gen(node.object_, true);
-    code().emit(OpCode::GET_ATTR, code().intern_name(node.attr_), node.pos_dot_);
-    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
-}
-
-void CodeGen::visit(const AstNodeIdentifier &node) {
-    const bool want{want_value_};
-
-    // 读不到就是 NameError，是指令固有行为，没人要值也照发
-    code().emit(OpCode::LOAD_NAME, code().intern_name(node.identifier_), node.pos_);
-    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
-}
-
-void CodeGen::visit(const AstNodeDel &node) {
-    const bool want{want_value_};
-    const Position pos{node.pos_};
-
-    if (const auto *name{dynamic_cast<const AstNodeIdentifier *>(node.target_.get())}) {
-        code().emit(OpCode::DELETE_NAME, code().intern_name(name->identifier_), pos);
-    } else if (const auto *attr{dynamic_cast<const AstNodeAttr *>(node.target_.get())}) {
-        gen(attr->object_, true);
-        code().emit(OpCode::DELETE_ATTR, code().intern_name(attr->attr_), attr->pos_dot_);
-    } else {
-        error_internal("del target must be an identifier or an attribute access", pos);
-    }
-
-    if (want) gen_none(pos);
-}
-
-void CodeGen::visit(const AstNodeGlobal &node) {
-    const bool want{want_value_};
-
-    code().emit(OpCode::DECLARE_GLOBAL, code().intern_name(node.identifier_), node.pos_);
-    if (want) gen_none(node.pos_);
 }
 
 void CodeGen::visit(const AstNodeIf &node) {
@@ -1151,11 +930,6 @@ void CodeGen::visit(const AstNodeReturn &node) {
     code().emit(OpCode::RETURN_VALUE, pos);
 }
 
-void CodeGen::visit(const AstNodeRaise &node) {
-    gen(node.value_, true);
-    code().emit(OpCode::RAISE, node.pos_);
-}
-
 void CodeGen::visit(const AstNodeTry &node) {
     const bool want{want_value_};
     const Position pos{node.pos_};
@@ -1242,6 +1016,11 @@ void CodeGen::visit(const AstNodeTry &node) {
     code().place_label(after_all);
 }
 
+void CodeGen::visit(const AstNodeRaise &node) {
+    gen(node.value_, true);
+    code().emit(OpCode::RAISE, node.pos_);
+}
+
 void CodeGen::visit(const AstNodeDecorator &node) {
     const bool want{want_value_};
 
@@ -1259,34 +1038,6 @@ void CodeGen::visit(const AstNodeEval &node) {
     gen_call_args_packed(node.args_, node.args_.pos_paren_);
     code().emit(OpCode::EVAL, node.pos_);
     if (!want) code().emit(OpCode::POP_TOP, node.pos_);
-}
-
-void CodeGen::visit(const AstNodeImportKw &node) {
-    const bool want{want_value_};
-    const Position pos{node.pos_};
-
-    if (node.segments_.empty()) error_internal("import without a name", pos);
-
-    std::u32string dotted;
-    for (std::size_t i{0}; i < node.segments_.size(); ++i) {
-        if (i > 0) dotted += U'.';
-        dotted += node.segments_[i];
-    }
-
-    // 压入的是第一段的模块对象，它同时也是整条表达式的值
-    code().emit(OpCode::IMPORT, code().intern_name(dotted), pos);
-    if (want) code().emit(OpCode::COPY, 1, pos);
-    code().emit(OpCode::STORE_NAME, code().intern_name(node.segments_.front()), pos);
-}
-
-void CodeGen::visit(const AstNodeImportCall &node) {
-    const bool want{want_value_};
-    const Position pos{node.pos_};
-
-    // 实参形状跟普通调用一致，所以加载算法包成一个内部函数对象接一次普通调用即可
-    code().emit(OpCode::LOAD_INTERNAL, static_cast<std::uint32_t>(InternalObject::ImportFunc), pos);
-    gen_call(node.args_, node.args_.pos_paren_);
-    if (!want) code().emit(OpCode::POP_TOP, pos);
 }
 
 void CodeGen::visit(const AstNodeFunc &node) {
@@ -1345,44 +1096,293 @@ void CodeGen::visit(const AstNodeFunc &node) {
     }
 }
 
-void CodeGen::visit(const AstNodeClass &node) {
+void CodeGen::visit(const AstNodeImportKw &node) {
     const bool want{want_value_};
     const Position pos{node.pos_};
 
-    if (!node.body_) error_internal("class without a body", pos);
+    if (node.segments_.empty()) error_internal("import without a name", pos);
 
-    push_scope();
-    declare_captures(node.captures_);
-    gen_program(*node.body_);
-    Ref<Code> body{pop_scope()};
-
-    const std::uint32_t slot{code().add_nested_code(std::move(body))};
-
-    gen_decorators_before(node.decorators_);
-
-    // 基类元组顶掉函数那边的形参段。它排在捕获之前——类的捕获是在新建类体那一帧之后才处理的，
-    // 而建帧要等基类求值完，跟函数那边捕获排最前正好相反
-    for (const AstNodePtr &base : node.bases_) gen(base, true);
-    code().emit(OpCode::MAKE_TUPLE, static_cast<std::uint32_t>(node.bases_.size()), pos);
-
-    gen_capture_values(node.captures_, pos);
-
-    gen_optional(node.doc_, pos);
-    if (node.name_)
-        gen_load_const(make_ref<Str>(*node.name_), pos);
-    else
-        gen_missing(pos);
-
-    // 不直接产出类对象：新建局部帧执行类体，类体返回时才由类构建器收属性、算 MRO
-    code().emit(OpCode::MAKE_CLASS, slot, pos);
-    gen_decorators_after(node.decorators_, pos);
-
-    if (node.name_) {
-        if (want) code().emit(OpCode::COPY, 1, pos);
-        code().emit(OpCode::STORE_NAME, code().intern_name(*node.name_), pos);
-    } else if (!want) {
-        code().emit(OpCode::POP_TOP, pos);
+    std::u32string dotted;
+    for (std::size_t i{0}; i < node.segments_.size(); ++i) {
+        if (i > 0) dotted += U'.';
+        dotted += node.segments_[i];
     }
+
+    // 压入的是第一段的模块对象，它同时也是整条表达式的值
+    code().emit(OpCode::IMPORT, code().intern_name(dotted), pos);
+    if (want) code().emit(OpCode::COPY, 1, pos);
+    code().emit(OpCode::STORE_NAME, code().intern_name(node.segments_.front()), pos);
+}
+
+void CodeGen::visit(const AstNodeImportCall &node) {
+    const bool want{want_value_};
+    const Position pos{node.pos_};
+
+    // 实参形状跟普通调用一致，所以加载算法包成一个内部函数对象接一次普通调用即可
+    code().emit(OpCode::LOAD_INTERNAL, static_cast<std::uint32_t>(InternalObject::ImportFunc), pos);
+    gen_call(node.args_, node.args_.pos_paren_);
+    if (!want) code().emit(OpCode::POP_TOP, pos);
+}
+
+void CodeGen::visit(const AstNodeLiteralNone &node) {
+    if (want_value_) gen_load_const(literal_object(node), node.pos_);
+}
+
+void CodeGen::visit(const AstNodeLiteralBool &node) {
+    if (want_value_) gen_load_const(literal_object(node), node.pos_);
+}
+
+void CodeGen::visit(const AstNodeLiteralGL &node) {
+    // 压的是 _L / _G 那个字典本身，不是视图也不是快照
+    if (want_value_)
+        code().emit(
+            OpCode::LOAD_GL, node.value_ == AstNodeLiteralGL::GLType::G ? 1u : 0u, node.pos_
+        );
+}
+
+void CodeGen::visit(const AstNodeLiteralInt &node) {
+    if (want_value_) gen_load_const(literal_object(node), node.pos_);
+}
+
+void CodeGen::visit(const AstNodeLiteralDecimal &node) {
+    if (!want_value_) return;
+
+    const ObjectRef value{literal_object(node)};
+    if (!value) error_internal("malformed decimal literal", node.pos_);
+
+    gen_load_const(value, node.pos_);
+}
+
+void CodeGen::visit(const AstNodeLiteralStr &node) {
+    if (want_value_) gen_load_const(literal_object(node), node.pos_);
+}
+
+void CodeGen::visit(const AstNodeLiteralTuple &node) {
+    const bool want{want_value_};
+
+    // 元组不可变，元素全是常量时整个进常量表，一条 LOAD_CONST 就够
+    if (const ObjectRef value{literal_object(node)}) {
+        if (want) gen_load_const(value, node.pos_);
+
+        return;
+    }
+
+    gen_sequence(node.items_, true, node.pos_);
+    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
+}
+
+void CodeGen::visit(const AstNodeLiteralList &node) {
+    const bool want{want_value_};
+
+    // list 可变，每次求值都得是新对象，元素全是常量也不例外
+    gen_sequence(node.items_, false, node.pos_);
+    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
+}
+
+void CodeGen::visit(const AstNodeLiteralDict &node) {
+    const bool want{want_value_};
+
+    gen_dict(node.items_, node.pos_);
+    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
+}
+
+void CodeGen::visit(const AstNodeLiteralEllipsis &node) {
+    if (want_value_) gen_load_const(literal_object(node), node.pos_);
+}
+
+void CodeGen::visit(const AstNodeProgram &node) {
+    // Program 只出现在文件 / 函数体 / 类体三处，各自走 gen_program，不会当子表达式分派到这里
+    error_internal("a program cannot appear as a sub-expression", node.pos_);
+}
+
+void CodeGen::visit(const AstNodeCompound &node) { gen_exprs(node.exprs_, want_value_, node.pos_); }
+
+void CodeGen::visit(const AstNodeStar &node) {
+    error_internal("* is only allowed in containers, call arguments and destructuring", node.pos_);
+}
+
+void CodeGen::visit(const AstNodeDoubleStar &node) {
+    error_internal("** is only allowed in dict literals and call arguments", node.pos_);
+}
+
+void CodeGen::visit(const AstNodeOpUnary &node) {
+    const bool want{want_value_};
+
+    gen(node.operand_, true);
+    code().emit(OpCode::UNARY_OP, to_unary_op(node.op_), node.pos_op_);
+    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
+}
+
+void CodeGen::visit(const AstNodeOpBinary &node) {
+    const bool want{want_value_};
+    const Position pos{node.pos_op_};
+
+    const bool is_and{node.op_ == AstNodeOpBinary::OpType::And};
+    const bool is_or{node.op_ == AstNodeOpBinary::OpType::Or};
+
+    if (!is_and && !is_or) {
+        gen(node.left_, true);
+        gen(node.right_, true);
+        code().emit(OpCode::BINARY_OP, to_binary_op(node.op_), pos);
+        if (!want) code().emit(OpCode::POP_TOP, node.pos_);
+
+        return;
+    }
+
+    // and / or 不落在 BINARY_OP 上，只用消费型的 JUMP_IF_FALSE 短路。
+    // want 时先复制一份去做真值测试，原件留在栈上当短路的结果
+    const CodeBuilder::Label end{code().new_label()};
+
+    gen(node.left_, true);
+    if (want) code().emit(OpCode::COPY, 1, pos);
+    code().emit(OpCode::TO_BOOL, pos);
+
+    if (is_and) {
+        code().emit_jump(OpCode::JUMP_IF_FALSE, end, pos);
+        if (want) code().emit(OpCode::POP_TOP, pos);
+        gen(node.right_, want);
+    } else {
+        // 没有 JUMP_IF_TRUE：把"假才跳"倒过来，再加一条无条件跳
+        const CodeBuilder::Label rhs{code().new_label()};
+
+        code().emit_jump(OpCode::JUMP_IF_FALSE, rhs, pos);
+        code().emit_jump(OpCode::JUMP, end, pos);
+        code().place_label(rhs);
+        if (want) code().emit(OpCode::POP_TOP, pos);
+        gen(node.right_, want);
+    }
+
+    code().place_label(end);
+}
+
+void CodeGen::visit(const AstNodeCompare &node) {
+    const bool want{want_value_};
+
+    if (node.ops_.empty() || node.operands_.size() != node.ops_.size() + 1 ||
+        node.positions_op_.size() != node.ops_.size())
+        error_internal("malformed comparison chain", node.pos_);
+
+    std::vector<ChainStep> steps;
+    steps.reserve(node.ops_.size());
+    for (std::size_t i{0}; i < node.ops_.size(); ++i)
+        steps.push_back(
+            ChainStep{.op_ = to_binary_op(node.ops_[i]), .pos_ = node.positions_op_[i]}
+        );
+
+    gen_chain(node.operands_, steps, want);
+}
+
+void CodeGen::visit(const AstNodeIs &node) {
+    const bool want{want_value_};
+
+    if (node.positions_op_.empty() || node.positions_op_.size() + 1 != node.operands_.size())
+        error_internal("malformed is chain", node.pos_);
+
+    std::vector<ChainStep> steps;
+    steps.reserve(node.positions_op_.size());
+    for (const Position pos : node.positions_op_)
+        steps.push_back(ChainStep{.op_ = BinaryOp::Is, .pos_ = pos});
+
+    gen_chain(node.operands_, steps, want);
+}
+
+void CodeGen::visit(const AstNodeAssign &node) {
+    const bool want{want_value_};
+    const Position pos{node.pos_};
+
+    const std::uint32_t prefix{gen_target_prefix(*node.target_, false)};
+    gen(node.value_, true);
+
+    // want 时垫一份出来，让写入指令把原件弹光
+    if (want) {
+        code().emit(OpCode::COPY, 1, pos);
+        if (prefix > 0) code().emit(OpCode::INSERT, prefix + 2, pos);
+    }
+
+    gen_target_store(*node.target_);
+}
+
+void CodeGen::visit(const AstNodeCompoundAssign &node) {
+    const bool want{want_value_};
+    const Position pos{node.pos_op_};
+
+    // 目标只求值一次，读旧值靠复制已经在栈上的那份
+    const std::uint32_t prefix{gen_target_prefix(*node.target_, false)};
+    gen_target_load(*node.target_, prefix);
+    gen(node.value_, true);
+    code().emit(OpCode::BINARY_OP, to_binary_op(node.op_), pos);
+
+    if (want) {
+        code().emit(OpCode::COPY, 1, pos);
+        if (prefix > 0) code().emit(OpCode::INSERT, prefix + 2, pos);
+    }
+
+    gen_target_store(*node.target_);
+}
+
+void CodeGen::visit(const AstNodeCall &node) {
+    const bool want{want_value_};
+
+    gen(node.object_, true);
+    gen_call(node.args_, node.args_.pos_paren_);
+    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
+}
+
+void CodeGen::visit(const AstNodeIndex &node) {
+    const bool want{want_value_};
+    const Position pos{node.pos_bracket_};
+
+    gen(node.object_, true);
+
+    // 下标里出现 *expr 时个数不再是编译期常数，先拼成一个 list
+    if (has_expansion(node.args_)) {
+        gen_sequence(node.args_, false, pos);
+        code().emit(OpCode::GET_INDEX_EX, pos);
+    } else {
+        for (const AstNodePtr &arg : node.args_) gen(arg, true);
+        code().emit(OpCode::GET_INDEX, static_cast<std::uint32_t>(node.args_.size()), pos);
+    }
+
+    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
+}
+
+void CodeGen::visit(const AstNodeAttr &node) {
+    const bool want{want_value_};
+
+    gen(node.object_, true);
+    code().emit(OpCode::GET_ATTR, code().intern_name(node.attr_), node.pos_dot_);
+    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
+}
+
+void CodeGen::visit(const AstNodeIdentifier &node) {
+    const bool want{want_value_};
+
+    // 读不到就是 NameError，是指令固有行为，没人要值也照发
+    code().emit(OpCode::LOAD_NAME, code().intern_name(node.identifier_), node.pos_);
+    if (!want) code().emit(OpCode::POP_TOP, node.pos_);
+}
+
+void CodeGen::visit(const AstNodeDel &node) {
+    const bool want{want_value_};
+    const Position pos{node.pos_};
+
+    if (const auto *name{dynamic_cast<const AstNodeIdentifier *>(node.target_.get())}) {
+        code().emit(OpCode::DELETE_NAME, code().intern_name(name->identifier_), pos);
+    } else if (const auto *attr{dynamic_cast<const AstNodeAttr *>(node.target_.get())}) {
+        gen(attr->object_, true);
+        code().emit(OpCode::DELETE_ATTR, code().intern_name(attr->attr_), attr->pos_dot_);
+    } else {
+        error_internal("del target must be an identifier or an attribute access", pos);
+    }
+
+    if (want) gen_none(pos);
+}
+
+void CodeGen::visit(const AstNodeGlobal &node) {
+    const bool want{want_value_};
+
+    code().emit(OpCode::DECLARE_GLOBAL, code().intern_name(node.identifier_), node.pos_);
+    if (want) gen_none(node.pos_);
 }
 
 Ref<Code> CodeGen::generate_program(const AstNodeProgram &root, std::string file_path) {

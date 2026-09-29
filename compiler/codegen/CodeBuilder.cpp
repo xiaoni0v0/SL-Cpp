@@ -19,6 +19,16 @@
 
 namespace {
 
+// 栈深 depth 加上有符号增量 delta。结果为负是操作数栈弹空，超出 uint32 的范围同样不可能是正常代码
+std::uint32_t shift_depth(const std::uint32_t depth, const std::int64_t delta) {
+    const std::int64_t result{static_cast<std::int64_t>(depth) + delta};
+    if (result < 0) throw InternalError{"CodeBuilder: operand stack underflow"};
+    if (std::cmp_greater(result, UINT32_MAX))
+        throw InternalError{"CodeBuilder: operand stack overflow"};
+
+    return static_cast<std::uint32_t>(result);
+}
+
 // 参数值 value 要占几条真指令（含它自己那条），差额就是 EXTENDED_ARG 前缀数
 std::uint32_t instr_width(const std::uint32_t value) {
     if (value <= kMaxInlineArg) return 1;
@@ -36,21 +46,38 @@ std::vector<std::uint32_t> compute_offsets(const std::vector<std::uint32_t> &wid
     return offsets;
 }
 
-// 栈深 depth 加上有符号增量 delta。结果为负是操作数栈弹空，超出 uint32 的范围同样不可能是正常代码
-std::uint32_t shift_depth(const std::uint32_t depth, const std::int64_t delta) {
-    const std::int64_t result{static_cast<std::int64_t>(depth) + delta};
-    if (result < 0) throw InternalError{"CodeBuilder: operand stack underflow"};
-    if (std::cmp_greater(result, UINT32_MAX))
-        throw InternalError{"CodeBuilder: operand stack overflow"};
-
-    return static_cast<std::uint32_t>(result);
-}
-
 std::uint16_t encode_instr(const OpCode op, const std::uint32_t low_byte) {
     return static_cast<std::uint16_t>((static_cast<std::uint32_t>(op) << 8u) | (low_byte & 0xFFu));
 }
 
 } // namespace
+
+void CodeBuilder::apply_effect(const std::int64_t effect) {
+    cur_stack_ = shift_depth(cur_stack_, effect);
+    max_stack_ = std::max(max_stack_, cur_stack_);
+}
+
+void CodeBuilder::note_label_stack(const Label label, const std::uint32_t depth) {
+    std::optional<std::uint32_t> &known{label_stacks_[label]};
+    if (known && *known != depth) throw InternalError{"CodeBuilder: stack depth mismatch at label"};
+
+    // 标签已经放过却没记下栈深，说明放它的时候顺序流走不到：往回跳到这里，
+    // 中间那段就被当成不可达跳过了栈跟踪
+    if (!known && label_targets_[label])
+        throw InternalError{"CodeBuilder: backward jump to untracked label"};
+
+    known = depth;
+}
+
+void CodeBuilder::push_instr(const PseudoInstr &instr) {
+    instrs_.push_back(instr);
+
+    // 不可达的代码不参与栈跟踪
+    if (unreachable_) return;
+
+    apply_effect(stack_effect(instr.op_, instr.arg_));
+    if (is_terminator(instr.op_)) unreachable_ = true;
+}
 
 CodeBuilder::CodeBuilder(std::string source_name) : source_name_{std::move(source_name)} {}
 
@@ -116,33 +143,6 @@ void CodeBuilder::place_label(const Label label) {
     }
 
     // 既没人跳过来、顺序流也走不到：这段确实不可达，保持 unreachable_
-}
-
-void CodeBuilder::apply_effect(const std::int64_t effect) {
-    cur_stack_ = shift_depth(cur_stack_, effect);
-    max_stack_ = std::max(max_stack_, cur_stack_);
-}
-
-void CodeBuilder::note_label_stack(const Label label, const std::uint32_t depth) {
-    std::optional<std::uint32_t> &known{label_stacks_[label]};
-    if (known && *known != depth) throw InternalError{"CodeBuilder: stack depth mismatch at label"};
-
-    // 标签已经放过却没记下栈深，说明放它的时候顺序流走不到：往回跳到这里，
-    // 中间那段就被当成不可达跳过了栈跟踪
-    if (!known && label_targets_[label])
-        throw InternalError{"CodeBuilder: backward jump to untracked label"};
-
-    known = depth;
-}
-
-void CodeBuilder::push_instr(const PseudoInstr &instr) {
-    instrs_.push_back(instr);
-
-    // 不可达的代码不参与栈跟踪
-    if (unreachable_) return;
-
-    apply_effect(stack_effect(instr.op_, instr.arg_));
-    if (is_terminator(instr.op_)) unreachable_ = true;
 }
 
 void CodeBuilder::emit(const OpCode op, const Position pos) {

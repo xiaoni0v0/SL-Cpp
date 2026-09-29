@@ -67,32 +67,6 @@ inline constexpr std::uint32_t kMaxExtendedArgs{3};
     throw InternalError{"OpCode: invalid value"};
 }
 
-[[nodiscard]] constexpr const char *unary_op_name(const UnaryOp op) {
-    switch (op) {
-#define X(id, mnemonic)                                                                            \
-    case UnaryOp::id:                                                                              \
-        return mnemonic;
-#include "x_unary_ops.inc"
-
-#undef X
-    }
-
-    throw InternalError{"UnaryOp: invalid value"};
-}
-
-[[nodiscard]] constexpr const char *binary_op_name(const BinaryOp op) {
-    switch (op) {
-#define X(id, mnemonic)                                                                            \
-    case BinaryOp::id:                                                                             \
-        return mnemonic;
-#include "x_binary_ops.inc"
-
-#undef X
-    }
-
-    throw InternalError{"BinaryOp: invalid value"};
-}
-
 [[nodiscard]] constexpr ArgKind opcode_arg_kind(const OpCode op) {
     switch (op) {
 #define X(id, mnemonic, argkind, effect)                                                           \
@@ -149,4 +123,30 @@ inline constexpr std::uint32_t kMaxExtendedArgs{3};
     default:
         return false;
     }
+}
+
+[[nodiscard]] constexpr const char *unary_op_name(const UnaryOp op) {
+    switch (op) {
+#define X(id, mnemonic)                                                                            \
+    case UnaryOp::id:                                                                              \
+        return mnemonic;
+#include "x_unary_ops.inc"
+
+#undef X
+    }
+
+    throw InternalError{"UnaryOp: invalid value"};
+}
+
+[[nodiscard]] constexpr const char *binary_op_name(const BinaryOp op) {
+    switch (op) {
+#define X(id, mnemonic)                                                                            \
+    case BinaryOp::id:                                                                             \
+        return mnemonic;
+#include "x_binary_ops.inc"
+
+#undef X
+    }
+
+    throw InternalError{"BinaryOp: invalid value"};
 }

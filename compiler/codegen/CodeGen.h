@@ -84,6 +84,10 @@ class CodeGen final : public AstConstVisitor {
 
     void gen_load_const(const ObjectRef &value, Position pos) const;
     void gen_none(Position pos) const;
+    // 没写的注解/默认值/doc/名字用内部哨兵顶上，不能用 None（它是合法的默认值）
+    void gen_missing(Position pos) const;
+    // 可空的槽位：有就求值，没有就压哨兵
+    void gen_optional(const AstNodePtr &node, Position pos);
     // 弹到只剩 depth 项
     void gen_pop_to(std::uint32_t depth, Position pos) const;
     // 求值一个条件，假就跳走。JUMP_IF_FALSE 只认 bool，自己不做真值转换
@@ -148,10 +152,6 @@ class CodeGen final : public AstConstVisitor {
     // 装饰器：建立之前从前到后求值，建立之后由近到远逐个调用
     void gen_decorators_before(const std::vector<AstNodePtr> &decorators);
     void gen_decorators_after(const std::vector<AstNodePtr> &decorators, Position pos) const;
-    // 没写的注解/默认值/doc/名字用内部哨兵顶上，不能用 None（它是合法的默认值）
-    void gen_missing(Position pos) const;
-    // 可空的槽位：有就求值，没有就压哨兵
-    void gen_optional(const AstNodePtr &node, Position pos);
 
 #define X(nt) void visit(const nt &node) override;
 #include "../parser/ast_nodes/x_ast_nodes.inc"
