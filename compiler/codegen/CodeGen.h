@@ -67,7 +67,7 @@ class CodeGen final : public AstConstVisitor {
     explicit CodeGen(std::string file_path);
 
     // 正在填的那份 Code
-    [[nodiscard]] CodeBuilder &code() const;
+    [[nodiscard]] CodeBuilder &builder() const;
 
     [[noreturn]] void error_internal(const std::string &msg, Position pos) const;
 
@@ -140,18 +140,20 @@ class CodeGen final : public AstConstVisitor {
         CodeBuilder::Label count_continue, Position pos
     ) const;
 
-    // ---------------- 嵌套作用域 ----------------
+    // ---------------- 函数体 / 类体：嵌套的 Code ----------------
 
-    // 进入一份新的 Code。循环/finally 上下文跟着换，函数体里的 break 跳不到外层循环
-    void push_scope();
-    [[nodiscard]] Ref<Code> pop_scope();
-    // 捕获列表登记进新作用域：引用捕获标名字表位图，值捕获进 value_captured
+    // 开始编一份新的 Code（压一个新 builder）。循环/finally 上下文跟着换，函数体里的 break
+    // 跳不到外层循环
+    void begin_code();
+    // 收尾当前这份 Code：恢复外层的循环/finally 上下文，builder 组装成 Code 返回
+    [[nodiscard]] Ref<Code> end_code();
+    // 捕获列表登记进当前这份新 Code：引用捕获标名字表位图，值捕获进 value_captured
     void declare_captures(const std::vector<OneCapture> &captures) const;
     // 外层这一侧：逐个求出捕获值并打成元组
     void gen_capture_values(const std::vector<OneCapture> &captures, Position pos);
-    // 装饰器：建立之前从前到后求值，建立之后由近到远逐个调用
-    void gen_decorators_before(const std::vector<AstNodePtr> &decorators);
-    void gen_decorators_after(const std::vector<AstNodePtr> &decorators, Position pos) const;
+    // 装饰器分两步：建立之前从前到后求值，建立之后由近到远逐个调用
+    void gen_decorators_eval(const std::vector<AstNodePtr> &decorators);
+    void gen_decorators_apply(const std::vector<AstNodePtr> &decorators, Position pos) const;
 
 #define X(nt) void visit(const nt &node) override;
 #include "../parser/ast_nodes/x_ast_nodes.inc"

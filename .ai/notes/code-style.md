@@ -47,8 +47,8 @@
   `inline constexpr`，命名 `kPascalCase`。
 - **只在当前 TU 可见的函数/变量放匿名命名空间，不用 `static`**（类内 `static` 成员不在此列）。
   一个 private 辅助函数如果既不用 `this` 也不碰类的私有成员/类型，就放进 `.cpp` 的匿名命名空间，别留成成员。
-- 没有可见性的 `const` 成员函数经指针/引用改了别的对象的状态（比如 `CodeGen::gen_*` 经 `code() const` 返回的
-  非 const `CodeBuilder &` 发指令）——这种 `const` 是撒谎，见 `code()`：目前没改，是否统一去掉是待拍板项。
+- 没有可见性的 `const` 成员函数经指针/引用改了别的对象的状态（比如 `CodeGen::gen_*` 经 `builder() const` 返回的
+  非 const `CodeBuilder &` 发指令）——这种 `const` 是撒谎，见 `builder()`：目前没改，是否统一去掉是待拍板项。
 
 ## 类：可实例化与否、explicit、访问控制
 

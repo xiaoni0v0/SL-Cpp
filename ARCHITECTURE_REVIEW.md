@@ -73,8 +73,8 @@ loops_      循环栈：break/continue 的标签、各自该裁到的栈深、�
 blocks_     运行期块栈的编译期镜像：SETUP_EXCEPT / SETUP_FINALLY 各一项
 ```
 
-`push_scope()` 压一个新 builder，同时把 `loops_`/`blocks_` 整个换成空的存进 `saved_*`——函数体里的
-`break` 跳不到外层循环。`pop_scope()` 反过来，并把 builder `build()` 成 `Code`，调用方再
+`begin_code()` 压一个新 builder，同时把 `loops_`/`blocks_` 整个换成空的存进 `saved_*`——函数体里的
+`break` 跳不到外层循环。`end_code()` 反过来，并把 builder `build()` 成 `Code`，调用方再
 `add_nested_code` 进外层表。
 
 ### 跳出去：`gen_unwind` / `gen_unwind_with_value`
