@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <stack>
 #include <string>
 #include <utility>
 #include <vector>
@@ -29,7 +30,7 @@ class CodeGen final : public AstConstVisitor {
     const std::string file_path_;
 
     // builder 栈，栈顶是正在填的那份 Code。函数体、类体各压一层
-    std::vector<std::unique_ptr<CodeBuilder>> builders_;
+    std::stack<std::unique_ptr<CodeBuilder>> builders_;
 
     // 成员通道：当前节点要不要产出值
     bool want_value_{true};
@@ -57,12 +58,13 @@ class CodeGen final : public AstConstVisitor {
         Position pos_{};
     };
 
-    std::vector<LoopContext> loops_;
+    std::stack<LoopContext> loops_;
+    // 栈，但 gen_unwind 要从栈顶往下逐层走，所以用 vector 而不是 std::stack
     std::vector<BlockContext> blocks_;
 
     // 嵌套作用域期间存起来的外层上下文。函数体里的 break 跳不到外层循环
-    std::vector<std::vector<LoopContext>> saved_loops_;
-    std::vector<std::vector<BlockContext>> saved_blocks_;
+    std::stack<std::stack<LoopContext>> saved_loops_;
+    std::stack<std::vector<BlockContext>> saved_blocks_;
 
     explicit CodeGen(std::string file_path);
 

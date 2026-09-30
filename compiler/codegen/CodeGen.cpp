@@ -199,7 +199,7 @@ CodeGen::CodeGen(std::string file_path) : file_path_{std::move(file_path)} {}
 CodeBuilder &CodeGen::builder() const {
     assert(!builders_.empty());
 
-    return *builders_.back();
+    return *builders_.top();
 }
 
 void CodeGen::error_internal(const std::string &msg, const Position pos) const {
@@ -692,21 +692,21 @@ void CodeGen::gen_loop_collect(
 }
 
 void CodeGen::begin_code() {
-    builders_.push_back(std::make_unique<CodeBuilder>(file_path_));
+    builders_.push(std::make_unique<CodeBuilder>(file_path_));
 
     // 新作用域是新的一份 Code，外层的循环、finally 在这里都跳不到
-    saved_loops_.push_back(std::exchange(loops_, {}));
-    saved_blocks_.push_back(std::exchange(blocks_, {}));
+    saved_loops_.push(std::exchange(loops_, {}));
+    saved_blocks_.push(std::exchange(blocks_, {}));
 }
 
 Ref<Code> CodeGen::end_code() {
-    loops_ = std::move(saved_loops_.back());
-    saved_loops_.pop_back();
-    blocks_ = std::move(saved_blocks_.back());
-    saved_blocks_.pop_back();
+    loops_ = std::move(saved_loops_.top());
+    saved_loops_.pop();
+    blocks_ = std::move(saved_blocks_.top());
+    saved_blocks_.pop();
 
-    Ref result{std::move(*builders_.back()).build()};
-    builders_.pop_back();
+    Ref result{std::move(*builders_.top()).build()};
+    builders_.pop();
 
     return result;
 }
@@ -837,7 +837,7 @@ void CodeGen::visit(const AstNodeForCond &node) {
     // cond 为空视为 True
     if (node.cond_) gen_jump_if_false(*node.cond_, end);
 
-    loops_.push_back(
+    loops_.push(
         LoopContext{
             .break_label_ = end,
             .continue_label_ = counting ? count_continue : inc,
@@ -849,7 +849,7 @@ void CodeGen::visit(const AstNodeForCond &node) {
     // 循环体恒按 want_value=true 编译，每轮的值都要被收尾逻辑读一次
     gen(node.body_, true);
     gen_loop_collect(node.collect_, has_slot, 1, count_continue, pos);
-    loops_.pop_back();
+    loops_.pop();
 
     builder().place_label(inc);
     if (node.inc_) gen(node.inc_, false);
@@ -885,7 +885,7 @@ void CodeGen::visit(const AstNodeForIter &node) {
     else
         builder().emit(OpCode::POP_TOP, pos);
 
-    loops_.push_back(
+    loops_.push(
         LoopContext{
             .break_label_ = end,
             .continue_label_ = counting ? count_continue : loop,
@@ -897,7 +897,7 @@ void CodeGen::visit(const AstNodeForIter &node) {
     gen(node.body_, true);
     // 每轮的值压在迭代器上面，收尾指令要跨过它才够得着结果槽
     gen_loop_collect(node.collect_, has_slot, 2, count_continue, pos);
-    loops_.pop_back();
+    loops_.pop();
 
     builder().emit_jump(OpCode::JUMP, loop, pos);
 
@@ -908,7 +908,7 @@ void CodeGen::visit(const AstNodeForIter &node) {
 void CodeGen::visit(const AstNodeBreak &node) {
     if (loops_.empty()) error_internal("break outside a loop", node.pos_);
 
-    const LoopContext loop{loops_.back()};
+    const LoopContext loop{loops_.top()};
     gen_unwind(loop.block_depth_, loop.break_depth_, node.pos_);
     builder().emit_jump(OpCode::JUMP, loop.break_label_, node.pos_);
 }
@@ -916,7 +916,7 @@ void CodeGen::visit(const AstNodeBreak &node) {
 void CodeGen::visit(const AstNodeContinue &node) {
     if (loops_.empty()) error_internal("continue outside a loop", node.pos_);
 
-    const LoopContext loop{loops_.back()};
+    const LoopContext loop{loops_.top()};
     gen_unwind(loop.block_depth_, loop.continue_depth_, node.pos_);
     builder().emit_jump(OpCode::JUMP, loop.continue_label_, node.pos_);
 }
