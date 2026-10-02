@@ -29,7 +29,7 @@
 class CodeGen final : public AstConstVisitor {
     const std::string file_path_;
 
-    // builder 栈，栈顶是正在填的那份 Code。函数体、类体各压一层
+    // builder 栈。函数体、类体各压一层
     std::stack<std::unique_ptr<CodeBuilder>> builders_;
 
     // 成员通道：当前节点要不要产出值

@@ -5,8 +5,7 @@
 
 // 源码里的一个位置（行、列）
 struct Position {
-    int row{0};
-    int col{0};
+    std::size_t row{0}, col{0};
 
     std::strong_ordering operator<=>(const Position &) const = default;
 };

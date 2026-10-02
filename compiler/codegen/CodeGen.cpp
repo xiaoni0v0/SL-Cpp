@@ -220,7 +220,7 @@ void CodeGen::gen(const AstNode &node, const bool want_value) {
 }
 
 void CodeGen::gen(const AstNodePtr &node, const bool want_value) {
-    if (!node) error_internal("unexpected null node", Position{.row = 0, .col = 0});
+    if (!node) error_internal("unexpected null node", Position{0, 0});
 
     gen(*node, want_value);
 }
@@ -694,7 +694,7 @@ void CodeGen::gen_loop_collect(
 void CodeGen::begin_code() {
     builders_.push(std::make_unique<CodeBuilder>(file_path_));
 
-    // 新作用域是新的一份 Code，外层的循环、finally 在这里都跳不到
+    // 隐藏外部块
     saved_loops_.push(std::exchange(loops_, {}));
     saved_blocks_.push(std::exchange(blocks_, {}));
 }
@@ -1394,8 +1394,8 @@ Ref<Code> CodeGen::generate_program(const AstNodeProgram &root, std::string file
     if (!Runtime::ready()) throw InternalError{"CodeGen: runtime is not initialized"};
 
     CodeGen generator{std::move(file_path)};
+
     generator.begin_code();
     generator.gen_program(root);
-
     return generator.end_code();
 }
