@@ -131,18 +131,13 @@ target_precompile_headers(
     sl_pch_stub
     PRIVATE
         <algorithm>
-        <charconv>
         <concepts>
-        <filesystem>
         <format>
-        <iostream>
         <memory>
         <optional>
-        <ranges>
         <stdexcept>
         <string>
         <string_view>
-        <type_traits>
         <utility>
         <vector>
 )
