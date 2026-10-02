@@ -29,7 +29,7 @@ namespace {
 template <std::convertible_to<std::size_t>... Values>
 std::size_t hash_combine(std::size_t seed, const Values... values) {
     // 64 位下就是原值；size_t 更窄的平台上取低位，只是个揉哈希用的常数
-    static constexpr std::size_t kGolden{static_cast<std::size_t>(0x9e3779b97f4a7c15ULL)};
+    static constexpr std::size_t kGolden{0x9e3779b97f4a7c15ULL};
 
     ((seed ^= static_cast<std::size_t>(values) + kGolden + (seed << 6U) + (seed >> 2U)), ...);
 
