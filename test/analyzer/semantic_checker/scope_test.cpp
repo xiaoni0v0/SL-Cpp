@@ -1,6 +1,8 @@
 // break/continue/return/global 的作用域。
 #include "test_utils.h"
 
+#include <string>
+
 #include <doctest/doctest.h>
 
 TEST_SUITE("SemanticChecker 作用域") {

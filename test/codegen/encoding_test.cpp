@@ -1,5 +1,9 @@
 #include "test_utils.h"
 
+#include <cstddef>
+#include <optional>
+#include <string>
+
 #include <doctest/doctest.h>
 
 namespace {

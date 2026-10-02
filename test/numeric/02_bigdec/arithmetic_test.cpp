@@ -1,6 +1,9 @@
 // 一元运算、// 和 %、比较。
 #include "test_utils.h"
 
+#include <compare>
+#include <vector>
+
 #include <doctest/doctest.h>
 
 TEST_SUITE("BigDec——一元运算") {

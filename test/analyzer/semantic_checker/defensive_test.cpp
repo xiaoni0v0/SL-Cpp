@@ -1,6 +1,12 @@
 // Parser 保证过的结构被破坏时抛 InternalError。
 #include "test_utils.h"
 
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include <doctest/doctest.h>
 
 namespace {

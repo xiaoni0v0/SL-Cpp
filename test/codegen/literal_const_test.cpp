@@ -1,5 +1,9 @@
 #include "test_utils.h"
 
+#include <algorithm>
+#include <string>
+#include <vector>
+
 #include <doctest/doctest.h>
 
 // 注意两点：单独一条纯字面量语句会被折叠器当死代码剪掉；Program 里每一条都不产出值。

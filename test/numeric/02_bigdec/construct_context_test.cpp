@@ -1,6 +1,11 @@
 // 构造与字符串往返；上下文、信号、陷阱。
 #include "test_utils.h"
 
+#include <compare>
+#include <optional>
+#include <stdexcept>
+#include <string>
+
 #include <doctest/doctest.h>
 
 TEST_SUITE("BigDec——构造与字符串往返") {

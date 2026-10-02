@@ -2,6 +2,8 @@
 #include "../../../cppexceptions/SyntaxError.h"
 #include "../test_utils.h"
 
+#include <string>
+
 #include <doctest/doctest.h>
 
 TEST_SUITE("表达式分隔符——标准例子") {

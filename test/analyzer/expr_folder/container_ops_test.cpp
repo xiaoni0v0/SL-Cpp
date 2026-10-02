@@ -1,6 +1,9 @@
 // str/tuple/list 的 + 拼接与 * 重复。
 #include "../test_utils.h"
 
+#include <cstddef>
+#include <string>
+
 #include <doctest/doctest.h>
 
 namespace {

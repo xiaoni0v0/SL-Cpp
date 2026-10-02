@@ -2,6 +2,10 @@
 #include "../../../cppexceptions/InternalError.h"
 #include "../test_utils.h"
 
+#include <cstddef>
+#include <memory>
+#include <string>
+
 #include <doctest/doctest.h>
 
 namespace {

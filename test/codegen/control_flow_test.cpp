@@ -1,5 +1,7 @@
 #include "test_utils.h"
 
+#include <string>
+
 #include <doctest/doctest.h>
 
 TEST_SUITE("codegen: 控制流") {

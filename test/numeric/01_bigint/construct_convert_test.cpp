@@ -2,9 +2,12 @@
 #include "test_utils.h"
 
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <limits>
 #include <stdexcept>
+#include <string>
+#include <utility>
 
 #include <doctest/doctest.h>
 

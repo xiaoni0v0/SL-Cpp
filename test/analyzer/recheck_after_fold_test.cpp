@@ -2,6 +2,9 @@
 #include "../../compiler/analyzer/semantic_checker/SemanticChecker.h"
 #include "test_utils.h"
 
+#include <stdexcept>
+#include <string>
+
 #include <doctest/doctest.h>
 
 namespace {

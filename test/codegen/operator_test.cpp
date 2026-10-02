@@ -1,5 +1,7 @@
 #include "test_utils.h"
 
+#include <string>
+
 #include <doctest/doctest.h>
 
 // 被测表达式一律放在赋值右侧——那才是 want_value=true 的位置，Program 里每一条都不产出值。

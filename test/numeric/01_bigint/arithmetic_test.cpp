@@ -2,6 +2,8 @@
 #include "test_utils.h"
 
 #include <stdexcept>
+#include <string>
+#include <utility>
 
 #include <doctest/doctest.h>
 

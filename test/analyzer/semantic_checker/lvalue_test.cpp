@@ -1,6 +1,7 @@
 // 赋值、for as、except as 的左值形状。
 #include "test_utils.h"
 
+#include <cstddef>
 #include <string>
 
 #include <doctest/doctest.h>

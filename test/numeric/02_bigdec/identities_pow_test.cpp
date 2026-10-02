@@ -1,6 +1,10 @@
 // 代数恒等式、幂与超越函数、operator 与具名方法。
 #include "test_utils.h"
 
+#include <cstdint>
+#include <string>
+#include <vector>
+
 #include <doctest/doctest.h>
 
 TEST_SUITE("BigDec——代数恒等式（不依赖生成的用例表）") {

@@ -5,6 +5,11 @@
 
 namespace {
 #include "../big_dec_cases.inc"
+
+#include <compare>
+#include <string>
+#include <utility>
+#include <vector>
 } // namespace
 
 TEST_SUITE("BigDec——跟 CPython decimal 的交叉验证") {

@@ -1,5 +1,8 @@
 #include "test_utils.h"
 
+#include <string>
+#include <vector>
+
 #include <doctest/doctest.h>
 
 // Program（整个文件 / 函数体 / 类体）的值只由 return 决定：走到末尾就是 None，

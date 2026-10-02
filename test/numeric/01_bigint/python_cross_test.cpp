@@ -2,6 +2,8 @@
 #include "test_utils.h"
 
 #include <cstdlib>
+#include <string>
+#include <vector>
 
 #include <doctest/doctest.h>
 

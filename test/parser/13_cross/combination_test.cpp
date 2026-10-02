@@ -2,6 +2,8 @@
 #include "../../../cppexceptions/SyntaxError.h"
 #include "../test_utils.h"
 
+#include <string>
+
 #include <doctest/doctest.h>
 
 TEST_SUITE("跨分组组合——装饰器/类/函数/for/try/字典展开/is 揉在一起") {

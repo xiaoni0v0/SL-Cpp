@@ -1,6 +1,9 @@
 // 生成表铺不到的窄路径。
 #include "test_utils.h"
 
+#include <cstdint>
+#include <string>
+
 #include <doctest/doctest.h>
 
 TEST_SUITE("BigDec——生成的用例表铺不到的窄路径") {

@@ -3,6 +3,7 @@
 #include "../../../cppexceptions/SyntaxError.h"
 #include "../test_utils.h"
 
+#include <cstddef>
 #include <string>
 
 #include <doctest/doctest.h>
