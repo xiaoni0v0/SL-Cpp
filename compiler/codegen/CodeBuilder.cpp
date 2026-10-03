@@ -130,7 +130,7 @@ void CodeBuilder::place_label(const Label label) {
 
     label_targets_[label] = static_cast<std::uint32_t>(instrs_.size());
 
-    if (const std::optional<std::uint32_t> known{label_stacks_[label]}) {
+    if (const std::optional known{label_stacks_[label]}) {
         // 有人跳到这里，栈深以跳转方为准
         if (!unreachable_ && cur_stack_ != *known)
             throw InternalError{"CodeBuilder: stack depth mismatch at label"};
@@ -199,7 +199,7 @@ Ref<Code> CodeBuilder::build() && {
     for (std::size_t i{0}; i < count; ++i)
         if (!instrs_[i].arg_is_label_) widths[i] = instr_width(instrs_[i].arg_);
 
-    std::vector<std::uint32_t> offsets{compute_offsets(widths)};
+    std::vector offsets{compute_offsets(widths)};
 
     // 跳转目标由前面所有指令的宽度决定，而补前缀又会把目标推远。前缀只增不减，必收敛
     for (bool changed{true}; changed;) {

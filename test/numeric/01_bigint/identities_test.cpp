@@ -301,8 +301,8 @@ TEST_SUITE("BigInt——bit_length 与 to_double 的窄路径") {
     TEST_CASE("bit_length 跟十进制位数彼此印证") {
         // b 位的数落在 [2^(b-1), 2^b)，于是十进制位数 digits 必然满足
         // (b-1)*log10(2) < digits <= b*log10(2) + 1，拿它把两个函数互相钉住
-        constexpr double kLog10Of2{0.30102999566398119521};
         for (const BigInt &x : interesting_values()) {
+            constexpr double kLog10Of2{0.30102999566398119521};
             CAPTURE(x.to_decimal_string());
             if (x.is_zero()) continue;
             const auto bits{static_cast<double>(x.bit_length())};

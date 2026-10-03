@@ -19,7 +19,7 @@ namespace {
 // 每个 limb 的位数
 constexpr unsigned kLimbBits{32};
 // 2^32：sub_magnitude 借位时补回的进位基数
-constexpr std::int64_t kLimbBase{static_cast<std::int64_t>(std::uint64_t{1} << kLimbBits)};
+constexpr std::int64_t kLimbBase{std::uint64_t{1} << kLimbBits};
 
 // int64_t 原生的 a / b、a % b 是否安全：INT64_MIN / -1 的结果 2^63 装不下（UB）。
 // 除数为 0 另行处理，调用方保证 b != 0
@@ -113,7 +113,7 @@ std::vector<std::uint32_t>
 shift_left_magnitude(const std::vector<std::uint32_t> &a, const std::uint64_t bits) {
     if (a.empty() || bits == 0) return a;
 
-    const std::size_t limb_shift{static_cast<std::size_t>(bits / kLimbBits)};
+    const std::size_t limb_shift{bits / kLimbBits};
     const unsigned bit_shift{static_cast<unsigned>(bits % kLimbBits)};
 
     std::vector<std::uint32_t> result(a.size() + limb_shift + 1, 0);
@@ -133,7 +133,7 @@ std::pair<std::vector<std::uint32_t>, bool>
 shift_right_magnitude(const std::vector<std::uint32_t> &a, const std::uint64_t bits) {
     if (bits == 0) return {a, false};
 
-    const std::size_t limb_shift{static_cast<std::size_t>(bits / kLimbBits)};
+    const std::size_t limb_shift{bits / kLimbBits};
     const unsigned bit_shift{static_cast<unsigned>(bits % kLimbBits)};
 
     // 被移出的位是否有非 0：按整 limb 判断，跟 to_double 的 sticky 位同理
@@ -280,7 +280,7 @@ std::vector<std::uint32_t> BigInt::to_twos_complement(const std::size_t limb_cou
     for (std::size_t i{0}; i < limb_count; ++i) {
         const std::uint32_t magnitude_limb{i < limbs_.size() ? limbs_[i] : 0u};
         // 显式取 32 位补码再零扩展；不写这个转换 MSVC 会报 C4319
-        const std::uint64_t sum{static_cast<std::uint32_t>(~magnitude_limb) + carry};
+        const std::uint64_t sum{~magnitude_limb + carry};
         result[i] = static_cast<std::uint32_t>(sum);
         carry = sum >> kLimbBits;
     }
@@ -296,7 +296,7 @@ BigInt BigInt::from_twos_complement(std::vector<std::uint32_t> limbs) {
     // 负数：magnitude = ~limbs + 1
     std::uint64_t carry{1};
     for (auto &limb : limbs) {
-        const std::uint64_t sum{static_cast<std::uint32_t>(~limb) + carry};
+        const std::uint64_t sum{~limb + carry};
         limb = static_cast<std::uint32_t>(sum);
         carry = sum >> kLimbBits;
     }

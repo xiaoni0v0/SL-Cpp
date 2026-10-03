@@ -135,7 +135,7 @@ TEST_SUITE("BigInt——跟 Python int 的交叉验证") {
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 2);
-            CHECK(d(f[0]).bit_length() == static_cast<std::size_t>(std::stoull(f[1])));
+            CHECK(d(f[0]).bit_length() == std::stoull(f[1]));
         }
     }
 
@@ -145,7 +145,7 @@ TEST_SUITE("BigInt——跟 Python int 的交叉验证") {
             CAPTURE(line);
             const std::vector<std::string> f{split_fields(line)};
             REQUIRE(f.size() == 2);
-            CHECK(d(f[0]).num_decimal_digits() == static_cast<std::size_t>(std::stoull(f[1])));
+            CHECK(d(f[0]).num_decimal_digits() == std::stoull(f[1]));
         }
     }
 

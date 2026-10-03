@@ -760,7 +760,7 @@ void CodeGen::visit(const AstNodeClass &node) {
     begin_code();
     declare_captures(node.captures_);
     gen_program(*node.body_);
-    Ref<Code> body{end_code()};
+    Ref body{end_code()};
 
     const std::uint32_t slot{builder().add_nested_code(std::move(body))};
 
@@ -1054,7 +1054,7 @@ void CodeGen::visit(const AstNodeFunc &node) {
     declare_captures(node.captures_);
     builder().set_params(build_param_shape(node));
     gen_program(*node.body_);
-    Ref<Code> body{end_code()};
+    Ref body{end_code()};
 
     const std::uint32_t slot{builder().add_nested_code(std::move(body))};
 

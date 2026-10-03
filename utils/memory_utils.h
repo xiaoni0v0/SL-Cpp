@@ -53,7 +53,7 @@ constexpr std::size_t heap_bytes(const std::basic_string<C, Tr, A> &value) {
     const void *end{&value + 1};
     const void *data{value.data()};
 
-    const std::less before{};
+    constexpr std::less before{};
     if (!before(data, begin) && before(data, end)) return 0;
     return (value.capacity() + 1) * sizeof(C); // + 1 for '\0'
 }
