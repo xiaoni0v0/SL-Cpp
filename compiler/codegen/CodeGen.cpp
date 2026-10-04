@@ -226,14 +226,10 @@ void CodeGen::gen(const AstNodePtr &node, const bool want_value) {
 }
 
 void CodeGen::gen_program(const AstNodeProgram &program) {
+    // Program 的值只由 return 决定，跟复合表达式不同：这里每一条都不产出值。
+    // 一路没触发 return 走到末尾就是 return None，由虚拟机在 pc 走出字节码末尾时兑现，
+    // 所以不必补指令
     for (const AstNodePtr &expr : program.exprs_) gen(expr, false);
-
-    // 前边有 return
-    if (builder().unreachable()) return;
-
-    // 前边无 return，补上个 return None
-    gen_none(program.pos_);
-    builder().emit(OpCode::RETURN_VALUE, program.pos_);
 }
 
 void CodeGen::gen_exprs(

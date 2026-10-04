@@ -145,11 +145,18 @@
 
 **`Program` 和 `Compound` 的值是两套规则，别混**：复合表达式的值是块里最后一条；而 Program（整个
 文件、函数体、类体）的值**只由 `return` 决定**，一路没触发 `return` 走到末尾，值就是 `None`。所以
-Program 里每一条都不产出值，codegen 在末尾补一条 `LOAD_CONST <None>` + `RETURN_VALUE`——那正是
-`SL.md` 说的"等价于末尾隐含一条 `return None`"。已经 `return`/`raise` 收尾的不再补，那两条走不到。
+Program 里每一条都不产出值，codegen 不补任何收尾指令——一路没触发 `return` 走到末尾，**pc 走出字节码
+末尾就等价于 `return None`**，正是 `SL.md` 说的"等价于末尾隐含一条 `return None`"。只有用户写了
+`return` 才有 `RETURN_VALUE`。
 
-于是**每份 `Code` 的字节码必然以终止指令结尾**，虚拟机的 pc 不会走出末尾。这条不变量值得 assert：
-真走出去了就是 codegen 漏发了收尾指令，让主循环在那里静默返回 `None` 只会把 bug 盖住。
+于是有三条约定：
+
+- **字节码不必以终止指令结尾**，可以是空的；虚拟机取指前判 `pc_ >= bytecode.size()`，成立就按
+  "返回 `None`"收尾（跟 `RETURN_VALUE` 弹出 `None` 走同一条收尾路径，包括按 `owner_` 种类处理）。
+- **跳转目标可以恰好等于指令总数**（例如 `if` 是最后一条语句时跳过分支的那两条跳转）。校验字节码
+  时把"末尾"当合法目标。
+- **走出末尾时操作数栈必须是空的**——没有返回值被压栈。`CodeBuilder::build()` 核对这一条，不平衡就是
+  codegen 的 bug。
 
 codegen 按实际传下去的 `want_value` 静态跟踪栈深（算 `max_stack`、`break`/`continue` 裁栈都要用）。
 

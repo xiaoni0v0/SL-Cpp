@@ -189,8 +189,10 @@ void CodeBuilder::emit_jump(const OpCode op, const Label target, const Position 
 }
 
 Ref<Code> CodeBuilder::build() && {
-    // 顺序流不能走出末尾，否则虚拟机的 pc 会越界。gen_program 保证末尾有 return
-    if (!unreachable_) throw InternalError{"CodeBuilder: control falls off the end"};
+    // 顺序流走出末尾是合法的：pc 走到字节码末尾等价于 return None（Program 没触发 return 的
+    // 正常结局）。这时没有返回值被压栈，所以操作数栈必须是空的，不平衡就是 codegen 的 bug
+    if (!unreachable_ && cur_stack_ != 0)
+        throw InternalError{"CodeBuilder: operand stack not empty at the end of code"};
 
     const std::size_t count{instrs_.size()};
 

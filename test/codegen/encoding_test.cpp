@@ -32,20 +32,20 @@ std::u32string repeat_line(const std::u32string &line, const int count) {
 TEST_SUITE("codegen: 指令编码") {
 
     TEST_CASE("参数装得下一个字节时不补前缀") {
-        const std::string dump{codegen_body(U"x = [" + distinct_ints(200) + U"]")};
+        const std::string dump{codegen_instrs(U"x = [" + distinct_ints(200) + U"]")};
         CHECK(dump.find("MAKE_LIST 200") != std::string::npos);
         CHECK(dump.find("LOAD_CONST 199") != std::string::npos);
     }
 
     TEST_CASE("参数超过一个字节时补 EXTENDED_ARG 前缀") {
         // 反汇编把前缀折进参数里，所以这里看到的是完整参数
-        const std::string dump{codegen_body(U"x = [" + distinct_ints(300) + U"]")};
+        const std::string dump{codegen_instrs(U"x = [" + distinct_ints(300) + U"]")};
         CHECK(dump.find("LOAD_CONST 299") != std::string::npos);
         CHECK(dump.find("MAKE_LIST 300") != std::string::npos);
     }
 
     TEST_CASE("跳转目标是绝对的、以指令为单位") {
-        CHECK(codegen_body(U"x = 1\ny = if (x) { x } else { x }") == R"(LOAD_CONST 0
+        CHECK(codegen_instrs(U"x = 1\ny = if (x) { x } else { x }") == R"(LOAD_CONST 0
 STORE_NAME 0
 LOAD_NAME 0
 TO_BOOL
@@ -61,7 +61,7 @@ STORE_NAME 1
         const std::u32string source{
             U"x = 1\nif (x) {" + repeat_line(U"x\n", 300) + U"} else { x }"
         };
-        const std::string dump{codegen_body(source)};
+        const std::string dump{codegen_instrs(source)};
 
         // 近处那条不用前缀
         CHECK(dump.find("JUMP_IF_FALSE 6") != std::string::npos);
@@ -86,7 +86,7 @@ STORE_NAME 1
         REQUIRE(first.has_value());
         CHECK(first->pos.row == 1);
 
-        // 第二条语句的指令从 pc 2 起。末尾那条隐含的 return None 用的是整份 Program 的位置
+        // 第二条语句的指令从 pc 2 起
         const std::optional second{code->line_at(2)};
         REQUIRE(second.has_value());
         CHECK(second->pos.row == 2);

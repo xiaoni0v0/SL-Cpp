@@ -45,6 +45,8 @@ compiler/codegen/
   和两条 `SETUP_*` 不是 0）。
 - 标签记着"该处应有的栈深"。`emit_jump` 和 `place_label` 两头核对，第一次得知就记下，对不上直接断言。
 - 终止指令（`JUMP`/`RETURN_VALUE`/`RAISE` 等）之后标为不可达，不可达的指令照发但不记账，直到下一个标签。
+- 字节码**不必**以终止指令结尾：顺序流走出末尾等价于 `return None`，跳转目标也可以恰好等于指令总数。
+  `build()` 只核对一条——走出末尾时栈必须是空的。
 
 栈不平衡是手写字节码最容易犯的错，而没有虚拟机时跑不出来，所以在这里当场抓。
 
@@ -63,7 +65,7 @@ void gen(const AstNode &node, bool want_value);
 
 - **复合表达式**（`gen_exprs`）：值是最后一条，只有最后一条跟着外层的 `want_value`。
 - **Program**（`gen_program`，文件 / 函数体 / 类体）：值只由 `return` 决定，每一条都 `want_value=false`，
-  末尾补 `LOAD_CONST None` + `RETURN_VALUE`。每份 `Code` 必以终止指令结尾。
+  不补任何收尾指令，走出字节码末尾就是 `return None`，由虚拟机兑现。
 
 ### 三种上下文
 
@@ -127,6 +129,5 @@ MAKE_CLASS  bases captures doc name             （基类先求值、建帧，�
 `test/codegen/`，辅助在 `test_utils.h`：
 
 - `codegen_instrs()` / `codegen_dump()`：分别对应上面两种反汇编。
-- `codegen_body()`：再剥掉 Program 末尾隐含的 `return None`。
 - 被测表达式放赋值右侧，才是 `want_value=true`。
 - 期望值用 raw string literal（clang-format 不动它内部）。

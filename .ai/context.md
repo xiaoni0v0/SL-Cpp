@@ -1660,9 +1660,16 @@ SL.md 一直没规定 `007`/`00` 合不合法，是真实的规范空白，已�
 当返回值——SL.md 926 行和 1088 行读起来像互相矛盾（一个说"不写 return 就自动 return None"，一个说
 "返回值就是 Program 的值"），其实并不矛盾：Program 的值在无 `return` 时按 3.4.1 本来就是 `None`。
 
-落到 codegen：Program 里每一条都按 `want_value=false` 编译，末尾补 `LOAD_CONST <None>` +
-`RETURN_VALUE`。**于是每份 `Code` 必然以终止指令结尾**，虚拟机的 pc 不会走出字节码末尾——这条不变量
-比"走到末尾就默认返回 None"值钱：后者会把 codegen 漏发收尾指令的 bug 悄悄盖住。
+落到 codegen：Program 里每一条都按 `want_value=false` 编译，**不补任何收尾指令**——pc 走出字节码
+末尾就等价于 `return None`，由虚拟机兑现。曾经的做法是末尾补 `LOAD_CONST <None>` + `RETURN_VALUE`、
+并以"每份 `Code` 必以终止指令结尾"为不变量，理由是"走出末尾就默认返回"会盖住 codegen 漏发收尾的 bug。
+**这个理由站不住**：在这套语义下走出末尾本来就是合法的正常结局，不是 bug；真正能抓 bug 的是
+`CodeBuilder::build()` 核对"走出末尾时操作数栈为空"，以及跳转两侧的栈深核对，这两样都还在。
+
+代价是三处：**跳转目标可以等于指令总数**（反汇编器、将来的字节码校验都得认）；**主循环取指前多一次
+`pc_ >= size` 判断**（CPython 每份 code 末尾带 `RETURN_CONST None` 就是为了省它，分支预测下几乎
+没开销）；类体、函数体走出末尾也要走跟 `RETURN_VALUE` 同一条收尾路径。换来的是：`Code` 少两条指令、
+常量表不必为隐含的 `None` 多占一项、语义跟 SL.md 的原话直接对应。
 
 ### 三张根表统一成「X-macro 清单 + 定长数组」
 

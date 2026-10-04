@@ -7,9 +7,7 @@ codegen 的唯一手段，所以这套写法会一直用下去。
 
 ```cpp
 CHECK(codegen_instrs(U"x = 1") == R"(LOAD_CONST 0
-COPY 1
 STORE_NAME 0
-RETURN_VALUE
 )");
 ```
 
@@ -26,8 +24,8 @@ RETURN_VALUE
 一个表达式测不到 `want_value=true` 那一路。要测它，把表达式放进赋值右侧：
 
 ```cpp
-codegen_body(U"x = 1\ny = x + x")   // x + x 在 want_value=true 下编译
-codegen_body(U"x = 1\nx + x")       // 裸表达式，走 want_value=false 那一路
+codegen_instrs(U"x = 1\ny = x + x")   // x + x 在 want_value=true 下编译
+codegen_instrs(U"x = 1\nx + x")       // 裸表达式，走 want_value=false 那一路
 ```
 
 赋值本身要 `want_value=true` 时，再套一层：`y = (x = 1)`，或者用复合表达式 `y = { x = 1 }`。
@@ -36,13 +34,11 @@ codegen_body(U"x = 1\nx + x")       // 裸表达式，走 want_value=false 那�
 （`[1, 2]`、`(1, 2)`、`None` 都到不了 codegen，Program 空了只剩一条 `LOAD_CONST None`），而
 `x = [1, 2]` 里的 list 有赋值托着，剪不掉。
 
-## 末尾那条隐含的 return None 用 `codegen_body` 剥掉
+## Program 末尾没有收尾指令
 
-每份 Program 末尾都有固定的 `LOAD_CONST <None>` + `RETURN_VALUE`，逐个用例重复它纯属噪音。
-`codegen_body()` 去掉这两行，`program_value_test.cpp` 专门验它们存在。以 `return`/`raise` 收尾的
-Program 本来就没有这条尾巴，那时 `codegen_body` 原样返回。
-
-注意常量表里那个 `None` 是剥不掉的：`constants_of()` 的期望值末尾通常要带上它。
+不写 `return` 时字节码里没有 `LOAD_CONST <None>` + `RETURN_VALUE`——pc 走出末尾就是 `return None`，
+所以 `codegen_instrs()` 的期望值直接就是语句本身的指令，常量表里也不会为此多出一个 `None`。
+`program_value_test.cpp` 专门验这一点（含空 Program、跳转目标等于指令总数）。
 
 ## 一个用例起落一次运行时
 
