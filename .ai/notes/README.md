@@ -33,6 +33,7 @@
 - [object-model-conventions.md](object-model-conventions.md) — runtime/ 里 C++ 类继承与 SL 类继承的分工，以及 Ref/裸指针的所有权约定
 - [cpp-layer-vs-sl-layer.md](cpp-layer-vs-sl-layer.md) — 哪一层才能命名 SL 异常/碰对象模型，底层出错该怎么往上转
 - [json-test-brace-init-trap.md](json-test-brace-init-trap.md) — 写 parser 测试时 nlohmann::json 花括号初始化会被吃成数组的坑
+- [spec-impl-gap.md](spec-impl-gap.md) — SL.md 已改、代码还没跟上的改动清单，改实现时逐条对照，做完即删
 - [grok-dsh-cli-review.md](grok-dsh-cli-review.md) — 调用本机 grok/dsh 两个 CLI 做交叉代码审查时的只读参数，避免卡在权限提示上
 
 ## 记录新笔记的原则

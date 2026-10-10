@@ -148,14 +148,9 @@ parser 那份抄了三处，加个文件要改三个地方。
 3. ~~**bootstrap**~~ **已完成**：`init()` 就三步——`build_types()` 建全部内置类型（含异常类树），
    `build_singletons()` 建六个单例，`build_internals()` 建 `LOAD_INTERNAL` 那张表里的内部对象——都
    只碰 `Runtime` 自己的私有字段，不经过任何公开访问器。三步各自由一份 X-macro 清单驱动。
-   `Runtime::instance()` 只做一件事：`g_runtime` 是否为空。**没有分阶段的状态机**：早先版本给这个类
-   配过一个有序的 `BootPhase`（`Uninitialized`→`Types`→`Values`→`Ready`），后来发现那是自己给
-   自己挖的坑——之所以"需要"区分"类型建好但单例还没建好"，只是因为 `build_singletons()` 和
-   `Bool`/`NamedSingleton` 的构造函数当时绕道调用了公开的、带检查的访问器（`type_none_type()`、
-   `Runtime::type_bool()`），而不是直接读私有字段/接收调用方传来的 `Type*`。改成直接传值之后，
-   这个中间状态从来没被任何代码观察到过（C++ 单线程同步执行，`init()` 跑到一半时没有别的代码能
-   插进来看），分阶段就是纯粹的自我循环论证，见 [context.md](context.md) 对应小节。
-   `Runtime::ready()` 现在就是 `g_runtime != nullptr`，供以后的编译器/虚拟机入口断言。内置函数表、
+   `Runtime::instance()` 只做一件事：`g_runtime` 是否为空。没有分阶段的状态机，理由见
+   [notes/object-model-conventions.md](notes/object-model-conventions.md) 第四节。
+   `Runtime::ready()` 就是 `g_runtime != nullptr`，供编译器、虚拟机入口断言。内置函数表、
    内置模块表这些还没做的初始化步骤，插进 `init()` 的两步之后即可，不需要为它们预先开新的状态。
    `init()` 中途失败会把已建的部分拆干净再抛，不留半初始化的运行时。
 4. ~~**异常体系**~~ **已完成**：`SL.md` 4.2.23 补了 `BaseException(*args)` 的构造与 `.args` 属性

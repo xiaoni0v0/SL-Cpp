@@ -85,7 +85,7 @@
 
 ## 怎么自查
 
-- **clang-tidy**（LLVM 22，随 VS Build Tools）：本次用的检查集覆盖 `bugprone-*`、`clang-analyzer-*`、
+- **clang-tidy**（LLVM 22，随 VS Build Tools）：用过的检查集覆盖 `bugprone-*`、`clang-analyzer-*`、
   `cppcoreguidelines-{init-variables,special-member-functions,pro-type-*cast,...}`、`google-explicit-constructor`、
   `misc-{const-correctness,include-cleaner,use-anonymous-namespace}`、`modernize-*`、`performance-*`、
   `readability-{convert-member-functions-to-static,make-member-function-const,...}`。`misc-const-correctness` 要设
