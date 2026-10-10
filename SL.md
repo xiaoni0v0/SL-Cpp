@@ -111,7 +111,7 @@ SL 中有以下**字面量**类型：
 | 140      | `+x`, `-x`, `~x`                                                                 | 正、负、按位取反   | R      | 1        |                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | 130      | `*`, `/`, `//`, `%`                                                              | 乘、除、整除、取模 | L      | 2        |                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | 120      | `+`, `-`                                                                         | 加、减             | L      | 2        |                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| 110      | `..`                                                                             | 范围运算           | L      | 2        |                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 110      | `..`, `..=`                                                                      | 范围运算           | L      | 2        |                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | 100      | `<<`, `>>`                                                                       | 按位左移、右移     | L      | 2        |                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | 90       | `&`                                                                              | 按位与             | L      | 2        |                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | 80       | `^`                                                                              | 按位异或           | L      | 2        |                                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -646,11 +646,12 @@ try expr1 ⟦except (⟦target ⟦: type⟧ from⟧ exc_type) expr2 ...⟧ ⟦fi
   - 对于均为字符串、元组、列表，返回 `x` 和 `y` 的拼接；
 - `x - y`
   对于数字、集合，返回 `x` 减 `y` / 差集；
-- `x..y`
+- `x..y`, `x..=y`
   - 对于 `x` 和 `y` 为 int、decimal、None，返回一个 range 对象（称为二元 range 对象），
-    分别表示 start、stop，步长默认为 1，等同于 Python 里的 range(x, y)；
-  - 对于 `x` 是二元 range 对象且 `y` 是 int、decimal、None，返回一个 range 对象（称为三元 range 对象），
-    表示同 Python 里的 `range(start, stop, step)`；
+    分别表示 start、stop，步长默认为 1。`..` 不包含 stop（左闭右开，等同于 Python 里的 `range(x, y)`），`..=` 包含 stop（闭区间）；
+    stop 为 None 时表示没有上界，两者相同；
+  - 对于 `x` 是二元 range 对象且 `y` 是 int、decimal、None，`x..y` 返回一个 range 对象（称为三元 range 对象），
+    `y` 为步长，是否包含 stop 沿用 `x`；`x..=y` 抛出 `TypeError`；
   - 对于 `x` 是 int、decimal、None 且 `y` 是二元 range 对象，直接抛出 `TypeError`；
 - `x << y`, `x >> y`
   对于 int，分别返回按位左移、按位右移；`y` 为负抛出 `ValueError`；
@@ -922,7 +923,7 @@ func f() {}
      ```
 
    - 带 `: type`：类型注解。它在第一次调用、检查到这个形参时才求值（见 3.12），函数建立时不求值。
-     求值结果须满足 `isinstance(annotation, type | CompoundType | TypeVar)`，或本身是 `str`，否则抛出 `TypeError`。
+     求值结果须满足 `isinstance(annotation, type | CompoundType)`，或本身是 `str`，否则抛出 `TypeError`。
      调用时实参（或填入的默认值）不符合注解，抛出 `DispatchError`；
      `annotation` 是 `str` 时不参与任何类型检查，运行时表现与没有类型注解完全一致（见下）；
 2. `*identifier`
@@ -934,8 +935,6 @@ func f() {}
 
 字符串形式的类型注解：`annotation` 是 `str` 时，运行时表现与没有类型注解完全一致，只是原样存为注解的值；
 存在的意义只是记录一点可读性信息，供以后可能新增的静态分析工具使用。
-
-类型注解是 `TypeVar`（表达多个形参/返回值位置的类型必须彼此一致）时，调用时的一致性检查规则见 4.2.24。
 
 实际执行时，没有类型注解的形参/返回值等价于类型注解 `object`。
 
@@ -1152,36 +1151,37 @@ SL 支持函数重载，使用 `FuncGroup` 类显式创建**函数族**（Functi
 
 除了 `is`、`and`、`or`、`not`、求属性、`=` 以及所有复合赋值，其他运算符均可重载，对应方法名称如下：
 
-| 运算符                 | 方法名             |
-| ---------------------- | ------------------ |
-| `x[arg, ...]`          | `__op_get_index__` |
-| `x[arg, ...] = v`      | `__op_set_index__` |
-| `x(arg, kwarg=v, ...)` | `__op_call__`      |
-| `x?`                   | `__op_question__`  |
-| `x!`                   | `__op_exclam__`    |
-| `**`                   | `__op_pow__`       |
-| `+x`                   | `__op_pos__`       |
-| `-x`                   | `__op_neg__`       |
-| `~x`                   | `__op_invert__`    |
-| `*`                    | `__op_mul__`       |
-| `/`                    | `__op_div__`       |
-| `//`                   | `__op_floordiv__`  |
-| `%`                    | `__op_mod__`       |
-| `+`                    | `__op_add__`       |
-| `-`                    | `__op_sub__`       |
-| `..`                   | `__op_range__`     |
-| `<<`                   | `__op_lshift__`    |
-| `>>`                   | `__op_rshift__`    |
-| `&`                    | `__op_and__`       |
-| `^`                    | `__op_xor__`       |
-| `\|`                   | `__op_or__`        |
-| `<`                    | `__op_lt__`        |
-| `<=`                   | `__op_le__`        |
-| `>`                    | `__op_gt__`        |
-| `>=`                   | `__op_ge__`        |
-| `!=`                   | `__op_ne__`        |
-| `==`                   | `__op_eq__`        |
-| `in`                   | `__op_contains__`  |
+| 运算符                 | 方法名                |
+| ---------------------- | --------------------- |
+| `x[arg, ...]`          | `__op_get_index__`    |
+| `x[arg, ...] = v`      | `__op_set_index__`    |
+| `x(arg, kwarg=v, ...)` | `__op_call__`         |
+| `x?`                   | `__op_question__`     |
+| `x!`                   | `__op_exclam__`       |
+| `**`                   | `__op_pow__`          |
+| `+x`                   | `__op_pos__`          |
+| `-x`                   | `__op_neg__`          |
+| `~x`                   | `__op_invert__`       |
+| `*`                    | `__op_mul__`          |
+| `/`                    | `__op_div__`          |
+| `//`                   | `__op_floordiv__`     |
+| `%`                    | `__op_mod__`          |
+| `+`                    | `__op_add__`          |
+| `-`                    | `__op_sub__`          |
+| `..`                   | `__op_range__`        |
+| `..=`                  | `__op_range_closed__` |
+| `<<`                   | `__op_lshift__`       |
+| `>>`                   | `__op_rshift__`       |
+| `&`                    | `__op_and__`          |
+| `^`                    | `__op_xor__`          |
+| `\|`                   | `__op_or__`           |
+| `<`                    | `__op_lt__`           |
+| `<=`                   | `__op_le__`           |
+| `>`                    | `__op_gt__`           |
+| `>=`                   | `__op_ge__`           |
+| `!=`                   | `__op_ne__`           |
+| `==`                   | `__op_eq__`           |
+| `in`                   | `__op_contains__`     |
 
 反向方法名：把上表中二元运算符正向名的 `__op_` 换成 `__rop_`，如 `+` 是 `__op_add__` / `__rop_add__`。
 
@@ -1906,6 +1906,8 @@ decimal.DecimalException
 2. `range(start, stop)`
 3. `range(start, stop, step)`
 
+以上均不包含 stop，与 `..` 一致。另可传关键字参数 `closed=True`，此时包含 stop，与 `..=` 一致。
+
 #### 4.2.16 Descriptor
 
 描述器的基类，`get`/`set`/`delete` 三个方法的语义、以及描述器表的规则见 3.9.1.1。
@@ -1999,23 +2001,6 @@ BaseException
 `BaseException(*args)`：
 `args` 按位置接收任意多个实参，构造后可通过属性 `.args` 取到（一个 tuple，可能为空）。
 整棵异常树都不重写 `__construct__`，全部复用这一份。
-
-#### 4.2.24 TypeVar
-
-`TypeVar(bound=None)`。用作类型注解，见 3.4.7。
-
-表示这个位置的类型待定，但同一次调用里，多个用到同一个 `TypeVar` 对象的位置，类型必须彼此一致。
-
-`bound`：可选，约束待定的类型本身必须满足 `isinstance(_, bound)`；省略则不做约束。
-`bound` 须为 `None`，或满足 `isinstance(bound, type | CompoundType)`，否则抛出 `TypeError`。
-
-调用时的一致性检查：按形参从前到后、再到返回值的顺序检查各类型注解，每遇到一个 `TypeVar` 对象：
-
-- 若这是本次调用中第一次遇到这个 `TypeVar`，跳过一致性检查；
-  但若该 `TypeVar` 带 `bound`，改为检查 `isinstance(实际值, bound)`；
-  检查通过后把实际值的类型记下来。
-- 若不是第一次遇到，则改为检查 `isinstance(实际值, 已记录的类型)`；
-  这份记录只在本次调用期间有效（随本次调用的帧一起产生、消失），不同调用互不影响。
 
 ### 4.3 不入内置表的类
 
@@ -2258,7 +2243,6 @@ IOError
   - `Method` *
   - `Code` *
   - `CompoundType` *
-  - `TypeVar`
   - `decimal.Context`
   - `Descriptor`
     - `property`
