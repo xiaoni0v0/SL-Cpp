@@ -1587,10 +1587,9 @@ SL 中，`SyntaxError` 在编译期抛出；其他所有异常均在运行时抛
 对容器类型的类型声明，只检查名字所引用的对象（见 4.3.9）：
 
 ```
-x: list[int, ...] = [1, 2]
-x.append('1')                # 可以，x 引用的是不带约束的 list
+x: list[int, ...] = [1, 2]                  # TypeError，[1, 2] 是不带约束的 list
 y: list[int, ...] = list[int, ...]([1, 2])
-y.append('1')                # TypeError
+y.append('1')                               # TypeError
 ```
 
 #### 3.12.4 属性
@@ -1621,10 +1620,7 @@ p.y = 1                    # 可以
 
 返回 `bool` 类型的值。
 
-具体行为：
-
-1. 若 `type` 有 `__instance_check__` 方法，则返回 `type.__instance_check__(obj)`（若返回值不是 `bool`，抛出 `TypeError`）；
-2. 否则返回 `issubclass(type(obj), type)`。
+等价于 `issubclass(type(obj), type)`：只看 `obj` 的类型，不看 `obj` 的内容。
 
 #### 4.1.2 `issubclass(cls, type)`
 
@@ -2078,6 +2074,8 @@ issubclass(int | str, int | str | None)  # True
 - 分支 `C` 被分支 `D` 包含，当且仅当 `C` 是 `D` 的子类；不被任何分支 `D!` 包含；
 - 分支 `C!` 被分支 `D` 包含，当且仅当 `C` 是 `D` 的子类；被分支 `D!` 包含，当且仅当 `C` 就是 `D`。
 
+复合类按结构比较相等（`==`），与书写顺序无关，如 `int | str == str | int`、`int? == int | None` 均为 `True`。
+
 以上构造复合类的方式均可嵌套使用，但应**尽量避免嵌套过深**，否则可能导致性能问题。
 
 以上检查均有短路性，但不应依赖于此，因为检查的顺序不确定，
@@ -2142,8 +2140,8 @@ issubclass(int | str, int | str | None)  # True
 
 元素类型须为类或复合类，否则抛出 `TypeError`。
 
-容器类与元素类型均相同时得到同一个类，如 `list[int, ...] is list[int, ...]`；
-元素类型为 `object` 时得到容器类本身，如 `list[object, ...] is list`。
+容器类与元素类型均相同的带约束的容器类相等（`==`），哈希也相同，如 `list[int, ...] == list[int, ...]`；
+是否为同一个对象不作保证。元素类型均为 `object` 时得到容器类本身，如 `list[object, ...] is list`。
 
 带约束的容器类之间的子类关系按元素类型判定：
 
@@ -2159,13 +2157,14 @@ issubclass(int | str, int | str | None)  # True
 2. 增加、修改元素时检查新元素，不满足则抛出 `TypeError`，容器不变；删除元素时不检查；
 3. `+`、`*`、切片、拷贝的结果与原对象是同一个类，`+` 同样检查另一方的元素。
 
-`isinstance(obj, list[E, ...])` 的行为（其余带约束的容器类同理）：
+`tuple`、`list`、`dict`、`unordered_dict`、`frozendict`、`set`、`frozenset` 都有方法 `typed(*args)`，
+返回一个新的带约束的容器，不修改 `x`：`x.typed(*args)` 以 `x` 所属的上述容器类加 `[*args]`（如 `list[*args]`）
+从 `x` 构造，如 `[1, 2].typed(int, ...)`、`${'a': 1}.typed(str, int)`。构造时逐个检查元素是否满足元素类型 `E`：
 
-1. `obj` 是带约束的容器类的实例时，按上述子类关系判定，不检查元素；
-2. `obj` 是不带约束的 `list` 时，逐个检查元素，结果不影响 `obj` 此后的修改；
-3. 否则为 `False`。
-
-**注意**：对不带约束的容器做此种类型检查，平均时间复杂度至少是 $\mathcal O(n)$，使用前需谨慎权衡。
+1. 满足则原样保留；
+2. 不满足，但该元素是 `E` 所基于的容器类的实例时，按同样的规则转换成 `E` 的新实例；
+   `E` 是复合类时，恰有一支是这样的类才转换；
+3. 否则抛出 `TypeError`。
 
 #### 4.3.10 Namespace
 
