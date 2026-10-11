@@ -19,7 +19,8 @@ TEST_SUITE("关键字") {
         CHECK(lex_dump(U"or") == "KW_OR");
         CHECK(lex_dump(U"is") == "KW_IS");
         CHECK(lex_dump(U"in") == "KW_IN");
-        CHECK(lex_dump(U"as") == "KW_AS");
+        CHECK(lex_dump(U"from") == "KW_FROM");
+        CHECK(lex_dump(U"const") == "KW_CONST");
         CHECK(lex_dump(U"del") == "KW_DEL");
         CHECK(lex_dump(U"global") == "KW_GLOBAL");
         CHECK(lex_dump(U"if") == "KW_IF");
@@ -62,7 +63,8 @@ TEST_SUITE("关键字") {
         CHECK(lex_dump(U"whiley") == "IDENTIFIER(whiley)");
         CHECK(lex_dump(U"important") == "IDENTIFIER(important)");
         CHECK(lex_dump(U"importer") == "IDENTIFIER(importer)");
-        CHECK(lex_dump(U"asx") == "IDENTIFIER(asx)");
+        CHECK(lex_dump(U"fromage") == "IDENTIFIER(fromage)");
+        CHECK(lex_dump(U"constant") == "IDENTIFIER(constant)");
         CHECK(lex_dump(U"evaluate") == "IDENTIFIER(evaluate)");
         CHECK(lex_dump(U"notin") == "IDENTIFIER(notin)");
         CHECK(lex_dump(U"isnot") == "IDENTIFIER(isnot)");

@@ -18,7 +18,8 @@ X(KW_AND)
 X(KW_OR)
 X(KW_IS)
 X(KW_IN)
-X(KW_AS)
+X(KW_FROM)
+X(KW_CONST)
 X(KW_DEL)
 X(KW_GLOBAL)
 X(KW_IF)
@@ -39,6 +40,7 @@ X(KW_IMPORT)
 X(KW_EVAL)
 
 // 保留字
+X(RW_AS)
 X(RW_ASSERT)
 X(RW_WHEN)
 X(RW_CASE)
@@ -48,7 +50,6 @@ X(RW_ASYNC)
 X(RW_AWAIT)
 
 X(RW_DEFINE)
-X(RW_CONST)
 X(RW_STATIC)
 X(RW_LOCAL)
 
@@ -113,8 +114,10 @@ X(SIGN_RSHIFT_ASSIGN)      // >>=
 // 符号：其他
 X(SIGN_DOT)      // .
 X(SIGN_DOTDOT)   // ..
+X(SIGN_DOTDOTEQ) // ..=
 X(SIGN_QUESTION) // ?
 X(SIGN_EXCLAIM)  // !
+X(SIGN_ARROW)    // ->
 
 // 结构
 X(NEWLINE)     // \n

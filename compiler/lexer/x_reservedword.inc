@@ -1,4 +1,5 @@
 // 保留字
+X(as, RW_AS)
 X(assert, RW_ASSERT)
 X(when, RW_WHEN)
 X(case, RW_CASE)
@@ -8,6 +9,5 @@ X(async, RW_ASYNC)
 X(await, RW_AWAIT)
 
 X(define, RW_DEFINE)
-X(const, RW_CONST)
 X(static, RW_STATIC)
 X(local, RW_LOCAL)

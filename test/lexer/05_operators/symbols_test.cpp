@@ -39,11 +39,19 @@ TEST_SUITE("符号：贪婪最长匹配（多字符优先于短的）") {
         CHECK(lex_dump(U"+++") == "SIGN_PLUS SIGN_PLUS SIGN_PLUS");
     }
 
-    TEST_CASE("- 系列：- / -=") {
+    TEST_CASE("- 系列：- / -= / ->") {
         CHECK(lex_dump(U"-") == "SIGN_MINUS");
         CHECK(lex_dump(U"-=") == "SIGN_MINUS_ASSIGN");
+        CHECK(lex_dump(U"->") == "SIGN_ARROW");
         CHECK(lex_dump(U"--") == "SIGN_MINUS SIGN_MINUS");
         CHECK(lex_dump(U"---") == "SIGN_MINUS SIGN_MINUS SIGN_MINUS");
+        CHECK(lex_dump(U"-->") == "SIGN_MINUS SIGN_ARROW");
+        CHECK(lex_dump(U"->-1") == "SIGN_ARROW SIGN_MINUS LITERAL_INT(1)");
+        CHECK(lex_dump(U"->=") == "SIGN_ARROW SIGN_ASSIGN");
+        // 中间隔开就不是 ->
+        CHECK(lex_dump(U"- >") == "SIGN_MINUS SIGN_GT");
+        // => 不是一个 token
+        CHECK(lex_dump(U"=>") == "SIGN_ASSIGN SIGN_GT");
     }
 
     TEST_CASE("* 系列：* / ** / *= / **=，四层长度都要对") {
@@ -61,6 +69,12 @@ TEST_SUITE("符号：贪婪最长匹配（多字符优先于短的）") {
         CHECK(lex_dump(U"$$$$") == "SIGN_DOUBLEDOLLAR SIGN_DOUBLEDOLLAR");
         // 中间隔开就是两个单字符的，$$ 必须连写
         CHECK(lex_dump(U"$ $") == "SIGN_DOLLAR SIGN_DOLLAR");
+    }
+
+    TEST_CASE("${ 是两个 token，组合由语法分析识别") {
+        CHECK(lex_dump(U"${}") == "SIGN_DOLLAR SIGN_LBRACE SIGN_RBRACE");
+        CHECK(lex_dump(U"$ {}") == "SIGN_DOLLAR SIGN_LBRACE SIGN_RBRACE");
+        CHECK(lex_dump(U"$${}") == "SIGN_DOUBLEDOLLAR SIGN_LBRACE SIGN_RBRACE");
     }
 
     TEST_CASE("/ 系列：/ / // / /= / //=") {
@@ -123,7 +137,8 @@ TEST_SUITE("符号：贪婪最长匹配（多字符优先于短的）") {
     }
 
     TEST_CASE("符号与关键字之间不必有空白") {
-        CHECK(lex_dump(U"for $ (ls as i) { i ** 2 }") == lex_dump(U"for$(ls as i){i**2}"));
+        CHECK(lex_dump(U"for $ (i from ls) { i ** 2 }") == lex_dump(U"for$(i from ls){i**2}"));
+        CHECK(lex_dump(U"x: const int") == lex_dump(U"x:const int"));
     }
 }
 

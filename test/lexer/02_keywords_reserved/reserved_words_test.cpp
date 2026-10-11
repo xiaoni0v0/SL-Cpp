@@ -9,6 +9,7 @@
 TEST_SUITE("保留字") {
 
     TEST_CASE("每个保留字单独出现都报错") {
+        CHECK_THROWS_AS(lex(U"as"), SyntaxError);
         CHECK_THROWS_AS(lex(U"assert"), SyntaxError);
         CHECK_THROWS_AS(lex(U"when"), SyntaxError);
         CHECK_THROWS_AS(lex(U"case"), SyntaxError);
@@ -17,7 +18,6 @@ TEST_SUITE("保留字") {
         CHECK_THROWS_AS(lex(U"async"), SyntaxError);
         CHECK_THROWS_AS(lex(U"await"), SyntaxError);
         CHECK_THROWS_AS(lex(U"define"), SyntaxError);
-        CHECK_THROWS_AS(lex(U"const"), SyntaxError);
         CHECK_THROWS_AS(lex(U"static"), SyntaxError);
         CHECK_THROWS_AS(lex(U"local"), SyntaxError);
     }
@@ -36,6 +36,7 @@ TEST_SUITE("保留字") {
     }
 
     TEST_CASE("前缀/超集是标识符") {
+        CHECK(lex_dump(U"asx") == "IDENTIFIER(asx)");
         CHECK(lex_dump(U"whenever") == "IDENTIFIER(whenever)");
         CHECK(lex_dump(U"locality") == "IDENTIFIER(locality)");
         CHECK(lex_dump(U"assertion") == "IDENTIFIER(assertion)");

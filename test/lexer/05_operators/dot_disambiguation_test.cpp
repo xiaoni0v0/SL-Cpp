@@ -1,4 +1,4 @@
-// 点号：小数点 / 属性 / range / Ellipsis。连续的点最多吃 3 个。
+// 点号：小数点 / 属性 / range（`..`、`..=`）/ Ellipsis。连续的点最多吃 3 个。
 #include "../test_utils.h"
 
 #include <doctest/doctest.h>
@@ -48,6 +48,19 @@ TEST_SUITE("点号消歧——数量与边界") {
     TEST_CASE("两个点：range 运算符") {
         CHECK(lex_dump(U"..") == "SIGN_DOTDOT");
         CHECK(lex_dump(U"1..2") == "LITERAL_INT(1) SIGN_DOTDOT LITERAL_INT(2)");
+    }
+
+    TEST_CASE("两个点紧跟 '='：闭区间 range 运算符") {
+        CHECK(lex_dump(U"..=") == "SIGN_DOTDOTEQ");
+        CHECK(lex_dump(U"1..=2") == "LITERAL_INT(1) SIGN_DOTDOTEQ LITERAL_INT(2)");
+        CHECK(lex_dump(U"a..=b") == "IDENTIFIER(a) SIGN_DOTDOTEQ IDENTIFIER(b)");
+        // 最长匹配：..== 是 ..= 加 =
+        CHECK(lex_dump(U"..==") == "SIGN_DOTDOTEQ SIGN_ASSIGN");
+        // 中间隔开就不是 ..=
+        CHECK(lex_dump(U".. =") == "SIGN_DOTDOT SIGN_ASSIGN");
+        // 三个点先吃成 Ellipsis，后面的 = 单独成 token
+        CHECK(lex_dump(U"...=") == "LITERAL_ELLIPSIS SIGN_ASSIGN");
+        CHECK(lex_dump(U"1.0..=1.5") == "LITERAL_DECIMAL(1.0) SIGN_DOTDOTEQ LITERAL_DECIMAL(1.5)");
     }
 
     TEST_CASE("三个点：Ellipsis") { CHECK(lex_dump(U"...") == "LITERAL_ELLIPSIS"); }

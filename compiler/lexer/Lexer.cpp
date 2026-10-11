@@ -273,6 +273,10 @@ Token Lexer::read_symbol() {
             advance();
             return {SIGN_MINUS_ASSIGN, start_pos, U"-="};
         }
+        if (peek() == U'>') {
+            advance();
+            return {SIGN_ARROW, start_pos, U"->"};
+        }
         return {SIGN_MINUS, start_pos, U"-"};
 
     case U'*':
@@ -396,6 +400,10 @@ Token Lexer::read_symbol() {
         case 3:
             return {LITERAL_ELLIPSIS, start_pos, U"..."};
         case 2:
+            if (peek() == U'=') {
+                advance();
+                return {SIGN_DOTDOTEQ, start_pos, U"..="};
+            }
             return {SIGN_DOTDOT, start_pos, U".."};
         default:
             return {SIGN_DOT, start_pos, U"."};
@@ -503,7 +511,8 @@ std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
     case KW_OR:                   return "'or'";
     case KW_IS:                   return "'is'";
     case KW_IN:                   return "'in'";
-    case KW_AS:                   return "'as'";
+    case KW_FROM:                 return "'from'";
+    case KW_CONST:                return "'const'";
     case KW_DEL:                  return "'del'";
     case KW_GLOBAL:               return "'global'";
     case KW_IF:                   return "'if'";
@@ -523,6 +532,7 @@ std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
     case KW_IMPORT:               return "'import'";
     case KW_EVAL:                 return "'eval'";
 
+    case RW_AS:                   return "'as'";
     case RW_ASSERT:               return "'assert'";
     case RW_WHEN:                 return "'when'";
     case RW_CASE:                 return "'case'";
@@ -531,7 +541,6 @@ std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
     case RW_ASYNC:                return "'async'";
     case RW_AWAIT:                return "'await'";
     case RW_DEFINE:               return "'define'";
-    case RW_CONST:                return "'const'";
     case RW_STATIC:               return "'static'";
     case RW_LOCAL:                return "'local'";
 
@@ -588,8 +597,10 @@ std::string Lexer::get_displayname_by_tokentype(const TokenType type) {
 
     case SIGN_DOT:                return "'.'";
     case SIGN_DOTDOT:             return "'..'";
+    case SIGN_DOTDOTEQ:           return "'..='";
     case SIGN_QUESTION:           return "'?'";
     case SIGN_EXCLAIM:            return "'!'";
+    case SIGN_ARROW:              return "'->'";
 
     case NEWLINE:                 return "a newline";
     case END_OF_FILE:             return "EOF";
