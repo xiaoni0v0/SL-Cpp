@@ -42,17 +42,23 @@ if(
 endif()
 
 # 是否为 MSVC 命令行风格。包括 clang-cl 和 cl
+set(SL_MSVC_LIKE_FRONTEND FALSE)
 if(
     CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"
     OR CMAKE_CXX_COMPILER_ID STREQUAL "MSVC"
 )
     set(SL_MSVC_LIKE_FRONTEND TRUE)
     add_compile_options(/utf-8 /bigobj)
+    # 静态链接
     set(CMAKE_MSVC_RUNTIME_LIBRARY
         "$<IF:$<CONFIG:Debug>,MultiThreadedDebugDLL,MultiThreaded>"
     )
-else()
-    set(SL_MSVC_LIKE_FRONTEND FALSE)
+elseif(MINGW)
+    # 静态链接
+    add_link_options(
+        $<$<CONFIG:Release>:-static-libgcc>
+        $<$<CONFIG:Release>:-static-libstdc++>
+    )
 endif()
 
 # 构建类型
@@ -196,15 +202,6 @@ add_subdirectory(executor)
 add_executable(SL main.cpp)
 sl_apply_target_options(SL)
 target_link_libraries(SL PRIVATE sl_executor cxxopts::cxxopts)
-
-if(MINGW)
-    target_link_options(
-        SL
-        PRIVATE
-            $<$<CONFIG:Release>:-static-libgcc>
-            $<$<CONFIG:Release>:-static-libstdc++>
-    )
-endif()
 
 # ------------------------------------------------------------
 # 测试
