@@ -36,13 +36,13 @@ TEST_SUITE("ExprFolder import 关键字形态") {
 
 TEST_SUITE("ExprFolder import 调用形态") {
 
-    TEST_CASE("位置实参照常折叠") {
+    TEST_CASE("按位置传参的实参照常折叠") {
         const auto result = fold_json(U"import('ma' + 'th')");
         CHECK(result["type"] == "ImportCall");
         CHECK(result["positional_args"] == nlohmann::json::array({str_lit("math")}));
     }
 
-    TEST_CASE("关键字实参照常折叠") {
+    TEST_CASE("按关键字传参的实参照常折叠") {
         const auto result = fold_json(U"import('os', lazy=1 == 1, force=not True)");
         CHECK(result["keyword_args"][0]["value"] == bool_lit(true));
         CHECK(result["keyword_args"][1]["value"] == bool_lit(false));

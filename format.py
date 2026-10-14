@@ -55,7 +55,6 @@ CACHE_VERSION = 1
 # 命中则整棵子树跳过（glob，忽略大小写）
 EXCLUDE_DIR_PATTERNS = [
     ".ai",
-    ".claude",
     ".git",
     ".idea",
     ".venv",

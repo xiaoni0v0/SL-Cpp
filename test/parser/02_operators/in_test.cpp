@@ -102,7 +102,10 @@ TEST_SUITE("in 的优先级（55：紧于 is、松于比较组）") {
         CHECK(
             parse_json(U"r = a in b") ==
             nlohmann::json{
-                {"type", "Assign"}, {"target", ident("r")}, {"value", in_op(ident("a"), ident("b"))}
+                {"type", "Assign"},
+                {"target", ident("r")},
+                {"annotation", {{"is_const", false}, {"type", nullptr}}},
+                {"value", in_op(ident("a"), ident("b"))}
             }
         );
     }

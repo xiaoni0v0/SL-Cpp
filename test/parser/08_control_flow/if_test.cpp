@@ -129,7 +129,10 @@ TEST_SUITE("if——cond 槽禁止裸的普通赋值") {
                 {"clauses",
                  nlohmann::json::array(
                      {{{"cond",
-                        {{"type", "Assign"}, {"target", ident("x")}, {"value", int_lit("1")}}},
+                        {{"type", "Assign"},
+                         {"target", ident("x")},
+                         {"annotation", {{"is_const", false}, {"type", nullptr}}},
+                         {"value", int_lit("1")}}},
                        {"body", ident("y")}}}
                  )},
                 {"else_expr", nullptr}

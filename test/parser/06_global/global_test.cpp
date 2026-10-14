@@ -28,7 +28,7 @@ TEST_SUITE("global") {
 
     TEST_CASE("目标撞见关键字时报的是'期待标识符'，不会一头扎进关键字自己的产生式报无关的错") {
         check_parse_throws_with(U"global class", "expected an identifier after 'global'");
-        check_parse_throws_with(U"global as", "expected an identifier after 'global'");
+        check_parse_throws_with(U"global from", "expected an identifier after 'global'");
     }
 
     TEST_CASE("缺少标识符时报错") { CHECK_THROWS_AS(parse_program(U"global"), SyntaxError); }

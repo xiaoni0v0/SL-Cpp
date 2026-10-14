@@ -32,7 +32,7 @@ TEST_SUITE("eval") {
         CHECK(result["positional_args"][0]["type"] == "OpBinary");
     }
 
-    TEST_CASE("关键字实参：eval(code='x') 语法上合法，恰好绑出 code 是运行期的事") {
+    TEST_CASE("按关键字传参的实参：eval(code='x') 语法上合法，恰好绑出 code 是运行期的事") {
         const auto result = parse_json(U"eval(code='x')");
         CHECK(result["type"] == "Eval");
         CHECK(result["positional_args"] == nlohmann::json::array());
@@ -69,7 +69,9 @@ TEST_SUITE("eval") {
         CHECK_THROWS_AS(parse_program(U"eval 'x'"), SyntaxError);
     }
 
-    TEST_CASE("空实参表、多个位置实参都合法（参数个数对不对是运行期的事，同 import 调用形态）") {
+    TEST_CASE(
+        "空实参表、多个按位置传参的实参都合法（参数个数对不对是运行期的事，同 import 调用形态）"
+    ) {
         CHECK(parse_json(U"eval()") == eval_node(nlohmann::json::array(), nlohmann::json::array()));
         CHECK(
             parse_json(U"eval('a', 'b')") ==
@@ -77,7 +79,9 @@ TEST_SUITE("eval") {
         );
     }
 
-    TEST_CASE("实参分组规则跟普通函数调用共用同一套：位置实参不能出现在关键字实参之后") {
+    TEST_CASE(
+        "实参分组规则跟普通函数调用共用同一套：按位置传参的实参不能出现在按关键字传参的实参之后"
+    ) {
         check_parse_throws_with(
             U"eval(code='x', 'y')", "positional argument cannot appear after keyword argument"
         );

@@ -128,6 +128,7 @@ TEST_SUITE("装饰器——通用形式") {
                 {"target",
                  {{"type", "Assign"},
                   {"target", ident("x")},
+                  {"annotation", {{"is_const", false}, {"type", nullptr}}},
                   {"value", nlohmann::json::parse(R"({"type":"LiteralInt","raw":"1"})")}}}
             }
         );

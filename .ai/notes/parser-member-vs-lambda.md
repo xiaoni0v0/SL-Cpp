@@ -5,7 +5,8 @@
 
 1. 被多个调用者真正复用；
 2. 即便只有一个调用者，本身也是一个独立、有名字的语法产生式/通用原语（比如链式比较、链式 `is`、
-   字典字面量这种在 SL.md 里明确成节的概念）。
+   字典与集合字面量、复合表达式这种在 SL.md 里明确成节的概念，或者 `skip_paren_newline`、
+   `assign_allowed` 这种对括号栈的查询）。
 
 否则——哪怕这段逻辑语法上完全自洽、哪怕它对应 SL.md 里一个正儿八经的产生式（如 `ONE_PARAM`/
 `ONE_CAPTURE`）——只要离开唯一的调用者就没有独立意义，就应该收进调用者内部当局部 lambda（`[&]`
@@ -19,15 +20,15 @@
 
 - `finish_func_params`/`finish_func_captures` 把原本独立的 `parse_func_param`/`parse_func_capture`
   （各自只有一个调用者）内联成了局部 lambda `parse_one_param`/`parse_one_capture`；
-- `finish_brace_block`（此前是拆出的"瘦壳 + 干活函数"两段式，但 `finish_brace_block` 自始至终只有
-  一个调用者）被合并回一个 `parse_brace()`。
+- 曾经拆成"瘦壳 + 干活函数"两段的 `{}` 解析（干活的那个自始至终只有一个调用者）被合并回一个函数。
 
-而 `parse_chain_compare`/`parse_chain_is`/`finish_dict` 虽然也只有一个调用点，但因为体量大（带自己的
-局部状态、循环）且对应 SL.md 里明确成节的语法概念，仍然保留为独立方法——这印证了判断标尺不是单纯数
-调用点个数，而是"这个方法在类的词汇表里有没有资格单独占一行"。这三个是否该内联成 lambda 曾经拿不准，
-问过用户，用户明确说这个具体要不要合是他自己也没想清楚的偶然情况、让 AI 自己判断——判断结果是继续
-保留独立方法（体量大 + 独立语法概念这两条本身就够格，不需要为了"贯彻内联原则"而牺牲 `parse_expr_pratt`/
-`parse_brace` 这两个核心调度函数的精简）。
+而 `parse_chain_compare`/`parse_chain_is`/`parse_dict_or_set` 虽然也只有一个调用点，但因为体量大（带自己的
+局部状态、循环）且对应 SL.md 里明确成节的语法概念，仍然保留为独立方法：判断标尺不是单纯数调用点个数，
+而是"这个方法在类的词汇表里有没有资格单独占一行"。这类拿不准的个案，用户让 AI 自己判断，倾向是保留
+独立方法，不为了"贯彻内联原则"牺牲 `parse_expr_pratt` 这个核心调度函数的精简。
+
+赋值一档的几个成员（`finish_assign`、`parse_annotation`、`parse_decl_head`、`finish_decl`、`parse_type`、
+`parse_from_clause`）都有两个以上调用者：Pratt 循环、条件、for 头部、except 头部、形参注解、返回值注解各取所需。
 
 ## how to apply
 

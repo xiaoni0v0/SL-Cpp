@@ -25,7 +25,7 @@ TEST_SUITE("* / ** 展开") {
 
     TEST_CASE("**expr 在字典里，value 侧为 null") {
         CHECK(
-            parse_json(U"{**a, 'b': 1}") ==
+            parse_json(U"${**a, 'b' -> 1}") ==
             nlohmann::json{
                 {"type", "LiteralDict"},
                 {"items",

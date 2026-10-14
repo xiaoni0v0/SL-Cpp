@@ -11,6 +11,7 @@ TEST_SUITE("Parser 单表达式入口") {
             node == nlohmann::json{
                         {"type", "Assign"},
                         {"target", {{"type", "Identifier"}, {"identifier", "x"}}},
+                        {"annotation", {{"is_const", false}, {"type", nullptr}}},
                         {"value", {{"type", "LiteralInt"}, {"raw", "0"}}}
                     }
         );

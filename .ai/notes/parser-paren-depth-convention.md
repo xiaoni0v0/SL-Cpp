@@ -1,50 +1,40 @@
-# Parser.cpp：`finish_*` 函数的括号栈管理约定
+# Parser.cpp：括号栈 `brackets_` 的管理约定和用途
 
-Parser.cpp 里所有处理 `()`/`[]` 配对的 `finish_*` 函数（`finish_call_args`、`finish_index`、
-`finish_func_params`、`finish_captures`）统一约定：
+## 谁压栈、谁弹栈
 
-1. **起始括号和收尾括号都由 `finish_*` 函数自己消耗**，调用方只负责判断"当前是不是起始括号"；
-2. **括号栈 `brackets_` 的入栈/出栈完全由 `finish_*` 函数自己管理**——函数一进来就
-   `expect_open(kind)`（消耗左括号、把 `kind` 压栈），收尾时 `expect_close(kind)`（消耗右括号、
-   弹栈并核对弹出的种类跟传进来的一致），调用方不用也不该直接碰 `brackets_`；
-3. **收尾时永远是"先消耗收尾括号、再弹栈"**，这已经是 `expect_close` 自己的实现顺序，`finish_*`
-   系列不需要（也没法）拆成两步分别控制。
+Parser.cpp 里所有处理括号配对的函数（`finish_call_args`、`finish_index`、`finish_func_params`、
+`finish_captures`，`parse_paren_or_tuple`、`parse_list`、`parse_dict_or_set`、`parse_compound`，以及
+`if`/`for`/`while`/`except` 的头部）统一约定：
 
-`finish_dict` 是唯一的例外：`{}` 这一层括号不是由 `finish_dict` 自己管理，而是外层的
-`parse_brace` 在调用 `finish_dict` 前后分别 `expect_open(Bracket::Brace)`/
-`expect_close(Bracket::Brace)`——这是因为 `{}` 开启的是全新的语句语境，跟"多一层括号嵌套"是不同
-的机制，详见 `compiler/parser/Parser.cpp` 里 `parse_brace` 的实现注释和 `.ai/context.md` 里对应的设计记录。
-`finish_dict` 本身完全不碰 `brackets_`。
+1. 起始括号和收尾括号都由这个函数自己消耗，调用方只负责判断"当前是不是起始括号"；
+2. 一进来就 `expect_open(kind)`（消耗左括号、压栈），收尾时 `expect_close(kind)`（消耗右括号、弹栈并核对
+   弹出的种类跟传进来的一致），调用方不碰 `brackets_`；
+3. 收尾永远是"先消耗收尾括号、再弹栈"，这是 `expect_close` 自己的实现顺序。
 
-## `brackets_` 解决的问题
+这样每个函数是自洽的单元，调用方不用记"调用我之前你还得自己压栈"这种隐藏契约。`expect()` 抛异常时整个
+Parser 作废，不存在"弹了一半"的状态。
 
-`brackets_` 是一个 `std::stack<Bracket>`，`Bracket` 有 `Paren`/`Square`/`Brace`/`ForHeader`
-四种。它替代了早期版本里的一个整数深度计数器 `paren_depth_`，原因是纯计数器分不清"括号嵌套了几层"
-和"最内层到底是哪一种括号"——而这两者的区别恰好是 `skip_paren_newline()`（仅当栈顶是 `Paren` 或
-`Square` 时才把 NEWLINE 当空白跳过）能不能正确工作的关键：`{}` 内部（栈顶是 `Brace`）、for 步进头部
-内部（栈顶是 `ForHeader`）都不应该被外层任意多少层 `Paren`/`Square` 带偏，栈顶天然就是当前"最内层
-生效的语境"，不需要在进入 `{}`/`ForHeader` 时手动"保存/清零/退出时再恢复"计数器——每一层括号各自
-独立压栈弹栈，互不干扰。
+需要"同一段括号内容、包成不同节点"时（`import`/`eval` 的调用形态），直接调现成的 `finish_call_args`，再把
+返回的 `CallArgs` 包进 `AstNodeImportCall`/`AstNodeEval`，不要为此拆一个出参版本。
 
-## why
+## 栈顶决定两件事
 
-早期版本 `finish_call`/`finish_index` 是"调用方在调用前 `paren_depth_++`、函数自己只减不增"，
-`finish_func_params`/`finish_captures` 是"函数自己全权管理"，两种写法混用；同时约一半的收尾代码是
-"先减后消耗"、另一半是"先消耗后减"。这两处不统一都是用户明确要求理顺的（"要统一一下"）。选"函数
-自己全权管理 + 消耗在前"这一版是因为：(a) 这样每个 `finish_*` 函数是完全自洽的单元，调用方不用记住
-"调用我之前你还得自己 `++`"这种隐藏契约；(b) 跟开头"消耗在前、入栈在后"的顺序对称一致；(c)
-`expect()` 抛异常时 Parser 整体废弃（不捕获继续解析），所以两种收尾顺序在行为上完全等价，纯粹是风格
-选择，选对称的那个更好记。后来把整数计数器换成 `Bracket` 栈是另一次改动，动机见上一节，跟这里的
-"函数自己全权管理"约定是正交的，栈化之后约定本身没变，只是操作对象从"整数加减"变成了"入栈出栈"。
+`Bracket` 有六种：`Paren`、`Square`、`Brace`（复合表达式、函数体、类体）、`ForHeader`、`Call`（实参表，含
+`import(...)`、`eval(...)`）、`DictSet`（`${ }`）。用栈而不用深度计数器，是因为下面两条规则只看最内层是
+哪一种括号，外面嵌了多少层都不该有影响，每层各自压栈弹栈，进入 `{}` 时不用手动保存、清零、恢复什么。
+
+1. **换行是不是空白**（`skip_paren_newline`）：栈顶是 `Brace` 或 `ForHeader` 时换行有意义（分隔语句、分隔
+   for 头部的槽），其余四种括号里换行是空白。
+2. **能不能写赋值一档**（`assign_allowed`，管 `=`、`:`、op=）：栈顶是 `Call` 时不能。SL.md 规定调用的实参里只有开头的
+   `identifier =` 表示按关键字传参，其余赋值写法都要被实参内的括号包住。按关键字传参的写法由 `finish_call_args` 在实参开头
+   单独认，不经过 Pratt；Pratt 循环在 `Call` 栈顶遇到赋值一档直接停，交给 `finish_call_args` 报"赋值不能当实参"。
+   加一层括号、进函数体、进列表，栈顶就变了，赋值照常可写。这条只看栈顶，所以 `f(if (c) x = 1)` 里 `if` 分支的
+   `x` 也不会吃掉 `=`。字典的键值分隔是 `->`，不是赋值一档，`DictSet` 里赋值照常可写。
+
+索引实参按普通表达式解析，赋值一档照常可写，不使用 `Call` 的括号限制。
+实参列表可以为空，允许多个 `*expr` 展开项，不单独识别按关键字传参的写法。
 
 ## how to apply
 
-以后往 Parser.cpp 加新的、处理括号配对的 `finish_*` 函数，直接照抄这个约定：起始/收尾括号和
-`brackets_` 的入栈出栈全部由函数自己管（`expect_open`/`expect_close` 已经把顺序和核对都做好了，
-直接调用即可，不需要手写 push/pop）。
-
-需要"同一段括号内容、包成不同节点"时（`import`/`eval` 的调用形态就是这样），**不要**为此把
-`finish_*` 再拆一层出参版本——直接调现成的那个、再把结果重新组装成需要的节点。用户明确要求这样，
-理由是只保留一个入口更统一，而且 `finish_*` 一族其余成员都是按值返回、没有出参风格。相应地
-`finish_call_args()` 的返回类型是具体的 `CallArgs`（普通调用、`import`/`eval` 三处调用方各自把它
-包进 `AstNodeCall`/`AstNodeImportCall`/`AstNodeEval`，不需要 `dynamic_cast`）。
+加处理括号配对的新函数，照抄 `expect_open`/`expect_close`，不手写 push/pop。新增一种括号时，想清楚它在上面
+两条规则里各属于哪一边；语义上跟已有某种完全一样（比如另一种"实参表"）就复用那一种，不另开。

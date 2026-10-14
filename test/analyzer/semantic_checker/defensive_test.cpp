@@ -103,7 +103,7 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
         check_throws_internal_error_with(*program, "unexpected empty name");
     }
 
-    TEST_CASE("AstNodeImportCall：关键字实参的 keyword_ 是空字符串") {
+    TEST_CASE("AstNodeImportCall：按关键字传参的实参的 keyword_ 是空字符串") {
         std::vector<OneKwArg> keyword_args;
         keyword_args.push_back({OneKwArg::Kind::Keyword, U"", int_lit()});
         AstNodeProgramPtr program{wrap(
@@ -115,7 +115,7 @@ TEST_SUITE("SemanticChecker 防御性断言（畸形 AST，正常解析永远构
         check_throws_internal_error_with(*program, "unexpected empty name");
     }
 
-    TEST_CASE("AstNodeImportCall：位置实参里有空指针") {
+    TEST_CASE("AstNodeImportCall：按位置传参的实参里有空指针") {
         std::vector<AstNodePtr> positional_args;
         positional_args.push_back(nullptr);
         AstNodeProgramPtr program{wrap(

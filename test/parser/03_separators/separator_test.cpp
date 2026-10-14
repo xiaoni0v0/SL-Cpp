@@ -15,7 +15,10 @@ TEST_SUITE("表达式分隔符——标准例子") {
                 {"type", "Program"},
                 {"exprs",
                  nlohmann::json::array(
-                     {{{"type", "Assign"}, {"target", ident("a")}, {"value", ident("b")}},
+                     {{{"type", "Assign"},
+                       {"target", ident("a")},
+                       {"annotation", {{"is_const", false}, {"type", nullptr}}},
+                       {"value", ident("b")}},
                       {{"type", "OpUnary"}, {"op", "+"}, {"operand", ident("c")}}}
                  )}
             }
@@ -24,19 +27,21 @@ TEST_SUITE("表达式分隔符——标准例子") {
 
     TEST_CASE("d = e +\\nf：二元运算符只有左操作数，不完整，合并成一条表达式") {
         CHECK(
-            parse_program_json(U"d = e +\nf") == nlohmann::json{
-                                                     {"type", "Program"},
-                                                     {"exprs",
-                                                      nlohmann::json::array(
-                                                          {{{"type", "Assign"},
-                                                            {"target", ident("d")},
-                                                            {"value",
-                                                             {{"type", "OpBinary"},
-                                                              {"op", "+"},
-                                                              {"left", ident("e")},
-                                                              {"right", ident("f")}}}}}
-                                                      )}
-                                                 }
+            parse_program_json(U"d = e +\nf") ==
+            nlohmann::json{
+                {"type", "Program"},
+                {"exprs",
+                 nlohmann::json::array(
+                     {{{"type", "Assign"},
+                       {"target", ident("d")},
+                       {"annotation", {{"is_const", false}, {"type", nullptr}}},
+                       {"value",
+                        {{"type", "OpBinary"},
+                         {"op", "+"},
+                         {"left", ident("e")},
+                         {"right", ident("f")}}}}}
+                 )}
+            }
         );
     }
 
@@ -111,10 +116,14 @@ TEST_SUITE("表达式分隔符——标准例子") {
                               {"body",
                                {{"type", "Assign"},
                                 {"target", ident("x")},
+                                {"annotation", {{"is_const", false}, {"type", nullptr}}},
                                 {"value", int_lit("100")}}}}}
                         )},
                        {"else_expr",
-                        {{"type", "Assign"}, {"target", ident("x")}, {"value", int_lit("200")}}}}}
+                        {{"type", "Assign"},
+                         {"target", ident("x")},
+                         {"annotation", {{"is_const", false}, {"type", nullptr}}},
+                         {"value", int_lit("200")}}}}}
                  )}
             }
         );
@@ -141,9 +150,7 @@ TEST_SUITE("表达式分隔符——其他续行场景（try/except/finally 同 
                        {"try_expr", ident("a")},
                        {"except_clauses",
                         nlohmann::json::array(
-                            {{{"exceptions", nlohmann::json::array({ident("E")})},
-                              {"target", nullptr},
-                              {"body", ident("b")}}}
+                            {{{"binding", nullptr}, {"exc_type", ident("E")}, {"body", ident("b")}}}
                         )},
                        {"finally_expr", nullptr}}}
                  )}
@@ -195,6 +202,7 @@ TEST_SUITE("表达式分隔符——嵌在别的表达式里的 if/try 同样跨
                  nlohmann::json::array(
                      {{{"type", "Assign"},
                        {"target", ident("x")},
+                       {"annotation", {{"is_const", false}, {"type", nullptr}}},
                        {"value",
                         {{"type", "If"},
                          {"clauses",
@@ -247,13 +255,14 @@ TEST_SUITE("表达式分隔符——嵌在别的表达式里的 if/try 同样跨
                  nlohmann::json::array(
                      {{{"type", "Assign"},
                        {"target", ident("x")},
+                       {"annotation", {{"is_const", false}, {"type", nullptr}}},
                        {"value",
                         {{"type", "Try"},
                          {"try_expr", ident("a")},
                          {"except_clauses",
                           nlohmann::json::array(
-                              {{{"exceptions", nlohmann::json::array({ident("E")})},
-                                {"target", nullptr},
+                              {{{"binding", nullptr},
+                                {"exc_type", ident("E")},
                                 {"body", ident("b")}}}
                           )},
                          {"finally_expr", nullptr}}}}}

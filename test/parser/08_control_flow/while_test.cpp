@@ -106,7 +106,11 @@ TEST_SUITE("while——cond 禁止裸的普通赋值") {
                 {"type", "ForCond"},
                 {"collect", "none"},
                 {"init", nullptr},
-                {"cond", {{"type", "Assign"}, {"target", ident("x")}, {"value", int_lit("1")}}},
+                {"cond",
+                 {{"type", "Assign"},
+                  {"target", ident("x")},
+                  {"annotation", {{"is_const", false}, {"type", nullptr}}},
+                  {"value", int_lit("1")}}},
                 {"inc", nullptr},
                 {"body", ident("body")}
             }

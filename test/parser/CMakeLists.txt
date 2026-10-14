@@ -9,6 +9,7 @@ sl_add_test_target(
         02_operators/compare_is_test.cpp
         02_operators/in_test.cpp
         02_operators/assign_test.cpp
+        02_operators/declaration_test.cpp
         02_operators/unpack_test.cpp
         03_separators/separator_test.cpp
         04_compound_dict/compound_dict_test.cpp

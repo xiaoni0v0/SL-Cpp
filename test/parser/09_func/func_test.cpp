@@ -8,10 +8,14 @@
 
 namespace {
 
-nlohmann::json
-param(const char *id, const nlohmann::json &type_annotation, const nlohmann::json &default_value) {
+nlohmann::json param(
+    const char *id, const nlohmann::json &type_annotation, const nlohmann::json &default_value,
+    const bool is_const = false
+) {
     return nlohmann::json{
-        {"identifier", id}, {"type_annotation", type_annotation}, {"default_value", default_value}
+        {"identifier", id},
+        {"annotation", {{"is_const", is_const}, {"type", type_annotation}}},
+        {"default_value", default_value}
     };
 }
 
@@ -111,6 +115,59 @@ TEST_SUITE("func——形参") {
         CHECK(
             parse_json(U"func f(a: int = 1) {}")["params"]["positional"] ==
             nlohmann::json::array({param("a", ident("int"), int_lit("1"))})
+        );
+    }
+
+    TEST_CASE("类型注解前可以写 const") {
+        CHECK(
+            parse_json(U"func f(a: const int, b: const int? = None) {}")["params"]["positional"] ==
+            nlohmann::json::array(
+                {param("a", ident("int"), nullptr, true),
+                 param(
+                     "b",
+                     {{"type", "OpUnary"}, {"op", "?"}, {"operand", ident("int")}},
+                     {{"type", "LiteralNone"}},
+                     true
+                 )}
+            )
+        );
+        CHECK(
+            parse_json(U"func f(a:\nconst\nint) {}")["params"]["positional"] ==
+            nlohmann::json::array({param("a", ident("int"), nullptr, true)})
+        );
+    }
+
+    TEST_CASE("形参注解的 const 后面可以不写类型") {
+        CHECK(
+            parse_json(U"func f(a: const, b: const = 1, *c, d: const) {}")["params"] ==
+            all_params(
+                nlohmann::json::array(
+                    {param("a", nullptr, nullptr, true), param("b", nullptr, int_lit("1"), true)}
+                ),
+                "c",
+                nlohmann::json::array({param("d", nullptr, nullptr, true)})
+            )
+        );
+    }
+
+    TEST_CASE("形参注解的类型可以是字符串，跟 const 一起写") {
+        CHECK(
+            parse_json(U"func f(a: const 'doc') {}")["params"]["positional"] ==
+            nlohmann::json::array({param("a", str_lit("doc"), nullptr, true)})
+        );
+    }
+
+    TEST_CASE("形参的 ':' 后面 const 和类型一个都没有") {
+        check_parse_throws_with(U"func f(a:) {}", "expected 'const' or a type after ':'");
+        check_parse_throws_with(U"func f(a: = 1) {}", "expected 'const' or a type after ':'");
+    }
+
+    TEST_CASE("形参注解停在 '=' 之前，注解里的赋值要加括号") {
+        CHECK(
+            parse_json(
+                U"func f(a: (x = int)) {}"
+            )["params"]["positional"][0]["annotation"]["type"] ==
+            bare_assign(ident("x"), ident("int"))
         );
     }
 
@@ -282,5 +339,48 @@ TEST_SUITE("func——返回类型/文档字符串") {
         const auto j = parse_json(U"func f(): int 'doc' {}");
         CHECK(j["return_type"] == ident("int"));
         CHECK(j["doc"] == nlohmann::json{{"type", "LiteralStr"}, {"value", "doc"}});
+    }
+
+    TEST_CASE("返回值注解不能写 const") {
+        const std::string msg{"a return annotation cannot be const"};
+        check_parse_throws_with(U"func f(): const int {}", msg);
+        // 允许的话这里分不清 {} 是类型还是函数体
+        check_parse_throws_with(U"func f(): const {}", msg);
+        check_parse_throws_with(U"func f():\nconst int {}", msg);
+    }
+
+    TEST_CASE("返回类型按高于赋值的优先级解析") {
+        CHECK_THROWS_AS(parse_program(U"func f(): a = b {}"), SyntaxError);
+        CHECK(parse_json(U"func f(): int | str? {}")["return_type"]["type"] == "OpBinary");
+    }
+}
+
+TEST_SUITE("func——类型位置上的函数表达式") {
+
+    TEST_CASE("匿名函数表达式可以当类型") {
+        CHECK(
+            parse_json(
+                U"func f(p: func [P]() { return P }) {}"
+            )["params"]["positional"][0]["annotation"]["type"]["type"] == "Func"
+        );
+        CHECK(parse_json(U"func f(): func () { return int } {}")["return_type"]["type"] == "Func");
+        // 冗余括号不影响判断
+        CHECK(
+            parse_json(
+                U"func f(p: (func () { return int })) {}"
+            )["params"]["positional"][0]["annotation"]["type"]["type"] == "Func"
+        );
+    }
+
+    TEST_CASE("带名字的函数表达式不能当类型") {
+        const std::string msg{"a function expression used as a type must be anonymous"};
+        check_parse_throws_with(U"func f(p: func g() { return int }) {}", msg);
+        check_parse_throws_with(U"func f(): func g() { return int } {}", msg);
+        check_parse_throws_with(U"func f(p: (func g() { return int })) {}", msg);
+    }
+
+    TEST_CASE("最外层不是函数表达式时，里面的具名函数不受限制") {
+        CHECK_NOTHROW(parse_program(U"func f(p: func g() {} | int) {}"));
+        CHECK_NOTHROW(parse_program(U"func f(p: (func g() {})()) {}"));
     }
 }

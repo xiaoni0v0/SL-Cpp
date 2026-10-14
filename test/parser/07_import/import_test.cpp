@@ -49,7 +49,7 @@ TEST_SUITE("import 关键字形态") {
 
     TEST_CASE("第一段撞见关键字时报的是'期待标识符'，不会一头扎进关键字自己的产生式报无关的错") {
         check_parse_throws_with(U"import class", "expected an identifier after 'import'");
-        check_parse_throws_with(U"import as", "expected an identifier after 'import'");
+        check_parse_throws_with(U"import from", "expected an identifier after 'import'");
     }
 
     TEST_CASE("点号后面必须还有一段") {
@@ -93,11 +93,13 @@ TEST_SUITE("import 关键字形态") {
 
     TEST_CASE("import 是表达式，可以出现在任何需要值的位置") {
         CHECK(
-            parse_json(U"x = import a") == nlohmann::json{
-                                               {"type", "Assign"},
-                                               {"target", ident("x")},
-                                               {"value", import_kw(nlohmann::json::array({"a"}))}
-                                           }
+            parse_json(U"x = import a") ==
+            nlohmann::json{
+                {"type", "Assign"},
+                {"target", ident("x")},
+                {"annotation", {{"is_const", false}, {"type", nullptr}}},
+                {"value", import_kw(nlohmann::json::array({"a"}))}
+            }
         );
         // 当实参传给别的函数
         const auto arg = parse_json(U"f(import a)");
@@ -134,7 +136,7 @@ TEST_SUITE("import 调用形态") {
         );
     }
 
-    TEST_CASE("关键字实参：按书写顺序进关键字组") {
+    TEST_CASE("按关键字传参的实参：按书写顺序进关键字组") {
         const auto result = parse_json(U"import('os', lazy=True, force=False)");
         CHECK(result["type"] == "ImportCall");
         CHECK(result["positional_args"] == nlohmann::json::array({str_literal("os")}));
@@ -158,7 +160,9 @@ TEST_SUITE("import 调用形态") {
         CHECK_NOTHROW(parse_program(U"import(1, 2, 3, whatever=None)"));
     }
 
-    TEST_CASE("实参分组规则跟普通函数调用共用同一套：位置实参不能出现在关键字实参之后") {
+    TEST_CASE(
+        "实参分组规则跟普通函数调用共用同一套：按位置传参的实参不能出现在按关键字传参的实参之后"
+    ) {
         check_parse_throws_with(
             U"import(lazy=True, 'math')", "positional argument cannot appear after keyword argument"
         );

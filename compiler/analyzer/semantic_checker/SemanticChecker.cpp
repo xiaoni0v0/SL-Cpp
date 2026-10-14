@@ -570,7 +570,7 @@ void SemanticChecker::check_call_args(const CallArgs &args, const Position pos) 
     ctx_.can_double_star = false;
     for (const auto &arg : args.positional_args_) check_not_null(arg, pos);
 
-    // 关键字组：关键字实参、**expr
+    // 关键字组：按关键字传参的实参、**expr
     for (const auto &kw : args.keyword_args_) {
         if (kw.kind_ == OneKwArg::Kind::Keyword) require_not_empty(kw.keyword_, pos);
 

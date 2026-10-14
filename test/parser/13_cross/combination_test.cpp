@@ -17,11 +17,12 @@ TEST_SUITE("跨分组组合——装饰器/类/函数/for/try/字典展开/is �
             U"class Handler(Base) {\n"
             U"    @cached\n"
             U"    func process[state](self, items, **opts) {\n"
-            U"        result = {}\n"
-            U"        for $ (items as item)\n"
-            U"            try result[item.key] = {**opts, 'value': item.value, 'flag': item.kind "
+            U"        result = ${}\n"
+            U"        for $ (item from items)\n"
+            U"            try result[item.key] = ${**opts, 'value' -> item.value, 'flag' -> "
+            U"item.kind "
             U"is 'ok'}\n"
-            U"            except (ValueError, KeyError) raise Exception('propagate')\n"
+            U"            except (ValueError | KeyError) raise Exception('propagate')\n"
             U"            finally item.seen = True\n"
             U"        return result\n"
             U"    }\n"
@@ -55,7 +56,7 @@ TEST_SUITE("跨分组组合——装饰器/类/函数/for/try/字典展开/is �
         const auto &for_node{func_body[1]};
         CHECK(for_node["type"] == "ForIter");
         CHECK(for_node["collect"] == "$");
-        CHECK(for_node["target"] == ident("item"));
+        CHECK(for_node["binding"]["target"] == ident("item"));
         CHECK(for_node["iterable"] == ident("items"));
 
         // for 的 body 没套 {}，直接就是 try 节点本身（不是 Compound 包一层）
@@ -73,8 +74,12 @@ TEST_SUITE("跨分组组合——装饰器/类/函数/for/try/字典展开/is �
 
         REQUIRE(try_node["except_clauses"].size() == 1);
         CHECK(
-            try_node["except_clauses"][0]["exceptions"] ==
-            nlohmann::json::array({ident("ValueError"), ident("KeyError")})
+            try_node["except_clauses"][0]["exc_type"] == nlohmann::json{
+                                                             {"type", "OpBinary"},
+                                                             {"op", "|"},
+                                                             {"left", ident("ValueError")},
+                                                             {"right", ident("KeyError")}
+                                                         }
         );
         CHECK(try_node["except_clauses"][0]["body"]["type"] == "Raise");
         CHECK(try_node["finally_expr"]["type"] == "Assign");
@@ -85,22 +90,24 @@ TEST_SUITE("跨分组组合——装饰器/类/函数/for/try/字典展开/is �
 
 TEST_SUITE("跨分组组合——{}/()/[] 混着嵌套时括号栈 brackets_ 的一致性") {
 
-    TEST_CASE(
-        "字典 value 换行不应合并这条规则，嵌套再深也不能失效（比 compound_dict_test.cpp 原始"
-        "回归用例多包一层 list 和 call）"
-    ) {
-        // f( [ { 'a' : 1 \n + 2 } ] )：进入 {} 时 brackets_ 栈顶被压成 Brace，不管外层是
-        // f( 还是 [ 嵌了几层，只要栈顶是 Brace，skip_paren_newline 就不会跳过换行——
-        // 'a' 对应的 value 在换行处都应该老老实实结束，不能被外层的括号嵌套带偏而把 "+ 2"
-        // 接续进来
-        CHECK_THROWS_AS(parse_program(U"f([{'a': 1\n+ 2}])"), SyntaxError);
+    TEST_CASE("栈顶是 Brace 时换行分隔语句，是 DictSet 时换行是空白，跟外层嵌了几层无关") {
+        // 复合表达式里 `a` 换行 `+ 2` 是两条表达式
+        CHECK(parse_json(U"f([{a\n+ 2}])")["positional_args"][0]["items"][0]["exprs"].size() == 2);
+        // 字典的值跨行接着解析
+        CHECK(parse_json(U"f([${'a' -> 1\n+ 2}])") == parse_json(U"f([${'a' -> 1 + 2}])"));
+        // 字典里的复合表达式又回到分隔语句
+        CHECK(
+            parse_json(
+                U"f([${'a' -> {b\n+ 2}}])"
+            )["positional_args"][0]["items"][0]["items"][0]["value"]["exprs"]
+                .size() == 2
+        );
     }
 
     TEST_CASE(
         "字典结束后 brackets_ 栈顶正确恢复到外层，同一个调用里字典后面的实参依然支持跨行合并"
-        "（parse_brace 必须在 finish_dict 返回之后才 expect_close(Brace) 弹栈，不能提前）"
     ) {
-        const std::u32string source{U"f({'a': 1}, x\n+ y)"};
+        const std::u32string source{U"f(${'a' -> 1}, x\n+ y)"};
         CHECK_NOTHROW(parse_program(source));
         CHECK(
             parse_json(source) ==
@@ -126,12 +133,12 @@ TEST_SUITE("跨分组组合——{}/()/[] 混着嵌套时括号栈 brackets_ 的
     }
 
     TEST_CASE(
-        "for 头部某一槽本身是字典字面量（内部会各自独立压栈/弹栈 Bracket::Brace），"
+        "for 头部某一槽本身是字典字面量（内部会各自独立压栈/弹栈 Bracket::DictSet），"
         "不影响 parse_for 对槽间换行分隔符的判定"
     ) {
-        // init 槽里的字典进入/退出时各自把 Brace 压栈/弹栈，brackets_ 栈底的 ForHeader
+        // init 槽里的字典进入/退出时各自把 DictSet 压栈/弹栈，brackets_ 栈底的 ForHeader
         // 全程不受影响，不应干扰槽间换行分隔。
-        const std::u32string source = U"for (state = {'count': 0}\n"
+        const std::u32string source = U"for (state = ${'count' -> 0}\n"
                                       U"     state.count < 10\n"
                                       U"     state.count += 1) body";
         CHECK_NOTHROW(parse_program(source));
@@ -154,7 +161,7 @@ TEST_SUITE("跨分组组合——深层嵌套结构里报错位置依然精确")
         // row1: func f() {
         // row2: return [
         // row3: 1,
-        // row4: {'a': (2 +
+        // row4: ${'a' -> (2 +
         // row5: )},
         // row6: ]
         // row7: }
@@ -162,7 +169,7 @@ TEST_SUITE("跨分组组合——深层嵌套结构里报错位置依然精确")
         const std::u32string source = U"func f() {\n"
                                       U"return [\n"
                                       U"1,\n"
-                                      U"{'a': (2 +\n"
+                                      U"${'a' -> (2 +\n"
                                       U")},\n"
                                       U"]\n"
                                       U"}";
@@ -210,7 +217,7 @@ TEST_SUITE("跨分组组合——表达式位置的通用性（默认值/实参/
     }
 
     TEST_CASE("链式比较和 is 可以混在字典的 key 位置（key 就是普通的 parse_expr，没有特殊限制）") {
-        const auto j = parse_json(U"{a < b is c: 1}");
+        const auto j = parse_json(U"${a < b is c -> 1}");
         const auto &key{j["items"][0]["key"]};
         CHECK(key["type"] == "Is");
         CHECK(key["operands"][0]["type"] == "Compare");

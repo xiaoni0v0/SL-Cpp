@@ -7,7 +7,7 @@
 在，新开一个 AI 会话读这里就能无缝接上。
 
 **新会话/新机器接手时，建议按顺序读**：
-1. 项目根目录的 `CLAUDE.md`（会被自动加载，写了最高频、最不能忘的硬约束）
+1. 项目根目录的 `AGENTS.md`（会被自动加载，写了最高频、最不能忘的硬约束）
 2. [architecture.md](../architecture.md)（项目结构、代码索引，从这里开始摸清代码在哪）
 3. 这份索引，按需点开下面链接的具体笔记
 4. [context.md](../context.md)（设计决策/被否决方案/悬而未决的问题，体量大，按需搜索关键词读）
@@ -24,7 +24,7 @@
 - [no-section-numbers.md](no-section-numbers.md) — 代码/测试/目录名里一律不许出现 SL.md 章节号，只能写文字描述
 - [parser-member-vs-lambda.md](parser-member-vs-lambda.md) — Parser.cpp 里辅助逻辑该当类成员还是局部 lambda 的判断标尺
 - [parser-prefer-expect.md](parser-prefer-expect.md) — 消耗类型确定的 token 一律用 expect(X)，不用裸 advance()
-- [parser-paren-depth-convention.md](parser-paren-depth-convention.md) — finish_* 系列函数管理括号栈 brackets_ 和括号收尾的统一约定
+- [parser-paren-depth-convention.md](parser-paren-depth-convention.md) — 括号栈 brackets_ 谁压谁弹，以及栈顶怎么决定换行和 ':' 的含义
 - [parser-token-vs-expr-level.md](parser-token-vs-expr-level.md) — Parser 某个槽位该收紧到 token 级别还是走通用表达式再交给语义层判形状
 - [ast-node-passing-conventions.md](ast-node-passing-conventions.md) — AST 节点该传引用、非 const 引用还是智能指针引用，以及 const 在这里承载的信息
 - [visitor-result-passing.md](visitor-result-passing.md) — AST 访问者要返回值/带参数时怎么手搓成员通道，以及为什么不抽成模板基类

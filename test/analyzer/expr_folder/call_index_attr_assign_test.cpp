@@ -24,7 +24,7 @@ TEST_SUITE("ExprFolder Call 子表达式折叠") {
         );
     }
 
-    TEST_CASE("keyword_args_ 的 value_ 会被折叠（普通关键字实参、**展开都一样）") {
+    TEST_CASE("keyword_args_ 的 value_ 会被折叠（普通的按关键字传参、**展开都一样）") {
         const auto result = fold_json(U"f(x = 1 + 1, **(1 + 1, 2 + 2))");
         CHECK(
             result["keyword_args"][0] == nlohmann::json{{"keyword", "x"}, {"value", int_lit("2")}}

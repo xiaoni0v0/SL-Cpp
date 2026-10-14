@@ -24,7 +24,8 @@
 入口，不是真正的解释器入口。
 
 **当前完成度**：Lexer/Parser 已实现且有完整测试；Analyzer 的两个子系统（语义检查、常量折叠）已实现
-且有完整测试；`numeric/` 的 `BigInt`（`int` 的底层）和 `BigDec`+`DecContext`（`decimal` 的底层）已实现
+且有完整测试，但它和 CodeGen 还停在旧 AST 上，跟上 SL.md 新一轮改动之前编不过，剩下的活见
+[notes/spec-impl-gap.md](notes/spec-impl-gap.md)；`numeric/` 的 `BigInt`（`int` 的底层）和 `BigDec`+`DecContext`（`decimal` 的底层）已实现
 且有完整测试；`compiler/codegen/` 全套已实现（`CodeGen`/`CodeBuilder`/`ConstPool`/反汇编器，设计文档 [`bytecode.md`](../compiler/codegen/bytecode.md)），有 `test/codegen/` 一整套测试，
 `executor/` 目前只是命令行驱动（串流水线的活在 `compiler/Compiler` 门面里）。`runtime/` 已经有对象模型骨架（`Object`+`Ref`、`Type`、
 四个基础类型、单例）、GC（引用计数 + 标记清扫）、bootstrap 和异常体系，帧与主循环还没开始——实现顺序见下面「实现路线」。
@@ -44,7 +45,7 @@
 | `compiler/lexer/` | `Lexer.{h,cpp}`：分词器。`token.h` 定义 `Token`；`x_token_type.inc`/`x_keyword.inc`/`x_reservedword.inc` 是 X-macro 列表（见下）。 |
 | `compiler/parser/` | `Parser.{h,cpp}`：递归下降 + Pratt 解析器，产出 `ast_nodes/` 里定义的 AST。 |
 | `compiler/parser/ast_nodes/` | AST 节点类型定义。`ast_nodes.h` 是汇总头（引入 `details/` 下所有节点头）；`x_ast_nodes.inc` 是全部节点类型的 X-macro 列表；`ast_json_dumper.h`/`.cpp` 定义 `AstJsonDumper : public AstConstVisitor`，把 AST 序列化成 JSON（调试/测试用，不是语言语义的一部分），入口是静态方法 `AstJsonDumper::dump(node, include_pos)`，内部靠每个节点一个 `visit()` + `result_` 成员当通道完成（`.ai/notes/visitor-result-passing.md` 那个模式）；`ast_visitor.h` 定义 `AstVisitor`/`AstConstVisitor`（会改树的、只读的两套）和 `SL_AST_NODE_ACCEPT` 宏，要遍历 AST 的类继承它们，靠 `accept` + `visit` 两次虚调用完成双分派——漏实现某个节点类型是编译期错误，不是运行期 assert。 |
-| `compiler/parser/ast_nodes/details/` | 具体节点定义，按语法范畴分文件（`ast_node_class.h`、`ast_node_control_flows.h`、`ast_node_func.h`、`ast_node_import.h`、`ast_node_literals.h`、`ast_node_multi_exprs.h`（Program/Compound）、`ast_node_operators.h`、`ast_node_postfix.h`（call/index/attr）、`ast_node_var.h`（del/global/标识符）、`ast_node_decorators.h`、`ast_node_eval.h`）。`ast_node_misc.h` 放**不是** `AstNode`、但被多个节点类型共用的小聚合体（`OneCapture`、`OneKwArg`、`CallArgs`）。唯一的 `.cpp` 是 `ast_node_literals.cpp`：int/decimal 字面量的构造函数在这里校验 `raw_` 的形状（纯数字/前导零/科学计数法后缀/可选的前导负号），违反即 `InternalError`——常量折叠造出来的字面量节点不会再经过 `SemanticChecker`，只有构造函数拦得住。 |
+| `compiler/parser/ast_nodes/details/` | 具体节点定义，按语法范畴分文件（`ast_node_class.h`、`ast_node_control_flows.h`、`ast_node_func.h`、`ast_node_import.h`、`ast_node_literals.h`、`ast_node_multi_exprs.h`（Program/Compound）、`ast_node_operators.h`、`ast_node_postfix.h`（call/index/attr）、`ast_node_var.h`（del/global/标识符）、`ast_node_decorators.h`、`ast_node_eval.h`）。`ast_node_misc.h` 放**不是** `AstNode`、但被多个节点类型共用的小聚合体（`Annotation`、`Binding`、`OneCapture`、`OneKwArg`、`CallArgs`）。唯一的 `.cpp` 是 `ast_node_literals.cpp`：int/decimal 字面量的构造函数在这里校验 `raw_` 的形状（纯数字/前导零/科学计数法后缀/可选的前导负号），违反即 `InternalError`——常量折叠造出来的字面量节点不会再经过 `SemanticChecker`，只有构造函数拦得住。 |
 | `compiler/analyzer/` | `Analyzer.{h,cpp}`：入口，依次跑 `SemanticChecker` 和 `ExprFolder`。 |
 | `compiler/analyzer/semantic_checker/` | `SemanticChecker.{h,cpp}`（`AstConstVisitor` 的实现）：语义检查（作用域规则、lvalue 合法性、`*`/`**` 位置合法性、func/class 约束、AST 结构防御性校验……），只读不改 AST，违规抛 `SyntaxError`（真实语义错误）或 `InternalError`（AST 结构本身违反 Parser 的保证，代表实现自己有 bug）。单个节点自己字段的合法性不归这里，归节点构造函数（见 `compiler/parser/ast_nodes/details/`）。 |
 | `compiler/analyzer/expr_folder/` | `ExprFolder.{h,cpp}`（`AstVisitor` 的实现）：遍历 + 原地替换 AST 的调度层，拥有 `AstNodePtr` 槽位的所有权。`StaticEvaler.{h,cpp}`：纯函数式的"给一个节点判断能不能折、折成什么"，不遍历树、不拥有节点。 |
@@ -198,8 +199,8 @@ parser 那份抄了三处，加个文件要改三个地方。
   "加新节点类型漏了 `visit` 会编译期报错"是两回事：X-macro 只保证每个**类型**都有 `visit`，管不到
   某个 `visit` 里面漏读了哪个**字段**。加完新槽位必须手动过一遍三个消费方：`ast_json_dumper.cpp` 的
   `visit`、`SemanticChecker` 的 `visit`、`ExprFolder` 的 `visit`（外加对应的测试）。踩过：
-  `as` 那次给 `AstNodeForIter` 和 `AstNodeTry::AstNodeExceptAndExpr` 各加了个 `target_`，前者三处
-  都跟上了，后者在 `ExprFolder` 里漏了，于是 `except (E as a[1 + 1])` 的下标一直没被折叠，四套
+  给 `AstNodeForIter` 和 `AstNodeTry::AstNodeExceptAndExpr` 加绑定目标 `target_` 时，前者三处
+  都跟上了，后者在 `ExprFolder` 里漏了，于是 `except (a[1 + 1] from E)` 的下标一直没被折叠，四套
   测试全绿也照样没发现（测试同样漏写了这个槽位）。
 - **节点类型拆分原则**："语义形状不同就不该共用节点类型"——比如比较运算符独立于普通二元运算符
   （`AstNodeCompare`，链式短路语义不同）、`is` 又独立于比较（`AstNodeIs`，不可重载、不跟比较混链）、
@@ -319,8 +320,8 @@ ctest 现在约 28 秒。要更大覆盖别往表里堆，用倍数参数临时�
   被编译掉会不会静默出错"）见 [notes/assert-vs-internal-error.md](notes/assert-vs-internal-error.md)。
 - **避免"同一产物在多个出口分头构造"**：同一种产物如果在多处提前返回、各自构造，等于制造了多份
   测试压不到的独立状态空间，历史上好几个换行容错类的 bug 都是这个模式孵出来的。能合并"同一产物多处
-  构造"就合并，只保留"产物本质不同"的分叉（比如字典字面量 vs 复合表达式、分组 vs 元组，这些才是
-  真正的二选一）。
+  构造"就合并，只保留"产物本质不同"的分叉（比如字典 vs 集合、分组 vs 元组，这些才是真正的
+  二选一）。
 - **折叠（`StaticEvaler`/`ExprFolder`）的正确性标准是"被丢弃的部分本来就不会被求值"，不是"被丢弃
   的部分本身可以折成字面量"**。例：`True and f()` 能折成 `f()`，不需要 `f()` 本身可折；链式比较
   `1 < 2 < 'a'` 已经确定为 `True` 的前缀可以丢，即使后面的 `2 < 'a'` 类型不可比没法继续折。新增
@@ -352,9 +353,7 @@ ctest 现在约 28 秒。要更大覆盖别往表里堆，用倍数参数临时�
   `Compound` 的值确实是最后一条，`fold_compound` 保留最后一条是对的、两者不能类比）。
 - **`for`/`while` 死分支消除**：`init_` 不管 `cond` 折出来是什么都会先无条件求值一次，折叠时不能
   丢掉这个副作用——`init_` 非空时结果包成 `Compound{init_, 退化值}`（不带 `$` 退化成 `0`，`$`/`$ *`
-  退化成 `[]`，`$$`/`$$ **` 退化成空 dict）。空 dict 在**源码**里写不出来（`{}` 归复合表达式），但
-  折叠器产出的是 AST 节点而不是源码，`AstNodeLiteralDict` 的 `items_` 本来就可空——"折叠结果必须是
-  parser 也能产出的形状"不是本项目的约束，别把它当理由。`cond` 折成确定 `True` 时刻意不折——只能
+  退化成 `[]`，`$$`/`$$ **` 退化成 `${}`）。`cond` 折成确定 `True` 时刻意不折——只能
   确定"不会提前退出"，不像 `if` 折 `True` 那样能确定具体是哪个分支、有"换成什么"的答案。
 - **`check`（`SemanticChecker`）必须在 `fold`（`ExprFolder`）之前跑，不能反过来**：反例
   `f(True and *args)`，check 先跑时 `*args` 作为 `and` 的右操作数永远在 `can_star=false` 语境下
@@ -374,5 +373,5 @@ bootstrap 的建立循环，加一个内置类型只改这一个文件）、`../
 枚举名、访问器名、C++ 类、类型、构造实参）、`../runtime/x_internal_objects.inc`（内部对象；
 **枚举值就是 `LOAD_INTERNAL` 的参数，所以顺序是字节码格式的一部分，只许往后追加**）、`../compiler/lexer/x_token_type.inc`（全部 `TokenType` 枚举值）、
 `../compiler/lexer/x_keyword.inc`（关键字文本 → `TokenType` 映射）、
-`../compiler/lexer/x_reservedword.inc`（保留字但非关键字，如 `_G`/`_L`）。加新
+`../compiler/lexer/x_reservedword.inc`（保留字但非关键字，如 `as`/`static`）。加新
 关键字/token 类型时这几个文件要一起改，具体加在哪由这个 token 的性质决定（是不是关键字、是不是保留字）。

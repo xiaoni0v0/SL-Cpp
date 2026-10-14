@@ -5,7 +5,7 @@
 
 TEST_SUITE("ExprFolder eval") {
 
-    TEST_CASE("位置实参、关键字实参都会折") {
+    TEST_CASE("按位置传参的实参、按关键字传参的实参都会折") {
         const auto pos = fold_json(U"eval(1 + 1)");
         CHECK(pos["type"] == "Eval");
         CHECK(pos["positional_args"] == nlohmann::json::array({int_lit("2")}));

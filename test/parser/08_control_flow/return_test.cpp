@@ -76,7 +76,7 @@ TEST_SUITE("return") {
     TEST_CASE("裸 return 出现在字典键 / 形参默认值语境时也能正确识别为裸 return") {
         // return 作为字典键，紧跟的 ':' 不是表达式的合法开头
         CHECK(
-            parse_json(U"{return: 1}") ==
+            parse_json(U"${return -> 1}") ==
             nlohmann::json{
                 {"type", "LiteralDict"},
                 {"items",
@@ -90,7 +90,8 @@ TEST_SUITE("return") {
             parse_json(U"func f(x: return = 1) {}")["params"]["positional"] ==
             nlohmann::json::array(
                 {{{"identifier", "x"},
-                  {"type_annotation", {{"type", "Return"}, {"value", nullptr}}},
+                  {"annotation",
+                   {{"is_const", false}, {"type", {{"type", "Return"}, {"value", nullptr}}}}},
                   {"default_value", int_lit("1")}}}
             )
         );

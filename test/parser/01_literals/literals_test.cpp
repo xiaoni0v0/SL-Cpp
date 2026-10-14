@@ -287,68 +287,89 @@ TEST_SUITE("字典") {
 
     TEST_CASE("基本键值对") {
         CHECK(
-            parse_json(U"{'a': 1}") == nlohmann::json::parse(
-                                           R"({"type":"LiteralDict","items":[
+            parse_json(U"${'a' -> 1}") == nlohmann::json::parse(
+                                              R"({"type":"LiteralDict","items":[
                   {"key":{"type":"LiteralStr","value":"a"},"value":{"type":"LiteralInt","raw":"1"}}
               ]})"
-                                       )
+                                          )
         );
     }
 
     TEST_CASE("多个键值对") {
         CHECK(
-            parse_json(U"{'a': 1, 'b': 2}") == nlohmann::json::parse(
-                                                   R"({"type":"LiteralDict","items":[
+            parse_json(U"${'a' -> 1, 'b' -> 2}") == nlohmann::json::parse(
+                                                        R"({"type":"LiteralDict","items":[
                   {"key":{"type":"LiteralStr","value":"a"},"value":{"type":"LiteralInt","raw":"1"}},
                   {"key":{"type":"LiteralStr","value":"b"},"value":{"type":"LiteralInt","raw":"2"}}
               ]})"
-                                               )
+                                                    )
         );
     }
 
     TEST_CASE("键不限于字符串字面量，可以是任意表达式") {
         CHECK(
-            parse_json(U"{1: 'a', (1+1): 'b'}") == nlohmann::json::parse(
-                                                       R"({"type":"LiteralDict","items":[
+            parse_json(U"${1 -> 'a', (1+1) -> 'b'}") == nlohmann::json::parse(
+                                                            R"({"type":"LiteralDict","items":[
                   {"key":{"type":"LiteralInt","raw":"1"},"value":{"type":"LiteralStr","value":"a"}},
                   {"key":{"type":"OpBinary","op":"+","left":{"type":"LiteralInt","raw":"1"},
                           "right":{"type":"LiteralInt","raw":"1"}},"value":{"type":"LiteralStr","value":"b"}}
               ]})"
-                                                   )
+                                                        )
         );
     }
 
     TEST_CASE("尾逗号可选") {
         CHECK(
-            parse_json(U"{'a': 1,}") == nlohmann::json::parse(
-                                            R"({"type":"LiteralDict","items":[
+            parse_json(U"${'a' -> 1,}") == nlohmann::json::parse(
+                                               R"({"type":"LiteralDict","items":[
                   {"key":{"type":"LiteralStr","value":"a"},"value":{"type":"LiteralInt","raw":"1"}}
               ]})"
-                                        )
+                                           )
         );
     }
 
     TEST_CASE("嵌套字典") {
         CHECK(
-            parse_json(U"{'a': {'b': 1}}") == nlohmann::json::parse(
-                                                  R"({"type":"LiteralDict","items":[
+            parse_json(U"${'a' -> ${'b' -> 1}}") == nlohmann::json::parse(
+                                                        R"({"type":"LiteralDict","items":[
                   {"key":{"type":"LiteralStr","value":"a"},"value":{"type":"LiteralDict","items":[
                       {"key":{"type":"LiteralStr","value":"b"},"value":{"type":"LiteralInt","raw":"1"}}
                   ]}}
               ]})"
-                                              )
+                                                    )
         );
     }
 
-    TEST_CASE("未闭合的字典抛异常（走的是通用 expect('}') 报错，不是字典专属措辞），位置指向 EOF") {
-        // "{'a': 1" 共 7 个字符，EOF 在第 8 列
+    TEST_CASE("空字典") {
+        CHECK(parse_json(U"${}") == nlohmann::json::parse(R"({"type":"LiteralDict","items":[]})"));
+    }
+
+    TEST_CASE("未闭合的字典抛异常，消息明确说是字典，位置指向 EOF") {
+        // "${'a' -> 1" 共 10 个字符，EOF 在第 11 列
         try {
-            parse_program(U"{'a': 1");
+            parse_program(U"${'a' -> 1");
             FAIL("应当抛出异常");
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
-            CHECK(msg.find("'}'") != std::string::npos);
-            CHECK(msg.find("1:8:") != std::string::npos);
+            CHECK(msg.find("dict literal") != std::string::npos);
+            CHECK(msg.find("1:11:") != std::string::npos);
         }
+    }
+}
+
+TEST_SUITE("集合") {
+
+    TEST_CASE("基本、尾逗号") {
+        CHECK(
+            parse_json(U"${1, 'a',}") == nlohmann::json::parse(
+                                             R"({"type":"LiteralSet","items":[
+                  {"type":"LiteralInt","raw":"1"},{"type":"LiteralStr","value":"a"}
+              ]})"
+                                         )
+        );
+    }
+
+    TEST_CASE("空集合没有字面量写法：${} 是空字典") {
+        CHECK(parse_json(U"${}")["type"] == "LiteralDict");
     }
 }

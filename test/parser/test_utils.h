@@ -88,3 +88,36 @@ inline nlohmann::json int_lit(const char *raw) {
 inline nlohmann::json str_lit(const char *value) {
     return nlohmann::json{{"type", "LiteralStr"}, {"value", value}};
 }
+
+// 裸赋值 target = value
+inline nlohmann::json bare_assign(const nlohmann::json &target, const nlohmann::json &value) {
+    return nlohmann::json{
+        {"type", "Assign"},
+        {"target", target},
+        {"annotation", {{"is_const", false}, {"type", nullptr}}},
+        {"value", value}
+    };
+}
+
+// for/except 的绑定 `target ⟦: ⟦const⟧ ⟦type⟧⟧ from`。target 传 nullptr 表示没写 from，
+// 此时整个绑定是 null
+inline nlohmann::json binding(
+    const nlohmann::json &target, const nlohmann::json &type = nullptr, const bool is_const = false
+) {
+    if (target.is_null()) return nullptr;
+    return nlohmann::json{
+        {"target", target}, {"annotation", {{"is_const", is_const}, {"type", type}}}
+    };
+}
+
+// 声明 name : ⟦const⟧ ⟦type⟧ ⟦= value⟧，没写的部分传 nullptr
+inline nlohmann::json declare(
+    const char *name, const bool is_const, const nlohmann::json &type, const nlohmann::json &value
+) {
+    return nlohmann::json{
+        {"type", "Assign"},
+        {"target", ident(name)},
+        {"annotation", {{"is_const", is_const}, {"type", type}}},
+        {"value", value}
+    };
+}

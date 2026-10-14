@@ -1,6 +1,6 @@
 # 对外输出的字符串一律英文、且尽量短
 
-代码注释用中文（`CLAUDE.md` 的硬约束），**但凡是会离开源码、被人看到的字符串一律用英文**：
+代码注释用中文（`AGENTS.md` 的硬约束），**但凡是会离开源码、被人看到的字符串一律用英文**：
 
 - 异常信息（`SyntaxError`/`InternalError`/`EncodingError`/…… 的 message 与 `what()` 渲染）
 - `assert` 的那句说明（表达式自己读得懂就省掉，见 [assert-vs-internal-error.md](assert-vs-internal-error.md)）

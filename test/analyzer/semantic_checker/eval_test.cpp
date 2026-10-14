@@ -20,13 +20,13 @@ TEST_SUITE("SemanticChecker eval 调用形态") {
         CHECK_NOTHROW(check_program(U"eval('x', *rest, **opts)"));
     }
 
-    TEST_CASE("关键字实参的值里不能裸写 *（can_star 在关键字组被关掉了）") {
+    TEST_CASE("按关键字传参的实参的值里不能裸写 *（can_star 在关键字组被关掉了）") {
         check_throws_with(
             U"eval(code=*a)", "* can only appear in tuple, list, index, or function call arguments"
         );
     }
 
-    TEST_CASE("位置实参里不能裸写 **（can_double_star 只对 ** 那一项自己开）") {
+    TEST_CASE("按位置传参的实参里不能裸写 **（can_double_star 只对 ** 那一项自己开）") {
         check_throws_with(
             U"eval(**a + b)", "** can only appear in dict literal or function call arguments"
         );

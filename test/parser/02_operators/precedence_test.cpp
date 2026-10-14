@@ -173,6 +173,34 @@ TEST_SUITE("优先级——四则/位运算/范围") {
         );
     }
 
+    TEST_CASE("..= 与 .. 同一档、左结合") {
+        const auto range = [](const char *op, const nlohmann::json &l, const nlohmann::json &r) {
+            return nlohmann::json{{"type", "OpBinary"}, {"op", op}, {"left", l}, {"right", r}};
+        };
+        CHECK(parse_json(U"1 ..= 3") == range("..=", int_lit("1"), int_lit("3")));
+        CHECK(
+            parse_json(U"1 + 2 ..= 3 * 4") == range(
+                                                  "..=",
+                                                  range("+", int_lit("1"), int_lit("2")),
+                                                  range("*", int_lit("3"), int_lit("4"))
+                                              )
+        );
+        CHECK(
+            parse_json(U"1 << 2 ..= 3") ==
+            range("<<", int_lit("1"), range("..=", int_lit("2"), int_lit("3")))
+        );
+        CHECK(
+            parse_json(U"1 ..= 2 .. 3") ==
+            range("..", range("..=", int_lit("1"), int_lit("2")), int_lit("3"))
+        );
+        CHECK(
+            parse_json(U"1 .. 2 ..= 3") ==
+            range("..=", range("..", int_lit("1"), int_lit("2")), int_lit("3"))
+        );
+        // 右操作数缺失报错，跟 .. 一样
+        CHECK_THROWS_AS(parse_program(U"1 ..="), SyntaxError);
+    }
+
     TEST_CASE("切片就是索引参数里写 ..，没有 Python 那种 a[1:2] 记法") {
         CHECK(
             parse_json(U"a[1..2]") == nlohmann::json{
@@ -187,8 +215,8 @@ TEST_SUITE("优先级——四则/位运算/范围") {
                                            )}
                                       }
         );
-        // Python 式的 a[1:2] 在 SL 里没有对应语法，': 2' 直接在这个位置报语法错误
-        check_parse_throws_with(U"a[1:2]", "expected ']'");
+        // Python 式的 a[1:2] 在 SL 里没有对应语法，':' 只能跟在标识符后面开始声明
+        check_parse_throws_with(U"a[1:2]", "only an identifier can be declared");
     }
 
     TEST_CASE("括号可以改变运算顺序：(1 + 2) * 3") {
@@ -392,7 +420,7 @@ TEST_SUITE("索引/调用/属性访问链") {
         );
     }
 
-    TEST_CASE("位置实参不能出现在关键字实参之后，Parser 直接报语法错误") {
+    TEST_CASE("按位置传参的实参不能出现在按关键字传参的实参之后，Parser 直接报语法错误") {
         check_parse_throws_with(
             U"f(a=1, 1)", "positional argument cannot appear after keyword argument"
         );
@@ -420,7 +448,7 @@ TEST_SUITE("索引/调用/属性访问链") {
         CHECK(parse_json(U"[*f(x)]")["items"][0]["operand"]["type"] == "Call");
         // 幂（150）也先结合进操作数：**d ** e 即 **(d ** e)
         CHECK(
-            parse_json(U"{**d ** e}")["items"][0]["key"] ==
+            parse_json(U"${**d ** e}")["items"][0]["key"] ==
             nlohmann::json{
                 {"type", "DoubleStar"},
                 {"operand",
