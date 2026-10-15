@@ -57,12 +57,29 @@ Analyzer、CodeGen 和它们的测试都要按下面这些跟上（测试源码�
   只有值作为字典项存在；只声明未绑定的名字也可以删除，带 `const` 时仍报 `TypeError`。对象属性表的声明和"已有值"都要沿 MRO 查：
   自己的表，再所属类 MRO 上各类的表。
 - 帧没有"死亡"了，弹出即可回收；函数不再持有定义帧。
-- `isinstance(x, T)` 恒等于 `issubclass(type(x), T)`，删掉 `__instance_check__`，保留 `__subclass_check__`。
-- 复合类只剩 `|`、`!`、`?`；按结构比较相等、哈希一致；子类判定按分支包含；所有要求类型的地方 `None` 都当
-  `NoneType`，`None | int` 要靠 `type.__rop_or__` 接住。
+- `isinstance(x, T)` 恒等于 `issubclass(type(x), T)`，删掉 `__instance_check__`。
+  类型关系钩子为类方法 `__is_subclass_of__`、`__is_superclass_of__`，先问左侧，弃权后问右侧，最后查实际 MRO；
+  `bool` 结束判断，`NotImplemented` 继续，其他返回值是 `TypeError`。类建立时检查这两个名字对应的项为 `classmethod`。
+- 复合类只剩 `|`、`!`、`?`，由 `type` 的运算方法动态建立类，以 `object` 为唯一直接基类，类型为 `type`。
+  分支结构作为不可变的内部状态保存，两个类方法负责按分支包含判定；`!` 只接受具体类，复合类操作数抛出 `TypeError`。
+  类对象的结构比较由 `type.__op_eq__` 处理，结构相等的类哈希相同，不保证对象身份相同。
+  生成的类不允许实例化，`__is_final_class__` 为 `True`；分配入口的限制方案见 context.md，尚未定下。
+  声明类型只需接受 `type` 或 `str`。所有要求类型的地方 `None` 都当 `NoneType`，`None | int` 要靠 `type.__rop_or__` 接住。
+- 协议类通过类方法 `__is_superclass_of__` 检查传入类的 MRO，查表时不调用描述器的 `get`。
+- `hash(obj)` 调用 `type(obj).__hash__(obj)`；bool 的算术和比较先折算成 int，结果类型随对应整数运算，不支持位运算。
+- `frozendict` 恒满足 `Hashable`；计算哈希时，若任一键或值不满足 `Hashable`，抛出 `TypeError`。
+- 解构赋值先取出各层元素并完成全部个数检查，再从前到后写入左值。个数不符时不写入任何左值；
+  写入时按已有声明检查类型与 `const`，失败时保留此前已完成的写入。
+- 索引方法按位置接收展开结果。读取依次传入对象、索引各项；写入依次传入对象、值、索引各项，支持零项索引。
+  元素赋值仍先求值对象和索引实参、展开，再求值右侧；复合赋值读写复用展开结果。
+- `MethodDescriptor`、`classmethod` 建立时复制被包装对象的 `__is_abstract_method__`，
+  property 在任一提供的访问函数标为抽象时以 `True` 初始化同名属性，类的抽象集合按收集后的表项计算。
 - 带约束的容器类：`tuple`、`list`、`dict`、`unordered_dict`、`frozendict`、`set`、`frozenset` 的 `[...]`
-  动态生成子类。同参数的类相等但不保证同一对象，元素全是 `object` 时得到容器类本身；子类关系按元素类型协变；
-  创建和增改元素时检查，派生容器保持同类；各容器加 `typed(*args)` 方法，按值递归转换。
+  动态生成子类。同参数的类相等但不保证同一对象，没有长度约束且元素类型全是 `object` 时得到容器类本身；
+  定长 tuple 保留长度约束，`tuple[object]` 不退回普通 tuple。子类关系按元素类型协变；
+  创建和增改元素时检查。定长 tuple 的拼接、重复、切片等操作按结果长度与各位置约束自动生成结果类，
+  来源容器没有约束的位置按 `object` 处理，空结果为 `tuple[]`，拷贝保留原类；其余派生容器保持同类。
+  各容器加 `typed(*args)` 方法，按值递归转换。
 - 删掉 `TypeVar`。
 - range 带"是否包含 stop"的标志；`..=`、`__op_range_closed__` / `__rop_range_closed__`；三元形式的第二个运算符
   只能是 `..`；`range(..., closed=True)`。

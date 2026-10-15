@@ -529,10 +529,10 @@ SL 的求值顺序是确定的：
 4. 单目运算符先对操作数求值，再运算；
 5. 二目运算符先对左操作数求值，再对右操作数求值，再运算。
    `and`、`or`、链式比较、赋值与复合赋值例外，规则见下面两条和 3.10.2；
-6. 链式比较 `a OP1 b OP2 c ...`（各 `OP` 同属 `<`、`<=`、`>`、`>=`、`!=`、`==` 一组，或都是 `is`，可以有 2 个以上算子）：
+6. 链式比较 `a OP1 b OP2 c ...`（各 `OP` 同属 `<`、`<=`、`>`、`>=`、`!=`、`==` 一组，或都是 `is`，可以有 2 个以上运算符）：
    先对 `a` 求值，再对 `b` 求值，计算 `t = a OP1 b`；若 `t` 的真值为假，短路，整体的值即为 `t`；
    若真值为真，再对 `c` 求值，计算 `t = b OP2 c`，按同样方式判断、短路。
-   除了每个算子只求值一次之外，它等价于 `a OP1 b and b OP2 c and c ...`；
+   除了每个操作数只求值一次之外，它等价于 `a OP1 b and b OP2 c and c ...`；
 7. `and` 先对左操作数求值，其真值为真时才对右操作数求值；`or` 先对左操作数求值，其真值为假时才对右操作数求值。
    两者的值见 3.7.2；
 8. 索引 `x[index1, index2, ...]` 和调用 `x(arg1, arg2, ...)`：先对 `x` 求值，再从前到后逐个对实参求值，最后索引或调用。
@@ -639,9 +639,9 @@ SL 只有 2 种**作用域**：
 
 捕获列表（2.3.16）中可以显式列出它要访问的、定义处所在作用域中的标识符，分两种：
 
-1. **值捕获** `x` 或 `x = expr`。建立时取得一个对象：
-   - 写作 `x` 时，按当时所在作用域的规则读取 `x` 的值；
-   - 写作 `x = expr` 时，对 `expr` 求值。
+1. **值捕获** `x` 或 `x = expr`。建立时在定义处所在作用域中取得一个对象：
+   - 写作 `x` 时，按定义处所在作用域的规则读取 `x` 的值；
+   - 写作 `x = expr` 时，在定义处所在作用域中对 `expr` 求值。
 
    结果对象作为该函数、类体这一帧的局部变量，名称即 `x`。
    函数在每次调用开始时把它随其他参数一起写入 `_L`（3.9.2），类在类体执行前把它写入新建的帧（3.10.13）。
@@ -741,7 +741,7 @@ func f() {
 - 以上两种位置，`type` 的最外层是匿名函数表达式时（冗余括号不算），这个函数表达式在原本求 `type` 的时刻求值，
   需要类型时以无实参调用它，返回值即类型。
 
-求得的类型须满足 `isinstance(类型, type | CompoundType | str)`，否则抛出 `TypeError`。
+求得的类型须满足 `isinstance(类型, type | str)`，否则抛出 `TypeError`。
 类型是 `str` 时任何值都满足它，此外与别的声明没有区别，字符串原样记为声明的类型，3.5.1 的各条规则照常适用。
 
 于是类体里可以直接写本类的名字：
@@ -912,6 +912,10 @@ b.n = 2                    # TypeError
 | `==`                   | `__op_eq__`           |
 | `in`                   | `__op_contains__`     |
 
+`x[a, b]` 效果上等价于 `type(x).__op_get_index__(x, a, b)`，
+`x[a, b] = v` 效果上等价于 `type(x).__op_set_index__(x, v, a, b)`，
+求值顺序见 3.10.2。
+
 反向方法名：把上表中二元运算符正向名的 `__op_` 换成 `__rop_`，如 `+` 是 `__op_add__` / `__rop_add__`。
 
 以 `+` 为例，对于 `a + b`，解释器进行如下操作：
@@ -960,7 +964,7 @@ b.n = 2                    # TypeError
 - `x.attribute`
   获取对象 `x` 的属性 `attribute` 的值，见 3.6；
 - `x?` 对于类型，生成一个复合类，表示该类型或 `None`；
-- `x!` 对于类型，生成一个复合类，表示恰为该类型本身（不允许是子类）；
+- `x!` 对于具体类，生成一个精确类；`x` 为复合类时抛出 `TypeError`（4.3.3）；
 - `x ** y` 返回 `x` 的 `y` 次幂；
   `x`、`y` 都是 int 时，结果为整数则仍是 int，否则（如 `2 ** -1`）是 decimal；
   结果不为实数（如负数开偶次方根）抛出 `MathError`；
@@ -1178,7 +1182,7 @@ SL 的函数重载不通过同名函数定义，而是用 `FuncGroup` 类（4.2.
    先对 `x` 求值，再对 `expr` 求值，然后按 3.6.2 令 `x` 的属性 `attribute` 引用结果对象；
 3. 元素赋值 `x[args, ...] = expr`：
    先对 `x` 求值，再按 3.2 的顺序对索引实参求值、展开，再对 `expr` 求值，
-   最后调用 `type(x)` 的 `__op_set_index__`（3.7.1）令 `x` 的元素 `args` 引用结果对象；
+   最后按 3.7.1 的实参顺序调用 `type(x).__op_set_index__`，令 `x` 的元素引用结果对象；
 4. 复合赋值 `target op= expr`：
    若 `target` 是属性访问 `x.attr`，`x` 只求值一次；若是元素访问 `x[index, ...]`，`x` 只求值一次，
    索引实参按 3.2 的顺序求值、展开，各项只处理一次。读、写复用这些结果。
@@ -1186,9 +1190,10 @@ SL 的函数重载不通过同名函数定义，而是用 `FuncGroup` 类（4.2.
    （`target` 是标识符时，读、写落在哪里见 3.4.2）；
 5. 解构赋值 `(lv1, lv2, ...) = expr` 或 `[lv1, lv2, ...] = expr`：
    先对 `expr` 求值，要求其可迭代，否则抛出 `TypeError`；
-   再按各 `lv` 从前到后依次对其赋值，每个 `lv` 按其形式套用上述 1 到 3 条（`lv` 本身也是解构则递归套用本条）。
-   无 `*lv` 时要求元素个数与 `lv` 个数完全一致，否则抛出 `ValueError`；
-   有 `*lv` 时要求元素个数不少于其余 `lv` 的个数，否则抛出 `ValueError`；`*lv` 收集剩余元素，总是绑定一个 `list`；
+   按左值的解构结构取出各层元素，每层无 `*lv` 时要求元素个数与 `lv` 个数完全一致，
+   有 `*lv` 时要求元素个数不少于其余 `lv` 的个数，否则抛出 `ValueError`，不向任何左值写入。
+   `*lv` 收集剩余元素，总是得到一个 `list`。
+   全部个数检查通过后，再按各 `lv` 从前到后依次赋值，每个纯左值按其形式套用上述 1 到 3 条，嵌套解构同样从前到后写入；
 6. 带声明的赋值 `x: T = expr`、`x: T`：
    在类体之外，先对 `T` 求值，再对 `expr` 求值（若有）；在类体里，只对 `expr` 求值（若有），`T` 的求值见 3.5.2。
    声明的检查与效果见 3.5.1。
@@ -1441,7 +1446,7 @@ func f() {}
 2. 从前到后对各基类 `BaseClass` 求值（若有）；未写基类时视为以 `object` 为唯一基类。
    若某个 `BaseClass` 的 `__is_final_class__` 为 `True`，抛出 `TypeError`；
 3. 新建一个局部帧（即一个局部作用域），压入帧栈；
-4. 若有捕获列表，从前到后处理其中各项（3.4.4）；
+4. 若有捕获列表，从前到后在定义处所在作用域中处理其中各项，再将捕获装入新帧（3.4.4）；
 5. 若有文档字符串，对其求值；
 6. 在该帧中从前到后对类体的各表达式求值。类体中可以用 `return` 提前中止这一步（3.10.9），其值被丢弃，不影响下一步；
 7. 类体求值完毕（或被 `return` 提前中止）后弹出该帧，按下面的规则把其局部字典中收集到的变量存为类的属性，建立类对象；
@@ -1453,7 +1458,7 @@ func f() {}
 是单元的取其中的值，见 4.3.10），按下列规则存为类的**属性**：
 
 1. 若 `isinstance(v, property)`，直接存入**描述器表**（属性行为由 `property` 自己的 `get`、`set`、`delete` 负责）；
-2. 否则若 `isinstance(v, staticmethod)`，将 `v.func` 存入**属性表**（`staticmethod` 是纯标签，不是描述器，不参与绑定）；
+2. 否则若 `isinstance(v, staticmethod)`，将 `v.function` 存入**属性表**（`staticmethod` 是纯标签，不是描述器，不参与绑定）；
 3. 否则若 `isinstance(v, classmethod)`，直接存入描述器表（绑定 `cls` 由 `classmethod` 自己的 `get` 负责）；
 4. 否则若 `v` 就是 `unsupported` 这个类本身，将 `unsupported(name)`（`name` 为收集到的这个变量名）存入描述器表；
 5. 否则若 `isinstance(v, unsupported)`，直接存入描述器表；
@@ -1496,8 +1501,8 @@ MRO 的计算：
 2. 若 `isinstance(obj, C)` 为假，抛出 `TypeError`；
 3. 返回 `obj`。
 
-`__construct__` 必须是 `classmethod`：
-收集属性时，若收集到名为 `__construct__` 的项而它 `not isinstance(它, classmethod)`，抛出 `TypeError`。
+`__construct__`、`__is_subclass_of__`、`__is_superclass_of__` 必须是 `classmethod`：
+收集属性时，若收集到这三个名字之一的项而 `not isinstance(它, classmethod)`，抛出 `TypeError`。
 
 典型写法（`super` 的第二个实参传类，见 4.2.21）：
 
@@ -1537,7 +1542,10 @@ class MyClass {
 随后在求值这一刻按 2.2 的规则解析它，必须恰好解析出一条表达式，否则抛出 `SyntaxError`。
 多条表达式需用复合表达式包裹，如 `eval('{ a; b }')`。
 
-`eval` 是内联语义：`eval(...)` 的值等价于把整个 `eval` 表达式原位替换为 `code` 解析出的那条表达式之后的值。
+语法检查时，解析出的表达式不处于任何外层 Program 或循环内；其中自行定义的函数、类和循环按通常规则检查。
+`global` 是否合法仍按 `eval` 所在帧的作用域判定（2.3.8）。
+
+`eval(...)` 的值为解析出的表达式的值。
 `code` 在 `eval` 所在的那一帧里求值，因此其中的赋值、`del`、`global` 都实际作用于该帧。
 
 `eval` 与 `eval_isolated`（4.1.13）的分工：前者共享所在帧的作用域，后者另起一份独立的文件和全局帧。
@@ -1560,14 +1568,19 @@ class MyClass {
 
 #### 4.1.2 `issubclass(cls, type)`
 
-检查 `cls` 是否为 `type` 的子类（`cls` 本身也算）。其中 `type` 可以是具体类也可以是复合类。
+检查 `cls` 是否为 `type` 的子类（`cls` 本身也算）。两者都须为类，可以是复合类，否则抛出 `TypeError`。
 
 返回 `bool` 类型的值。
 
 具体行为：
 
-1. 若 `type` 有 `__subclass_check__` 方法，则返回 `type.__subclass_check__(cls)`（若返回值不是 `bool`，抛出 `TypeError`）；
-2. 否则检查 `cls` 是否为 `type` 或其子类。
+1. 若 `cls` 有 `__is_subclass_of__` 方法，则调用 `cls.__is_subclass_of__(type)`；
+2. 若第 1 步的方法不存在或返回 `NotImplemented`，且 `type` 有 `__is_superclass_of__` 方法，则调用 `type.__is_superclass_of__(cls)`；
+3. 两个方法都不存在或返回 `NotImplemented` 时，检查 `type` 是否在 `cls` 的 MRO 中。
+
+两个方法都是类方法（3.10.13），按 3.6.2 取用，绑定到参与判断的类。
+返回 `bool` 时立即以该值结束判断；返回 `NotImplemented` 时继续；返回其他值抛出 `TypeError`。
+调用中抛出的异常继续传播。
 
 #### 4.1.3 `len(obj)`
 
@@ -1575,7 +1588,7 @@ class MyClass {
 
 #### 4.1.4 `hash(obj)`
 
-等价于 `obj.__hash__()`。若返回值不是 `int`，抛出 `TypeError`。
+等价于 `type(obj).__hash__(obj)`。若返回值不是 `int`，抛出 `TypeError`。
 
 #### 4.1.5 `getattr(obj, name, ⟦default⟧)`
 
@@ -1669,6 +1682,9 @@ class MyClass {
 1. `type(x)`：单参数，返回 `x` 的类；
 2. `type(name, bases, namespace)`：三参数，动态创建一个类，等价于 `class` 表达式的效果。
 
+类上的 `|`、`?`、`!` 分别由 `type.__op_or__`、`type.__op_question__`、`type.__op_exclam__` 创建复合类（4.3.3）。
+`type.__op_eq__` 对同为复合类或同为带约束的容器类的两个类按结构比较（4.3.3、4.3.9），其余按对象身份比较。
+
 #### 4.2.3 int
 
 表示整数，自带高精度。
@@ -1683,8 +1699,8 @@ class MyClass {
 
 继承 `numbers.Real`。
 
-`bool` 没有 `int` 特有的位运算等方法。但 `numbers.Real` 要求的四则运算、大小比较，`bool` 自己实现：
-参与运算前先把 `True`/`False` 按 `1`/`0` 折算成 `int`，再复用 `int` 的实现，结果类型是 `int`（不是 `bool`）。
+`bool` 具有与 `int` 相同的算术和比较运算，不支持位运算。
+运算时先把 `True`/`False` 按 `1`/`0` 折算成 `int`，再复用 `int` 的实现，结果类型遵循对应整数运算的规则。
 
 #### 4.2.5 decimal
 
@@ -1826,7 +1842,7 @@ decimal.DecimalException
 #### 4.2.12 frozendict
 
 不可变的 `dict`，建立后不能增删改其中的项，其余接口与 `dict` 一致，遍历按插入序。
-满足映射协议。若其中每个键值对均可哈希则是 `Hashable`（见 4.4.2），此时可作 `dict` 的键、`set` 的元素。
+满足映射协议，为 `Hashable`（见 4.4.2）。计算其哈希时，若任一键或值不满足 `Hashable`，抛出 `TypeError`。
 
 `frozendict(m)` 由一个映射对象建立；`frozendict()` 建立空的冻结字典。
 注意不可变的只是这张表本身；其中的值若是可变对象，该对象仍可被修改。
@@ -1867,17 +1883,19 @@ decimal.DecimalException
 #### 4.2.17 property
 
 `property(func_get, func_set=None, func_del=None)`，`Descriptor` 的子类。
+建立时，若任一提供的访问函数的 `__is_abstract_method__` 为 `True`，其同名属性初值为 `True`，否则为 `False`。
 `func_set`、`func_del` 为 `None` 时对应操作按 `Descriptor` 默认行为抛 `AttributeError`。
 `get(self, obj)`：若 `isinstance(obj, type)` 返回 `self`（供内省），否则返回 `func_get(obj)`。
 
 #### 4.2.18 staticmethod
 
-`staticmethod(func)`，`self.func = func`。纯标签，不是描述器，仅在类体收集属性时取出 `v.func` 使用，
+`staticmethod(function)`，`self.function = function`。纯标签，不是描述器，仅在类体收集属性时取出 `v.function` 使用，
 本身不会成为类属性。
 
 #### 4.2.19 classmethod
 
-`classmethod(func)`，`Descriptor` 的子类。
+`classmethod(function)`，`Descriptor` 的子类。
+建立时将 `function.__is_abstract_method__` 记为自己的同名属性初值。
 `get(self, obj)`：令 `cls = obj if isinstance(obj, type) else type(obj)`，
 返回把 `cls` 绑定为第一参数的可调用对象。
 
@@ -1968,12 +1986,16 @@ BaseException
 - NotImplemented
 - StopIteration
 
-#### 4.3.3 CompoundType
+#### 4.3.3 复合类
 
 用 `|`, `!`, `?` 可以创建**复合类**。
+结果是动态建立的类，类型为 `type`，以 `object` 为唯一直接基类，不继承各分支的属性和方法。
+分支结构保存在对象内部，不通过属性表暴露，建立后不变。
+生成的类不能实例化，`__is_final_class__` 为 `True`。
+它的 `__is_subclass_of__`、`__is_superclass_of__` 都是类方法，按下面的分支包含规则判定。
 
 1. `|` 表示两种类型均可。例如 `isinstance(1, int | str)` 为 `True`。
-2. `!` 表示精确类（即不允许子类）。
+2. `!` 表示精确类（即不允许子类），操作数只能是具体类，为复合类时抛出 `TypeError`。
    例如 `isinstance(1, int!)` 为 `True`，而 `isinstance(1, numbers.Real!)` 为 `False`。
 3. `?` 表示可以为 `None`，即 `x?` 等价于 `x | None`。例如 `isinstance(None, int?)` 为 `True`。
 
@@ -1994,8 +2016,9 @@ issubclass(int | str, int | str | None)  # True
 - 分支 `C!` 被分支 `D` 包含，当且仅当 `C` 是 `D` 的子类；被分支 `D!` 包含，当且仅当 `C` 就是 `D`。
 
 复合类按结构比较相等（`==`），与书写顺序无关，如 `int | str == str | int`、`int? == int | None` 均为 `True`。
+结构相等的复合类哈希相同，是否为同一个对象不作保证。
 
-以上构造复合类的方式均可嵌套使用，但应**尽量避免嵌套过深**，否则可能导致性能问题。
+复合类可以作为 `|`、`?` 的操作数，但应**尽量避免嵌套过深**，否则可能导致性能问题。
 
 以上检查均有短路性，但不应依赖于此，因为检查的顺序不确定，
 例如 `int | str?` 的实际实现*可能*为 `None | int | str` 而非 `int | str | None`。
@@ -2030,6 +2053,7 @@ issubclass(int | str, int | str | None)  # True
 #### 4.3.7 MethodDescriptor
 
 `Descriptor`（4.2.16）的子类。类体收集属性时，函数对象和 `FuncGroup` 的实例被包成它存入描述器表；
+建立时将被包装对象的 `__is_abstract_method__` 记为自己的同名属性初值。
 它的 `get(self, obj)` 规则都在 3.10.13。
 
 #### 4.3.8 Code
@@ -2045,7 +2069,7 @@ issubclass(int | str, int | str | None)  # True
 
 1. 对于 `tuple`
    1. `tuple[int, str]` 可传入多个类型，同时约束长度与各位置的元素类型，
-      即“元组只能有两个元素，第一个是 int，第二个是 str”；
+      即“元组只能有两个元素，第一个是 int，第二个是 str”；不传参数的 `tuple[]` 约束长度为 0；
    2. `tuple[int, ...]` 只能传入两个参数，第一个为类型，第二个为 `...`，只约束元素类型，
       即“元组的每个元素都是 int”，允许空元组；
 2. 对于 `list`，同上第 2 种；
@@ -2055,7 +2079,8 @@ issubclass(int | str, int | str | None)  # True
 元素类型须为类或复合类，否则抛出 `TypeError`。
 
 容器类与元素类型均相同的带约束的容器类相等（`==`），哈希也相同，如 `list[int, ...] == list[int, ...]`；
-是否为同一个对象不作保证。元素类型均为 `object` 时得到容器类本身，如 `list[object, ...] is list`。
+是否为同一个对象不作保证。没有长度约束且元素类型均为 `object` 时得到容器类本身，如 `list[object, ...] is list`、`tuple[object, ...] is tuple`。
+定长 tuple 保留长度约束，`tuple[object]` 表示长度为 1、元素类型不限的元组。
 
 带约束的容器类之间的子类关系按元素类型判定：
 
@@ -2069,7 +2094,10 @@ issubclass(int | str, int | str | None)  # True
 
 1. 创建时检查每个元素，不满足则抛出 `TypeError`；
 2. 增加、修改元素时检查新元素，不满足则抛出 `TypeError`，容器不变；删除元素时不检查；
-3. `+`、`*`、切片、拷贝的结果与原对象是同一个类，`+` 同样检查另一方的元素。
+3. 定长 tuple 的 `+`、`*`、切片等操作，结果类按结果的长度与各位置的类型约束自动生成，
+   拼接时拼接两侧的类型约束，重复时重复原有的类型约束，切片时选取对应位置的类型约束。
+   来源容器没有元素类型约束的位置按 `object` 处理。结果为空时，类为 `tuple[]`；拷贝保留原类。
+4. 其余带约束的容器，`+`、`*`、切片、拷贝的结果与原对象是同一个类，`+` 同样检查另一方的元素。
 
 `tuple`、`list`、`dict`、`unordered_dict`、`frozendict`、`set`、`frozenset` 都有方法 `typed(*args)`。
 `x.typed(*args)` 以 `x` 所属的上述容器类加 `[*args]`（如 `list[*args]`）从 `x` 构造一个新的带约束的容器，不修改 `x`，
@@ -2118,9 +2146,9 @@ issubclass(int | str, int | str | None)  # True
 
 #### 4.4.2 `protocols`
 
-以下几者的判定规则类似：
-`isinstance(obj, X)`/`issubclass(cls, X)` 当且仅当 `type(obj)`/`cls` 的 MRO 上有该协议要求的全部方法，
-且每个方法按 3.6.2 的表查找顺序查到的那一项都不是 `unsupported` 的实例（见 4.2.20 `unsupported`），查表时不调用描述器的 `get`。
+以下协议类通过类方法 `__is_superclass_of__` 判断传入的类：
+若传入的类的 MRO 上有该协议要求的全部方法，且每个方法按 3.6.2 的表查找顺序查到的那一项都不是
+`unsupported` 的实例（见 4.2.20 `unsupported`），返回 `True`，否则返回 `False`。查表时不调用描述器的 `get`。
 
 ##### 4.4.2.1 Callable
 
@@ -2137,8 +2165,8 @@ issubclass(int | str, int | str | None)  # True
 默认按对象身份（同 `is`）计算；可重载 `__hash__(self)` 与 `__op_eq__` 改为按值比较，两者需保持一致
 （相等的对象哈希值必须相等）。
 
-`list`、`dict`、`set`、`unordered_dict` 不是 `Hashable`；`tuple`、`frozenset` 是；
-`frozendict` 在每个键值对均可哈希时可哈希。
+`list`、`dict`、`set`、`unordered_dict` 不是 `Hashable`；`tuple`、`frozenset`、`frozendict` 是。
+`frozendict` 的哈希计算规则见 4.2.12。
 
 ##### 4.4.2.4 Iterable
 
@@ -2173,7 +2201,7 @@ IOError
 
 ### 4.5 类继承关系图
 
-带 `*` 的类不在内置表里，见 4.3。
+带 `*` 的类不在内置表里，见 4.3。名称中带 `.` 的类不在内置表里，在对应模块中。
 
 - `object`
   - `NoneType` *
@@ -2186,7 +2214,6 @@ IOError
   - `BuiltinFunction` *
   - `Method` *
   - `Code` *
-  - `CompoundType` *
   - `decimal.Context`
   - `Descriptor`
     - `property`
