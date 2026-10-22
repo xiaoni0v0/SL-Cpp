@@ -4,6 +4,7 @@
 #include "../../../utils/string_utils.h"
 #include "ast_nodes.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -49,22 +50,23 @@ const char *op_str(const AstNodeOpUnary::OpType op) {
 const char *op_str(const AstNodeOpBinary::OpType op) {
     // clang-format off
     switch (op) {
-    case AstNodeOpBinary::OpType::Add:      return "+";
-    case AstNodeOpBinary::OpType::Sub:      return "-";
-    case AstNodeOpBinary::OpType::Mul:      return "*";
-    case AstNodeOpBinary::OpType::Div:      return "/";
-    case AstNodeOpBinary::OpType::DivFloor: return "//";
-    case AstNodeOpBinary::OpType::Mod:      return "%";
-    case AstNodeOpBinary::OpType::Pow:      return "**";
-    case AstNodeOpBinary::OpType::BitAnd:   return "&";
-    case AstNodeOpBinary::OpType::BitOr:    return "|";
-    case AstNodeOpBinary::OpType::BitXor:   return "^";
-    case AstNodeOpBinary::OpType::LShift:   return "<<";
-    case AstNodeOpBinary::OpType::RShift:   return ">>";
-    case AstNodeOpBinary::OpType::And:      return "and";
-    case AstNodeOpBinary::OpType::Or:       return "or";
-    case AstNodeOpBinary::OpType::Range:    return "..";
-    case AstNodeOpBinary::OpType::In:       return "in";
+    case AstNodeOpBinary::OpType::Add:         return "+";
+    case AstNodeOpBinary::OpType::Sub:         return "-";
+    case AstNodeOpBinary::OpType::Mul:         return "*";
+    case AstNodeOpBinary::OpType::Div:         return "/";
+    case AstNodeOpBinary::OpType::DivFloor:    return "//";
+    case AstNodeOpBinary::OpType::Mod:         return "%";
+    case AstNodeOpBinary::OpType::Pow:         return "**";
+    case AstNodeOpBinary::OpType::BitAnd:      return "&";
+    case AstNodeOpBinary::OpType::BitOr:       return "|";
+    case AstNodeOpBinary::OpType::BitXor:      return "^";
+    case AstNodeOpBinary::OpType::LShift:      return "<<";
+    case AstNodeOpBinary::OpType::RShift:      return ">>";
+    case AstNodeOpBinary::OpType::And:         return "and";
+    case AstNodeOpBinary::OpType::Or:          return "or";
+    case AstNodeOpBinary::OpType::Range:       return "..";
+    case AstNodeOpBinary::OpType::RangeClosed: return "..=";
+    case AstNodeOpBinary::OpType::In:          return "in";
     // clang-format on
     default:
         return "<unknown>";
@@ -132,6 +134,18 @@ json AstJsonDumper::dump_call_args(const CallArgs &args) {
     };
 }
 
+json AstJsonDumper::dump_annotation(const Annotation &annotation) {
+    return json{{"is_const", annotation.is_const_}, {"type", dump_or_null(annotation.type_)}};
+}
+
+json AstJsonDumper::dump_binding(const std::optional<Binding> &binding) {
+    if (!binding) return nullptr;
+    return json{
+        {"target", dump_node(*binding->target_)},
+        {"annotation", dump_annotation(binding->annotation_)}
+    };
+}
+
 json AstJsonDumper::dump_captures(const std::vector<OneCapture> &captures) {
     auto arr = json::array();
     for (const auto &c : captures)
@@ -149,7 +163,7 @@ json AstJsonDumper::dump_captures(const std::vector<OneCapture> &captures) {
 json AstJsonDumper::dump_one_param(const AstNodeFunc::OneParam &param) {
     return json{
         {"identifier", u32_to_utf8(param.identifier_)},
-        {"type_annotation", dump_or_null(param.type_annotation_)},
+        {"annotation", dump_annotation(param.annotation_)},
         {"default_value", dump_or_null(param.default_value_)}
     };
 }
@@ -253,7 +267,7 @@ void AstJsonDumper::visit(const AstNodeForIter &node) {
             {"pos", pos_to_json(node.pos_)},
             {"collect", collect_str(node.collect_)},
             {"iterable", dump_node(*node.iterable_)},
-            {"target", dump_or_null(node.target_)},
+            {"binding", dump_binding(node.binding_)},
             {"body", dump_node(*node.body_)}
         };
         return;
@@ -262,7 +276,7 @@ void AstJsonDumper::visit(const AstNodeForIter &node) {
         {"type", "ForIter"},
         {"collect", collect_str(node.collect_)},
         {"iterable", dump_node(*node.iterable_)},
-        {"target", dump_or_null(node.target_)},
+        {"binding", dump_binding(node.binding_)},
         {"body", dump_node(*node.body_)}
     };
 }
@@ -298,11 +312,10 @@ void AstJsonDumper::visit(const AstNodeReturn &node) {
 void AstJsonDumper::visit(const AstNodeTry &node) {
     auto except_clauses = json::array();
     for (const auto &clause : node.except_clauses_) {
-        auto exceptions = dump_nodes(clause.exceptions_);
         except_clauses.push_back(
             json{
-                {"exceptions", std::move(exceptions)},
-                {"target", dump_or_null(clause.target_)},
+                {"exc_type", dump_node(*clause.exc_type_)},
+                {"binding", dump_binding(clause.binding_)},
                 {"body", dump_node(*clause.body_)}
             }
         );
@@ -533,6 +546,18 @@ void AstJsonDumper::visit(const AstNodeLiteralDict &node) {
     result_ = json{{"type", "LiteralDict"}, {"items", std::move(items)}};
 }
 
+void AstJsonDumper::visit(const AstNodeLiteralSet &node) {
+    auto items = dump_nodes(node.items_);
+
+    if (include_pos_) {
+        result_ = json{
+            {"type", "LiteralSet"}, {"pos", pos_to_json(node.pos_)}, {"items", std::move(items)}
+        };
+        return;
+    }
+    result_ = json{{"type", "LiteralSet"}, {"items", std::move(items)}};
+}
+
 void AstJsonDumper::visit(const AstNodeLiteralEllipsis &node) {
     if (include_pos_) {
         result_ = json{{"type", "LiteralEllipsis"}, {"pos", pos_to_json(node.pos_)}};
@@ -662,12 +687,16 @@ void AstJsonDumper::visit(const AstNodeAssign &node) {
             {"type", "Assign"},
             {"pos", pos_to_json(node.pos_)},
             {"target", dump_node(*node.target_)},
-            {"value", dump_node(*node.value_)}
+            {"annotation", dump_annotation(node.annotation_)},
+            {"value", dump_or_null(node.value_)}
         };
         return;
     }
     result_ = json{
-        {"type", "Assign"}, {"target", dump_node(*node.target_)}, {"value", dump_node(*node.value_)}
+        {"type", "Assign"},
+        {"target", dump_node(*node.target_)},
+        {"annotation", dump_annotation(node.annotation_)},
+        {"value", dump_or_null(node.value_)}
     };
 }
 

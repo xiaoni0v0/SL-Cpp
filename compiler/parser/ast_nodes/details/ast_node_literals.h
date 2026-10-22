@@ -85,13 +85,24 @@ struct AstNodeLiteralList : AstNode {
     SL_AST_NODE_ACCEPT
 };
 
-// {'k1': 'v1', 'k2': 'v2'}
+// ${'k1' -> 'v1', **d}，${} 是空字典
 struct AstNodeLiteralDict : AstNode {
-    std::vector<std::pair<AstNodePtr, AstNodePtr>> items_; // 可空
+    // `**expr` 展开项存成 {AstNodeDoubleStar, nullptr}
+    std::vector<std::pair<AstNodePtr, AstNodePtr>> items_;
 
     explicit AstNodeLiteralDict(
         const Position pos, std::vector<std::pair<AstNodePtr, AstNodePtr>> items
     )
+        : AstNode{pos}, items_{std::move(items)} {}
+
+    SL_AST_NODE_ACCEPT
+};
+
+// ${1, 2, *s}
+struct AstNodeLiteralSet : AstNode {
+    std::vector<AstNodePtr> items_; // 非空，空集合没有字面量
+
+    explicit AstNodeLiteralSet(const Position pos, std::vector<AstNodePtr> items)
         : AstNode{pos}, items_{std::move(items)} {}
 
     SL_AST_NODE_ACCEPT

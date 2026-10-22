@@ -61,4 +61,24 @@ TEST_SUITE("Parser 单表达式入口") {
         check_parse_single_expr_throws_with(U"1 +", "expected");
         CHECK_THROWS_AS(parse_single_expr(U"("), SyntaxError);
     }
+
+    TEST_CASE("复杂表达式在两个入口下结构相同，首尾分号仅在 Program 中允许") {
+        for (const auto *source :
+             {U"x: const @deco func typed[P]() { return P } = value",
+              U"func f(a: const int = 1, *args, b: func g() { return int }): tuple[] { return a }",
+              U"class C { x: const; y: (func(p = (b: int = 1)) {})(); func f() { temp: str } }",
+              U"x = if (flag) try { a; b } except (E) { c; d } else e",
+              U"for (xs as item: const T) { y: T = item; y }",
+              U"obj[][i: int] += f(1, flag=True)",
+              U"${(key: T) -> obj[], **rest}"}) {
+            const std::u32string input{source};
+            const auto expected = parse_json(input);
+            INFO("expression AST: " << expected.dump());
+            CHECK(nlohmann::json(AstJsonDumper::dump(*parse_single_expr(input))) == expected);
+            const auto program = parse_program_json(U";\n" + input + U";\n");
+            CHECK(program["exprs"] == nlohmann::json::array({expected}));
+            check_parse_single_expr_throws_with(input + U";\n", "expected EOF but got ';'");
+            check_parse_single_expr_throws_with(U";\n" + input, "unexpected token ';'");
+        }
+    }
 }

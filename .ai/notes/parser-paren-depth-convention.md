@@ -2,8 +2,8 @@
 
 ## 谁压栈、谁弹栈
 
-Parser.cpp 里所有处理括号配对的函数（`finish_call_args`、`finish_index`、`finish_func_params`、
-`finish_captures`，`parse_paren_or_tuple`、`parse_list`、`parse_dict_or_set`、`parse_compound`，以及
+Parser.cpp 里所有处理括号配对的函数（`parse_call_args`、`finish_index`、`parse_func_params`、
+`parse_captures`，`parse_paren_or_tuple`、`parse_list`、`parse_dict_or_set`、`parse_compound`，以及
 `if`/`for`/`while`/`except` 的头部）统一约定：
 
 1. 起始括号和收尾括号都由这个函数自己消耗，调用方只负责判断"当前是不是起始括号"；
@@ -14,7 +14,7 @@ Parser.cpp 里所有处理括号配对的函数（`finish_call_args`、`finish_i
 这样每个函数是自洽的单元，调用方不用记"调用我之前你还得自己压栈"这种隐藏契约。`expect()` 抛异常时整个
 Parser 作废，不存在"弹了一半"的状态。
 
-需要"同一段括号内容、包成不同节点"时（`import`/`eval` 的调用形态），直接调现成的 `finish_call_args`，再把
+需要"同一段括号内容、包成不同节点"时（`import`/`eval` 的调用形态），直接调现成的 `parse_call_args`，再把
 返回的 `CallArgs` 包进 `AstNodeImportCall`/`AstNodeEval`，不要为此拆一个出参版本。
 
 ## 栈顶决定两件事
@@ -26,8 +26,8 @@ Parser 作废，不存在"弹了一半"的状态。
 1. **换行是不是空白**（`skip_paren_newline`）：栈顶是 `Brace` 或 `ForHeader` 时换行有意义（分隔语句、分隔
    for 头部的槽），其余四种括号里换行是空白。
 2. **能不能写赋值一档**（`assign_allowed`，管 `=`、`:`、op=）：栈顶是 `Call` 时不能。SL.md 规定调用的实参里只有开头的
-   `identifier =` 表示按关键字传参，其余赋值写法都要被实参内的括号包住。按关键字传参的写法由 `finish_call_args` 在实参开头
-   单独认，不经过 Pratt；Pratt 循环在 `Call` 栈顶遇到赋值一档直接停，交给 `finish_call_args` 报"赋值不能当实参"。
+   `identifier =` 表示按关键字传参，其余赋值写法都要被实参内的括号包住。按关键字传参的写法由 `parse_call_args` 在实参开头
+   单独认，不经过 Pratt；Pratt 循环在 `Call` 栈顶遇到赋值一档直接停，交给 `parse_call_args` 报"赋值不能当实参"。
    加一层括号、进函数体、进列表，栈顶就变了，赋值照常可写。这条只看栈顶，所以 `f(if (c) x = 1)` 里 `if` 分支的
    `x` 也不会吃掉 `=`。字典的键值分隔是 `->`，不是赋值一档，`DictSet` 里赋值照常可写。
 

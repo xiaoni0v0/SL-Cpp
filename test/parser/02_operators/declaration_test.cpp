@@ -58,6 +58,31 @@ TEST_SUITE("声明——四种写法") {
     }
 }
 
+TEST_SUITE("声明——类型位置上的函数表达式") {
+
+    TEST_CASE("匿名函数表达式可以当类型，冗余括号不影响") {
+        CHECK(parse_json(U"x: func () { return int } = 1")["annotation"]["type"]["type"] == "Func");
+        CHECK(parse_json(U"x: (func () { return int })")["annotation"]["type"]["type"] == "Func");
+        CHECK(
+            parse_json(U"x: const func [P]() { return P }")["annotation"]["type"]["type"] == "Func"
+        );
+    }
+
+    TEST_CASE("命名函数表达式可以当类型，保留名字和装饰器") {
+        CHECK(parse_json(U"x: func f() { return int } = 1")["annotation"]["type"]["name"] == "f");
+        CHECK(parse_json(U"x: (func f() { return int })")["annotation"]["type"]["name"] == "f");
+        const auto j = parse_json(U"x: const @deco func f() { return int }");
+        CHECK(j["annotation"]["is_const"] == true);
+        CHECK(j["annotation"]["type"]["name"] == "f");
+        CHECK(j["annotation"]["type"]["decorators"] == nlohmann::json::array({ident("deco")}));
+    }
+
+    TEST_CASE("最外层不是函数表达式时不受限制") {
+        CHECK(parse_json(U"x: func f() {}() = 1")["annotation"]["type"]["type"] == "Call");
+        CHECK(parse_json(U"x: func f() {} | int")["annotation"]["type"]["type"] == "OpBinary");
+    }
+}
+
 TEST_SUITE("声明——优先级与结合") {
 
     TEST_CASE("类型按高于 '=' 的优先级解析") {
@@ -107,101 +132,6 @@ TEST_SUITE("声明——优先级与结合") {
     TEST_CASE("左边比赋值一档高的表达式整体当目标，不是标识符就报错") {
         check_parse_throws_with(U"not x: int", "only an identifier can be declared");
         check_parse_throws_with(U"a or b: int", "only an identifier can be declared");
-    }
-}
-
-TEST_SUITE("声明——换行") {
-
-    TEST_CASE("':' 之后不完整，并入下一行") {
-        CHECK(parse_json(U"x:\nint") == declare("x", false, ident("int"), nullptr));
-        CHECK(parse_json(U"x:\nconst\n") == declare("x", true, nullptr, nullptr));
-    }
-
-    TEST_CASE("x: const 本身完整，下一行是新的表达式") {
-        CHECK(
-            parse_program_json(U"x: const\nint")["exprs"] ==
-            nlohmann::json::array({declare("x", true, nullptr, nullptr), ident("int")})
-        );
-    }
-
-    TEST_CASE("x: T 本身完整，下一行的 '= v' 不能接上来") {
-        CHECK_THROWS_AS(parse_program(U"x: int\n= 1"), SyntaxError);
-    }
-
-    TEST_CASE("括号里的换行是空白") {
-        CHECK(parse_json(U"(x: const\nint)") == declare("x", true, ident("int"), nullptr));
-        CHECK(parse_json(U"(x: int\n= 1)") == declare("x", false, ident("int"), int_lit("1")));
-    }
-
-    TEST_CASE("'=' 之后不完整，并入下一行") {
-        CHECK(parse_json(U"x: int =\n1") == declare("x", false, ident("int"), int_lit("1")));
-    }
-}
-
-TEST_SUITE("声明——语法错误") {
-
-    TEST_CASE("目标只能是标识符") {
-        const std::string msg{"only an identifier can be declared"};
-        check_parse_throws_with(U"a.b: int = 1", msg);
-        check_parse_throws_with(U"a[0]: int", msg);
-        check_parse_throws_with(U"(a, b): int", msg);
-        check_parse_throws_with(U"[a]: int", msg);
-        check_parse_throws_with(U"f(): int", msg);
-        check_parse_throws_with(U"1: int", msg);
-    }
-
-    TEST_CASE("报错位置指向目标开头") {
-        // "y = a.b: int" 里 a 在第 5 列
-        check_parse_throws_with(U"y = a.b: int", "1:5:");
-    }
-
-    TEST_CASE("冗余括号包住的标识符仍是标识符") {
-        CHECK(parse_json(U"(x): int = 1") == parse_json(U"x: int = 1"));
-    }
-
-    TEST_CASE("':' 后面 const 和类型一个都没有") {
-        const std::string msg{"expected 'const' or a type after ':'"};
-        check_parse_throws_with(U"x: = 1", msg);
-        check_parse_throws_with(U"x:", msg);
-        check_parse_throws_with(U"(x:)", msg);
-    }
-
-    TEST_CASE("没有带类型的复合赋值") {
-        const std::string msg{"a compound assignment cannot be declared"};
-        check_parse_throws_with(U"x: int += 1", msg);
-        check_parse_throws_with(U"x: const -= 1", msg);
-    }
-
-    TEST_CASE("const 只能紧跟在 ':' 后面") {
-        CHECK_THROWS_AS(parse_program(U"const x = 1"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"x = const"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"x: int const = 1"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"x: const const = 1"), SyntaxError);
-    }
-
-    TEST_CASE("连着两个 ':' 报错") { CHECK_THROWS_AS(parse_program(U"x: int: str"), SyntaxError); }
-}
-
-TEST_SUITE("声明——类型位置上的函数表达式") {
-
-    TEST_CASE("匿名函数表达式可以当类型，冗余括号不影响") {
-        CHECK(parse_json(U"x: func () { return int } = 1")["annotation"]["type"]["type"] == "Func");
-        CHECK(parse_json(U"x: (func () { return int })")["annotation"]["type"]["type"] == "Func");
-        CHECK(
-            parse_json(U"x: const func [P]() { return P }")["annotation"]["type"]["type"] == "Func"
-        );
-    }
-
-    TEST_CASE("带名字的函数表达式不能当类型") {
-        const std::string msg{"a function expression used as a type must be anonymous"};
-        check_parse_throws_with(U"x: func f() { return int } = 1", msg);
-        check_parse_throws_with(U"x: (func f() { return int })", msg);
-        check_parse_throws_with(U"x: @deco func f() { return int }", msg);
-    }
-
-    TEST_CASE("最外层不是函数表达式时不受限制") {
-        CHECK(parse_json(U"x: func f() {}() = 1")["annotation"]["type"]["type"] == "Call");
-        CHECK(parse_json(U"x: func f() {} | int")["annotation"]["type"]["type"] == "OpBinary");
     }
 }
 
@@ -280,6 +210,34 @@ TEST_SUITE("声明——能出现在哪") {
     }
 }
 
+TEST_SUITE("声明——换行") {
+
+    TEST_CASE("':' 之后不完整，并入下一行") {
+        CHECK(parse_json(U"x:\nint") == declare("x", false, ident("int"), nullptr));
+        CHECK(parse_json(U"x:\nconst\n") == declare("x", true, nullptr, nullptr));
+    }
+
+    TEST_CASE("x: const 本身完整，下一行是新的表达式") {
+        CHECK(
+            parse_program_json(U"x: const\nint")["exprs"] ==
+            nlohmann::json::array({declare("x", true, nullptr, nullptr), ident("int")})
+        );
+    }
+
+    TEST_CASE("x: T 本身完整，下一行的 '= v' 不能接上来") {
+        CHECK_THROWS_AS(parse_program(U"x: int\n= 1"), SyntaxError);
+    }
+
+    TEST_CASE("括号里的换行是空白") {
+        CHECK(parse_json(U"(x: const\nint)") == declare("x", true, ident("int"), nullptr));
+        CHECK(parse_json(U"(x: int\n= 1)") == declare("x", false, ident("int"), int_lit("1")));
+    }
+
+    TEST_CASE("'=' 之后不完整，并入下一行") {
+        CHECK(parse_json(U"x: int =\n1") == declare("x", false, ident("int"), int_lit("1")));
+    }
+}
+
 TEST_SUITE("声明——位置") {
 
     TEST_CASE("节点位置是目标的位置") {
@@ -291,4 +249,48 @@ TEST_SUITE("声明——位置") {
         REQUIRE(assign->annotation_.type_ != nullptr);
         CHECK(assign->annotation_.type_->pos_.col == 12); // x(3):(4) (5)const(6..10) (11)int(12)
     }
+}
+
+TEST_SUITE("声明——语法错误") {
+
+    TEST_CASE("目标只能是标识符") {
+        const std::string msg{"only an identifier can be declared"};
+        check_parse_throws_with(U"a.b: int = 1", msg);
+        check_parse_throws_with(U"a[0]: int", msg);
+        check_parse_throws_with(U"(a, b): int", msg);
+        check_parse_throws_with(U"[a]: int", msg);
+        check_parse_throws_with(U"f(): int", msg);
+        check_parse_throws_with(U"1: int", msg);
+    }
+
+    TEST_CASE("报错位置指向目标开头") {
+        // "y = a.b: int" 里 a 在第 5 列
+        check_parse_throws_with(U"y = a.b: int", "1:5:");
+    }
+
+    TEST_CASE("冗余括号包住的标识符仍是标识符") {
+        CHECK(parse_json(U"(x): int = 1") == parse_json(U"x: int = 1"));
+    }
+
+    TEST_CASE("':' 后面 const 和类型一个都没有") {
+        const std::string msg{"expected 'const' or a type after ':'"};
+        check_parse_throws_with(U"x: = 1", msg);
+        check_parse_throws_with(U"x:", msg);
+        check_parse_throws_with(U"(x:)", msg);
+    }
+
+    TEST_CASE("没有带类型的复合赋值") {
+        const std::string msg{"a compound assignment cannot be declared"};
+        check_parse_throws_with(U"x: int += 1", msg);
+        check_parse_throws_with(U"x: const -= 1", msg);
+    }
+
+    TEST_CASE("const 只能紧跟在 ':' 后面") {
+        CHECK_THROWS_AS(parse_program(U"const x = 1"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"x = const"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"x: int const = 1"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"x: const const = 1"), SyntaxError);
+    }
+
+    TEST_CASE("连着两个 ':' 报错") { CHECK_THROWS_AS(parse_program(U"x: int: str"), SyntaxError); }
 }

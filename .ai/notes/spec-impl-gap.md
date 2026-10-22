@@ -1,13 +1,14 @@
 # SL.md 已改、实现还没跟上的地方
 
-类型系统、`const`、单元、懒注解、范围运算这一轮改的是 SL.md。词法和语法分析已经跟上，后面各层还停在旧
-AST 上，暂时编不过，`run_test.py` 构建 all 目标会失败；在那之前只单独构建 `sl_test_lexer`、`sl_test_parser`
+类型系统、`const`、单元、懒注解、范围运算以 SL.md 为准。Parser 保留原始类型表达式；惰性类型的函数封装
+由 Analyzer 前置转换完成，尚未实现。后面各层还停在旧 AST 上，暂时编不过，`run_test.py` 构建 all 目标会失败；
+在那之前只单独构建 `sl_test_lexer`、`sl_test_parser`
 两个目标来验证。这份清单按层列出剩下要改的东西，改实现时逐条对照 SL.md 的对应章节，做完一条删一条，全部
 做完后删掉这个文件。设计理由不在这里，查 [context.md](../context.md) 里的对应小节。
 
 ## AST 已经变了的地方
 
-Analyzer、CodeGen 和它们的测试都要按下面这些跟上（测试源码里的旧写法 `as`、`{k: v}`、`except (A, B)` 也要换成 `from`、`${k -> v}`、`A | B`）：
+Analyzer、CodeGen 和它们的测试都要按下面这些跟上（测试源码里的旧字典写法 `{k: v}`、异常列表 `except (A, B)` 要换成 `${k -> v}`、`A | B`；绑定使用 `as binding`）：
 
 - 注解是 `ast_node_misc.h` 里的 `Annotation { is_const_, type_ }`，四处共用，没写注解时是 `{false, nullptr}`。
   消费方各写一个吃 `Annotation` 的辅助函数（JSON dumper 已有 `dump_annotation`），跟 `CallArgs` 一样。
@@ -16,18 +17,24 @@ Analyzer、CodeGen 和它们的测试都要按下面这些跟上（测试源码�
 - 新节点 `AstNodeLiteralSet`，`items_` 非空，项里可以有 `*expr`，不会有 `**expr`。`AstNodeLiteralDict` 的
   `items_` 可空（`${}`）。
 - `for`/`except` 的绑定是 `ast_node_misc.h` 里的 `Binding { target_, annotation_ }`，节点里放
-  `std::optional<Binding> binding_`，没写 `from` 时是 `nullopt`，连注解一起没有。`target_` 非空，写了注解时是标识符。
-- `AstNodeForIter` 字段按源码顺序变成 `collect_`、`binding_`、`iterable_`、`body_`。
-- `AstNodeTry::AstNodeExceptAndExpr` 的 `exceptions_` 列表换成单个 `exc_type_`，字段顺序 `binding_`、
-  `exc_type_`、`body_`。
+  `std::optional<Binding> binding_`，没写 `as` 时是 `nullopt`，连注解一起没有。`target_` 非空，写了注解时是标识符。
+- `AstNodeForIter` 字段按源码顺序变成 `collect_`、`iterable_`、`binding_`、`body_`。
+- `AstNodeTry::AstNodeExceptAndExpr` 的 `exceptions_` 列表换成单个 `exc_type_`，字段顺序 `exc_type_`、
+  `binding_`、`body_`。
 - `AstNodeFunc::OneParam` 字段是 `identifier_`、`annotation_`、`default_value_`，注解可以只有 `const`
   （`func f(x: const)`）。返回值注解不能写 `const`，Parser 直接报错。
 - `AstNodeOpBinary::OpType` 多了 `RangeClosed`（`..=`）。
-- 类型位置上最外层是函数表达式时，Parser 已保证它是匿名的。最外层是匿名函数表达式还是字符串字面量，后面
-  各层按节点类型自己判断（`dynamic_cast`），AST 上没有额外标记。
+- Parser 保留类型原式，最外层是函数表达式时允许匿名或命名。Analyzer 的前置转换见下，
+  后续阶段不再按折叠后的原式重新决定是否包装。
 
 ## 语义分析和折叠
 
+- TODO：在 `SemanticChecker` 和 `ExprFolder` 前递归转换惰性注解。复用 `AstNodeFunc`，将普通类型表达式替换为
+  `func () { return 原表达式 }`，合成节点保留来源标记；不增加 `AstNodeDeferredType` 或运行时 `variant`。
+  包装范围是函数形参、返回值注解和类体普通声明中的非空类型；显式匿名或命名函数不再包一层，`const` 标志不动，
+  省略类型仍为空。文件顶层、函数体普通声明、`for`/`except` 绑定保持就地求值。
+  先确定外层函数边界再递归，生成的函数体中的声明按函数环境处理；定义时求值的默认值、装饰器、捕获初始化等沿用
+  外围环境。判定在折叠前完成。理由、实现边界及后端优化约束见 [context.md](../context.md) 的“注解懒求值”。
 - 上面每个新字段在 `SemanticChecker`、`ExprFolder` 里都要访问到（新槽位编译器不会提醒，见
   [architecture.md](../architecture.md) 的 AST 节点一节）。声明的目标不必再查左值；`for`、`except` 带类型时
   目标同理。集合字面量的项允许 `*`。
@@ -40,7 +47,8 @@ Analyzer、CodeGen 和它们的测试都要按下面这些跟上（测试源码�
 - 声明需要新指令或扩展存储指令，带上类型和 `const` 标志。无值声明给存储指令推 `Missing` 哨兵，VM 遇到
   `Missing` 只换声明不绑定；表达式要值时不能 `COPY` 这个 `Missing`，要另压 `None`。
 - 声明的类型何时求值：函数的形参、返回注解和类体里的声明，类型编译成无形参、无捕获的函数，第一次检查时
-  调用并缓存；其余位置就地求值，先 `T` 后 `v`。最外层是匿名函数表达式时直接用它，以无实参调用。
+  调用并缓存；其余位置就地求值，先 `T` 后 `v`。最外层是函数表达式时直接用它，以无实参调用。
+  CodeGen 消费 Analyzer 转换后的节点，不再补一层函数；合成标记供后端的专门优化使用。
 - 引用捕获改成单元：`MAKE_FUNC` / `MAKE_CLASS` 取的是单元而不是名字集合加定义帧；定义处的名字本身是引用
   捕获来的，直接转发那个单元。函数、类对象记住建立时的 `_G`。
 - `except` 先检查 `issubclass(exc_type, BaseException)`，不满足抛 `TypeError`；匹配就是
@@ -93,5 +101,5 @@ Analyzer、CodeGen 和它们的测试都要按下面这些跟上（测试源码�
 ## 跟着代码一起改的文档
 
 - `compiler/codegen/bytecode.md`：`ByteCodeFrame` 的 `locals_` 还写着"帧死亡时置为 `None`"，`owner_` 还提到
-  定义帧和 `TypeVar`，作用域那段还在转发到定义帧，`for`、`except` 的编译模式还写着 `as`。
+  定义帧和 `TypeVar`，作用域那段还在转发到定义帧，`for`、`except` 的绑定还没有跟上带注解的 `Binding`。
 - `.ai/architecture.md` 的"当前完成度"在 Analyzer、CodeGen 跟上之后去掉"停在旧 AST 上"那句。

@@ -18,11 +18,11 @@
 // ⟦@decorator ...⟧ func ⟦name⟧ ⟦[captures]⟧ (params) ⟦: return_type⟧ ⟦doc⟧ { body }
 struct AstNodeFunc : AstNode {
 
-    // 单个形参：identifier ⟦: type⟧ ⟦= expr⟧（*args/**kwargs 各自只有一个裸标识符，不需要这个结构）
+    // 单个不可变长的形参：identifier ⟦: ⟦const⟧ ⟦type⟧⟧ ⟦= expr⟧
     struct OneParam {
         std::u32string identifier_;
-        AstNodePtr type_annotation_; // 类型注解，nullptr 表示无类型注解
-        AstNodePtr default_value_;   // 默认值，nullptr 表示无默认值
+        Annotation annotation_;
+        AstNodePtr default_value_; // 默认值，nullptr 表示无默认值
     };
 
     // 所有形参

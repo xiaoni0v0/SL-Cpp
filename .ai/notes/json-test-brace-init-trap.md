@@ -17,7 +17,7 @@
 错误发生在没被 `CHECK`/`REQUIRE` 包裹的裸语句里时，doctest 只会笼统报"test case THREW exception"，
 不会精确指到出问题的那一行，容易误导排查方向。
 
-这个坑在 `literals_test.cpp`/`func_test.cpp` 等文件里已经有注释提醒过（用于"expected 字面量"场景），
+这个坑在 `scalar_test.cpp`/`func_test.cpp` 等文件里已经有注释提醒过（用于"expected 字面量"场景），
 但只覆盖了 `nlohmann::json{...}` 手写期望值那个方向；在"直接对 `parse_json` 返回值本身取值"这个新
 方向上又踩了一次（`combination_test.cpp` 里），后来在 `container_ops_test.cpp` 里对 `fold_json`
 返回值也踩了第三次——排查那次花了很大力气：一度怀疑到生产代码的 `to_json()`/`to_json_impl()`

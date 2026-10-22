@@ -1,4 +1,4 @@
-// for：3 槽步进或 1 槽迭代（可带 `target ⟦: type⟧ from`）；头部换行按软终止切槽。
+// for：3 槽步进或 1 槽迭代（可带 `as target ⟦: type⟧`）；头部换行按软终止切槽。
 #include "../../../cppexceptions/SyntaxError.h"
 #include "../test_utils.h"
 
@@ -292,6 +292,90 @@ TEST_SUITE("for——步进模式") {
     }
 }
 
+TEST_SUITE("for——步进模式的 init、cond 槽里可以写声明") {
+
+    TEST_CASE("init 槽的声明") {
+        CHECK(
+            for_slots(U"for (i: int = 0; i < n; i += 1) body") ==
+            nlohmann::json{
+                {"init", declare("i", false, ident("int"), int_lit("0"))},
+                {"cond", compare_lt(ident("i"), ident("n"))},
+                {"inc", cassign(ident("i"), "+", int_lit("1"))}
+            }
+        );
+        CHECK(
+            for_slots(U"for (i: const int; ;) body")["init"] ==
+            declare("i", true, ident("int"), nullptr)
+        );
+    }
+
+    TEST_CASE("cond 槽只拒绝裸赋值，带类型的赋值放行") {
+        CHECK(
+            for_slots(U"for (; ok: bool = f(); ) body")["cond"] ==
+            declare(
+                "ok",
+                false,
+                ident("bool"),
+                {{"type", "Call"},
+                 {"object", ident("f")},
+                 {"positional_args", nlohmann::json::array()},
+                 {"keyword_args", nlohmann::json::array()}}
+            )
+        );
+    }
+
+    TEST_CASE("as 之后是绑定目标，主表达式中的声明仍是普通声明") {
+        CHECK(parse_json(U"for (xs as x: int) body")["type"] == "ForIter");
+        CHECK(parse_json(U"for (x: int; ;) body")["type"] == "ForCond");
+        // 单槽里的声明就是可迭代对象本身，能不能迭代交给运行期
+        CHECK(
+            parse_json(U"for (x: int) body") ==
+            for_iter("none", nullptr, nullptr, declare("x", false, ident("int"), nullptr))
+        );
+    }
+}
+
+TEST_SUITE("for——cond 槽禁止裸的普通赋值（init/inc 不受限）") {
+
+    TEST_CASE("中间 cond 槽裸 = 报错") {
+        CHECK_THROWS_AS(parse_program(U"for (i = 0; i = 10; i += 1) body"), SyntaxError);
+    }
+
+    TEST_CASE("中间 cond 槽裸复合赋值不受限") {
+        CHECK(
+            parse_json(U"for (; x += 1;) body") == nlohmann::json{
+                                                       {"type", "ForCond"},
+                                                       {"collect", "none"},
+                                                       {"init", nullptr},
+                                                       {"cond",
+                                                        {{"type", "CompoundAssign"},
+                                                         {"target", ident("x")},
+                                                         {"op", "+"},
+                                                         {"value", int_lit("1")}}},
+                                                       {"inc", nullptr},
+                                                       {"body", ident("body")}
+                                                   }
+        );
+    }
+
+    TEST_CASE("cond 槽套一层括号就能写裸赋值") {
+        CHECK(
+            parse_json(U"for (; (x = 1);) body") == nlohmann::json{
+                                                        {"type", "ForCond"},
+                                                        {"collect", "none"},
+                                                        {"init", nullptr},
+                                                        {"cond", assign(ident("x"), int_lit("1"))},
+                                                        {"inc", nullptr},
+                                                        {"body", ident("body")}
+                                                    }
+        );
+    }
+
+    TEST_CASE("init/inc 槽裸赋值不受限（本来就是为赋值而生）") {
+        CHECK_NOTHROW(parse_program(U"for (i = 0; c; i = i + 1) body"));
+    }
+}
+
 TEST_SUITE("for——步进模式头部的换行按软终止分隔") {
 
     // 步进 for 头部的换行按软终止切槽，不把括号内换行当空白。
@@ -436,7 +520,7 @@ TEST_SUITE("for——步进模式头部的换行按软终止分隔") {
 TEST_SUITE("for——头部的槽数只能是 3 或 1") {
 
     // 模式判定不靠前瞻找记号，而是先把头部切成槽、数个数：3 个槽是步进模式，1 个槽是迭代模式
-    // （槽里的 `target from` 写不写都行）。其余槽数一律报错。
+    // （槽里的 `as target` 写不写都行）。其余槽数一律报错。
 
     TEST_CASE("2 个槽：报错，消息把两种合法形状都摆出来") {
         try {
@@ -445,7 +529,7 @@ TEST_SUITE("for——头部的槽数只能是 3 或 1") {
         } catch (const SyntaxError &e) {
             const std::string msg{e.what()};
             CHECK(msg.find("(init; cond; inc)") != std::string::npos);
-            CHECK(msg.find("([target from] iterable)") != std::string::npos);
+            CHECK(msg.find("(iterable [as target])") != std::string::npos);
         }
         CHECK_THROWS_AS(parse_program(U"for (a; b) body"), SyntaxError);
     }
@@ -464,22 +548,22 @@ TEST_SUITE("for——头部的槽数只能是 3 或 1") {
         CHECK_NOTHROW(parse_program(U"for (a in b) body"));
     }
 
-    TEST_CASE("from 只属于迭代模式：写在第一个槽、后面又有两个槽，报错") {
-        check_parse_throws_with(U"for (x from a; b; c) body", "'from' is only allowed in");
+    TEST_CASE("as 只属于迭代模式：写在第一个槽、后面又有两个槽，报错") {
+        check_parse_throws_with(U"for (a as x; b; c) body", "'as' is only allowed in");
     }
 
-    TEST_CASE("from 只能写在第一个槽：写在后面的槽里撞上槽边界检查") {
+    TEST_CASE("as 只能写在第一个槽：写在后面的槽里撞上槽边界检查") {
         check_parse_throws_with(
-            U"for (a; x from b; c) body", "expected ';' or newline between for header slots"
+            U"for (a; b as x; c) body", "expected ';' or newline between for header slots"
         );
         check_parse_throws_with(
-            U"for (a; b; x from c) body", "expected ';' or newline between for header slots"
+            U"for (a; b; c as x) body", "expected ';' or newline between for header slots"
         );
     }
 
-    TEST_CASE("一个头部里最多一个 from：第二个 from 撞在槽边界检查上，不需要单独一条规则") {
+    TEST_CASE("一个头部里最多一个 as：第二个 as 撞在槽边界检查上，不需要单独一条规则") {
         check_parse_throws_with(
-            U"for (a from b from c) body", "expected ';' or newline between for header slots"
+            U"for (c as b as a) body", "expected ';' or newline between for header slots"
         );
     }
 
@@ -511,20 +595,19 @@ TEST_SUITE("for——迭代模式") {
 
     TEST_CASE("基本迭代") {
         CHECK(
-            parse_json(U"for (x from xs) body") ==
-            for_iter("none", ident("x"), nullptr, ident("xs"))
+            parse_json(U"for (xs as x) body") == for_iter("none", ident("x"), nullptr, ident("xs"))
         );
     }
 
     TEST_CASE("收集模式迭代") {
         CHECK(
-            parse_json(U"for $ (x from xs) body") == for_iter("$", ident("x"), nullptr, ident("xs"))
+            parse_json(U"for $ (xs as x) body") == for_iter("$", ident("x"), nullptr, ident("xs"))
         );
     }
 
     TEST_CASE("目标可以是解构元组/列表/属性/索引（语法层放行任意左值形状，交语义层校验）") {
         CHECK(
-            parse_json(U"for ((a, b) from pairs) body") ==
+            parse_json(U"for (pairs as (a, b)) body") ==
             for_iter(
                 "none",
                 {{"type", "LiteralTuple"},
@@ -534,7 +617,7 @@ TEST_SUITE("for——迭代模式") {
             )
         );
         CHECK(
-            parse_json(U"for ([a, *b] from xs) body") ==
+            parse_json(U"for (xs as [a, *b]) body") ==
             for_iter(
                 "none",
                 {{"type", "LiteralList"},
@@ -546,11 +629,11 @@ TEST_SUITE("for——迭代模式") {
                 ident("xs")
             )
         );
-        CHECK(parse_json(U"for (o.x from xs) body")["binding"]["target"]["type"] == "Attr");
-        CHECK(parse_json(U"for (o[0] from xs) body")["binding"]["target"]["type"] == "Index");
+        CHECK(parse_json(U"for (xs as o.x) body")["binding"]["target"]["type"] == "Attr");
+        CHECK(parse_json(U"for (xs as o[0]) body")["binding"]["target"]["type"] == "Index");
     }
 
-    TEST_CASE("不写 target from 也合法：迭代出来的值直接丢弃") {
+    TEST_CASE("不写 as target 也合法：迭代出来的值直接丢弃") {
         CHECK(parse_json(U"for (xs) body") == for_iter("none", nullptr, nullptr, ident("xs")));
         CHECK(parse_json(U"for $ (xs) body") == for_iter("$", nullptr, nullptr, ident("xs")));
     }
@@ -571,210 +654,141 @@ TEST_SUITE("for——迭代模式") {
 
     TEST_CASE("可迭代对象可以是任意表达式，包括 ..=") {
         CHECK(
-            parse_json(U"for (i from 0..=n) body")["iterable"] ==
+            parse_json(U"for (0..=n as i) body")["iterable"] ==
             binary("..=", int_lit("0"), ident("n"))
         );
     }
 
     TEST_CASE("元组目标不带外层括号会因为缺分隔符报错") {
-        CHECK_THROWS_AS(parse_program(U"for (a, b from pairs) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (pairs as a, b) body"), SyntaxError);
     }
 
-    TEST_CASE("from 后面缺可迭代对象报错") {
-        CHECK_THROWS_AS(parse_program(U"for (x from) body"), SyntaxError);
+    TEST_CASE("缺可迭代对象或缺绑定目标都报错") {
+        CHECK_THROWS_AS(parse_program(U"for ( as x) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (xs as) body"), SyntaxError);
     }
 
     TEST_CASE("未闭合括号/缺 body 报错") {
-        CHECK_THROWS_AS(parse_program(U"for (x from xs"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"for (x from xs)"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (xs as x"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (xs as x)"), SyntaxError);
     }
 
-    TEST_CASE("as 已经是保留字") {
-        CHECK_THROWS_AS(parse_program(U"for (xs as x) body"), SyntaxError);
+    TEST_CASE("from 是保留字，不支持目标在前的绑定") {
+        CHECK_THROWS_AS(parse_program(U"for (x from xs) body"), SyntaxError);
     }
 }
 
-TEST_SUITE("for——迭代模式带类型的绑定 `target : type from`") {
+TEST_SUITE("for——迭代模式带类型的绑定 `as target : type`") {
 
     TEST_CASE("带类型") {
         CHECK(
-            parse_json(U"for (x: int from xs) body") ==
+            parse_json(U"for (xs as x: int) body") ==
             for_iter("none", ident("x"), ident("int"), ident("xs"))
         );
         CHECK(
-            parse_json(U"for $ (x: int | str? from xs) body")["binding"]["annotation"]["type"] ==
+            parse_json(U"for $ (xs as x: int | str?) body")["binding"]["annotation"]["type"] ==
             binary("|", ident("int"), {{"type", "OpUnary"}, {"op", "?"}, {"operand", ident("str")}})
         );
     }
 
     TEST_CASE("':' 之后可以换行") {
         CHECK(
-            parse_json(U"for (x:\nint from xs) body") ==
+            parse_json(U"for (xs as x:\nint) body") ==
             for_iter("none", ident("x"), ident("int"), ident("xs"))
         );
     }
 
     TEST_CASE("带类型时目标只能是标识符") {
         check_parse_throws_with(
-            U"for ((a, b): T from xs) body", "only an identifier can be declared"
+            U"for (xs as (a, b): T) body", "only an identifier can be declared"
         );
-        check_parse_throws_with(U"for (o.x: T from xs) body", "only an identifier can be declared");
+        check_parse_throws_with(U"for (xs as o.x: T) body", "only an identifier can be declared");
     }
 
     TEST_CASE("注解里可以写 const，类型可省") {
         CHECK(
-            parse_json(U"for (x: const int from xs) body") ==
+            parse_json(U"for (xs as x: const int) body") ==
             for_iter("none", ident("x"), ident("int"), ident("xs"), true)
         );
         CHECK(
-            parse_json(U"for (x: const from xs) body") ==
+            parse_json(U"for (xs as x: const) body") ==
             for_iter("none", ident("x"), nullptr, ident("xs"), true)
         );
         CHECK(
-            parse_json(U"for (x: const 'doc' from xs) body") ==
+            parse_json(U"for (xs as x: const 'doc') body") ==
             for_iter("none", ident("x"), str_lit("doc"), ident("xs"), true)
         );
     }
 
-    TEST_CASE("':' 后面没有类型报错") {
-        check_parse_throws_with(U"for (x: from xs) body", "expected 'const' or a type after ':'");
+    TEST_CASE("for 头部 const 后换行结束无类型声明，额外圆括号内则继续解析类型") {
+        const auto j = parse_json(U"for (x: const\nT\nxs) body");
+        CHECK(j["type"] == "ForCond");
+        CHECK(j["init"] == declare("x", true, nullptr, nullptr));
+        CHECK(j["cond"] == ident("T"));
+        CHECK(j["inc"] == ident("xs"));
+        CHECK(j["body"] == ident("body"));
+        CHECK(
+            parse_json(U"for ((x: const\nT); cond; inc) body")["init"] ==
+            declare("x", true, ident("T"), nullptr)
+        );
+        CHECK_THROWS_AS(parse_program(U"for (xs as x: const\nT) body"), SyntaxError);
     }
 
-    TEST_CASE("类型位置上的具名函数表达式报错") {
-        check_parse_throws_with(
-            U"for (x: func g() { return int } from xs) body",
-            "a function expression used as a type must be anonymous"
+    TEST_CASE("':' 后面没有类型报错") {
+        check_parse_throws_with(U"for (xs as x:) body", "expected 'const' or a type after ':'");
+    }
+
+    TEST_CASE("类型位置上的函数表达式允许命名或匿名") {
+        CHECK(
+            parse_json(
+                U"for (xs as x: func g() { return int }) body"
+            )["binding"]["annotation"]["type"]["name"] == "g"
         );
         CHECK(
             parse_json(
-                U"for (x: func () { return int } from xs) body"
+                U"for (xs as x: func () { return int }) body"
             )["binding"]["annotation"]["type"]["type"] == "Func"
         );
     }
 
     TEST_CASE("绑定目标加了括号就不是 `identifier : type`，而是整个声明当目标（交语义层拦）") {
         CHECK(
-            parse_json(U"for ((x: int) from xs) body")["binding"]["target"] ==
+            parse_json(U"for (xs as (x: int)) body")["binding"]["target"] ==
             declare("x", false, ident("int"), nullptr)
         );
     }
 }
 
-TEST_SUITE("for——步进模式的 init、cond 槽里可以写声明") {
-
-    TEST_CASE("init 槽的声明") {
-        CHECK(
-            for_slots(U"for (i: int = 0; i < n; i += 1) body") ==
-            nlohmann::json{
-                {"init", declare("i", false, ident("int"), int_lit("0"))},
-                {"cond", compare_lt(ident("i"), ident("n"))},
-                {"inc", cassign(ident("i"), "+", int_lit("1"))}
-            }
-        );
-        CHECK(
-            for_slots(U"for (i: const int; ;) body")["init"] ==
-            declare("i", true, ident("int"), nullptr)
-        );
-    }
-
-    TEST_CASE("cond 槽只拒绝裸赋值，带类型的赋值放行") {
-        CHECK(
-            for_slots(U"for (; ok: bool = f(); ) body")["cond"] ==
-            declare(
-                "ok",
-                false,
-                ident("bool"),
-                {{"type", "Call"},
-                 {"object", ident("f")},
-                 {"positional_args", nlohmann::json::array()},
-                 {"keyword_args", nlohmann::json::array()}}
-            )
-        );
-    }
-
-    TEST_CASE("第一个槽的声明后面接 from 才是绑定，不接就是声明") {
-        CHECK(parse_json(U"for (x: int from xs) body")["type"] == "ForIter");
-        CHECK(parse_json(U"for (x: int; ;) body")["type"] == "ForCond");
-        // 单槽里的声明就是可迭代对象本身，能不能迭代交给运行期
-        CHECK(
-            parse_json(U"for (x: int) body") ==
-            for_iter("none", nullptr, nullptr, declare("x", false, ident("int"), nullptr))
-        );
-    }
-}
-
-TEST_SUITE("for——迭代模式的头部同样按槽切分，`from` 不是分界记号") {
+TEST_SUITE("for——迭代模式的头部同样按槽切分，`as` 不是分界记号") {
 
     // 迭代模式就是"恰好一个槽"，头部里换行的待遇跟步进模式完全一样：换行处左侧能构成完整表达式
-    // 就切一刀。所以 from 两侧的换行是不对称的：from 之后可以换行（from
-    // 已消耗，可迭代对象会跨行找）， from 之前不行（左边的 target
+    // 就切一刀。所以 as 两侧的换行是不对称的：as 之后可以换行（as
+    // 已消耗，绑定目标会跨行找），as 之前不行（左边的 iterable
     // 已经完整，一刀切成两槽）。这跟同样两行写在块里的结果一致。
 
-    TEST_CASE("from 之后可以换行") {
+    TEST_CASE("as 之后可以换行") {
         CHECK(
-            parse_json(U"for (x from\nxs) body") ==
-            for_iter("none", ident("x"), nullptr, ident("xs"))
+            parse_json(U"for (xs as\nx) body") == for_iter("none", ident("x"), nullptr, ident("xs"))
         );
-        CHECK_NOTHROW(parse_program(U"for (\nx from\n\n\nxs\n) body"));
+        CHECK_NOTHROW(parse_program(U"for (\nxs as\n\n\nx\n) body"));
     }
 
-    TEST_CASE("from 之前不能换行：左边已经完整，换行把它切成了两个槽") {
-        CHECK_THROWS_AS(parse_program(U"for (x\nfrom xs) body"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"for (x\n\n\nfrom xs) body"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"for (x: int\nfrom xs) body"), SyntaxError);
+    TEST_CASE("as 之前不能换行：左边已经完整，换行把它切成了两个槽") {
+        CHECK_THROWS_AS(parse_program(U"for (xs\nas x) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (xs\n\n\nas x) body"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"for (xs\nas x: int) body"), SyntaxError);
     }
 
     TEST_CASE("iterable 里的换行也照槽的规矩切，不再当空白") {
         // `a` 换行 `+ b`：左边已完整 -> 切成两槽 -> 槽数是 2 -> 报错。
         // 想跨行写长的 iterable，把运算符留在行尾（`a +` 换行 `b`）或者自己加一层括号
-        CHECK_THROWS_AS(parse_program(U"for (x from a\n+ b) body"), SyntaxError);
-        CHECK_NOTHROW(parse_program(U"for (x from a +\nb) body"));
-        CHECK_NOTHROW(parse_program(U"for (x from (a\n+ b)) body"));
+        CHECK_THROWS_AS(parse_program(U"for (a\n+ b as x) body"), SyntaxError);
+        CHECK_NOTHROW(parse_program(U"for (a +\nb as x) body"));
+        CHECK_NOTHROW(parse_program(U"for ((a\n+ b) as x) body"));
     }
 
     TEST_CASE("target 那一侧同理：`a` 换行 `.b` 会把 '.b' 甩出头部，'.' 起不了头") {
-        CHECK_THROWS_AS(parse_program(U"for (a\n.b from xs) body"), SyntaxError);
-    }
-}
-
-TEST_SUITE("for——cond 槽禁止裸的普通赋值（init/inc 不受限）") {
-
-    TEST_CASE("中间 cond 槽裸 = 报错") {
-        CHECK_THROWS_AS(parse_program(U"for (i = 0; i = 10; i += 1) body"), SyntaxError);
-    }
-
-    TEST_CASE("中间 cond 槽裸复合赋值不受限") {
-        CHECK(
-            parse_json(U"for (; x += 1;) body") == nlohmann::json{
-                                                       {"type", "ForCond"},
-                                                       {"collect", "none"},
-                                                       {"init", nullptr},
-                                                       {"cond",
-                                                        {{"type", "CompoundAssign"},
-                                                         {"target", ident("x")},
-                                                         {"op", "+"},
-                                                         {"value", int_lit("1")}}},
-                                                       {"inc", nullptr},
-                                                       {"body", ident("body")}
-                                                   }
-        );
-    }
-
-    TEST_CASE("cond 槽套一层括号就能写裸赋值") {
-        CHECK(
-            parse_json(U"for (; (x = 1);) body") == nlohmann::json{
-                                                        {"type", "ForCond"},
-                                                        {"collect", "none"},
-                                                        {"init", nullptr},
-                                                        {"cond", assign(ident("x"), int_lit("1"))},
-                                                        {"inc", nullptr},
-                                                        {"body", ident("body")}
-                                                    }
-        );
-    }
-
-    TEST_CASE("init/inc 槽裸赋值不受限（本来就是为赋值而生）") {
-        CHECK_NOTHROW(parse_program(U"for (i = 0; c; i = i + 1) body"));
+        CHECK_THROWS_AS(parse_program(U"for (xs as a\n.b) body"), SyntaxError);
     }
 }
 
@@ -788,8 +802,6 @@ TEST_SUITE("for——$ 与 for 之间不需要空白") {
     }
 
     TEST_CASE("迭代模式 for$ 无空格") {
-        CHECK(
-            parse_json(U"for$(x from xs) body") == for_iter("$", ident("x"), nullptr, ident("xs"))
-        );
+        CHECK(parse_json(U"for$(xs as x) body") == for_iter("$", ident("x"), nullptr, ident("xs")));
     }
 }

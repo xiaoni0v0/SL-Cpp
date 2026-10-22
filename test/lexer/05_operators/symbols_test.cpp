@@ -137,7 +137,7 @@ TEST_SUITE("符号：贪婪最长匹配（多字符优先于短的）") {
     }
 
     TEST_CASE("符号与关键字之间不必有空白") {
-        CHECK(lex_dump(U"for $ (i from ls) { i ** 2 }") == lex_dump(U"for$(i from ls){i**2}"));
+        CHECK(lex_dump(U"for $ (ls as i) { i ** 2 }") == lex_dump(U"for$(ls as i){i**2}"));
         CHECK(lex_dump(U"x: const int") == lex_dump(U"x:const int"));
     }
 }

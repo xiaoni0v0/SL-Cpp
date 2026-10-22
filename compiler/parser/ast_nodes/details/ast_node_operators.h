@@ -3,6 +3,7 @@
 #include "../../../../common/Position.h"
 #include "../ast_visitor.h"
 #include "ast_node.h"
+#include "ast_node_misc.h"
 
 #include <utility>
 #include <vector>
@@ -57,7 +58,7 @@ struct AstNodeOpUnary : AstNode {
     SL_AST_NODE_ACCEPT
 };
 
-// 二元运算符：+  -  *  /  //  %  **  &  |  ^  <<  >>  and  or  ..  in
+// 二元运算符：+  -  *  /  //  %  **  &  |  ^  <<  >>  and  or  ..  ..=  in
 struct AstNodeOpBinary : AstNode {
     enum class OpType {
         // 算术
@@ -77,8 +78,9 @@ struct AstNodeOpBinary : AstNode {
         // 逻辑
         And,
         Or,
-        // ..
+        // ..  ..=
         Range,
+        RangeClosed,
         // 成员测试
         In
     };
@@ -132,19 +134,23 @@ struct AstNodeIs : AstNode {
     SL_AST_NODE_ACCEPT
 };
 
-// target = expr
+// 裸赋值 target = expr 和赋值表达式 identifier : ⟦const⟧ ⟦type⟧ ⟦= expr⟧
 struct AstNodeAssign : AstNode {
     AstNodePtr target_;
-    AstNodePtr value_;
+    Annotation annotation_;
+    AstNodePtr value_; // nullptr 表示没写 `= expr`
 
-    explicit AstNodeAssign(const Position pos, AstNodePtr target, AstNodePtr value)
-        : AstNode{pos}, target_{std::move(target)}, value_{std::move(value)} {}
+    explicit AstNodeAssign(
+        const Position pos, AstNodePtr target, Annotation annotation, AstNodePtr value
+    )
+        : AstNode{pos}, target_{std::move(target)}, annotation_{std::move(annotation)},
+          value_{std::move(value)} {}
 
     SL_AST_NODE_ACCEPT
 };
 
 // target op= expr
-// （op 为算术/位运算，由 Parser.cpp 里 assign_compound_to_binary 的白名单保证，不是语义层校验的）
+// （op 为算术/位运算，由 Parser 里 assign_compound_to_binary 的白名单保证，不是语义层校验的）
 struct AstNodeCompoundAssign : AstNode {
     AstNodePtr target_;
     AstNodeOpBinary::OpType op_;

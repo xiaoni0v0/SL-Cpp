@@ -27,23 +27,23 @@
 必须是纯 `Identifier`；`import` 必须是 `Identifier` 或一路 `Attr` 到底的属性访问链，展开进
 `segments_`），这样 `.y`/`(x)` 会被吃进目标本身、校验时直接拒绝，不会泄漏给外层。
 
-对照组：`for` 迭代模式和 `except` 的绑定目标（`for (lvalue from iterable)`、`except (lvalue
-from E)`）走 2 那条。目标允许标识符/属性访问/索引/解构元组或列表等多种形状，产生式不单一，
+对照组：`for` 迭代模式和 `except` 的绑定目标（`for (iterable as lvalue)`、`except (E as lvalue)`）走 2 那条。
+目标允许标识符/属性访问/索引/解构元组或列表等多种形状，产生式不单一，
 按表达式解析后校验交给语义层 `check_lvalue`（这里的目标字段本来就该是宽泛的 `AstNodePtr`，
 可以是任意左值，不像 `global`/`import` 的字段被收紧成必须是纯标识符/纯路径）。
 `del target` 同理（`check_lvalue_pure` 承担这一步）。
 
 带注解的目标不一样：产生式变成单一的 `identifier : ...`（声明也是这个产生式），目标必须是
-标识符这件事在 Parser 里（`parse_decl_head`）当场判掉，不留给语义层。
+标识符这件事在 Parser 里（`finish_assign`、`parse_binding`）当场判掉，不留给语义层。
 
-反过来，`from` 这个**记号本身**、函数/类的可选名字这类"只是子字段、不是整个构造返回值"的槽位，
-不受第 3 问牵连：`from` 不是运算符，只在头部里出现，当前 token 就够判断，`check(KW_FROM)` +
-`expect(KW_FROM)` 直接收紧没问题，它不会被交回外层 Pratt 循环，没有"泄漏"这一说。
+反过来，`as` 这个**记号本身**、函数/类的可选名字这类"只是子字段、不是整个构造返回值"的槽位，
+不受第 3 问牵连：`as` 不是运算符，只在头部里出现，当前 token 就够判断，`check(KW_AS)` +
+`expect(KW_AS)` 直接收紧没问题，它不会被交回外层 Pratt 循环，没有"泄漏"这一说。
 
 ## 用 `parse_expr()` 收紧目标形状时，先探路避免报错串味
 
 `global`/`import` 这两处在调用 `parse_expr()` 之前，都先用一次不消耗 token 的 `check(IDENTIFIER)`
-探路。原因：目标位置一旦撞见关键字（`global class`、`import from`），直接扔给 `parse_expr()` 会一头
+探路。原因：目标位置一旦撞见关键字（`global class`、`import as`），直接扔给 `parse_expr()` 会一头
 扎进 `parse_class()` 之类的深层产生式，报出跟"这里需要一个标识符"毫不相关的错误。探路一下能把这类
 输入挡在最外面，报错跟原来 `expect(IDENTIFIER)` 一样干脆。
 

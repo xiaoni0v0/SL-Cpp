@@ -3,6 +3,7 @@
 #include "ast_nodes.h"
 #include "ast_visitor.h"
 
+#include <optional>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -30,6 +31,9 @@ class AstJsonDumper : public AstConstVisitor {
     [[nodiscard]] json dump_kwargs(const std::vector<OneKwArg> &kwargs);
     // 普通函数调用、import 调用形态、eval 共用的那部分
     [[nodiscard]] json dump_call_args(const CallArgs &args);
+    [[nodiscard]] json dump_annotation(const Annotation &annotation);
+    // 没写 as 时给 null
+    [[nodiscard]] json dump_binding(const std::optional<Binding> &binding);
     [[nodiscard]] json dump_captures(const std::vector<OneCapture> &captures);
     [[nodiscard]] json dump_one_param(const AstNodeFunc::OneParam &param);
     [[nodiscard]] json dump_all_params(const AstNodeFunc::AllParams &params);

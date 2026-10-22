@@ -54,7 +54,7 @@ TEST_SUITE("try") {
 
     TEST_CASE("逗号分隔的异常类列表不再支持，报错时提示用 |") {
         check_parse_throws_with(U"try a except (E1, E2) b", "use '|'");
-        check_parse_throws_with(U"try a except (e from E1, E2) b", "use '|'");
+        check_parse_throws_with(U"try a except (E1, E2 as e) b", "use '|'");
     }
 
     TEST_CASE("多个 except 子句 + finally") {
@@ -131,20 +131,20 @@ TEST_SUITE("try") {
     }
 }
 
-TEST_SUITE("try——except 的 from 绑定") {
+TEST_SUITE("try——except 的 as 绑定") {
 
     // 绑定写在括号里：')' 仍然是"头部到此为止"的可靠信号，body 从哪开始永远确定。
 
-    TEST_CASE("target from exc_type") {
+    TEST_CASE("exc_type as target") {
         CHECK(
-            parse_json(U"try a except (e from E) b")["except_clauses"][0] ==
+            parse_json(U"try a except (E as e) b")["except_clauses"][0] ==
             except_clause(ident("e"), nullptr, ident("E"), ident("b"))
         );
     }
 
-    TEST_CASE("target : type from exc_type，类型和用来匹配的异常类互相独立") {
+    TEST_CASE("exc_type as target : type，类型和用来匹配的异常类互相独立") {
         CHECK(
-            parse_json(U"try a except (e: Exception from E1 | E2) b")["except_clauses"][0] ==
+            parse_json(U"try a except (E1 | E2 as e: Exception) b")["except_clauses"][0] ==
             except_clause(
                 ident("e"),
                 ident("Exception"),
@@ -154,13 +154,13 @@ TEST_SUITE("try——except 的 from 绑定") {
         );
     }
 
-    TEST_CASE("from 可选：不写就是不关心异常对象，target 为空") {
+    TEST_CASE("as 可选：不写就是不关心异常对象，target 为空") {
         const auto result = parse_json(U"try a except (E) b");
         CHECK(result["except_clauses"][0]["binding"] == nullptr);
     }
 
-    TEST_CASE("每个 except 子句各自独立决定写不写 from") {
-        const auto result = parse_json(U"try a except (e from E1) b except (E2) c");
+    TEST_CASE("每个 except 子句各自独立决定写不写 as") {
+        const auto result = parse_json(U"try a except (E1 as e) b except (E2) c");
         CHECK(result["except_clauses"][0]["binding"]["target"] == ident("e"));
         CHECK(result["except_clauses"][1]["binding"] == nullptr);
     }
@@ -168,39 +168,39 @@ TEST_SUITE("try——except 的 from 绑定") {
     TEST_CASE("不带类型时目标是任意左值形状（左值校验交语义层）") {
         CHECK(
             parse_json(
-                U"try a except (x.y from E) b"
+                U"try a except (E as x.y) b"
             )["except_clauses"][0]["binding"]["target"]["type"] == "Attr"
         );
         CHECK(
             parse_json(
-                U"try a except (x[0] from E) b"
+                U"try a except (E as x[0]) b"
             )["except_clauses"][0]["binding"]["target"]["type"] == "Index"
         );
         CHECK(
             parse_json(
-                U"try a except ((p, q) from E) b"
+                U"try a except (E as (p, q)) b"
             )["except_clauses"][0]["binding"]["target"]["type"] == "LiteralTuple"
         );
     }
 
     TEST_CASE("带类型时目标只能是标识符") {
         check_parse_throws_with(
-            U"try a except (x.y: T from E) b", "only an identifier can be declared"
+            U"try a except (E as x.y: T) b", "only an identifier can be declared"
         );
     }
 
     TEST_CASE("注解里可以写 const，类型可省") {
         CHECK(
-            parse_json(U"try a except (e: const E from E) b")["except_clauses"][0] ==
+            parse_json(U"try a except (E as e: const E) b")["except_clauses"][0] ==
             except_clause(ident("e"), ident("E"), ident("E"), ident("b"), true)
         );
         CHECK(
-            parse_json(U"try a except (e: const from E) b")["except_clauses"][0] ==
+            parse_json(U"try a except (E as e: const) b")["except_clauses"][0] ==
             except_clause(ident("e"), nullptr, ident("E"), ident("b"), true)
         );
     }
 
-    TEST_CASE("没写 from 时括号里整个是异常类表达式，写成声明也照常解析（交给运行期）") {
+    TEST_CASE("没写 as 时括号里整个是异常类表达式，写成声明也照常解析（交给运行期）") {
         CHECK(
             parse_json(U"try a except (e: E) b")["except_clauses"][0] ==
             except_clause(nullptr, nullptr, declare("e", false, ident("E"), nullptr), ident("b"))
@@ -212,25 +212,48 @@ TEST_SUITE("try——except 的 from 绑定") {
         CHECK(parse_json(U"try a except ((e: E)) b") == parse_json(U"try a except (e: E) b"));
     }
 
-    TEST_CASE("from 和 ':' 之后可以换行（括号内换行照常当空白）") {
+    TEST_CASE("as 和 ':' 之后可以换行（括号内换行照常当空白）") {
         CHECK(
-            parse_json(U"try a except (e\nfrom\nE) b")["except_clauses"][0] ==
+            parse_json(U"try a except (E\nas\ne) b")["except_clauses"][0] ==
             except_clause(ident("e"), nullptr, ident("E"), ident("b"))
         );
         CHECK(
-            parse_json(U"try a except (e:\nT\nfrom E) b")["except_clauses"][0] ==
+            parse_json(U"try a except (E\nas e:\nT) b")["except_clauses"][0] ==
             except_clause(ident("e"), ident("T"), ident("E"), ident("b"))
         );
     }
 
-    TEST_CASE("from 之后缺异常类、from 写在括号外、as 都报错") {
-        CHECK_THROWS_AS(parse_program(U"try a except (e from) b"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"try a except (E) from e b"), SyntaxError);
-        CHECK_THROWS_AS(parse_program(U"try a except (E as e) b"), SyntaxError);
+    TEST_CASE("except 的圆括号中 const 后换行仍继续解析类型") {
+        CHECK(
+            parse_json(U"try a except (E as e: const\nT) b")["except_clauses"][0] ==
+            except_clause(ident("e"), ident("T"), ident("E"), ident("b"), true)
+        );
+    }
+
+    TEST_CASE("绑定类型允许带装饰器的命名函数，const 和 as 各自保留") {
+        const auto j =
+            parse_json(U"try a except (E as e: const @deco func typed[P]() { return P }) b");
+        const auto &clause = j["except_clauses"][0];
+        CHECK(clause["binding"]["target"] == ident("e"));
+        CHECK(clause["binding"]["annotation"]["is_const"] == true);
+        const auto &type = clause["binding"]["annotation"]["type"];
+        CHECK(type["type"] == "Func");
+        CHECK(type["name"] == "typed");
+        CHECK(type["decorators"] == nlohmann::json::array({ident("deco")}));
+        CHECK(type == parse_json(U"@deco func typed[P]() { return P }"));
+        CHECK(clause["exc_type"] == ident("E"));
+        CHECK(clause["body"] == ident("b"));
+    }
+
+    TEST_CASE("缺异常类、as 写在括号外或缺绑定目标都报错") {
+        CHECK_THROWS_AS(parse_program(U"try a except ( as e) b"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"try a except (E) as e b"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"try a except (E as) b"), SyntaxError);
+        CHECK_THROWS_AS(parse_program(U"try a except (e from E) b"), SyntaxError);
     }
 
     TEST_CASE("body 以 '[' 开头也不会跟目标粘在一起：')' 已经把头部封死") {
-        const auto result = parse_json(U"try a except (e from E) [1, 2]");
+        const auto result = parse_json(U"try a except (E as e) [1, 2]");
         CHECK(result["except_clauses"][0]["binding"]["target"] == ident("e"));
         CHECK(result["except_clauses"][0]["body"]["type"] == "LiteralList");
     }

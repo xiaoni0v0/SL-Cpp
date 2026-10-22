@@ -27,6 +27,7 @@ X(AstNodeLiteralStr)
 X(AstNodeLiteralTuple)
 X(AstNodeLiteralList)
 X(AstNodeLiteralDict)
+X(AstNodeLiteralSet)
 X(AstNodeLiteralEllipsis)
 
 X(AstNodeProgram)

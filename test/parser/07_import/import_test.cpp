@@ -49,7 +49,7 @@ TEST_SUITE("import 关键字形态") {
 
     TEST_CASE("第一段撞见关键字时报的是'期待标识符'，不会一头扎进关键字自己的产生式报无关的错") {
         check_parse_throws_with(U"import class", "expected an identifier after 'import'");
-        check_parse_throws_with(U"import from", "expected an identifier after 'import'");
+        check_parse_throws_with(U"import as", "expected an identifier after 'import'");
     }
 
     TEST_CASE("点号后面必须还有一段") {

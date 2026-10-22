@@ -9,7 +9,7 @@
 TEST_SUITE("保留字") {
 
     TEST_CASE("每个保留字单独出现都报错") {
-        CHECK_THROWS_AS(lex(U"as"), SyntaxError);
+        CHECK_THROWS_AS(lex(U"from"), SyntaxError);
         CHECK_THROWS_AS(lex(U"assert"), SyntaxError);
         CHECK_THROWS_AS(lex(U"when"), SyntaxError);
         CHECK_THROWS_AS(lex(U"case"), SyntaxError);
@@ -36,7 +36,7 @@ TEST_SUITE("保留字") {
     }
 
     TEST_CASE("前缀/超集是标识符") {
-        CHECK(lex_dump(U"asx") == "IDENTIFIER(asx)");
+        CHECK(lex_dump(U"fromage") == "IDENTIFIER(fromage)");
         CHECK(lex_dump(U"whenever") == "IDENTIFIER(whenever)");
         CHECK(lex_dump(U"locality") == "IDENTIFIER(locality)");
         CHECK(lex_dump(U"assertion") == "IDENTIFIER(assertion)");

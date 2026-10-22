@@ -3,23 +3,32 @@ sl_add_test_target(
     LIBS sl_compiler_parser
     SOURCES
         test_utils.h
-        01_literals/literals_test.cpp
-        01_literals/literal_raw_test.cpp
+        01_literals/scalar_test.cpp
+        01_literals/numeric_raw_test.cpp
+        01_literals/tuple_test.cpp
+        01_literals/list_test.cpp
+        01_literals/dict_test.cpp
+        01_literals/set_test.cpp
+        01_literals/dict_set_disambiguation_test.cpp
+        02_operators/unary_test.cpp
         02_operators/precedence_test.cpp
         02_operators/compare_is_test.cpp
         02_operators/in_test.cpp
+        02_operators/postfix_test.cpp
+        02_operators/unpack_test.cpp
         02_operators/assign_test.cpp
         02_operators/declaration_test.cpp
-        02_operators/unpack_test.cpp
         03_separators/separator_test.cpp
-        04_compound_dict/compound_dict_test.cpp
+        03_separators/soft_newline_test.cpp
+        04_compound/compound_test.cpp
         05_del/del_test.cpp
         06_global/global_test.cpp
         07_import/import_test.cpp
         08_control_flow/if_test.cpp
+        08_control_flow/collect_mark_test.cpp
+        08_control_flow/binding_test.cpp
         08_control_flow/for_test.cpp
         08_control_flow/while_test.cpp
-        08_control_flow/collect_mark_test.cpp
         08_control_flow/break_continue_test.cpp
         08_control_flow/return_test.cpp
         08_control_flow/try_test.cpp
@@ -28,9 +37,10 @@ sl_add_test_target(
         10_class/class_test.cpp
         11_decorator/decorator_test.cpp
         12_eval/eval_test.cpp
-        13_cross/combination_test.cpp
-        13_cross/error_handling_test.cpp
-        13_cross/position_tracking_test.cpp
-        13_cross/single_expr_entry_test.cpp
+        13_entries/single_expr_entry_test.cpp
+        14_diagnostics/error_handling_test.cpp
+        14_diagnostics/position_tracking_test.cpp
+        15_cross/annotation_shape_test.cpp
+        15_cross/combination_test.cpp
 )
 target_precompile_headers(sl_test_parser PRIVATE <nlohmann/json.hpp>)

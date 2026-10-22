@@ -3,7 +3,9 @@
 #include "../../../../common/Position.h"
 #include "../ast_visitor.h"
 #include "ast_node.h"
+#include "ast_node_misc.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -40,7 +42,7 @@ struct CollectMark {
     bool expand_; // 是否带 * / **（把每轮的值展开）；container_ 为 None 时必须为 false
 };
 
-// for [collect] (init cond inc) body
+// for [collect] (init; cond; inc) body
 struct AstNodeForCond : AstNode {
     CollectMark collect_;
     AstNodePtr init_; // nullptr 表示空
@@ -58,19 +60,19 @@ struct AstNodeForCond : AstNode {
     SL_AST_NODE_ACCEPT
 };
 
-// for [collect] (iterable [as target]) body
+// for [collect] (iterable [as target [: [const] [type]]]) body
 struct AstNodeForIter : AstNode {
     CollectMark collect_;
     AstNodePtr iterable_;
-    AstNodePtr target_; // nullptr 表示没有 as
+    std::optional<Binding> binding_; // nullopt 表示没写 as
     AstNodePtr body_;
 
     explicit AstNodeForIter(
-        const Position pos, const CollectMark collect, AstNodePtr iterable, AstNodePtr target,
-        AstNodePtr body
+        const Position pos, const CollectMark collect, AstNodePtr iterable,
+        std::optional<Binding> binding, AstNodePtr body
     )
         : AstNode{pos}, collect_{collect}, iterable_{std::move(iterable)},
-          target_{std::move(target)}, body_{std::move(body)} {}
+          binding_{std::move(binding)}, body_{std::move(body)} {}
 
     SL_AST_NODE_ACCEPT
 };
@@ -97,17 +99,17 @@ struct AstNodeReturn : AstNode {
     SL_AST_NODE_ACCEPT
 };
 
-// try expr [except (Exception, ... [as target]) expr]* [finally expr]
+// try expr [except (exc_type [as target [: [const] [type]]]) expr]* [finally expr]
 struct AstNodeTry : AstNode {
     // except 子句，作为 AstNodeTry 的组成部分
     struct AstNodeExceptAndExpr {
-        std::vector<AstNodePtr> exceptions_;
-        AstNodePtr target_; // nullptr 表示没有 as
+        AstNodePtr exc_type_;
+        std::optional<Binding> binding_; // nullopt 表示没写 as
         AstNodePtr body_;
 
-        AstNodeExceptAndExpr(std::vector<AstNodePtr> exception, AstNodePtr target, AstNodePtr body)
-            : exceptions_{std::move(exception)}, target_{std::move(target)},
-              body_{std::move(body)} {}
+        AstNodeExceptAndExpr(AstNodePtr exc_type, std::optional<Binding> binding, AstNodePtr body)
+            : exc_type_{std::move(exc_type)}, binding_{std::move(binding)}, body_{std::move(body)} {
+        }
     };
 
     AstNodePtr try_expr_;

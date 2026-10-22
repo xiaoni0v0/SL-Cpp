@@ -16,10 +16,6 @@ TEST_SUITE("return") {
         );
     }
 
-    TEST_CASE("return a, b 不是返回元组，逗号处缺分隔符") {
-        CHECK_THROWS_AS(parse_program(U"return a, b"), SyntaxError);
-    }
-
     TEST_CASE("带值是复杂表达式") {
         CHECK(
             parse_json(U"return 1 + 2") == nlohmann::json{
@@ -73,8 +69,8 @@ TEST_SUITE("return") {
         );
     }
 
-    TEST_CASE("裸 return 出现在字典键 / 形参默认值语境时也能正确识别为裸 return") {
-        // return 作为字典键，紧跟的 ':' 不是表达式的合法开头
+    TEST_CASE("裸 return 出现在字典键 / 形参类型语境时也能正确识别为裸 return") {
+        // return 作为字典键，紧跟的 '->' 不是表达式的合法开头
         CHECK(
             parse_json(U"${return -> 1}") ==
             nlohmann::json{
@@ -132,5 +128,56 @@ TEST_SUITE("return") {
             nlohmann::json{{"type", "Return"}, {"value", int_lit("5")}}
         );
         CHECK(result["else_expr"] == int_lit("1"));
+    }
+
+    TEST_CASE("括号内 return 后的换行是空白，后面的表达式仍是返回值") {
+        const auto expected = nlohmann::json{
+            {"type", "Return"},
+            {"value", {{"type", "OpUnary"}, {"op", "+"}, {"operand", int_lit("1")}}}
+        };
+        CHECK(parse_json(U"(return\n+1)") == expected);
+        CHECK(parse_json(U"[return\n+1]")["items"][0] == expected);
+        CHECK(parse_json(U"f(return\n+1)")["positional_args"][0] == expected);
+        CHECK(parse_json(U"a[return\n+1]")["args"][0] == expected);
+        CHECK(parse_json(U"${return\n+1 -> 2}")["items"][0]["key"] == expected);
+        CHECK(parse_json(U"${return\n+1}")["items"][0] == expected);
+        CHECK(
+            parse_json(U"func f(x = return\n+1) {}")["params"]["positional"][0]["default_value"] ==
+            expected
+        );
+        CHECK(
+            parse_json(U"(return\n1)") ==
+            nlohmann::json{{"type", "Return"}, {"value", int_lit("1")}}
+        );
+    }
+
+    TEST_CASE("括号内 return 后换行遇到右边界，仍是裸 return") {
+        const auto expected = nlohmann::json{{"type", "Return"}, {"value", nullptr}};
+        CHECK(parse_json(U"(return\n)") == expected);
+        CHECK(parse_json(U"[return\n, 1]")["items"][0] == expected);
+        CHECK(parse_json(U"f(return\n)")["positional_args"][0] == expected);
+        CHECK(parse_json(U"${return\n-> 1}")["items"][0]["key"] == expected);
+    }
+
+    TEST_CASE("Program 和复合表达式中的 return 后换行仍分隔表达式") {
+        const auto expected = nlohmann::json::array(
+            {{{"type", "Return"}, {"value", nullptr}},
+             {{"type", "OpUnary"}, {"op", "+"}, {"operand", int_lit("1")}}}
+        );
+        CHECK(parse_program_json(U"return\n+1")["exprs"] == expected);
+        CHECK(parse_json(U"func f() { return\n+1 }")["body"]["exprs"] == expected);
+        CHECK(parse_json(U"class C { return\n+1 }")["body"]["exprs"] == expected);
+        CHECK(parse_json(U"f({ return\n+1 })")["positional_args"][0]["exprs"] == expected);
+    }
+
+    TEST_CASE("for 头部 return 后的换行仍分隔槽位") {
+        const auto j = parse_json(U"for (return\nTrue\nNone) 0");
+        CHECK(j["init"] == nlohmann::json{{"type", "Return"}, {"value", nullptr}});
+        CHECK(j["cond"] == parse_json(U"True"));
+        CHECK(j["inc"] == parse_json(U"None"));
+    }
+
+    TEST_CASE("return a, b 不是返回元组，逗号处缺分隔符") {
+        CHECK_THROWS_AS(parse_program(U"return a, b"), SyntaxError);
     }
 }

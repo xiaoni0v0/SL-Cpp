@@ -99,7 +99,7 @@ inline nlohmann::json bare_assign(const nlohmann::json &target, const nlohmann::
     };
 }
 
-// for/except 的绑定 `target ⟦: ⟦const⟧ ⟦type⟧⟧ from`。target 传 nullptr 表示没写 from，
+// for/except 的绑定 `as target ⟦: ⟦const⟧ ⟦type⟧⟧`。target 传 nullptr 表示没写 as，
 // 此时整个绑定是 null
 inline nlohmann::json binding(
     const nlohmann::json &target, const nlohmann::json &type = nullptr, const bool is_const = false

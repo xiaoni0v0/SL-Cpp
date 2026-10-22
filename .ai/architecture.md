@@ -253,7 +253,7 @@ parser 那份抄了三处，加个文件要改三个地方。
 `test/` 下每个测试目标目录结构镜像对应源码目录（`test/lexer/`、`test/parser/`、
 `test/analyzer/{semantic_checker,expr_folder}/`、`test/codegen/`、`test/numeric/`）。`test/parser/`、`test/lexer/`、
 `test/numeric/` 内部按主题分子目录，用两位数独立编号（lexer `01_comments`…`07_errors`，parser
-`01_literals`…`13_cross`，numeric `01_bigint` / `02_bigdec`），**不跟 SL.md 章节号绑定**，见
+`01_literals`…`15_cross`，numeric `01_bigint` / `02_bigdec`），**不跟 SL.md 章节号绑定**，见
 [notes/no-section-numbers.md](notes/no-section-numbers.md)。analyzer 按子系统分子目录，文件按被测
 规则命名，不再套一层编号——源码本身已经按子系统拆开，测试跟着走比再编一套号更不容易找错地方。
 新增测试文件必须手动加进 `CMakeLists.txt` 对应的 `add_executable(...)` 文件列表（不是 glob，漏加

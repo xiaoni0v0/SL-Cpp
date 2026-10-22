@@ -1,5 +1,5 @@
 // 保留字
-X(as, RW_AS)
+X(from, RW_FROM)
 X(assert, RW_ASSERT)
 X(when, RW_WHEN)
 X(case, RW_CASE)

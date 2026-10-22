@@ -21,8 +21,10 @@ class Parser {
     enum class Bracket : std::uint8_t {
         Paren,     // ( )
         Square,    // [ ]
-        Brace,     // { }
-        ForHeader, // 步进 for 头部的 ( )
+        Brace,     // 复合表达式、函数体、类体的 { }
+        ForHeader, // for 头部的 ( )
+        Call,      // 调用的 ( )
+        DictSet,   // 字典、集合字面量 ${ } 里的 { }
     };
 
     std::stack<Bracket> brackets_; // 所有未闭合的括号，栈顶是最内层
@@ -45,7 +47,7 @@ class Parser {
     const Token &expect_close(Bracket kind);
     // 无条件跳过 NEWLINE
     void skip_newline();
-    // 仅当最内层那对括号是 Paren 或 Square 时跳过 NEWLINE（ForHeader/Brace 不跳）
+    // 仅当最内层那对括号是 Paren、Square、Call、DictSet 时跳过 NEWLINE（ForHeader、Brace 不跳）
     void skip_paren_newline();
     // 无条件跳过 NEWLINE 和 ';'
     void skip_terminator();
@@ -77,24 +79,24 @@ class Parser {
     [[nodiscard]] AstNodePtr parse_expr_pratt(int min_bp);
 
     /**
-     * 链式比较（< <= > >= == !=）
+     * 继续解析链式比较（< <= > >= == !=），左操作数和首个运算符已读取
      * @param left         左操作数
      * @param start_pos    整个表达式开始的位置
      * @param first_op     第一个运算符的类型
      * @param first_op_pos 第一个运算符的位置
      */
-    [[nodiscard]] AstNodePtr parse_chain_compare(
+    [[nodiscard]] AstNodePtr finish_chain_compare(
         AstNodePtr left, Position start_pos, AstNodeCompare::OpType first_op, Position first_op_pos
     );
 
     /**
-     * 链式 is
+     * 继续解析 is 链，左操作数和首个 is 已读取
      * @param left         左操作数
      * @param start_pos    整个表达式开始的位置
      * @param first_is_pos 第一个 is 的位置
      */
     [[nodiscard]] AstNodePtr
-    parse_chain_is(AstNodePtr left, Position start_pos, Position first_is_pos);
+    finish_chain_is(AstNodePtr left, Position start_pos, Position first_is_pos);
 
     /**
      * 解析一个无运算符的表达式
@@ -113,8 +115,10 @@ class Parser {
     [[nodiscard]] AstNodePtr parse_paren_or_tuple();
     // 列表 [expr1, expr2]
     [[nodiscard]] AstNodePtr parse_list();
-    // 字典 {k1: v1, ...} 或复合表达式
-    [[nodiscard]] AstNodePtr parse_brace();
+    // 字典 ${k1 -> v1, ...} 或集合 ${a, b, ...}
+    [[nodiscard]] AstNodePtr parse_dict_or_set();
+    // 复合表达式 { expr1; expr2 }
+    [[nodiscard]] AstNodePtr parse_compound();
 
     // del
     [[nodiscard]] AstNodePtr parse_del();
@@ -151,26 +155,33 @@ class Parser {
     [[nodiscard]] AstNodePtr parse_eval();
 
     /**
-     * 完成一堆逗号连成的一串的剩余部分，可能空。不消耗括号、不动括号栈。
-     * 说白了它的功能就是跳过逗号并控制何时结束，不管每一项怎么解析。
-     * @param close      结束括号 token 类型
-     * @param parse_item 回调函数，对每一项怎么解析
-     * @return           是否真的消耗过至少一个 ','
+     * 解析逗号分隔的一批项，允许空批和尾逗号。不消耗括号、不动括号栈。
+     * @param closing_type 结束括号的 token 类型
+     * @param parse_item   解析一项的回调函数
+     * @return             列表中是否出现过 ','
      */
     template <typename F>
         requires std::is_invocable_r_v<void, F>
-    bool finish_comma_batch(TokenType close, const F &parse_item);
+    bool parse_comma_batch(TokenType closing_type, const F &parse_item);
 
-    // 完成解析捕获列表。消耗括号、管理括号栈
-    [[nodiscard]] std::vector<OneCapture> finish_captures();
-    // 完成解析形参列表。消耗括号、管理括号栈
-    [[nodiscard]] AstNodeFunc::AllParams finish_func_params();
-    // 完成字典剩余部分。当前已被判为字典、第一项已解析为 first。不消耗括号、不动括号栈
-    [[nodiscard]] AstNodePtr finish_dict(Position start_pos, AstNodePtr first);
-    // 完成实参表 (...)：位置组 + 关键字组 + '(' 位置。消耗括号、管理括号栈
-    [[nodiscard]] CallArgs finish_call_args();
-    // 完成索引 x[...]。消耗括号、管理括号栈
-    [[nodiscard]] AstNodePtr finish_index(AstNodePtr obj, Position start_pos);
+    // 解析 `: ⟦const⟧ ⟦type⟧`，const 和类型至少一个；消耗 ':'
+    [[nodiscard]] Annotation parse_annotation();
+    // left 之后若紧跟 '='、':' 或复合赋值运算符，解析出整个赋值表达式；否则原样返回 left
+    // 调用方按高于赋值的优先级解析出 left
+    [[nodiscard]] AstNodePtr finish_assign(AstNodePtr left);
+    // 解析 `as binding`；带注解时目标必须是标识符
+    [[nodiscard]] Binding parse_binding();
+
+    // 解析捕获列表。消耗括号、管理括号栈
+    [[nodiscard]] std::vector<OneCapture> parse_captures();
+    // 解析形参列表。消耗括号、管理括号栈
+    [[nodiscard]] AstNodeFunc::AllParams parse_func_params();
+    // 解析实参表 (...)：位置组 + 关键字组 + '(' 位置。消耗括号、管理括号栈
+    [[nodiscard]] CallArgs parse_call_args();
+    // object 已解析，继续解析调用 (...)
+    [[nodiscard]] AstNodePtr finish_call(AstNodePtr object, Position start_pos);
+    // object 已解析，继续解析索引 [...]。消耗括号、管理括号栈
+    [[nodiscard]] AstNodePtr finish_index(AstNodePtr object, Position start_pos);
 
     explicit Parser(std::vector<Token> tokens, std::string file_path);
 

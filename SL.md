@@ -46,7 +46,7 @@ SL 是一种面向对象的编程语言。特点是：
 换行符不是空白，它参与表达式的切分（2.2）。
 
 相邻的符号连写会产生歧义时，必须用空白、换行、括号等隔开，否则可以省略。
-例如 `for $ (i from ls) { i ** 2 }` 可以写成 `for$(i from ls){i**2}`，但 `a! == b` 不能写成 `a!==b`。
+例如 `for $ (ls as i) { i ** 2 }` 可以写成 `for$(ls as i){i**2}`，但 `a! == b` 不能写成 `a!==b`。
 
 #### 2.1.2 标识符
 
@@ -59,7 +59,7 @@ SL 是一种面向对象的编程语言。特点是：
 - `None`, `True`, `False`
 - `_G`, `_L`
 - `not`, `and`, `or`, `is`, `in`
-- `from`
+- `as`
 - `const`
 - `del`
 - `global`
@@ -74,7 +74,7 @@ SL 是一种面向对象的编程语言。特点是：
 
 以下是 SL 的**保留字**。它们目前不是关键字，也不能作为标识符使用，出现在源码中一律抛出 `SyntaxError`：
 
-- `as`
+- `from`
 - `assert`
 - `when`, `case`
 - `yield`
@@ -322,10 +322,13 @@ f(*args, x=1, **extra)
 第 2、3 种里的 `: ⟦const⟧ ⟦type⟧` 称为**注解**，下文记作 `annotation`，其中 `const`、`type` 至少写一个。
 第 2、3 种称为**声明**（3.5）。
 
+下文用 `binding` 表示 `target ⟦annotation⟧`。
+未写注解时，`target` 为左值（2.3.4）；
+写了注解时，`target` 必须为标识符，否则抛出 `SyntaxError`。
+`binding = expr` 即上述第 1 或第 2 种写法。
+
 四种写法同属 2.1.5 中 `=` 那一档优先级，右结合，如 `a = x: int = 1` 即 `a = (x: int = 1)`。
 `:` 左边和 `type` 都按高于这一档的优先级解析，如 `x: int | str? = v`；`a or x: int` 即 `(a or x): int`。
-
-注解里的 `type`、函数的返回值注解（2.3.16）里的 `type`，最外层（冗余括号不算）若是函数表达式，必须是匿名函数，否则抛出 `SyntaxError`。
 
 #### 2.3.7 `del` 表达式
 
@@ -368,7 +371,7 @@ if (cond1) expr1 ⟦elif (cond2) expr2 ...⟧ ⟦else expr3⟧
 `for` 有两种写法：
 
 1. 步进模式：`for ⟦collect⟧ (init; cond; inc) expr`
-2. 迭代模式：`for ⟦collect⟧ (⟦target ⟦annotation⟧ from⟧ iterable) expr`
+2. 迭代模式：`for ⟦collect⟧ (iterable ⟦as binding⟧) expr`
 
 括号里的内容一律按槽切分：`;` 分隔一个槽，换行也分隔一个槽
 （按 2.2 的规则，换行处左侧若已能构成完整表达式就分隔，否则并入下一行继续解析）；
@@ -378,12 +381,12 @@ if (cond1) expr1 ⟦elif (cond2) expr2 ...⟧ ⟦else expr3⟧
 其中：
 
 1. `init`、`cond`、`inc` 为表达式或为空；
-2. `iterable` 为表达式；`target` 为左值（2.3.4，可以是解构）；
-   `annotation` 为注解（2.3.6），带注解时 `target` 只能是标识符，否则抛出 `SyntaxError`；
-   `target ⟦annotation⟧ from` 整体可以省略；
+2. `iterable` 为表达式；`binding` 见 2.3.6；`as binding` 整体可以省略；
 3. `expr` 为表达式，称为**循环体**；
 4. `collect` 为**收集模式记号**，只能是 `$`、`$ *`、`$$`、`$$ **` 四者之一，其余组合抛出 `SyntaxError`。
    不带 `collect` 为计数模式，带则为收集模式。
+
+`as binding` 称为**绑定**，`as` 不是运算符。具体绑定的值由所在表达式确定（3.10）。
 
 `while` 的写法：`while ⟦collect⟧ (cond) expr`，其中 `cond`、`expr` 为表达式，`collect` 同上。
 
@@ -406,13 +409,12 @@ if (cond1) expr1 ⟦elif (cond2) expr2 ...⟧ ⟦else expr3⟧
 语法：
 
 ```
-try expr1 ⟦except (⟦target ⟦annotation⟧ from⟧ exc_type) expr2 ...⟧ ⟦finally expr3⟧
+try expr1 ⟦except (exc_type ⟦as binding⟧) expr2 ...⟧ ⟦finally expr3⟧
 ```
 
 `except` 子句可以有 0 个或多个，`finally` 可选，但两者不能同时省略。
 
-其中 `expr1`、`expr2`、`expr3`、`exc_type` 均为表达式；`target` 为左值（2.3.4）；
-`annotation` 为注解（2.3.6），带注解时 `target` 只能是标识符，否则抛出 `SyntaxError`。
+其中 `expr1`、`expr2`、`expr3`、`exc_type` 均为表达式；`binding` 见 2.3.6。
 
 `expr3` 里不允许出现会跳出 `expr3` 的 `return`、`break`、`continue`，否则抛出 `SyntaxError`；
 完整落在 `expr3` 内部的循环、`expr3` 里定义的函数不受此限制。
@@ -738,7 +740,7 @@ func f() {
 - 函数的形参与返回值注解（3.10.12）、类体里的声明：`type` 编译成一个无形参、无捕获的函数，
   只能看到建立时的 `_G` 和内置表（3.4.2）。第一次用这个类型做检查时调用该函数，结果永久缓存。
 - 其余声明：`type` 就地求值，与普通表达式相同。
-- 以上两种位置，`type` 的最外层是匿名函数表达式时（冗余括号不算），这个函数表达式在原本求 `type` 的时刻求值，
+- 以上两种位置，`type` 的最外层是函数表达式时（冗余括号不算），这个函数表达式在原本求 `type` 的时刻求值，
   需要类型时以无实参调用它，返回值即类型。
 
 求得的类型须满足 `isinstance(类型, type | str)`，否则抛出 `TypeError`。
@@ -1042,14 +1044,14 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
 
 #### 3.8.1 迭代器协议
 
-迭代器协议规定对象如何参与 `for (i from obj)` 及 `*obj` 展开。
+迭代器协议规定对象如何参与 `for (obj as i)` 及 `*obj` 展开。
 
 实现了 `__iter__` 方法的对象称为**可迭代对象**。`__iter__` 返回对象对应的迭代器。
 
 实现了 `__iter__` 和 `__next__` 方法的对象称为**迭代器**。迭代器一定可迭代，它的 `__iter__` 通常返回它本身。
 `__next__` 从迭代器取下一个元素；迭代终止时，返回单例 `StopIteration`。
 
-`for ⟦collect⟧ (⟦target ⟦annotation⟧ from⟧ obj) expr` 大致等价于：
+`for ⟦collect⟧ (obj ⟦as binding⟧) expr` 大致等价于：
 
 ```
 {
@@ -1058,7 +1060,7 @@ SL 通过若干**协议**（Protocol）把语言机制开放给对象。
     while ⟦collect⟧ (True) {
         item = iterator.__next__()
         if (item is StopIteration) break
-        target ⟦annotation⟧ = item # 仅在写了 from 时才有这一步
+        binding = item  # 仅在写了 as 时才有这一步
         expr
     }
 }
@@ -1284,11 +1286,11 @@ SL 的函数重载不通过同名函数定义，而是用 `FuncGroup` 类（4.2.
 1. 步进模式 `for ⟦collect⟧ (init; cond; inc) expr`：
    `init`、`inc` 为空时，对其求值即跳过；`cond` 为空时，对其求值即得到 `True`。
    先对 `init` 求值并丢弃，然后不断重复：对 `cond` 求值，真值成立则按上述方式处理循环体，再对 `inc` 求值并丢弃；否则跳出循环。
-2. 迭代模式 `for ⟦collect⟧ (⟦target ⟦annotation⟧ from⟧ iterable) expr`：
+2. 迭代模式 `for ⟦collect⟧ (iterable ⟦as binding⟧) expr`：
    要求 `iterable` 满足可迭代协议（`protocols.Iterable`，见 4.4.2.4），否则抛出 `TypeError`。
-   不断从 `iterable` 取出一个元素（3.8.1），对 `target ⟦annotation⟧ = 该元素` 求值（3.10.2），
+   不断从 `iterable` 取出一个元素（3.8.1），对 `binding = 该元素` 求值（3.10.2），
    然后按上述方式处理循环体，直到迭代结束。
-   不写 `from` 时不做这次绑定，取出的元素直接丢弃，其余不变。
+   不写 `as` 时不做这次绑定，取出的元素直接丢弃，其余不变。
 
 `while ⟦collect⟧ (cond) expr` 等价于 `for ⟦collect⟧ (; cond ;) expr`。
 
@@ -1297,10 +1299,10 @@ SL 的函数重载不通过同名函数定义，而是用 `FuncGroup` 类（4.2.
 例如：
 
 ```
-for $ (i from 0..4) i * i                   # [0, 1, 4, 9]
-for $ * (i from [[1, 2], [3, 4]]) i         # [1, 2, 3, 4]
-for $$ (i from 0..3) (i, str(i))            # ${0 -> '0', 1 -> '1', 2 -> '2'}
-for $$ ** (d from [${1 -> 2}, ${3 -> 4}]) d # ${1 -> 2, 3 -> 4}
+for $ (0..4 as i) i * i                   # [0, 1, 4, 9]
+for $ * ([[1, 2], [3, 4]] as i) i         # [1, 2, 3, 4]
+for $$ (0..3 as i) (i, str(i))            # ${0 -> '0', 1 -> '1', 2 -> '2'}
+for $$ ** ([${1 -> 2}, ${3 -> 4}] as d) d # ${1 -> 2, 3 -> 4}
 ```
 
 不应在无限循环中使用收集模式，否则内存占用将持续增加。
@@ -1339,7 +1341,7 @@ for $$ ** (d from [${1 -> 2}, ${3 -> 4}]) d # ${1 -> 2, 3 -> 4}
 
 1. 对 `exc_type` 求值，要求 `issubclass(exc_type, BaseException)` 为 `True`，否则抛出 `TypeError`；
 2. 以 `isinstance(异常对象, exc_type)` 判断是否匹配，不匹配则检查下一条；
-3. 匹配时，若写了 `from`，先对 `target ⟦annotation⟧ = 异常对象` 求值（3.10.2），然后对 `expr2` 求值，不再检查其余 `except`。
+3. 匹配时，若写了 `as`，先对 `binding = 异常对象` 求值（3.10.2），然后对 `expr2` 求值，不再检查其余 `except`。
    `expr2` 正常完成时，`try` 的值为 `expr2` 的值；触发跳转时，保留该跳转。
 
 没有匹配的 `except` 时，原异常继续传播。检查、绑定或处理异常时抛出的新异常取代原异常，不再检查其余 `except`。
@@ -1352,7 +1354,7 @@ for $$ ** (d from [${1 -> 2}, ${3 -> 4}]) d # ${1 -> 2, 3 -> 4}
 
 `raise expr` 在当前位置抛出异常。`expr` 需要是 `BaseException`（或其子类）的实例，否则抛出 `TypeError`。
 
-要重新抛出当前正在处理的异常，需要在 `except` 子句里把它绑定下来再抛，如 `except (e from E) { raise e }`。
+要重新抛出当前正在处理的异常，需要在 `except` 子句里把它绑定下来再抛，如 `except (E as e) { raise e }`。
 
 求值 `raise` 会抛出异常并中止当前求值，试图使用它的值的表达式都得不到求值。为了统一，规定其值为 `None`。
 
@@ -1369,7 +1371,7 @@ for $$ ** (d from [${1 -> 2}, ${3 -> 4}]) d # ${1 -> 2, 3 -> 4}
 1. 若有前缀装饰器，先从前到后（离 `func` 越远的越先）对各 `decorator` 求值；
 2. 若有捕获列表，从前到后处理其中各项（3.4.4）；
 3. 从前到后对各形参的默认值逐个求值；
-4. 形参注解里的 `type`、返回值注解此时不求值，但若最外层是匿名函数表达式，则对这个函数表达式求值（3.5.2）；
+4. 形参注解里的 `type`、返回值注解此时不求值，但若最外层是函数表达式，则对这个函数表达式求值（3.5.2）；
 5. 若有文档字符串，对其求值；
 6. 建立函数对象；
 7. 若有前缀装饰器，从近到远（离 `func` 最近的先来）依次调用装饰器，整个表达式的值就是最终的值。

@@ -18,7 +18,7 @@ TEST_SUITE("跨分组组合——装饰器/类/函数/for/try/字典展开/is �
             U"    @cached\n"
             U"    func process[state](self, items, **opts) {\n"
             U"        result = ${}\n"
-            U"        for $ (item from items)\n"
+            U"        for $ (items as item)\n"
             U"            try result[item.key] = ${**opts, 'value' -> item.value, 'flag' -> "
             U"item.kind "
             U"is 'ok'}\n"
@@ -85,6 +85,46 @@ TEST_SUITE("跨分组组合——装饰器/类/函数/for/try/字典展开/is �
         CHECK(try_node["finally_expr"]["type"] == "Assign");
 
         CHECK(func_body[2]["type"] == "Return");
+    }
+}
+
+TEST_SUITE("跨分组组合——表达式位置的通用性（默认值/实参/字典 key 都能放任意复杂表达式）") {
+
+    TEST_CASE("形参默认值本身是一个匿名函数（func 是普通表达式，能出现在任何表达式能出现的位置）") {
+        const std::u32string source{U"func f(x, cb = func(y) { return y + 1 }) { return cb(x) }"};
+        CHECK_NOTHROW(parse_program(source));
+
+        const auto j = parse_json(source);
+        const auto &default_value{j["params"]["positional"][1]["default_value"]};
+        CHECK(default_value["type"] == "Func");
+        CHECK(default_value["name"] == nullptr);
+        REQUIRE(default_value["params"]["positional"].size() == 1);
+        CHECK(default_value["params"]["positional"][0]["identifier"] == "y");
+    }
+
+    TEST_CASE("if-else 作为普通表达式直接用作调用实参（一切皆表达式，不是只能当语句用）") {
+        CHECK(
+            parse_json(U"f(if (a) 1 else 2)") ==
+            nlohmann::json{
+                {"type", "Call"},
+                {"object", ident("f")},
+                {"positional_args",
+                 nlohmann::json::array(
+                     {{{"type", "If"},
+                       {"clauses",
+                        nlohmann::json::array({{{"cond", ident("a")}, {"body", int_lit("1")}}})},
+                       {"else_expr", int_lit("2")}}}
+                 )},
+                {"keyword_args", nlohmann::json::array()}
+            }
+        );
+    }
+
+    TEST_CASE("链式比较和 is 可以混在字典的 key 位置（key 就是普通的 parse_expr，没有特殊限制）") {
+        const auto j = parse_json(U"${a < b is c -> 1}");
+        const auto &key{j["items"][0]["key"]};
+        CHECK(key["type"] == "Is");
+        CHECK(key["operands"][0]["type"] == "Compare");
     }
 }
 
@@ -181,45 +221,5 @@ TEST_SUITE("跨分组组合——深层嵌套结构里报错位置依然精确")
             CHECK(msg.find("unexpected token ')'") != std::string::npos);
             CHECK(msg.find("5:1:") != std::string::npos);
         }
-    }
-}
-
-TEST_SUITE("跨分组组合——表达式位置的通用性（默认值/实参/字典 key 都能放任意复杂表达式）") {
-
-    TEST_CASE("形参默认值本身是一个匿名函数（func 是普通表达式，能出现在任何表达式能出现的位置）") {
-        const std::u32string source{U"func f(x, cb = func(y) { return y + 1 }) { return cb(x) }"};
-        CHECK_NOTHROW(parse_program(source));
-
-        const auto j = parse_json(source);
-        const auto &default_value{j["params"]["positional"][1]["default_value"]};
-        CHECK(default_value["type"] == "Func");
-        CHECK(default_value["name"] == nullptr);
-        REQUIRE(default_value["params"]["positional"].size() == 1);
-        CHECK(default_value["params"]["positional"][0]["identifier"] == "y");
-    }
-
-    TEST_CASE("if-else 作为普通表达式直接用作调用实参（一切皆表达式，不是只能当语句用）") {
-        CHECK(
-            parse_json(U"f(if (a) 1 else 2)") ==
-            nlohmann::json{
-                {"type", "Call"},
-                {"object", ident("f")},
-                {"positional_args",
-                 nlohmann::json::array(
-                     {{{"type", "If"},
-                       {"clauses",
-                        nlohmann::json::array({{{"cond", ident("a")}, {"body", int_lit("1")}}})},
-                       {"else_expr", int_lit("2")}}}
-                 )},
-                {"keyword_args", nlohmann::json::array()}
-            }
-        );
-    }
-
-    TEST_CASE("链式比较和 is 可以混在字典的 key 位置（key 就是普通的 parse_expr，没有特殊限制）") {
-        const auto j = parse_json(U"${a < b is c -> 1}");
-        const auto &key{j["items"][0]["key"]};
-        CHECK(key["type"] == "Is");
-        CHECK(key["operands"][0]["type"] == "Compare");
     }
 }

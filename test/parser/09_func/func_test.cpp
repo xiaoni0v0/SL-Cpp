@@ -81,6 +81,90 @@ TEST_SUITE("func——基本形状") {
     }
 }
 
+TEST_SUITE("func——捕获列表") {
+
+    TEST_CASE("值捕获（裸标识符）") {
+        CHECK(
+            parse_json(U"func f[x]() {}")["captures"] ==
+            nlohmann::json::array({nlohmann::json{
+                {"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}
+            }})
+        );
+    }
+
+    TEST_CASE("值捕获（显式表达式）") {
+        CHECK(
+            parse_json(U"func f[x = 1 + 2]() {}")["captures"] ==
+            nlohmann::json::array({nlohmann::json{
+                {"capture_type", "Value"},
+                {"identifier", "x"},
+                {"value_expr",
+                 {{"type", "OpBinary"},
+                  {"op", "+"},
+                  {"left", int_lit("1")},
+                  {"right", int_lit("2")}}}
+            }})
+        );
+    }
+
+    TEST_CASE("引用捕获不能带 =") {
+        CHECK_THROWS_AS(parse_program(U"func f[&x = 1]() {}"), SyntaxError);
+    }
+
+    TEST_CASE("引用捕获") {
+        CHECK(
+            parse_json(U"func f[&y]() {}")["captures"] ==
+            nlohmann::json::array({nlohmann::json{
+                {"capture_type", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
+            }})
+        );
+    }
+
+    TEST_CASE("混合捕获，空捕获列表 []") {
+        CHECK(
+            parse_json(U"func f[x, &y, z = 1]() {}")["captures"] ==
+            nlohmann::json::array(
+                {nlohmann::json{
+                     {"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}
+                 },
+                 nlohmann::json{
+                     {"capture_type", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
+                 },
+                 nlohmann::json{
+                     {"capture_type", "Value"}, {"identifier", "z"}, {"value_expr", int_lit("1")}
+                 }}
+            )
+        );
+        CHECK(parse_json(U"func f[]() {}")["captures"] == nlohmann::json::array());
+    }
+
+    TEST_CASE("捕获列表未闭合的消息明确说'capture list'，位置指向多出来的 '{'（不是 EOF）") {
+        // "func f[x {}" -> f(1)u(2)n(3)c(4) (5)f(6)[(7)x(8) (9){(10)}(11)
+        try {
+            parse_program(U"func f[x {}");
+            FAIL("应当抛出异常");
+        } catch (const SyntaxError &e) {
+            const std::string msg{e.what()};
+            CHECK(msg.find("close capture list") != std::string::npos);
+            CHECK(msg.find("1:10:") != std::string::npos); // '{'
+        }
+    }
+
+    TEST_CASE("捕获列表尾逗号") {
+        CHECK(
+            parse_json(U"func f[a, b,]() {}")["captures"] ==
+            nlohmann::json::array(
+                {nlohmann::json{
+                     {"capture_type", "Value"}, {"identifier", "a"}, {"value_expr", nullptr}
+                 },
+                 nlohmann::json{
+                     {"capture_type", "Value"}, {"identifier", "b"}, {"value_expr", nullptr}
+                 }}
+            )
+        );
+    }
+}
+
 TEST_SUITE("func——形参") {
 
     TEST_CASE("普通形参") {
@@ -239,90 +323,6 @@ TEST_SUITE("func——形参") {
     }
 }
 
-TEST_SUITE("func——捕获列表") {
-
-    TEST_CASE("值捕获（裸标识符）") {
-        CHECK(
-            parse_json(U"func f[x]() {}")["captures"] ==
-            nlohmann::json::array({nlohmann::json{
-                {"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}
-            }})
-        );
-    }
-
-    TEST_CASE("值捕获（显式表达式）") {
-        CHECK(
-            parse_json(U"func f[x = 1 + 2]() {}")["captures"] ==
-            nlohmann::json::array({nlohmann::json{
-                {"capture_type", "Value"},
-                {"identifier", "x"},
-                {"value_expr",
-                 {{"type", "OpBinary"},
-                  {"op", "+"},
-                  {"left", int_lit("1")},
-                  {"right", int_lit("2")}}}
-            }})
-        );
-    }
-
-    TEST_CASE("引用捕获不能带 =") {
-        CHECK_THROWS_AS(parse_program(U"func f[&x = 1]() {}"), SyntaxError);
-    }
-
-    TEST_CASE("引用捕获") {
-        CHECK(
-            parse_json(U"func f[&y]() {}")["captures"] ==
-            nlohmann::json::array({nlohmann::json{
-                {"capture_type", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
-            }})
-        );
-    }
-
-    TEST_CASE("混合捕获，空捕获列表 []") {
-        CHECK(
-            parse_json(U"func f[x, &y, z = 1]() {}")["captures"] ==
-            nlohmann::json::array(
-                {nlohmann::json{
-                     {"capture_type", "Value"}, {"identifier", "x"}, {"value_expr", nullptr}
-                 },
-                 nlohmann::json{
-                     {"capture_type", "Reference"}, {"identifier", "y"}, {"value_expr", nullptr}
-                 },
-                 nlohmann::json{
-                     {"capture_type", "Value"}, {"identifier", "z"}, {"value_expr", int_lit("1")}
-                 }}
-            )
-        );
-        CHECK(parse_json(U"func f[]() {}")["captures"] == nlohmann::json::array());
-    }
-
-    TEST_CASE("捕获列表未闭合的消息明确说'capture list'，位置指向多出来的 '{'（不是 EOF）") {
-        // "func f[x {}" -> f(1)u(2)n(3)c(4) (5)f(6)[(7)x(8) (9){(10)}(11)
-        try {
-            parse_program(U"func f[x {}");
-            FAIL("应当抛出异常");
-        } catch (const SyntaxError &e) {
-            const std::string msg{e.what()};
-            CHECK(msg.find("close capture list") != std::string::npos);
-            CHECK(msg.find("1:10:") != std::string::npos); // '{'
-        }
-    }
-
-    TEST_CASE("捕获列表尾逗号") {
-        CHECK(
-            parse_json(U"func f[a, b,]() {}")["captures"] ==
-            nlohmann::json::array(
-                {nlohmann::json{
-                     {"capture_type", "Value"}, {"identifier", "a"}, {"value_expr", nullptr}
-                 },
-                 nlohmann::json{
-                     {"capture_type", "Value"}, {"identifier", "b"}, {"value_expr", nullptr}
-                 }}
-            )
-        );
-    }
-}
-
 TEST_SUITE("func——返回类型/文档字符串") {
 
     TEST_CASE("返回类型") {
@@ -353,6 +353,16 @@ TEST_SUITE("func——返回类型/文档字符串") {
         CHECK_THROWS_AS(parse_program(U"func f(): a = b {}"), SyntaxError);
         CHECK(parse_json(U"func f(): int | str? {}")["return_type"]["type"] == "OpBinary");
     }
+
+    TEST_CASE("返回注解完成后换行即结束，有未闭合圆括号时才能在运算符前续行") {
+        const auto expected = nlohmann::json{
+            {"type", "OpBinary"}, {"op", "|"}, {"left", ident("int")}, {"right", ident("str")}
+        };
+        check_parse_throws_with(U"func f(): int\n| str {}", "unexpected token '|'");
+        CHECK(parse_json(U"func f(): int |\nstr {}")["return_type"] == expected);
+        CHECK(parse_json(U"func f(): (int\n| str) {}")["return_type"] == expected);
+        CHECK(parse_json(U"(func f(): int\n| str {})")["return_type"] == expected);
+    }
 }
 
 TEST_SUITE("func——类型位置上的函数表达式") {
@@ -372,11 +382,21 @@ TEST_SUITE("func——类型位置上的函数表达式") {
         );
     }
 
-    TEST_CASE("带名字的函数表达式不能当类型") {
-        const std::string msg{"a function expression used as a type must be anonymous"};
-        check_parse_throws_with(U"func f(p: func g() { return int }) {}", msg);
-        check_parse_throws_with(U"func f(): func g() { return int } {}", msg);
-        check_parse_throws_with(U"func f(p: (func g() { return int })) {}", msg);
+    TEST_CASE("命名函数表达式可以作形参和返回值的类型") {
+        CHECK(
+            parse_json(
+                U"func f(p: func g() { return int }) {}"
+            )["params"]["positional"][0]["annotation"]["type"]["name"] == "g"
+        );
+        CHECK(parse_json(U"func f(): func g() { return int } {}")["return_type"]["name"] == "g");
+        CHECK(
+            parse_json(
+                U"func f(p: (func g() { return int })) {}"
+            )["params"]["positional"][0]["annotation"]["type"]["name"] == "g"
+        );
+        const auto j = parse_json(U"func f(p: const func g() { return int }) {}");
+        CHECK(j["params"]["positional"][0]["annotation"]["is_const"] == true);
+        CHECK(j["params"]["positional"][0]["annotation"]["type"]["name"] == "g");
     }
 
     TEST_CASE("最外层不是函数表达式时，里面的具名函数不受限制") {

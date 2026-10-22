@@ -107,8 +107,8 @@ TEST_SUITE("Parser 的 SyntaxError 行为") {
         CHECK_THROWS_AS(parse_program(U"1."), SyntaxError);           // 属性访问缺属性名
         CHECK_THROWS_AS(parse_program(U"(1, 2"), SyntaxError);        // 未闭合的元组
         CHECK_THROWS_AS(parse_program(U"[1, 2"), SyntaxError);        // 未闭合的列表
-        CHECK_THROWS_AS(parse_program(U"{k: v"), SyntaxError);        // 未闭合的字典
-        CHECK_THROWS_AS(parse_program(U"{k: v, x}"), SyntaxError);    // 字典展开项判定错误
+        CHECK_THROWS_AS(parse_program(U"${k -> v"), SyntaxError);     // 未闭合的字典
+        CHECK_THROWS_AS(parse_program(U"${k -> v, x}"), SyntaxError); // 字典中混入集合项
         CHECK_THROWS_AS(parse_program(U"if (x = 1) y"), SyntaxError); // cond 槽裸赋值
         CHECK_THROWS_AS(
             parse_program(U"for (a; b) body"), SyntaxError

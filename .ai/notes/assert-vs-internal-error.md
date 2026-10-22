@@ -49,7 +49,7 @@
   [user-facing-strings.md](user-facing-strings.md)：`Module` 是类或子系统名，不是函数名
   （`OpCode: invalid value`，不是 `opcode_name: OpCode out of range`）。**`assert` 不加前缀**——它自己会
   打出文件和行号。位置信息不进 message。
-- 测试按 message 的**子串**匹配（`test/parser/01_literals/literal_raw_test.cpp`），改措辞前先 grep
+- 测试按 message 的**子串**匹配（`test/parser/01_literals/numeric_raw_test.cpp`），改措辞前先 grep
   `test/`。
 
 ## Why
